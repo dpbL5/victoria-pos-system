@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(npx prisma db push --accept-data-loss 2 >& 1)",
+      "Shell(npx prisma migrate status)",
+      "Shell(npx prisma db push --accept-data-loss)",
+      "Shell(npx prisma generate)",
+      "Shell(npx tsc --noEmit 2>&1)",
+      "Shell(npx vitest run --reporter=verbose 2>&1)",
+      "Shell(npx vitest run --reporter=verbose src/lib/__tests__/tool-validations.test.ts 2>&1)",
+      "Shell(npx next build 2>&1)",
+      "Shell(git:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

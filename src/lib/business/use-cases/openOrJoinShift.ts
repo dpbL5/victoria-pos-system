@@ -6,11 +6,13 @@ import {
 } from '@/lib/business/shifts'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@/generated/prisma/client'
+import type { ToolCountEntry } from '@/lib/validations/shift'
 
 export interface OpenOrJoinShiftInput {
   staffId: string
   openingCash: number
   notes?: string
+  toolCounts?: ToolCountEntry[]
 }
 
 export interface OpenOrJoinShiftResult {
@@ -43,6 +45,7 @@ export async function openOrJoinShift({
   staffId,
   openingCash,
   notes,
+  toolCounts,
 }: OpenOrJoinShiftInput): Promise<OpenOrJoinShiftResult> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
@@ -100,6 +103,18 @@ export async function openOrJoinShift({
                 role: 'LEAD',
               },
             },
+            ...(toolCounts && toolCounts.length > 0
+              ? {
+                  toolCounts: {
+                    createMany: {
+                      data: toolCounts.map((tc) => ({
+                        toolId: tc.toolId,
+                        openCount: tc.openCount,
+                      })),
+                    },
+                  },
+                }
+              : {}),
           },
           include: shiftWithParticipantsInclude,
         })

@@ -123,3 +123,59 @@ export interface RevenueReport {
   sessionCount: number
   avgRevenuePerSession: number
 }
+
+// ── Shift report types ──
+
+export interface TransactionItem {
+  id: string
+  type: 'payment' | 'membership'
+  amount: number
+  paymentMethod: string | null
+  paidAt: string
+  customerName: string
+  customerType: string | null
+  invoiceId: string | null
+  invoiceNo: string | null
+  staffName: string
+  planName: string | null
+}
+
+export interface ShiftRevenueSummary {
+  id: string
+  openedAt: string
+  closedAt: string | null
+  openingCash: number
+  closingCash: number | null
+  expectedCash: number | null
+  cashDifference: number | null
+  status: ShiftStatus
+  notes: string | null
+  staff: { id: string; fullName: string }
+  totalRevenue: number
+  cashRevenue: number
+  transferRevenue: number
+  cardRevenue: number
+  paymentCount: number
+  membershipCount: number
+  sessionCount: number
+}
+
+export interface ShiftReportDetail extends ShiftRevenueSummary {
+  participants: Array<{
+    id: string
+    role: ShiftParticipantRole
+    joinedAt: string
+    leftAt: string | null
+    staff: { id: string; fullName: string }
+  }>
+  byPaymentMethod: Record<PaymentMethod, { total: number; count: number }>
+  byItemType: Record<InvoiceItemType, number>
+  transactions: TransactionItem[]
+  toolCounts?: Array<{
+    id: string
+    toolId: string
+    tool: { id: string; name: string; quantity: number; isRequired: boolean }
+    openCount: number
+    closeCount: number | null
+  }>
+}

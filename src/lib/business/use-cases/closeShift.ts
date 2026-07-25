@@ -1,6 +1,7 @@
 import { logActivity } from '@/lib/business/audit'
 import { calculateExpectedCash, shiftWithParticipantsInclude } from '@/lib/business/shifts'
 import { prisma } from '@/lib/prisma'
+import type { ToolCountEntry } from '@/lib/validations/shift'
 
 export interface CloseShiftInput {
   shiftId: string
@@ -10,6 +11,7 @@ export interface CloseShiftInput {
   fullName: string
   closingCash: number
   notes?: string
+  toolCounts?: ToolCountEntry[]
 }
 
 export interface CloseShiftResult {
@@ -38,6 +40,7 @@ export async function closeShift({
   fullName,
   closingCash,
   notes,
+  toolCounts,
 }: CloseShiftInput): Promise<CloseShiftResult> {
   const shift = await prisma.shift.findUnique({
     where: { id: shiftId },
@@ -79,6 +82,28 @@ export async function closeShift({
         leftAt: closedAt,
       },
     })
+
+    if (toolCounts && toolCounts.length > 0) {
+      for (const tc of toolCounts) {
+        await tx.shiftTool.upsert({
+          where: {
+            shiftId_toolId: {
+              shiftId,
+              toolId: tc.toolId,
+            },
+          },
+          update: {
+            closeCount: tc.openCount,
+          },
+          create: {
+            shiftId,
+            toolId: tc.toolId,
+            openCount: 0,
+            closeCount: tc.openCount,
+          },
+        })
+      }
+    }
 
     const closedShift = await tx.shift.update({
       where: { id: shiftId },

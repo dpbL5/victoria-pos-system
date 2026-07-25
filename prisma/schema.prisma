@@ -301,6 +301,7 @@ model Shift {
 
   sessions           Session[]
   participants       ShiftParticipant[]
+  toolCounts         ShiftTool[]
   invoices           Invoice[]
   payments           Payment[]
   membershipPayments MembershipPayment[]
@@ -445,6 +446,36 @@ model StockMovement {
   @@index([productId, createdAt])
   @@index([shiftId])
   @@map("stock_movements")
+}
+
+model Tool {
+  id          String   @id @default(uuid())
+  name        String   @db.VarChar(120)
+  description String?  @db.Text
+  quantity    Int      @default(0)
+  isRequired  Boolean  @default(false) @map("is_required")
+  order       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  shiftTools  ShiftTool[]
+
+  @@map("tools")
+}
+
+model ShiftTool {
+  id         String   @id @default(uuid())
+  shiftId    String   @map("shift_id")
+  shift      Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  toolId     String   @map("tool_id")
+  tool       Tool     @relation(fields: [toolId], references: [id])
+  openCount  Int      @default(0) @map("open_count")
+  closeCount Int?     @map("close_count")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([shiftId, toolId])
+  @@map("shift_tools")
 }
 
 model ActivityLog {

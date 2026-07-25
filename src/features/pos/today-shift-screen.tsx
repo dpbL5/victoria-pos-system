@@ -1,12 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Clock,
   LogIn,
   Minus,
   Package,
   Plus,
+  ReceiptText,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -43,6 +45,20 @@ import type {
   Shift,
 } from './types'
 
+interface TransactionItem {
+  id: string
+  type: 'payment' | 'membership'
+  amount: number
+  paymentMethod: string | null
+  paidAt: string
+  customerName: string
+  customerType: string | null
+  invoiceId: string | null
+  invoiceNo: string | null
+  staffName: string
+  planName: string | null
+}
+
 type CheckInMode = 'WALK_IN' | 'MEMBER'
 
 interface PricingRuleOption {
@@ -78,6 +94,10 @@ export function TodayShiftScreen() {
   const [checkoutSession, setCheckoutSession] = useState<SessionRow | null>(null)
   const [sellSession, setSellSession] = useState<SessionRow | null>(null)
   const [sellPickOpen, setSellPickOpen] = useState(false)
+  const [transactionsOpen, setTransactionsOpen] = useState(false)
+  const [shiftTransactions, setShiftTransactions] = useState<TransactionItem[]>([])
+  const [shiftTransactionsLoading, setShiftTransactionsLoading] = useState(false)
+  const [tools, setTools] = useState<{ id: string; name: string; quantity: number; isRequired: boolean }[]>([])
 
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -89,7 +109,7 @@ export function TodayShiftScreen() {
     setLoading(true)
     setError('')
     try {
-      const [shiftData, openShiftData, sessionData, productData, planData, pricingData, authData] = await Promise.all([
+      const [shiftData, openShiftData, sessionData, productData, planData, pricingData, authData, toolsData] = await Promise.all([
         apiJson<Shift | null>('/api/shifts?current=true'),
         apiJson<Shift | null>('/api/shifts?openOperational=true'),
         apiJson<SessionRow[]>('/api/sessions?status=ACTIVE&limit=50'),
@@ -97,6 +117,7 @@ export function TodayShiftScreen() {
         apiJson<MembershipPlan[]>('/api/membership-plans'),
         apiJson<{ count: number; activeCount?: number }>('/api/pricing/status'),
         apiJson<{ role: string }>('/api/auth/me'),
+        apiJson<{ id: string; name: string; quantity: number; isRequired: boolean }[]>('/api/tools'),
       ])
 
       if (!shiftData.success) throw new Error(shiftData.error || 'Không tải được ca làm')
@@ -115,6 +136,7 @@ export function TodayShiftScreen() {
       setPricingCount(pricingData.data?.count ?? 0)
       setActivePricingCount(pricingData.data?.activeCount ?? pricingData.data?.count ?? 0)
       setAuthRole(authData.data?.role ?? null)
+      setTools(toolsData.data ?? [])
     } catch (err) {
       setError((err as Error).message || 'Lỗi kết nối máy chủ')
     } finally {
@@ -131,10 +153,10 @@ export function TodayShiftScreen() {
   const isAdmin = authRole === 'ADMIN'
   const shiftReady = isAdmin || !!shift
 
-  const handleOpenShift = async (openingCash?: number, notes?: string) => {
+  const handleOpenShift = async (openingCash?: number, notes?: string, toolCounts?: { toolId: string; openCount: number }[]) => {
     setSubmitting(true)
     try {
-      const data = await apiJson<Shift>('/api/shifts', jsonRequest({ openingCash, notes }))
+      const data = await apiJson<Shift>('/api/shifts', jsonRequest({ openingCash, notes, toolCounts }))
       if (!data.success) {
         notifyError(data.error || 'Không mở được ca')
         return
@@ -149,14 +171,32 @@ export function TodayShiftScreen() {
     }
   }
 
-  const handleCloseShift = async (closingCash: number, notes?: string) => {
+  const loadShiftTransactions = async (shiftId: string) => {
+    setShiftTransactionsLoading(true)
+    try {
+      const data = await apiJson<{
+        transactions: TransactionItem[]
+      }>(`/api/shifts/${shiftId}/transactions`)
+      if (!data.success) {
+        notifyError(data.error || 'Không tải được giao dịch')
+        return
+      }
+      setShiftTransactions(data.data?.transactions ?? [])
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setShiftTransactionsLoading(false)
+    }
+  }
+
+  const handleCloseShift = async (closingCash: number, notes?: string, toolCounts?: { toolId: string; openCount: number }[]) => {
     if (!shift) return
 
     setSubmitting(true)
     try {
       const data = await apiJson<Shift>(
         `/api/shifts/${shift.id}/close`,
-        jsonRequest({ closingCash, notes })
+        jsonRequest({ closingCash, notes, toolCounts })
       )
       if (!data.success) {
         notifyError(data.error || 'Không đóng được ca')
@@ -212,6 +252,12 @@ export function TodayShiftScreen() {
           memberCount={activeMembers}
           onOpen={() => setOpenShiftDialog(true)}
           onClose={() => setCloseShiftDialog(true)}
+          onViewTransactions={() => {
+            if (shift) {
+              void loadShiftTransactions(shift.id)
+              setTransactionsOpen(true)
+            }
+          }}
         />
 
         {!shiftReady && (
@@ -301,6 +347,7 @@ export function TodayShiftScreen() {
       <OpenShiftDialog
         open={openShiftDialog}
         existingShift={!shift ? openOperationalShift : null}
+        tools={tools}
         submitting={submitting}
         onClose={() => setOpenShiftDialog(false)}
         onSubmit={handleOpenShift}
@@ -309,6 +356,7 @@ export function TodayShiftScreen() {
       <CloseShiftDialog
         open={closeShiftDialog}
         shift={shift}
+        tools={tools}
         submitting={submitting}
         onClose={() => setCloseShiftDialog(false)}
         onSubmit={handleCloseShift}
@@ -364,6 +412,13 @@ export function TodayShiftScreen() {
           setSellSession(session)
         }}
       />
+
+      <TransactionsDialog
+        open={transactionsOpen}
+        transactions={shiftTransactions}
+        loading={shiftTransactionsLoading}
+        onClose={() => setTransactionsOpen(false)}
+      />
     </div>
   )
 }
@@ -390,6 +445,7 @@ function ShiftRail({
   memberCount,
   onOpen,
   onClose,
+  onViewTransactions,
 }: {
   shift: Shift | null
   activeCount: number
@@ -397,6 +453,7 @@ function ShiftRail({
   memberCount: number
   onOpen: () => void
   onClose: () => void
+  onViewTransactions: () => void
 }) {
   const participantNames = shift?.participants?.map((participant) => participant.staff.fullName) ?? []
   const participantLabel = participantNames.length > 0
@@ -431,9 +488,14 @@ function ShiftRail({
               )}
             </div>
             {shift ? (
-              <Button variant="secondary" size="sm" onClick={onClose}>
-                Đóng ca
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" onClick={onViewTransactions}>
+                  Xem giao dịch
+                </Button>
+                <Button variant="secondary" size="sm" onClick={onClose}>
+                  Đóng ca
+                </Button>
+              </div>
             ) : (
               <Button variant="primary" size="sm" onClick={onOpen}>
                 Mở/Tham gia
@@ -580,18 +642,21 @@ function ActiveSessionCard({
 function OpenShiftDialog({
   open,
   existingShift,
+  tools,
   submitting,
   onClose,
   onSubmit,
 }: {
   open: boolean
   existingShift: Shift | null
+  tools: { id: string; name: string; quantity: number; isRequired: boolean }[]
   submitting: boolean
   onClose: () => void
-  onSubmit: (openingCash?: number, notes?: string) => void
+  onSubmit: (openingCash?: number, notes?: string, toolCounts?: { toolId: string; openCount: number }[]) => void
 }) {
   const [openingCash, setOpeningCash] = useState('0')
   const [notes, setNotes] = useState('')
+  const [toolCounts, setToolCounts] = useState<Record<string, string>>({})
   const isJoiningExistingShift = !!existingShift
 
   useEffect(() => {
@@ -599,8 +664,26 @@ function OpenShiftDialog({
     /* eslint-disable react-hooks/set-state-in-effect */
     setOpeningCash('0')
     setNotes('')
+    setToolCounts({})
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [open, existingShift?.id])
+
+  const handleSubmit = () => {
+    if (isJoiningExistingShift) {
+      onSubmit()
+      return
+    }
+
+    const tc = tools
+      .map((t) => {
+        const val = toolCounts[t.id]
+        if (val === undefined || val === '') return null
+        return { toolId: t.id, openCount: Number(val) || 0 }
+      })
+      .filter(Boolean) as { toolId: string; openCount: number }[]
+
+    onSubmit(Number(openingCash || 0), notes.trim() || undefined, tc.length > 0 ? tc : undefined)
+  }
 
   return (
     <Modal
@@ -618,13 +701,7 @@ function OpenShiftDialog({
           size="lg"
           fullWidth
           disabled={submitting}
-          onClick={() => {
-            if (isJoiningExistingShift) {
-              onSubmit()
-              return
-            }
-            onSubmit(Number(openingCash || 0), notes.trim() || undefined)
-          }}
+          onClick={handleSubmit}
         >
           {submitting
             ? 'Đang xử lý...'
@@ -670,6 +747,11 @@ function OpenShiftDialog({
                 onChange={(event) => setNotes(event.target.value)}
               />
             </div>
+            <ToolCountFields
+              tools={tools}
+              values={toolCounts}
+              onChange={setToolCounts}
+            />
           </>
         )}
       </div>
@@ -680,18 +762,21 @@ function OpenShiftDialog({
 function CloseShiftDialog({
   open,
   shift,
+  tools,
   submitting,
   onClose,
   onSubmit,
 }: {
   open: boolean
   shift: Shift | null
+  tools: { id: string; name: string; quantity: number; isRequired: boolean }[]
   submitting: boolean
   onClose: () => void
-  onSubmit: (closingCash: number, notes?: string) => void
+  onSubmit: (closingCash: number, notes?: string, toolCounts?: { toolId: string; openCount: number }[]) => void
 }) {
   const [closingCash, setClosingCash] = useState('')
   const [notes, setNotes] = useState('')
+  const [toolCounts, setToolCounts] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (open && shift) {
@@ -699,6 +784,24 @@ function CloseShiftDialog({
       setClosingCash(String(toNumber(shift.openingCash)))
     }
   }, [open, shift])
+
+  useEffect(() => {
+    if (!open) {
+      setToolCounts({})
+    }
+  }, [open])
+
+  const handleSubmit = () => {
+    const tc = tools
+      .map((t) => {
+        const val = toolCounts[t.id]
+        if (val === undefined || val === '') return null
+        return { toolId: t.id, openCount: Number(val) || 0 }
+      })
+      .filter(Boolean) as { toolId: string; openCount: number }[]
+
+    onSubmit(Number(closingCash), notes.trim() || undefined, tc.length > 0 ? tc : undefined)
+  }
 
   return (
     <Modal
@@ -712,7 +815,7 @@ function CloseShiftDialog({
           size="lg"
           fullWidth
           disabled={submitting || !closingCash}
-          onClick={() => onSubmit(Number(closingCash), notes.trim() || undefined)}
+          onClick={handleSubmit}
         >
           {submitting ? 'Đang đóng ca...' : 'Đóng ca'}
         </Button>
@@ -744,6 +847,11 @@ function CloseShiftDialog({
             onChange={(event) => setNotes(event.target.value)}
           />
         </div>
+        <ToolCountFields
+          tools={tools}
+          values={toolCounts}
+          onChange={setToolCounts}
+        />
       </div>
     </Modal>
   )
@@ -1887,6 +1995,80 @@ function SellPickDialog({
   )
 }
 
+function TransactionsDialog({
+  open,
+  transactions,
+  loading,
+  onClose,
+}: {
+  open: boolean
+  transactions: TransactionItem[]
+  loading: boolean
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Giao dịch trong ca"
+      description={`${transactions.length} giao dịch · Tổng ${money(totalAmount)}`}
+      size="lg"
+    >
+      <div className="max-h-[60vh] divide-y divide-zinc-100 overflow-y-auto dark:divide-zinc-800">
+        {loading ? (
+          <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            Đang tải giao dịch...
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            Chưa có giao dịch nào trong ca.
+          </div>
+        ) : (
+          transactions.map((tx) => (
+            <button
+              key={`${tx.type}-${tx.id}`}
+              type="button"
+              disabled={!tx.invoiceId}
+              onClick={() => {
+                if (tx.invoiceId) router.push(`/invoices/${tx.invoiceId}`)
+              }}
+              className="grid w-full grid-cols-[1fr_auto] gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent dark:hover:bg-zinc-800/50"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
+                    {tx.customerName}
+                  </p>
+                  {tx.type === 'membership' ? (
+                    <Badge variant="purple" size="sm">Hội viên</Badge>
+                  ) : tx.customerType === 'MEMBER' ? (
+                    <Badge variant="purple" size="sm">HV</Badge>
+                  ) : (
+                    <Badge variant="default" size="sm">VL</Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  {formatClock(tx.paidAt)}
+                  {tx.invoiceNo ? ` · ${tx.invoiceNo}` : ''}
+                  {tx.type === 'membership' && tx.planName ? ` · ${tx.planName}` : ''}
+                  {' · '}
+                  {tx.type === 'membership' ? 'Phí hội viên' : tx.paymentMethod ? paymentMethodLabel(tx.paymentMethod as PaymentMethod) : ''}
+                </p>
+              </div>
+              <p className="self-center text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
+                {money(tx.amount)}
+              </p>
+            </button>
+          ))
+        )}
+      </div>
+    </Modal>
+  )
+}
+
 function formatPromotionOption(promotion: PromotionSnapshot): string {
   if (promotion.discountType === 'PERCENT' || promotion.discountType === 'PERCENT_PLAY_TIME') {
     return `${promotion.name} · Giảm ${promotion.discountValue}%`
@@ -1912,6 +2094,51 @@ function InvoiceRow({
         {label}
       </span>
       <span className="tabular-nums text-zinc-950 dark:text-white">{value}</span>
+    </div>
+  )
+}
+
+function ToolCountFields({
+  tools,
+  values,
+  onChange,
+}: {
+  tools: { id: string; name: string; quantity: number; isRequired: boolean }[]
+  values: Record<string, string>
+  onChange: (values: Record<string, string>) => void
+}) {
+  if (tools.length === 0) return null
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-zinc-950 dark:text-white">
+        Kiểm đếm dụng cụ
+      </p>
+      <div className="grid gap-2 md:grid-cols-2">
+        {tools.map((tool) => (
+          <div key={tool.id}>
+            <div className="flex items-baseline justify-between gap-2">
+              <Label htmlFor={`tool-${tool.id}`}>
+                {tool.name}
+                {tool.isRequired && <span className="ml-1 text-red-500">*</span>}
+              </Label>
+              {tool.quantity > 0 && (
+                <span className="shrink-0 text-[10px] text-zinc-400 dark:text-zinc-500">
+                  Chuẩn: {tool.quantity}
+                </span>
+              )}
+            </div>
+            <Input
+              id={`tool-${tool.id}`}
+              type="number"
+              min={0}
+              value={values[tool.id] ?? ''}
+              onChange={(event) => onChange({ ...values, [tool.id]: event.target.value })}
+              placeholder="0"
+            />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

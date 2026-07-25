@@ -2,16 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
+  ArrowLeft,
   ArrowRight,
+  Banknote,
   CalendarClock,
   CheckCircle2,
-  Clock,
+  CreditCard,
   History,
+  ReceiptText,
   RefreshCw,
   UserMinus,
   UserRoundPlus,
-  Users,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,8 +26,23 @@ import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { apiJson } from '@/features/pos/api'
-import { formatClock, formatDay, money, toNumber } from '@/features/pos/format'
-import type { ShiftParticipantRole, UserRole, UserSession } from '@/features/pos/types'
+import { formatClock, formatDay, money, paymentMethodLabel, toNumber } from '@/features/pos/format'
+import { toInputDate } from '@/lib/utils'
+import type { PaymentMethod, ShiftParticipantRole, UserRole, UserSession } from '@/features/pos/types'
+
+interface TransactionItem {
+  id: string
+  type: 'payment' | 'membership'
+  amount: number
+  paymentMethod: string | null
+  paidAt: string
+  customerName: string
+  customerType: string | null
+  invoiceId: string | null
+  invoiceNo: string | null
+  staffName: string
+  planName: string | null
+}
 
 type ShiftStatusFilter = 'ALL' | 'OPEN' | 'CLOSED'
 
@@ -71,11 +89,31 @@ interface ShiftRow {
   }
 }
 
+interface DayGroup {
+  date: string
+  totalRevenue: number
+  cashRevenue: number
+  transferRevenue: number
+  cardRevenue: number
+  paymentCount: number
+  membershipCount: number
+  sessionCount: number
+  shifts: ShiftRow[]
+}
+
+interface DayGroupsResponse {
+  success: boolean
+  data?: DayGroup[]
+  pagination?: { page: number; daysPerPage: number; totalDays: number; totalPages: number }
+  error?: string
+}
+
 export function ShiftsScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
   const [user, setUser] = useState<UserSession | null>(null)
   const [users, setUsers] = useState<UserRow[]>([])
-  const [shifts, setShifts] = useState<ShiftRow[]>([])
+  const [dayGroups, setDayGroups] = useState<DayGroup[]>([])
+  const [pagination, setPagination] = useState({ page: 1, daysPerPage: 7, totalDays: 0, totalPages: 0 })
   const [statusFilter, setStatusFilter] = useState<ShiftStatusFilter>('ALL')
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -83,8 +121,14 @@ export function ShiftsScreen() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [manageShift, setManageShift] = useState<ShiftRow | null>(null)
+  const [txShift, setTxShift] = useState<ShiftRow | null>(null)
+  const [txDialogOpen, setTxDialogOpen] = useState(false)
+  const [txList, setTxList] = useState<TransactionItem[]>([])
+  const [txLoading, setTxLoading] = useState(false)
 
-  const loadData = useCallback(async () => {
+  const todayStr = toInputDate(new Date())
+
+  const loadData = useCallback(async (page: number) => {
     setLoading(true)
     setError('')
     try {
@@ -92,13 +136,14 @@ export function ShiftsScreen() {
       if (!me.success || !me.data) throw new Error(me.error || 'Không tải được tài khoản')
 
       const params = new URLSearchParams({
-        includeParticipants: 'all',
-        limit: '100',
+        groupBy: 'day',
+        daysPerPage: '7',
+        page: String(page),
       })
       if (statusFilter !== 'ALL') params.set('status', statusFilter)
 
       const [shiftData, userData] = await Promise.all([
-        apiJson<ShiftRow[]>(`/api/shifts?${params.toString()}`),
+        fetch(`/api/shifts?${params.toString()}`).then((r) => r.json()) as Promise<DayGroupsResponse>,
         me.data.role === 'ADMIN'
           ? apiJson<UserRow[]>('/api/users')
           : Promise.resolve({ success: true, data: [] as UserRow[], error: undefined }),
@@ -108,7 +153,8 @@ export function ShiftsScreen() {
       if (!userData.success) throw new Error(userData.error || 'Không tải được nhân viên')
 
       setUser(me.data)
-      setShifts(shiftData.data ?? [])
+      setDayGroups(shiftData.data ?? [])
+      if (shiftData.pagination) setPagination(shiftData.pagination)
       setUsers((userData.data ?? []).filter((item) => item.isActive))
     } catch (err) {
       setError((err as Error).message || 'Lỗi kết nối máy chủ')
@@ -118,54 +164,65 @@ export function ShiftsScreen() {
   }, [statusFilter])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadData()
+    void loadData(1)
   }, [loadData])
 
   const isAdmin = user?.role === 'ADMIN'
-  const visibleShifts = useMemo(() => {
-    const keyword = searchQuery.trim().toLowerCase()
-    if (!keyword) return shifts
 
-    return shifts.filter((shift) => {
-      const names = [
-        shift.staff?.fullName,
-        ...(shift.participants ?? []).map((participant) => participant.staff.fullName),
-      ]
-
-      return names.some((name) => name?.toLowerCase().includes(keyword))
-        || shift.id.toLowerCase().includes(keyword)
-    })
-  }, [searchQuery, shifts])
+  const allShifts = useMemo(() => dayGroups.flatMap((g) => g.shifts), [dayGroups])
 
   const stats = useMemo(() => {
-    const open = shifts.filter((shift) => shift.status === 'OPEN').length
-    const closed = shifts.filter((shift) => shift.status === 'CLOSED').length
-    const activeParticipants = shifts
-      .filter((shift) => shift.status === 'OPEN')
-      .flatMap((shift) => shift.participants ?? [])
-      .filter((participant) => !participant.leftAt).length
+    const open = allShifts.filter((s) => s.status === 'OPEN').length
+    const closed = allShifts.filter((s) => s.status === 'CLOSED').length
+    return { total: open + closed, open, closed }
+  }, [allShifts])
 
-    return {
-      total: shifts.length,
-      open,
-      closed,
-      activeParticipants,
+  const totals = useMemo(() => {
+    let totalRevenue = 0
+    let cashRevenue = 0
+    let transferRevenue = 0
+    let cardRevenue = 0
+    let paymentCount = 0
+    let membershipCount = 0
+    let sessionCount = 0
+    for (const g of dayGroups) {
+      totalRevenue += g.totalRevenue
+      cashRevenue += g.cashRevenue
+      transferRevenue += g.transferRevenue
+      cardRevenue += g.cardRevenue
+      paymentCount += g.paymentCount
+      membershipCount += g.membershipCount
+      sessionCount += g.sessionCount
     }
-  }, [shifts])
+    return { totalRevenue, cashRevenue, transferRevenue, cardRevenue, paymentCount, membershipCount, sessionCount }
+  }, [dayGroups])
+
+  const visibleGroups = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase()
+    if (!keyword) return dayGroups
+
+    return dayGroups.map((group) => ({
+      ...group,
+      shifts: group.shifts.filter((shift) => {
+        const names = [
+          shift.staff?.fullName,
+          ...(shift.participants ?? []).map((p) => p.staff.fullName),
+        ]
+        return names.some((name) => name?.toLowerCase().includes(keyword))
+          || shift.id.toLowerCase().includes(keyword)
+      }),
+    })).filter((group) => group.shifts.length > 0)
+  }, [searchQuery, dayGroups])
 
   const replaceShift = (updated: ShiftRow) => {
-    setShifts((current) => current.map((shift) => (
-      shift.id === updated.id ? updated : shift
-    )))
+    setDayGroups((current) => current.map((group) => ({
+      ...group,
+      shifts: group.shifts.map((s) => (s.id === updated.id ? updated : s)),
+    })))
     setManageShift((current) => (current?.id === updated.id ? updated : current))
   }
 
-  const upsertParticipant = async (
-    shift: ShiftRow,
-    staffId: string,
-    role: ShiftParticipantRole
-  ) => {
+  const upsertParticipant = async (shift: ShiftRow, staffId: string, role: ShiftParticipantRole) => {
     setSubmitting(true)
     try {
       const data = await apiJson<ShiftRow>(
@@ -176,7 +233,6 @@ export function ShiftsScreen() {
         notifyError(data.error || 'Không cập nhật được nhân viên trong ca')
         return
       }
-
       replaceShift(data.data)
       notifySuccess('Đã cập nhật nhân viên trong ca')
     } catch {
@@ -197,7 +253,6 @@ export function ShiftsScreen() {
         notifyError(data.error || 'Không xoá được nhân viên khỏi ca')
         return
       }
-
       replaceShift(data.data)
       notifySuccess('Đã cho nhân viên rời ca')
     } catch {
@@ -207,9 +262,27 @@ export function ShiftsScreen() {
     }
   }
 
-  if (loading) {
-    return <ShiftsSkeleton />
+  const loadTransactions = async (shift: ShiftRow) => {
+    setTxShift(shift)
+    setTxDialogOpen(true)
+    setTxLoading(true)
+    try {
+      const data = await apiJson<{ transactions: TransactionItem[] }>(
+        `/api/shifts/${shift.id}/transactions`
+      )
+      if (!data.success) {
+        notifyError(data.error || 'Không tải được giao dịch')
+        return
+      }
+      setTxList(data.data?.transactions ?? [])
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setTxLoading(false)
+    }
   }
+
+  if (loading) return <ShiftsSkeleton />
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
@@ -228,24 +301,24 @@ export function ShiftsScreen() {
             variant="secondary"
             size="sm"
             icon={RefreshCw}
-            onClick={() => void loadData()}
+            onClick={() => void loadData(pagination.page)}
             title="Làm mới"
           />
         </header>
 
         {error && (
-          <NoticeCard
-            tone="danger"
-            title="Không tải được dữ liệu"
-            description={error}
-          />
+          <NoticeCard tone="danger" title="Không tải được dữ liệu" description={error} />
         )}
 
         <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
           <ShiftStat label="Tổng ca" value={stats.total} />
           <ShiftStat label="Đang mở" value={stats.open} tone="success" />
           <ShiftStat label="Đã đóng" value={stats.closed} />
-          <ShiftStat label="Nhân viên trong ca" value={stats.activeParticipants} tone="blue" />
+          <ShiftStat
+            label={`${pagination.totalDays} ngày`}
+            value={totals.sessionCount}
+            tone="blue"
+          />
         </section>
 
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -290,8 +363,36 @@ export function ShiftsScreen() {
           </div>
         </section>
 
-        <section className="space-y-3">
-          {visibleShifts.length === 0 ? (
+        {pagination.totalPages > 1 && (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              Trang {pagination.page}/{pagination.totalPages} · {pagination.totalDays} ngày
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="xs"
+                icon={ArrowLeft}
+                disabled={pagination.page <= 1 || loading}
+                onClick={() => loadData(pagination.page - 1)}
+              >
+                Trước
+              </Button>
+              <Button
+                variant="secondary"
+                size="xs"
+                icon={ArrowRight}
+                disabled={pagination.page >= pagination.totalPages || loading}
+                onClick={() => loadData(pagination.page + 1)}
+              >
+                Sau
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <section className="space-y-4">
+          {visibleGroups.length === 0 ? (
             <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <EmptyState
                 icon={History}
@@ -300,17 +401,17 @@ export function ShiftsScreen() {
               />
             </div>
           ) : (
-            visibleShifts.map((shift) => (
-              <ShiftCard
-                key={shift.id}
-                shift={shift}
-                canManageParticipants={!!isAdmin && shift.status === 'OPEN'}
+            visibleGroups.map((group) => (
+              <DayGroupSection
+                key={group.date}
+                group={group}
+                isToday={group.date === todayStr}
+                canManageParticipants={!!isAdmin}
                 submitting={submitting}
-                onManage={() => setManageShift(shift)}
-                onRoleChange={(participant, role) => (
-                  upsertParticipant(shift, participant.staffId, role)
-                )}
-                onRemove={(participant) => removeParticipant(shift, participant.staffId)}
+                onManage={setManageShift}
+                onViewTransactions={(shift) => void loadTransactions(shift)}
+                onRoleChange={upsertParticipant}
+                onRemove={removeParticipant}
               />
             ))
           )}
@@ -324,6 +425,89 @@ export function ShiftsScreen() {
         onClose={() => setManageShift(null)}
         onSubmit={upsertParticipant}
       />
+
+      <TransactionsDialog
+        shift={txShift}
+        transactions={txList}
+        loading={txLoading}
+        onClose={() => setTxDialogOpen(false)}
+        open={txDialogOpen}
+      />
+    </div>
+  )
+}
+
+function DayGroupSection({
+  group,
+  isToday,
+  canManageParticipants,
+  submitting,
+  onManage,
+  onViewTransactions,
+  onRoleChange,
+  onRemove,
+}: {
+  group: DayGroup
+  isToday: boolean
+  canManageParticipants: boolean
+  submitting: boolean
+  onManage: (shift: ShiftRow) => void
+  onViewTransactions: (shift: ShiftRow) => void
+  onRoleChange: (shift: ShiftRow, staffId: string, role: ShiftParticipantRole) => Promise<void>
+  onRemove: (shift: ShiftRow, staffId: string) => Promise<void>
+}) {
+  const dayLabel = new Date(group.date).toLocaleDateString('vi-VN', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+
+  return (
+    <div className={`overflow-hidden rounded-xl border shadow-sm ${
+      isToday
+        ? 'border-blue-300 bg-blue-50/50 dark:border-blue-500/30 dark:bg-blue-500/5'
+        : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
+    }`}>
+      <div className="border-b px-4 py-3 dark:border-zinc-800">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            {isToday && <Badge variant="purple" size="sm">Hôm nay</Badge>}
+            <h3 className="text-sm font-semibold capitalize text-zinc-950 dark:text-white">
+              {dayLabel}
+            </h3>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              {group.shifts.length} ca
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="inline-flex items-center gap-1">
+              <Banknote size={12} />
+              {money(group.totalRevenue)}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <CreditCard size={12} />
+              {group.paymentCount + group.membershipCount} GD
+            </span>
+            <span>{group.sessionCount} phiên</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        {group.shifts.map((shift) => (
+          <ShiftCard
+            key={shift.id}
+            shift={shift}
+            canManageParticipants={canManageParticipants && shift.status === 'OPEN'}
+            submitting={submitting}
+            onManage={() => onManage(shift)}
+            onViewTransactions={() => onViewTransactions(shift)}
+            onRoleChange={(p, role) => onRoleChange(shift, p.staffId, role)}
+            onRemove={(p) => onRemove(shift, p.staffId)}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -333,6 +517,7 @@ function ShiftCard({
   canManageParticipants,
   submitting,
   onManage,
+  onViewTransactions,
   onRoleChange,
   onRemove,
 }: {
@@ -340,111 +525,106 @@ function ShiftCard({
   canManageParticipants: boolean
   submitting: boolean
   onManage: () => void
+  onViewTransactions: () => void
   onRoleChange: (participant: ShiftParticipantRow, role: ShiftParticipantRole) => void
   onRemove: (participant: ShiftParticipantRow) => void
 }) {
-  const activeParticipants = (shift.participants ?? []).filter((participant) => !participant.leftAt)
-  const pastParticipants = (shift.participants ?? []).filter((participant) => participant.leftAt)
+  const activeParticipants = (shift.participants ?? []).filter((p) => !p.leftAt)
+  const pastParticipants = (shift.participants ?? []).filter((p) => p.leftAt)
   const duration = formatShiftDuration(shift.openedAt, shift.closedAt)
 
   return (
-    <article className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="grid grid-cols-[6px_1fr]">
-        <div className={shift.status === 'OPEN' ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'} />
-        <div className="p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={shift.status === 'OPEN' ? 'success' : 'default'}>
-                  {shift.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}
-                </Badge>
-                <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
-                  Ca {formatDay(shift.openedAt)}
-                </h2>
-              </div>
-              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-                <span className="inline-flex items-center gap-1">
-                  <Clock size={13} />
-                  {formatClock(shift.openedAt)}
-                  {shift.closedAt ? ` - ${formatClock(shift.closedAt)}` : ''}
-                </span>
-                <span>{duration}</span>
-                <span>Mở bởi {shift.staff?.fullName ?? 'Không rõ'}</span>
-              </p>
+    <div className="grid grid-cols-[4px_1fr]">
+      <div className={shift.status === 'OPEN' ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'} />
+      <div className="p-3">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={shift.status === 'OPEN' ? 'success' : 'default'} size="sm">
+                {shift.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}
+              </Badge>
+              <h4 className="text-sm font-medium text-zinc-950 dark:text-white">
+                Ca {formatClock(shift.openedAt)}
+                {shift.closedAt ? ` - ${formatClock(shift.closedAt)}` : ''}
+              </h4>
             </div>
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+              <span>{duration}</span>
+              <span>Mở bởi {shift.staff?.fullName ?? 'Không rõ'}</span>
+            </p>
+          </div>
 
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="xs" icon={ReceiptText} onClick={onViewTransactions}>
+              GD
+            </Button>
             {canManageParticipants && (
-              <Button variant="secondary" size="sm" icon={UserRoundPlus} onClick={onManage}>
-                Thêm nhân viên
+              <Button variant="secondary" size="xs" icon={UserRoundPlus} onClick={onManage}>
+                NV
               </Button>
             )}
           </div>
+        </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
-            <MoneyMetric label="Tiền đầu ca" value={shift.openingCash} />
-            <MoneyMetric label="Tiền dự kiến" value={shift.expectedCash} />
-            <MoneyMetric label="Tiền cuối ca" value={shift.closingCash} />
-            <MoneyMetric
-              label="Chênh lệch"
-              value={shift.cashDifference}
-              warning={toNumber(shift.cashDifference) !== 0}
-            />
-            <MiniMetric label="Giao dịch" value={String((shift._count?.payments ?? 0) + (shift._count?.membershipPayments ?? 0))} />
-          </div>
-
-          <div className="mt-4">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
-                <Users size={16} className="text-zinc-400" />
-                Nhân viên trong ca
-              </h3>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                {activeParticipants.length} đang tham gia
-              </span>
-            </div>
-
-            {activeParticipants.length === 0 ? (
-              <p className="mt-3 rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
-                Không còn nhân viên đang tham gia ca này.
-              </p>
-            ) : (
-              <div className="mt-3 grid gap-2 md:grid-cols-2">
-                {activeParticipants.map((participant) => (
-                  <ParticipantPill
-                    key={participant.id}
-                    participant={participant}
-                    canManage={canManageParticipants}
-                    submitting={submitting}
-                    onRoleChange={onRoleChange}
-                    onRemove={onRemove}
-                  />
-                ))}
-              </div>
-            )}
-
-            {pastParticipants.length > 0 && (
-              <details className="mt-3">
-                <summary className="cursor-pointer text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  {pastParticipants.length} nhân viên đã rời ca
-                </summary>
-                <div className="mt-2 grid gap-2 md:grid-cols-2">
-                  {pastParticipants.map((participant) => (
-                    <ParticipantPill
-                      key={participant.id}
-                      participant={participant}
-                      canManage={false}
-                      submitting={submitting}
-                      onRoleChange={onRoleChange}
-                      onRemove={onRemove}
-                    />
-                  ))}
-                </div>
-              </details>
-            )}
+        <div className="mt-2 grid grid-cols-3 gap-2 md:grid-cols-5">
+          <MoneyMini label="Đầu ca" value={shift.openingCash} />
+          <MoneyMini label="Dự kiến" value={shift.expectedCash} />
+          <MoneyMini label="Cuối ca" value={shift.closingCash} />
+          <MoneyMini
+            label="Chênh"
+            value={shift.cashDifference}
+            warning={toNumber(shift.cashDifference) !== 0}
+          />
+          <div className="rounded bg-zinc-50 px-2 py-1 dark:bg-zinc-950">
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">GD</p>
+            <p className="text-xs font-semibold tabular-nums text-zinc-950 dark:text-white">
+              {(shift._count?.payments ?? 0) + (shift._count?.membershipPayments ?? 0)}
+            </p>
           </div>
         </div>
+
+        {(activeParticipants.length > 0 || pastParticipants.length > 0) && (
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            {activeParticipants.map((p) => (
+              <ParticipantPill
+                key={p.id}
+                participant={p}
+                canManage={canManageParticipants}
+                submitting={submitting}
+                onRoleChange={onRoleChange}
+                onRemove={onRemove}
+              />
+            ))}
+            {pastParticipants.length > 0 && (
+              <span className="inline-flex items-center rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] text-zinc-400 dark:border-zinc-700">
+                +{pastParticipants.length} đã rời
+              </span>
+            )}
+          </div>
+        )}
       </div>
-    </article>
+    </div>
+  )
+}
+
+function MoneyMini({
+  label,
+  value,
+  warning,
+}: {
+  label: string
+  value: number | string | null | undefined
+  warning?: boolean
+}) {
+  return (
+    <div className="rounded bg-zinc-50 px-2 py-1 dark:bg-zinc-950">
+      <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{label}</p>
+      <p className={`text-xs font-semibold tabular-nums ${
+        warning ? 'text-amber-600 dark:text-amber-300' : 'text-zinc-950 dark:text-white'
+      }`}>
+        {money(value ?? 0)}
+      </p>
+    </div>
   )
 }
 
@@ -461,47 +641,39 @@ function ParticipantPill({
   onRoleChange: (participant: ShiftParticipantRow, role: ShiftParticipantRole) => void
   onRemove: (participant: ShiftParticipantRow) => void
 }) {
-  const active = !participant.leftAt
   const nextRole: ShiftParticipantRole = participant.role === 'LEAD' ? 'STAFF' : 'LEAD'
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-medium text-zinc-950 dark:text-white">
-            {participant.staff.fullName}
-          </p>
-          <Badge variant={participant.role === 'LEAD' ? 'purple' : 'default'} size="sm">
-            {shiftRoleLabel(participant.role)}
-          </Badge>
-        </div>
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-          Vào {formatClock(participant.joinedAt)}
-          {participant.leftAt ? ` · Rời ${formatClock(participant.leftAt)}` : ''}
-        </p>
-      </div>
-
-      {canManage && active && (
-        <div className="flex shrink-0 gap-1.5">
-          <Button
-            variant="secondary"
-            size="xs"
-            icon={CheckCircle2}
+    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-800">
+      <span className="max-w-[100px] truncate font-medium text-zinc-950 dark:text-white">
+        {participant.staff.fullName}
+      </span>
+      {participant.role === 'LEAD' && (
+        <span className="text-[10px] text-purple-600 dark:text-purple-400">TC</span>
+      )}
+      {canManage && !participant.leftAt && (
+        <span className="ml-0.5 flex gap-0.5">
+          <button
+            type="button"
             disabled={submitting}
             onClick={() => onRoleChange(participant, nextRole)}
-            title={participant.role === 'LEAD' ? 'Chuyển thành nhân viên' : 'Chuyển thành trưởng ca'}
-          />
-          <Button
-            variant="outline-danger"
-            size="xs"
-            icon={UserMinus}
+            className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+            title={participant.role === 'LEAD' ? 'Chuyển thành NV' : 'Chuyển thành TC'}
+          >
+            <CheckCircle2 size={10} />
+          </button>
+          <button
+            type="button"
             disabled={submitting}
             onClick={() => onRemove(participant)}
+            className="rounded p-0.5 text-zinc-400 hover:text-red-500"
             title="Cho rời ca"
-          />
-        </div>
+          >
+            <UserMinus size={10} />
+          </button>
+        </span>
       )}
-    </div>
+    </span>
   )
 }
 
@@ -523,18 +695,11 @@ function ManageParticipantsDialog({
 
   useEffect(() => {
     if (!shift) return
-    /* eslint-disable react-hooks/set-state-in-effect */
     setStaffId('')
     setRole('STAFF')
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, [shift])
 
-  const availableUsers = users.filter((user) => user.isActive)
-
-  const handleSubmit = async () => {
-    if (!shift || !staffId) return
-    await onSubmit(shift, staffId, role)
-  }
+  const availableUsers = users.filter((u) => u.isActive)
 
   return (
     <Modal
@@ -548,7 +713,7 @@ function ManageParticipantsDialog({
           size="lg"
           fullWidth
           disabled={submitting || !staffId}
-          onClick={() => void handleSubmit()}
+          onClick={() => { if (shift) void onSubmit(shift, staffId, role) }}
         >
           {submitting ? 'Đang cập nhật...' : 'Thêm hoặc cập nhật'}
         </Button>
@@ -563,9 +728,9 @@ function ManageParticipantsDialog({
             onChange={(event) => setStaffId(event.target.value)}
           >
             <option value="">Chọn nhân viên</option>
-            {availableUsers.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.fullName} · {user.username}
+            {availableUsers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.fullName} · {u.username}
               </option>
             ))}
           </Select>
@@ -592,7 +757,7 @@ function ShiftStat({
   tone = 'default',
 }: {
   label: string
-  value: number
+  value: number | string
   tone?: 'success' | 'blue' | 'default'
 }) {
   const valueClass = tone === 'success'
@@ -609,42 +774,9 @@ function ShiftStat({
   )
 }
 
-function MoneyMetric({
-  label,
-  value,
-  warning,
-}: {
-  label: string
-  value: number | string | null | undefined
-  warning?: boolean
-}) {
-  return (
-    <div className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className={`mt-1 text-sm font-semibold tabular-nums ${
-        warning ? 'text-amber-600 dark:text-amber-300' : 'text-zinc-950 dark:text-white'
-      }`}
-      >
-        {money(value ?? 0)}
-      </p>
-    </div>
-  )
-}
-
-function MiniMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className="mt-1 text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
-        {value}
-      </p>
-    </div>
-  )
-}
-
 function ShiftsSkeleton() {
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <div className="min-h-full space-y-4 p-4 md:p-6">
       <Skeleton className="h-10 w-36" />
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <Skeleton className="h-20" />
@@ -653,7 +785,8 @@ function ShiftsSkeleton() {
         <Skeleton className="h-20" />
       </div>
       <Skeleton className="h-28 w-full" />
-      <Skeleton className="h-72 w-full" />
+      <Skeleton className="h-64 w-full" />
+      <Skeleton className="h-64 w-full" />
     </div>
   )
 }
@@ -664,11 +797,7 @@ function jsonRequest(method: 'POST' | 'DELETE', body: unknown): RequestInit {
     ? document.cookie.match(/(?:^|;\s*)qltrungcung_csrf=([^;]*)/)?.[1]
     : null
   if (csrfToken) headers['X-CSRF-Token'] = decodeURIComponent(csrfToken)
-  return {
-    method,
-    headers,
-    body: JSON.stringify(body),
-  }
+  return { method, headers, body: JSON.stringify(body) }
 }
 
 function formatShiftDuration(openedAt: string, closedAt?: string | null): string {
@@ -682,6 +811,78 @@ function formatShiftDuration(openedAt: string, closedAt?: string | null): string
   return `${hours} giờ ${minutes} phút`
 }
 
-function shiftRoleLabel(role: ShiftParticipantRole): string {
-  return role === 'LEAD' ? 'Trưởng ca' : 'Nhân viên'
+function TransactionsDialog({
+  shift,
+  transactions,
+  loading,
+  onClose,
+  open,
+}: {
+  shift: ShiftRow | null
+  transactions: TransactionItem[]
+  loading: boolean
+  onClose: () => void
+  open: boolean
+}) {
+  const router = useRouter()
+  const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={shift ? `Giao dịch ca ${formatDay(shift.openedAt)}` : 'Giao dịch trong ca'}
+      description={shift ? `Mở lúc ${formatClock(shift.openedAt)} · ${transactions.length} giao dịch · Tổng ${money(totalAmount)}` : undefined}
+      size="lg"
+    >
+      <div className="max-h-[60vh] divide-y divide-zinc-100 overflow-y-auto dark:divide-zinc-800">
+        {loading ? (
+          <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            Đang tải giao dịch...
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            Chưa có giao dịch nào trong ca.
+          </div>
+        ) : (
+          transactions.map((tx) => (
+            <button
+              key={`${tx.type}-${tx.id}`}
+              type="button"
+              disabled={!tx.invoiceId}
+              onClick={() => {
+                if (tx.invoiceId) router.push(`/invoices/${tx.invoiceId}`)
+              }}
+              className="grid w-full grid-cols-[1fr_auto] gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent dark:hover:bg-zinc-800/50"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
+                    {tx.customerName}
+                  </p>
+                  {tx.type === 'membership' ? (
+                    <Badge variant="purple" size="sm">Hội viên</Badge>
+                  ) : tx.customerType === 'MEMBER' ? (
+                    <Badge variant="purple" size="sm">HV</Badge>
+                  ) : (
+                    <Badge variant="default" size="sm">VL</Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  {formatClock(tx.paidAt)}
+                  {tx.invoiceNo ? ` · ${tx.invoiceNo}` : ''}
+                  {tx.type === 'membership' && tx.planName ? ` · ${tx.planName}` : ''}
+                  {' · '}
+                  {tx.type === 'membership' ? 'Phí hội viên' : tx.paymentMethod ? paymentMethodLabel(tx.paymentMethod as PaymentMethod) : ''}
+                </p>
+              </div>
+              <p className="self-center text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
+                {money(tx.amount)}
+              </p>
+            </button>
+          ))
+        )}
+      </div>
+    </Modal>
+  )
 }

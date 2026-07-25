@@ -29,6 +29,7 @@ export async function POST(
       fullName: auth.fullName,
       closingCash: parsed.data.closingCash,
       notes: parsed.data.notes,
+      toolCounts: parsed.data.toolCounts,
     })
 
     return NextResponse.json({ success: true, data: result })

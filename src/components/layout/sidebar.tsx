@@ -15,6 +15,7 @@ import {
   Tag,
   Timer,
   UserCog,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react'
 import { useCallback } from 'react'
@@ -34,6 +35,7 @@ export const staffMenuItems: MenuItem[] = [
   { href: '/inventory', label: 'Kho', Icon: Package },
   { href: '/pricing', label: 'Bảng giá', Icon: Banknote, adminOnly: true },
   { href: '/promotions', label: 'Khuyến mại', Icon: Tag, adminOnly: true },
+  { href: '/tools', label: 'Dụng cụ', Icon: Wrench, adminOnly: true },
   { href: '/reports', label: 'Báo cáo', Icon: BarChart3 },
   { href: '/staff', label: 'Nhân viên', Icon: UserCog, adminOnly: true },
   { href: '/settings', label: 'Cài đặt', Icon: Settings },

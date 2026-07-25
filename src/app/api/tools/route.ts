@@ -1,0 +1,60 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { requireAuth, requireMutationAuth } from '@/lib/auth'
+import { createToolSchema } from '@/lib/validations/tool'
+
+export async function GET(_request: NextRequest) {
+  try {
+    await requireAuth()
+
+    const tools = await prisma.tool.findMany({
+      orderBy: { order: 'asc' },
+    })
+
+    return NextResponse.json({ success: true, data: tools })
+  } catch (error) {
+    if ((error as Error).message === 'UNAUTHORIZED') {
+      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
+    }
+    console.error('GET /api/tools error:', error)
+    return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const auth = await requireMutationAuth(request)
+    if (auth.role !== 'ADMIN') {
+      return NextResponse.json({ success: false, error: 'Chỉ quản trị viên được truy cập' }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const parsed = createToolSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.issues[0].message },
+        { status: 400 }
+      )
+    }
+
+    const tool = await prisma.tool.create({
+      data: parsed.data,
+    })
+
+    return NextResponse.json({ success: true, data: tool }, { status: 201 })
+  } catch (error) {
+    const message = (error as Error).message
+    if (message === 'UNAUTHORIZED') {
+      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
+    }
+    if (message === 'FORBIDDEN') {
+      return NextResponse.json({ success: false, error: 'Chỉ quản trị viên được truy cập' }, { status: 403 })
+    }
+    if (message === 'CSRF_MISMATCH') {
+      return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
+    }
+    console.error('POST /api/tools error:', error)
+    return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
+  }
+}
