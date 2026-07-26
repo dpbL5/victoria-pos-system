@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { generateCSRFToken, setCSRFCookie, clearCSRFCookie, validateCSRF } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
+import { withRetry } from "@/lib/db-retry";
 import type { SessionPayload } from "@/types";
 
 // ── Config ─────────────────────────────────────────────
@@ -79,16 +80,18 @@ export async function requireAuth(): Promise<SessionPayload> {
     throw new Error("UNAUTHORIZED");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: {
-      id: true,
-      username: true,
-      fullName: true,
-      role: true,
-      isActive: true,
-    },
-  });
+  const user = await withRetry(() =>
+    prisma.user.findUnique({
+      where: { id: session.userId },
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+      },
+    })
+  );
 
   if (!user || !user.isActive) {
     throw new Error("UNAUTHORIZED");
