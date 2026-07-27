@@ -136,13 +136,15 @@ export function resolveRuleDaysOfWeek(daysOfWeek: number[] | null | undefined, d
 export async function calculateSessionPrice(
   sessionId: string,
   endTime: Date,
-  promotion: PromotionSnapshot | null = null
+  promotion: PromotionSnapshot | null = null,
+  pricingGroupId?: string
 ): Promise<PricingResult> {
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
     include: {
       customer: true,
       membership: true,
+      pricingGroups: true,
     },
   })
 
@@ -167,31 +169,46 @@ export async function calculateSessionPrice(
     }
   }
 
-  const currentHour = getVnHour(session.startTime)
-  const dayType = getDayType(session.startTime)
-
   let hourlyRate: number
   let tiers: { minHours: number; ratePerHour: number }[] = []
 
-  // ── Dùng bảng giá đã snapshot lúc check-in nếu có ──
-  const snapshot = (session as any).pricingRuleSnapshot as PricingRuleSnapshot | null
-  if (snapshot) {
-    hourlyRate = snapshot.ratePerHour
-    tiers = snapshot.tiers.map((t) => ({
-      minHours: t.minHours,
-      ratePerHour: t.ratePerHour,
-    }))
-  } else {
-    // ── Fallback: resolve lại bảng giá từ DB (tương thích session cũ) ──
-    const applicableRule = await findApplicablePricingRule(currentHour, dayType, session.startTime)
-
-    if (applicableRule) {
-      hourlyRate = Number(applicableRule.ratePerHour)
-      tiers = await fetchPricingTiers(applicableRule.id)
+  // ── Nếu có pricingGroupId, dùng snapshot của group đó ──
+  if (pricingGroupId) {
+    const group = session.pricingGroups.find(g => g.id === pricingGroupId)
+    if (!group || group.remainingCount <= 0) throw new Error('PRICING_GROUP_NOT_FOUND')
+    const snapshot = group.pricingSnapshot as PricingRuleSnapshot | null
+    if (snapshot) {
+      hourlyRate = snapshot.ratePerHour
+      tiers = snapshot.tiers.map((t) => ({
+        minHours: t.minHours,
+        ratePerHour: t.ratePerHour,
+      }))
     } else {
-      hourlyRate = Number(session.hourlyRate)
-      if (!hourlyRate) {
-        hourlyRate = await findApplicableRate(currentHour, dayType, session.startTime)
+      hourlyRate = Number(group.hourlyRate)
+    }
+  } else {
+    // ── Dùng bảng giá đã snapshot lúc check-in trên session nếu có ──
+    const snapshot = (session as any).pricingRuleSnapshot as PricingRuleSnapshot | null
+    if (snapshot) {
+      hourlyRate = snapshot.ratePerHour
+      tiers = snapshot.tiers.map((t) => ({
+        minHours: t.minHours,
+        ratePerHour: t.ratePerHour,
+      }))
+    } else {
+      // ── Fallback: resolve lại bảng giá từ DB (tương thích session cũ) ──
+      const currentHour = getVnHour(session.startTime)
+      const dayType = getDayType(session.startTime)
+      const applicableRule = await findApplicablePricingRule(currentHour, dayType, session.startTime)
+
+      if (applicableRule) {
+        hourlyRate = Number(applicableRule.ratePerHour)
+        tiers = await fetchPricingTiers(applicableRule.id)
+      } else {
+        hourlyRate = Number(session.hourlyRate)
+        if (!hourlyRate) {
+          hourlyRate = await findApplicableRate(currentHour, dayType, session.startTime)
+        }
       }
     }
   }

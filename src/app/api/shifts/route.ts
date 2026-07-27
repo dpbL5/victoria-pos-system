@@ -16,6 +16,9 @@ import { Prisma } from '@/generated/prisma/client'
 const stripeShiftInclude = {
   staff: { select: { id: true, fullName: true } },
   _count: { select: { sessions: true, payments: true, membershipPayments: true } },
+  toolCounts: {
+    include: { tool: { select: { id: true, name: true, quantity: true, isRequired: true } } },
+  },
 } satisfies Prisma.ShiftInclude
 
 export async function GET(request: NextRequest) {
@@ -85,6 +88,18 @@ export async function GET(request: NextRequest) {
         })
       )
 
+      function calcToolStats(tcs: { openCount: number; closeCount: number | null }[]) {
+        if (tcs.length === 0) return undefined
+        let matched = 0
+        let mismatched = 0
+        for (const tc of tcs) {
+          if (tc.closeCount == null) continue
+          if (tc.closeCount === tc.openCount) matched++
+          else mismatched++
+        }
+        return { total: tcs.length, matched, mismatched }
+      }
+
       const todayStr = toInputDate(new Date())
       const groups = new Map<string, {
         date: string
@@ -136,6 +151,8 @@ export async function GET(request: NextRequest) {
           cashDifference: shift.cashDifference != null ? Number(shift.cashDifference) : null,
           status: shift.status,
           _count: shift._count,
+          toolCounts: shift.toolCounts,
+          toolStats: calcToolStats(shift.toolCounts as any),
         })
       }
 

@@ -1,4 +1,4 @@
-import type { PricingRuleSnapshot, PromotionDiscountType } from '@/types'
+import type { PricingRuleSnapshot, PromotionDiscountType, SessionPricingGroupDTO } from '@/types'
 
 export type PaymentMethod = 'CASH' | 'TRANSFER' | 'CARD'
 export type CustomerType = 'WALK_IN' | 'MEMBER'
@@ -48,6 +48,7 @@ export interface SessionRow {
   shift?: { id: string; openedAt: string; status: 'OPEN' | 'CLOSED' } | null
   payment?: { paymentMethod: PaymentMethod } | null
   pendingSellTotal?: number
+  pricingGroups?: SessionPricingGroupDTO[]
 }
 
 export interface Shift {

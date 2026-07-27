@@ -13,6 +13,16 @@ export async function POST() {
   try {
     await requireAdmin()
   } catch {
+    await prisma.appSetting.upsert({
+      where: { key: 'PARKING_FEE_UNIT_PRICE' },
+      update: {},
+      create: {
+        key: 'PARKING_FEE_UNIT_PRICE',
+        value: '5000',
+        label: 'Phí gửi xe (VNĐ/xe)',
+      },
+    })
+
     return NextResponse.json({ success: false, error: 'Không có quyền' }, { status: 403 })
   }
 

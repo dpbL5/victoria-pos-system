@@ -9,7 +9,7 @@ export type PromotionDiscountType = "FIXED_AMOUNT" | "PERCENT" | "FIXED_PER_HOUR
 export type PaymentMethod = "CASH" | "TRANSFER" | "CARD"
 export type MembershipStatus = "ACTIVE" | "CANCELLED"
 export type InvoiceStatus = "DRAFT" | "PAID" | "CANCELLED"
-export type InvoiceItemType = "PLAY_TIME" | "MEMBERSHIP_FEE" | "PRODUCT" | "SERVICE" | "DISCOUNT"
+export type InvoiceItemType = "PLAY_TIME" | "MEMBERSHIP_FEE" | "PRODUCT" | "SERVICE" | "DISCOUNT" | "SURCHARGE"
 export type ProductType = "PRODUCT" | "SERVICE"
 export type StockMovementType = "RESTOCK" | "SALE" | "ADJUSTMENT" | "VOID"
 export type ShiftStatus = "OPEN" | "CLOSED"
@@ -50,6 +50,9 @@ export interface PlayTimeQuote {
   pendingSellTotal: number
   pendingSellItems: PendingSellItem[]
   playerCount?: number
+  pricingGroupId?: string
+  pricingGroups?: SessionPricingGroupDTO[]
+  parkingFeeUnitPrice?: number
 }
 
 export interface PendingSellItem {
@@ -66,6 +69,17 @@ export interface PricingTier {
   ruleId: string
   minHours: number
   ratePerHour: number | string
+}
+
+export interface SessionPricingGroupDTO {
+  id: string
+  sessionId: string
+  label: string
+  playerCount: number
+  remainingCount: number
+  hourlyRate: number
+  pricingRuleId: string | null
+  pricingSnapshot: PricingRuleSnapshot | null
 }
 
 export interface PricingRuleTierSnapshot {
@@ -158,6 +172,18 @@ export interface ShiftRevenueSummary {
   paymentCount: number
   membershipCount: number
   sessionCount: number
+  toolStats?: {
+    total: number
+    matched: number
+    mismatched: number
+  }
+  toolCounts?: Array<{
+    id: string
+    toolId: string
+    tool: { id: string; name: string; quantity: number; isRequired: boolean }
+    openCount: number
+    closeCount: number | null
+  }>
 }
 
 export interface ShiftReportDetail extends ShiftRevenueSummary {

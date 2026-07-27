@@ -6,6 +6,8 @@ import {
   ArrowRight,
   Banknote,
   CalendarClock,
+  ChevronDown,
+  ChevronRight,
   CreditCard,
   Search,
 } from 'lucide-react'
@@ -287,6 +289,52 @@ function ShiftCard({
             <p className="text-xs font-semibold">{money(shift.closingCash)}</p>
           </div>
         </div>
+      )}
+
+      {shift.toolStats && shift.status === 'CLOSED' && (
+        <details className="group mt-2">
+          <summary className="cursor-pointer list-none rounded-lg bg-zinc-50 p-2 transition-colors hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900">
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <span className="text-[10px] text-zinc-400">Dụng cụ</span>
+                <p className="flex items-center gap-1 text-xs font-semibold">
+                  <ChevronRight size={12} className="group-open:hidden" />
+                  <ChevronDown size={12} className="hidden group-open:block" />
+                  {shift.toolStats.total} món
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400">Khớp</span>
+                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{shift.toolStats.matched}</p>
+              </div>
+              <div>
+                <span className="text-[10px] text-amber-600 dark:text-amber-400">Lệch</span>
+                <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">{shift.toolStats.mismatched}</p>
+              </div>
+            </div>
+          </summary>
+          {shift.toolCounts && shift.toolCounts.length > 0 && (
+            <div className="mt-1 space-y-1 rounded-lg bg-white p-2 dark:bg-zinc-900">
+              {shift.toolCounts.map((tc) => {
+                const diff = tc.closeCount != null ? tc.closeCount - tc.openCount : null
+                return (
+                  <div key={tc.id} className="flex items-center justify-between gap-2 py-1 text-xs">
+                    <span className="text-zinc-700 dark:text-zinc-300">{tc.tool.name}</span>
+                    <span className="tabular-nums text-zinc-500">
+                      Mở: {tc.openCount}
+                      {tc.closeCount != null && <> · Đóng: {tc.closeCount}</>}
+                      {diff != null && (
+                        <span className={diff === 0 ? 'ml-1 text-emerald-600' : 'ml-1 text-amber-600'}>
+                          ({diff > 0 ? `+${diff}` : diff})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </details>
       )}
     </button>
   )

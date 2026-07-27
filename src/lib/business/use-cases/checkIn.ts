@@ -11,6 +11,7 @@ export interface CheckInInput {
   customerId?: string
   pricingRuleId?: string
   playerCount?: number
+  groups?: Array<{ playerCount: number; pricingRuleId: string }>
   now?: Date
 }
 
@@ -90,33 +91,77 @@ async function resolvePricingSnapshot(
   }
 }
 
+async function createPricingGroups(
+  tx: typeof prisma,
+  sessionId: string,
+  groups: Array<{ playerCount: number; pricingRuleId: string }>,
+  now: Date,
+): Promise<void> {
+  let i = 1
+  for (const group of groups) {
+    const { pricingRuleId, pricingRuleSnapshot } = await resolvePricingSnapshot(group.pricingRuleId, now)
+    await tx.sessionPricingGroup.create({
+      data: {
+        sessionId,
+        label: `Nhóm ${i}`,
+        playerCount: group.playerCount,
+        remainingCount: group.playerCount,
+        hourlyRate: pricingRuleSnapshot.ratePerHour,
+        pricingRuleId,
+        pricingSnapshot: pricingRuleSnapshot as any,
+      },
+    })
+    i++
+  }
+}
+
 export async function checkIn({
   staffId,
   customerId,
   pricingRuleId,
   playerCount = 1,
+  groups,
   now = new Date(),
 }: CheckInInput): Promise<CheckInResult> {
   if (!customerId) {
-    return checkInAnonymousWalkIn({ staffId, pricingRuleId, playerCount, now })
+    return checkInAnonymousWalkIn({ staffId, pricingRuleId, playerCount, groups, now })
   }
 
-  return checkInRegisteredCustomer({ staffId, customerId, pricingRuleId, playerCount, now })
+  return checkInRegisteredCustomer({ staffId, customerId, pricingRuleId, playerCount, groups, now })
 }
 
 async function checkInAnonymousWalkIn({
   staffId,
   pricingRuleId,
   playerCount = 1,
+  groups,
   now,
 }: {
   staffId: string
   pricingRuleId?: string
   playerCount?: number
+  groups?: Array<{ playerCount: number; pricingRuleId: string }>
   now: Date
 }) {
-  const { pricingRuleId: resolvedId, pricingRuleSnapshot } = await resolvePricingSnapshot(pricingRuleId, now)
-  const applicableRate = pricingRuleSnapshot.ratePerHour
+  // ── Nếu có groups, resolve pricing groups trước ──
+  const resolvedGroups = groups
+    ? await Promise.all(
+        groups.map(async (g) => {
+          const resolved = await resolvePricingSnapshot(g.pricingRuleId, now)
+          return { ...g, ...resolved }
+        })
+      )
+    : null
+
+  const totalPlayers = resolvedGroups
+    ? resolvedGroups.reduce((sum, g) => sum + g.playerCount, 0)
+    : playerCount
+
+  const { pricingRuleId: resolvedId, pricingRuleSnapshot } = resolvedGroups
+    ? resolvedGroups[0] // first group for session-level fields (backward compat)
+    : await resolvePricingSnapshot(pricingRuleId, now)
+
+  const applicableRate = resolvedGroups?.[0]?.pricingRuleSnapshot?.ratePerHour ?? pricingRuleSnapshot.ratePerHour
 
   const result = await prisma.$transaction(async (tx) => {
     // ── Dùng parseStartOfDay/parseEndOfDay để tính mốc ngày theo giờ Việt Nam (UTC+7) ──
@@ -155,7 +200,7 @@ async function checkInAnonymousWalkIn({
         hourlyRate: applicableRate,
         pricingRuleId: resolvedId,
         pricingRuleSnapshot: pricingRuleSnapshot as any,
-        playerCount,
+        playerCount: totalPlayers,
         status: 'ACTIVE',
       },
       include: {
@@ -164,6 +209,38 @@ async function checkInAnonymousWalkIn({
         shift: { select: { id: true, openedAt: true, status: true } },
       },
     })
+
+    // ── Luôn tạo pricing groups ──
+    if (resolvedGroups) {
+      let i = 1
+      for (const g of resolvedGroups) {
+        await tx.sessionPricingGroup.create({
+          data: {
+            sessionId: session.id,
+            label: `Nhóm ${i}`,
+            playerCount: g.playerCount,
+            remainingCount: g.playerCount,
+            hourlyRate: g.pricingRuleSnapshot.ratePerHour,
+            pricingRuleId: g.pricingRuleId,
+            pricingSnapshot: g.pricingRuleSnapshot as any,
+          },
+        })
+        i++
+      }
+    } else {
+      // Legacy path: single group
+      await tx.sessionPricingGroup.create({
+        data: {
+          sessionId: session.id,
+          label: 'Nhóm 1',
+          playerCount: totalPlayers,
+          remainingCount: totalPlayers,
+          hourlyRate: applicableRate,
+          pricingRuleId: resolvedId,
+          pricingSnapshot: pricingRuleSnapshot as any,
+        },
+      })
+    }
 
     await logActivity(tx, {
       userId: staffId,
@@ -176,7 +253,8 @@ async function checkInAnonymousWalkIn({
         shiftId: openShift.id,
         hourlyRate: applicableRate,
         pricingRuleId: resolvedId,
-        playerCount,
+        playerCount: totalPlayers,
+        groupCount: resolvedGroups?.length ?? 1,
       },
     })
 
@@ -194,12 +272,14 @@ async function checkInRegisteredCustomer({
   customerId,
   pricingRuleId,
   playerCount = 1,
+  groups,
   now,
 }: {
   staffId: string
   customerId: string
   pricingRuleId?: string
   playerCount?: number
+  groups?: Array<{ playerCount: number; pricingRuleId: string }>
   now: Date
 }) {
   const customer = await prisma.customer.findUnique({
@@ -217,9 +297,9 @@ async function checkInRegisteredCustomer({
   }
 
   let membershipId: string | undefined
-  let rate = 0
   let resolvedPricingRuleId: string | undefined
   let pricingRuleSnapshot: PricingRuleSnapshot | undefined
+  let totalPlayers = playerCount
 
   if (customer.type === 'MEMBER') {
     const activeMembership = await findActiveMembership(prisma, customer.id, now)
@@ -227,13 +307,92 @@ async function checkInRegisteredCustomer({
       throw new Error('MEMBERSHIP_REQUIRED')
     }
     membershipId = activeMembership.id
-    rate = 0
+  } else if (groups) {
+    // Resolve all group snapshots
+    const resolvedGroups = await Promise.all(
+      groups.map(async (g) => {
+        const resolved = await resolvePricingSnapshot(g.pricingRuleId, now)
+        return { ...g, ...resolved }
+      })
+    )
+    totalPlayers = resolvedGroups.reduce((sum, g) => sum + g.playerCount, 0)
+    resolvedPricingRuleId = resolvedGroups[0].pricingRuleId
+    pricingRuleSnapshot = resolvedGroups[0].pricingRuleSnapshot
+
+    const result = await prisma.$transaction(async (tx) => {
+      const openShift = await findOpenShiftForStaff(tx, staffId)
+      if (!openShift) {
+        throw new Error('SHIFT_REQUIRED')
+      }
+
+      const session = await tx.session.create({
+        data: {
+          customerId: customer.id,
+          staffId,
+          shiftId: openShift.id,
+          membershipId,
+          startTime: now,
+          hourlyRate: pricingRuleSnapshot!.ratePerHour,
+          pricingRuleId: resolvedPricingRuleId,
+          pricingRuleSnapshot: pricingRuleSnapshot as any,
+          playerCount: totalPlayers,
+          status: 'ACTIVE',
+        },
+        include: {
+          customer: { select: { id: true, fullName: true, type: true } },
+          membership: { select: { id: true, startsAt: true, expiresAt: true } },
+          shift: { select: { id: true, openedAt: true, status: true } },
+        },
+      })
+
+      let i = 1
+      for (const g of resolvedGroups) {
+        await tx.sessionPricingGroup.create({
+          data: {
+            sessionId: session.id,
+            label: `Nhóm ${i}`,
+            playerCount: g.playerCount,
+            remainingCount: g.playerCount,
+            hourlyRate: g.pricingRuleSnapshot.ratePerHour,
+            pricingRuleId: g.pricingRuleId,
+            pricingSnapshot: g.pricingRuleSnapshot as any,
+          },
+        })
+        i++
+      }
+
+      await logActivity(tx, {
+        userId: staffId,
+        action: 'SESSION_CHECK_IN',
+        entityType: 'Session',
+        entityId: session.id,
+        details: {
+          customerId: customer.id,
+          customerType: customer.type,
+          membershipId,
+          shiftId: openShift.id,
+          hourlyRate: pricingRuleSnapshot!.ratePerHour,
+          pricingRuleId: resolvedPricingRuleId,
+          playerCount: totalPlayers,
+          groupCount: resolvedGroups.length,
+        },
+      })
+
+      return session
+    })
+
+    return {
+      ...result,
+      hourlyRate: Number(result.hourlyRate),
+    } as CheckInResult
   } else {
+    // Legacy single-pricing check-in
     const resolved = await resolvePricingSnapshot(pricingRuleId, now)
     resolvedPricingRuleId = resolved.pricingRuleId
     pricingRuleSnapshot = resolved.pricingRuleSnapshot
-    rate = pricingRuleSnapshot.ratePerHour
   }
+
+  const rate = membershipId ? 0 : (pricingRuleSnapshot?.ratePerHour ?? 0)
 
   const result = await prisma.$transaction(async (tx) => {
     const openShift = await findOpenShiftForStaff(tx, staffId)
@@ -251,13 +410,26 @@ async function checkInRegisteredCustomer({
         hourlyRate: rate,
         pricingRuleId: resolvedPricingRuleId,
         pricingRuleSnapshot: pricingRuleSnapshot as any,
-        playerCount,
+        playerCount: totalPlayers,
         status: 'ACTIVE',
       },
       include: {
         customer: { select: { id: true, fullName: true, type: true } },
         membership: { select: { id: true, startsAt: true, expiresAt: true } },
         shift: { select: { id: true, openedAt: true, status: true } },
+      },
+    })
+
+    // ── Luôn tạo 1 pricing group ──
+    await tx.sessionPricingGroup.create({
+      data: {
+        sessionId: session.id,
+        label: 'Nhóm 1',
+        playerCount: totalPlayers,
+        remainingCount: totalPlayers,
+        hourlyRate: rate,
+        pricingRuleId: resolvedPricingRuleId,
+        pricingSnapshot: pricingRuleSnapshot as any,
       },
     })
 
@@ -273,7 +445,8 @@ async function checkInRegisteredCustomer({
         shiftId: openShift.id,
         hourlyRate: rate,
         pricingRuleId: resolvedPricingRuleId,
-        playerCount,
+        playerCount: totalPlayers,
+        groupCount: 1,
       },
     })
 

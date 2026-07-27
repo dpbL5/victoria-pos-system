@@ -7,10 +7,10 @@ import { adjustCashDifferenceSchema } from '@/lib/validations/shift'
 import type { ShiftReportDetail } from '@/types'
 
 type PaymentMethodKey = 'CASH' | 'TRANSFER' | 'CARD'
-type ItemTypeKey = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT'
+type ItemTypeKey = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT' | 'SURCHARGE'
 
 const paymentMethods: PaymentMethodKey[] = ['CASH', 'TRANSFER', 'CARD']
-const itemTypes: ItemTypeKey[] = ['PLAY_TIME', 'MEMBERSHIP_FEE', 'PRODUCT', 'SERVICE', 'DISCOUNT']
+const itemTypes: ItemTypeKey[] = ['PLAY_TIME', 'MEMBERSHIP_FEE', 'PRODUCT', 'SERVICE', 'DISCOUNT', 'SURCHARGE']
 
 export async function GET(
   _request: NextRequest,

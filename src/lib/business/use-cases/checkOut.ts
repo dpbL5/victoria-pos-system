@@ -5,6 +5,7 @@ import {
   promotionRuleWhere,
   toPromotionSnapshot,
 } from '@/lib/business/promotions'
+import { getNumericSetting, SETTING_KEYS } from '@/lib/business/settings'
 import { findOpenShiftForStaff } from '@/lib/business/shifts'
 import { prisma } from '@/lib/prisma'
 import {
@@ -29,8 +30,12 @@ export interface CheckoutInput {
   endTime?: Date
   items: CheckoutLineInput[]
   notes?: string
-  /** Số người checkout (mặc định = tất cả người còn lại trong phiên) */
+  /** ID của pricing group cần checkout (nếu không có, dùng legacy session.playerCount) */
+  pricingGroupId?: string
+  /** Số người checkout từ group */
   playerCount?: number
+  /** Số lượng xe gửi (phí gửi xe) */
+  parkingVehicleCount?: number
 }
 
 export interface CheckoutResult {
@@ -54,6 +59,8 @@ export interface CheckoutResult {
   checkedOutPlayers: number
   remainingPlayers: number
   sessionClosed: boolean
+  /** Tổng phí gửi xe (nếu có) */
+  parkingFeeTotal?: number
 }
 
 interface CheckoutLine {
@@ -73,11 +80,17 @@ export async function checkOut({
   endTime = new Date(),
   items,
   notes,
+  pricingGroupId,
   playerCount,
+  parkingVehicleCount = 0,
 }: CheckoutInput): Promise<CheckoutResult> {
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
-    include: { customer: true, membership: true },
+    include: {
+      customer: true,
+      membership: true,
+      pricingGroups: { orderBy: { createdAt: 'asc' } },
+    },
   })
 
   if (!session) {
@@ -90,13 +103,41 @@ export async function checkOut({
     throw new Error('END_TIME_BEFORE_START')
   }
 
-  // ── Xác định số người checkout ──
-  const checkoutCount = Math.min(
-    playerCount ?? session.playerCount,
-    session.playerCount
-  )
-  if (checkoutCount <= 0) {
-    throw new Error('NO_PLAYERS_TO_CHECKOUT')
+  // ── Xác định group và số người checkout ──
+  let checkoutCount: number
+  let targetGroupId: string | undefined
+
+  if (pricingGroupId) {
+    // Checkout theo pricing group cụ thể
+    const group = session.pricingGroups.find(g => g.id === pricingGroupId)
+    if (!group) throw new Error('PRICING_GROUP_NOT_FOUND')
+    if (group.remainingCount <= 0) throw new Error('PRICING_GROUP_EMPTY')
+    checkoutCount = Math.min(
+      playerCount ?? group.remainingCount,
+      group.remainingCount
+    )
+    if (checkoutCount <= 0) throw new Error('NO_PLAYERS_TO_CHECKOUT')
+    targetGroupId = group.id
+  } else {
+    // Legacy path: dùng session.playerCount
+    if (session.pricingGroups.length > 0) {
+      // Session mới có groups, checkout từ group đầu tiên còn người
+      const firstGroup = session.pricingGroups.find(g => g.remainingCount > 0)
+      if (!firstGroup) throw new Error('NO_PLAYERS_TO_CHECKOUT')
+      checkoutCount = Math.min(
+        playerCount ?? firstGroup.remainingCount,
+        firstGroup.remainingCount
+      )
+      if (checkoutCount <= 0) throw new Error('NO_PLAYERS_TO_CHECKOUT')
+      targetGroupId = firstGroup.id
+    } else {
+      // Session cũ không có groups (legacy)
+      checkoutCount = Math.min(
+        playerCount ?? session.playerCount,
+        session.playerCount
+      )
+      if (checkoutCount <= 0) throw new Error('NO_PLAYERS_TO_CHECKOUT')
+    }
   }
 
   const checkoutAt = new Date()
@@ -108,7 +149,7 @@ export async function checkOut({
     throw new Error('PROMOTION_UNAVAILABLE')
   }
 
-  const pricing = await calculateSessionPrice(sessionId, endTime, selectedPromotion)
+  const pricing = await calculateSessionPrice(sessionId, endTime, selectedPromotion, targetGroupId)
   if (pricing.isMemberSession && promotionRuleId) {
     throw new Error('PROMOTION_NOT_APPLICABLE')
   }
@@ -118,7 +159,7 @@ export async function checkOut({
   let playTotal = Math.max(0, pricing.grandTotal)
 
   const quantityByProductId = new Map<string, number>()
-  const newQuantityByProductId = new Map<string, number>() // chỉ món mới thêm lúc checkout — cần trừ kho
+  const newQuantityByProductId = new Map<string, number>()
 
   // ── Gom sản phẩm từ hóa đơn DRAFT (bán kèm — đã trừ kho lúc thêm vào phiên) ──
   const draftInvoices = await prisma.invoice.findMany({
@@ -204,8 +245,6 @@ export async function checkOut({
   const paidAt = checkoutAt
 
   const result = await prisma.$transaction(async (tx) => {
-    // ── Kiểm tra ca làm trong transaction ──
-    // Cho phép checkout phiên từ ca trước: tiền thuộc về ca đang mở hiện tại
     const openShift = await findOpenShiftForStaff(tx, staffId)
     if (!openShift) {
       throw new Error('SHIFT_REQUIRED')
@@ -235,8 +274,6 @@ export async function checkOut({
     }
 
     const promotion = promotionRule ? toPromotionSnapshot(promotionRule) : null
-    // Dùng subtotal luỹ tiến đã tính từ calculateSessionPrice,
-    // chỉ áp lại promotion discount trong transaction để đảm bảo khuyến mại còn hiệu lực.
     const playPrice = calculatePlayPrice({
       totalHours: pricing.totalHours,
       hourlyRate: pricing.hourlyRate,
@@ -255,6 +292,11 @@ export async function checkOut({
     invoiceSubtotal = finalPricing.subtotal * checkoutCount + productSubtotal
     invoiceGrandTotal = playTotal + productSubtotal
 
+    // ── Lấy group label ──
+    const groupLabel = targetGroupId
+      ? session.pricingGroups.find(g => g.id === targetGroupId)?.label ?? ''
+      : ''
+
     const invoice = await tx.invoice.create({
       data: {
         invoiceNo: generateInvoiceNo(),
@@ -267,7 +309,11 @@ export async function checkOut({
         discountTotal: playDiscountTotal,
         grandTotal: invoiceGrandTotal,
         paidAt,
-        notes: notes || (checkoutCount < session.playerCount ? `Checkout ${checkoutCount}/${session.playerCount} người` : undefined),
+        notes: notes || (
+          targetGroupId
+            ? `Checkout ${checkoutCount} người (${groupLabel})`
+            : (checkoutCount < session.playerCount ? `Checkout ${checkoutCount}/${session.playerCount} người` : undefined)
+        ),
       },
     })
 
@@ -278,7 +324,9 @@ export async function checkOut({
         type: 'PLAY_TIME',
         description: finalPricing.isMemberSession
           ? `Giờ chơi hội viên × ${checkoutCount} người`
-          : `Giờ chơi khách vãng lai × ${checkoutCount} người`,
+          : targetGroupId
+            ? `Giờ chơi (${groupLabel}: ${checkoutCount} người × ${moneyPerPerson(finalPricing.hourlyRate)})`
+            : `Giờ chơi khách vãng lai × ${checkoutCount} người`,
         quantity: +(finalPricing.totalHours * checkoutCount).toFixed(2),
         unitPrice: finalPricing.hourlyRate,
         subtotal: finalPricing.subtotal * checkoutCount,
@@ -295,9 +343,48 @@ export async function checkOut({
           checkoutCount,
           perPersonSubtotal: finalPricing.subtotal,
           perPersonHours: finalPricing.totalHours,
+          pricingGroupId: targetGroupId ?? null,
+          groupLabel: groupLabel || null,
         },
       },
     })
+
+    // ── Phí gửi xe ──
+    let parkingFeeTotal = 0
+    if (parkingVehicleCount > 0) {
+      const unitPrice = await getNumericSetting(SETTING_KEYS.PARKING_FEE_UNIT_PRICE, 0)
+      if (unitPrice > 0) {
+        parkingFeeTotal = parkingVehicleCount * unitPrice
+        invoiceSubtotal += parkingFeeTotal
+        invoiceGrandTotal += parkingFeeTotal
+
+        await tx.invoiceItem.create({
+          data: {
+            invoiceId: invoice.id,
+            type: 'SURCHARGE',
+            description: `Phí gửi xe × ${parkingVehicleCount} xe`,
+            quantity: parkingVehicleCount,
+            unitPrice,
+            subtotal: parkingFeeTotal,
+            discountAmount: 0,
+            total: parkingFeeTotal,
+            metadata: {
+              surchargeType: 'PARKING',
+              vehicleCount: parkingVehicleCount,
+              unitPrice,
+            },
+          },
+        })
+
+        await tx.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            subtotal: invoiceSubtotal,
+            grandTotal: invoiceGrandTotal,
+          },
+        })
+      }
+    }
 
     for (const line of checkoutLines) {
       const latestProduct = await tx.product.findUnique({
@@ -331,7 +418,6 @@ export async function checkOut({
         },
       })
 
-      // Chỉ trừ kho cho món mới thêm lúc checkout (món DRAFT đã trừ kho lúc bán kèm)
       const newQuantity = newQuantityByProductId.get(line.productId) ?? 0
       if (latestProduct.type === 'PRODUCT' && newQuantity > 0) {
         const stockUpdate = await tx.product.updateMany({
@@ -379,9 +465,31 @@ export async function checkOut({
       },
     })
 
-    // ── Cập nhật session: partial checkout giữ ACTIVE, full checkout đóng session ──
-    const isFullCheckout = checkoutCount >= session.playerCount
-    const remainingPlayers = session.playerCount - checkoutCount
+    // ── Cập nhật group, kiểm tra còn người không ──
+    let totalRemaining = 0
+
+    if (targetGroupId) {
+      // Decrement group.remainingCount
+      const updatedGroup = await tx.sessionPricingGroup.update({
+        where: { id: targetGroupId },
+        data: { remainingCount: { decrement: checkoutCount } },
+      })
+      if (updatedGroup.remainingCount < 0) {
+        throw new Error('PRICING_GROUP_UNDERFLOW')
+      }
+
+      // Tính tổng remaining từ tất cả groups
+      const allGroups = await tx.sessionPricingGroup.findMany({
+        where: { sessionId },
+        select: { remainingCount: true },
+      })
+      totalRemaining = allGroups.reduce((sum, g) => sum + g.remainingCount, 0)
+    } else {
+      // Legacy path: dùng session.playerCount
+      totalRemaining = session.playerCount - checkoutCount
+    }
+
+    const isFullCheckout = totalRemaining <= 0
 
     if (isFullCheckout) {
       await tx.session.update({
@@ -401,16 +509,17 @@ export async function checkOut({
           totalAmount: invoiceGrandTotal,
         },
       })
-    } else {
-      // Partial checkout: giữ ACTIVE, giảm playerCount
+    } else if (!targetGroupId) {
+      // Legacy partial checkout
       await tx.session.update({
         where: { id: sessionId },
         data: {
-          playerCount: remainingPlayers,
+          playerCount: totalRemaining,
         },
       })
     }
 
+    // Cập nhật customer totals
     await tx.customer.update({
       where: { id: session.customerId },
       data: {
@@ -420,7 +529,6 @@ export async function checkOut({
     })
 
     // ── Chỉ huỷ hóa đơn DRAFT khi checkout toàn bộ phiên ──
-    // Với partial checkout, DRAFT invoices ở lại cho người chơi còn lại
     if (isFullCheckout && draftInvoiceIds.length > 0) {
       await tx.invoice.updateMany({
         where: { id: { in: draftInvoiceIds }, status: 'DRAFT' },
@@ -447,16 +555,18 @@ export async function checkOut({
         promotionDiscount: playDiscountTotal,
         promotion: toPromotionMetadata(finalPricing.promotion),
         checkoutCount,
-        remainingPlayers,
+        remainingPlayers: totalRemaining,
         isFullCheckout,
+        pricingGroupId: targetGroupId ?? null,
         mergedDraftInvoices: isFullCheckout && draftInvoiceIds.length > 0 ? draftInvoiceIds : undefined,
+        parkingFeeTotal: parkingFeeTotal || undefined,
       },
     })
 
-    return { invoice, payment }
+    return { invoice, payment, remainingPlayers: totalRemaining, parkingFeeTotal }
   })
 
-  const isFullCheckout = checkoutCount >= session.playerCount
+  const isFullCheckout = result.remainingPlayers <= 0
 
   return {
     sessionId,
@@ -477,9 +587,17 @@ export async function checkOut({
     paymentMethod,
     paymentId: result.payment.id,
     checkedOutPlayers: checkoutCount,
-    remainingPlayers: session.playerCount - checkoutCount,
+    remainingPlayers: result.remainingPlayers,
     sessionClosed: isFullCheckout,
+    parkingFeeTotal: result.parkingFeeTotal,
   }
+}
+
+function moneyPerPerson(value: number): string {
+  if (value >= 1000 && value % 1000 === 0) {
+    return `${(value / 1000).toLocaleString('vi-VN')}kđ`
+  }
+  return `${value.toLocaleString('vi-VN')}đ`
 }
 
 export function mapCheckoutError(error: Error): { code: string; message: string; status: number } {
@@ -496,6 +614,12 @@ export function mapCheckoutError(error: Error): { code: string; message: string;
   }
   if (message === 'END_TIME_BEFORE_START') {
     return { code: 'END_TIME_BEFORE_START', message: 'Thời gian checkout không được trước lúc check-in', status: 400 }
+  }
+  if (message === 'PRICING_GROUP_NOT_FOUND') {
+    return { code: 'PRICING_GROUP_NOT_FOUND', message: 'Không tìm thấy nhóm giá', status: 400 }
+  }
+  if (message === 'PRICING_GROUP_EMPTY') {
+    return { code: 'PRICING_GROUP_EMPTY', message: 'Nhóm giá đã checkout hết người', status: 400 }
   }
   if (message === 'PRODUCT_NOT_FOUND') {
     return { code: 'PRODUCT_NOT_FOUND', message: 'Có sản phẩm không tồn tại hoặc đã ngừng bán', status: 400 }

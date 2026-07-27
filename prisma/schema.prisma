@@ -63,6 +63,7 @@ enum InvoiceItemType {
   PRODUCT
   SERVICE
   DISCOUNT
+  SURCHARGE
 }
 
 enum ProductType {
@@ -160,8 +161,9 @@ model Session {
   createdAt              DateTime               @default(now()) @map("created_at")
   updatedAt              DateTime               @updatedAt @map("updated_at")
 
-  payments Payment[]
-  invoices Invoice[]
+  payments      Payment[]
+  invoices      Invoice[]
+  pricingGroups SessionPricingGroup[]
 
   @@index([customerId, status])
   @@index([shiftId])
@@ -169,6 +171,23 @@ model Session {
   @@index([pricingRuleId])
   @@index([promotionRuleId])
   @@map("sessions")
+}
+
+model SessionPricingGroup {
+  id              String   @id @default(uuid())
+  sessionId       String   @map("session_id")
+  session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  label           String   @default("") @db.VarChar(50)
+  playerCount     Int      @map("player_count")
+  remainingCount  Int      @map("remaining_count")
+  hourlyRate      Decimal  @map("hourly_rate") @db.Decimal(10, 0)
+  pricingRuleId   String?  @map("pricing_rule_id")
+  pricingSnapshot Json?    @map("pricing_snapshot")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([sessionId])
+  @@map("session_pricing_groups")
 }
 
 model PricingRule {
@@ -476,6 +495,17 @@ model ShiftTool {
 
   @@unique([shiftId, toolId])
   @@map("shift_tools")
+}
+
+model AppSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique @db.VarChar(100)
+  value     String   @db.VarChar(255)
+  label     String?  @db.VarChar(200)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("app_settings")
 }
 
 model ActivityLog {

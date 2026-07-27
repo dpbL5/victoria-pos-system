@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label, Select } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -425,10 +426,9 @@ function AccountsTab({
               </div>
               <div>
                 <Label htmlFor="staff-password" required>Mật khẩu</Label>
-                <Input
+                <PasswordInput
                   id="staff-password"
                   required
-                  type="password"
                   value={form.password}
                   onChange={(event) => setForm({ ...form, password: event.target.value })}
                   placeholder="Ít nhất 6 ký tự"
@@ -569,9 +569,8 @@ function AccountsTab({
         }
       >
         <Label htmlFor="staff-new-password" required>Mật khẩu mới</Label>
-        <Input
+        <PasswordInput
           id="staff-new-password"
-          type="password"
           value={newPassword}
           onChange={(event) => setNewPassword(event.target.value)}
           placeholder="Ít nhất 6 ký tự"

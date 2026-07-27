@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { findAvailablePromotionById } from '@/lib/business/promotions'
+import { getNumericSetting, SETTING_KEYS } from '@/lib/business/settings'
 import { calculateSessionPrice } from '@/lib/pricing'
 import { prisma } from '@/lib/prisma'
-import type { PlayTimeQuote } from '@/types'
+import type { PlayTimeQuote, SessionPricingGroupDTO } from '@/types'
 
 export async function GET(
   _request: NextRequest,
@@ -14,7 +15,23 @@ export async function GET(
     const { id } = await params
     const session = await prisma.session.findUnique({
       where: { id },
-      select: { id: true, status: true, playerCount: true },
+      select: {
+        id: true,
+        status: true,
+        playerCount: true,
+        pricingGroups: {
+          select: {
+            id: true,
+            label: true,
+            playerCount: true,
+            remainingCount: true,
+            hourlyRate: true,
+            pricingRuleId: true,
+            pricingSnapshot: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     })
 
     if (!session) {
@@ -31,6 +48,8 @@ export async function GET(
     }
 
     const promotionRuleId = _request.nextUrl.searchParams.get('promotionRuleId')
+    const pricingGroupId = _request.nextUrl.searchParams.get('pricingGroupId')
+
     const promotion = promotionRuleId
       ? await findAvailablePromotionById(promotionRuleId)
       : null
@@ -42,7 +61,7 @@ export async function GET(
       )
     }
 
-    const pricing = await calculateSessionPrice(id, new Date(), promotion)
+    const pricing = await calculateSessionPrice(id, new Date(), promotion, pricingGroupId ?? undefined)
 
     // ── Lấy danh sách bán kèm chưa thanh toán (DRAFT invoices) ──
     const draftInvoices = await prisma.invoice.findMany({
@@ -90,6 +109,18 @@ export async function GET(
       pendingSellTotal,
       pendingSellItems,
       playerCount: session.playerCount,
+      pricingGroupId: pricingGroupId ?? undefined,
+      pricingGroups: session.pricingGroups.map(g => ({
+        id: g.id,
+        sessionId: id,
+        label: g.label,
+        playerCount: g.playerCount,
+        remainingCount: g.remainingCount,
+        hourlyRate: Number(g.hourlyRate),
+        pricingRuleId: g.pricingRuleId,
+        pricingSnapshot: g.pricingSnapshot as any,
+      })),
+      parkingFeeUnitPrice: (await getNumericSetting(SETTING_KEYS.PARKING_FEE_UNIT_PRICE, 0)) || undefined,
     }
 
     return NextResponse.json({ success: true, data: quote })

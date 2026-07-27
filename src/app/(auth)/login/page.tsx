@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { LogIn } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { PasswordInput } from '@/components/ui/password-input'
 
 export default function LoginPage() {
   const router = useRouter();
@@ -77,8 +78,7 @@ export default function LoginPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm text-zinc-400">Mật khẩu</label>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2.5 text-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"

@@ -1,6 +1,7 @@
 export function formatVND(amount: number | string): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount
-  return `${num.toLocaleString('vi-VN')}đ`
+  const rounded = Math.ceil(num / 1000) * 1000
+  return `${rounded.toLocaleString('vi-VN')}đ`
 }
 
 export function formatHours(hours: number): string {

@@ -31,6 +31,9 @@ export async function GET(request: NextRequest) {
         include: {
           staff: { select: { id: true, fullName: true } },
           _count: { select: { sessions: true } },
+          toolCounts: {
+            include: { tool: { select: { id: true, name: true, quantity: true, isRequired: true } } },
+          },
         },
         orderBy: { openedAt: 'desc' },
         skip: (page - 1) * limit,
@@ -47,6 +50,18 @@ export async function GET(request: NextRequest) {
         revenueMap.set(id, await getShiftRevenueData(prisma as any, id))
       })
     )
+
+    function calcToolStats(tcs: { openCount: number; closeCount: number | null }[]) {
+      if (tcs.length === 0) return undefined
+      let matched = 0
+      let mismatched = 0
+      for (const tc of tcs) {
+        if (tc.closeCount == null) continue
+        if (tc.closeCount === tc.openCount) matched++
+        else mismatched++
+      }
+      return { total: tcs.length, matched, mismatched }
+    }
 
     const data: ShiftRevenueSummary[] = shifts.map((shift) => {
       const rev = revenueMap.get(shift.id) ?? {
@@ -76,6 +91,14 @@ export async function GET(request: NextRequest) {
         paymentCount: rev.paymentCount,
         membershipCount: rev.membershipCount,
         sessionCount: shift._count.sessions,
+        toolStats: calcToolStats(shift.toolCounts),
+        toolCounts: shift.toolCounts.map((tc) => ({
+          id: tc.id,
+          toolId: tc.toolId,
+          tool: tc.tool,
+          openCount: tc.openCount,
+          closeCount: tc.closeCount,
+        })),
       }
     })
 

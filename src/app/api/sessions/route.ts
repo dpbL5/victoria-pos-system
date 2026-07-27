@@ -50,6 +50,18 @@ export async function GET(request: NextRequest) {
           staff: { select: { id: true, fullName: true } },
           membership: { select: { id: true, startsAt: true, expiresAt: true } },
           shift: { select: { id: true, openedAt: true, status: true } },
+          pricingGroups: {
+            select: {
+              id: true,
+              label: true,
+              playerCount: true,
+              remainingCount: true,
+              hourlyRate: true,
+              pricingRuleId: true,
+              pricingSnapshot: true,
+            },
+            orderBy: { createdAt: 'asc' },
+          },
         },
         skip,
         take: limit,
@@ -122,6 +134,7 @@ export async function POST(request: NextRequest) {
       customerId: parsed.data.customerId,
       pricingRuleId: parsed.data.pricingRuleId,
       playerCount: parsed.data.playerCount,
+      groups: parsed.data.groups,
     })
 
     return NextResponse.json({ success: true, data: session }, { status: 201 })
