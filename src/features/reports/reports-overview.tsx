@@ -26,7 +26,7 @@ import { formatClock, money } from '@/features/pos/format'
 import type { PaymentMethod, UserSession } from '@/features/pos/types'
 import { toInputDate } from '@/lib/utils'
 
-type ItemType = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT'
+type ItemType = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT' | 'SURCHARGE'
 type Scope = 'STAFF' | 'ALL'
 
 interface PaymentBreakdown {
@@ -684,6 +684,7 @@ function buildItemRows(items: ItemBreakdown) {
     { label: 'Hàng hóa', value: items.PRODUCT, color: 'bg-emerald-500' },
     { label: 'Dịch vụ', value: items.SERVICE, color: 'bg-amber-500' },
     { label: 'Giảm giá', value: items.DISCOUNT, color: 'bg-red-500' },
+    { label: 'Phí gửi xe', value: items.SURCHARGE, color: 'bg-rose-500' },
   ]
 }
 

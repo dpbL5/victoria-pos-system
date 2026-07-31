@@ -9,7 +9,11 @@
       "Shell(npx vitest run --reporter=verbose 2>&1)",
       "Shell(npx vitest run --reporter=verbose src/lib/__tests__/tool-validations.test.ts 2>&1)",
       "Shell(npx next build 2>&1)",
-      "Shell(git:*)"
+      "Shell(git:*)",
+      "Shell(npx next build 2 >& 1)",
+      "Shell(npx eslint src/app/api/settings/route.ts 2>&1)",
+      "Shell(npx eslint src/features/pos/today-shift-screen.tsx src/features/pos/invoice-detail-content.tsx src/features/more/more-screen.tsx src/features/reports/reports-overview.tsx src/features/reports/reports-shift-detail.tsx 2 >& 1)",
+      "Shell(npx eslint src/app/api/settings/route.ts src/features/pos/invoice-detail-content.tsx src/features/more/more-screen.tsx src/lib/business/use-cases/checkOut.ts src/features/reports/reports-shift-detail.tsx 2>&1)"
     ],
     "deny": [],
     "defaultMode": "default"

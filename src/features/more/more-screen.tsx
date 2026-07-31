@@ -10,6 +10,7 @@ import {
   Banknote,
   BarChart3,
   CalendarClock,
+  Car,
   CheckCircle2,
   LogOut,
   Monitor,
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input, Label } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
@@ -65,15 +67,23 @@ export function MoreScreen() {
   const [error, setError] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
 
+  const [parkingFeeValue, setParkingFeeValue] = useState('')
+  const [parkingFeeSaving, setParkingFeeSaving] = useState(false)
+
+  const PARKING_FEE_KEY = 'PARKING_FEE_UNIT_PRICE'
+
   const loadData = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const [userData, shiftData, pricingData, productData] = await Promise.all([
+      const [userData, shiftData, pricingData, productData, parkingFeeData] = await Promise.all([
         apiJson<UserSession>('/api/auth/me'),
         apiJson<Shift | null>('/api/shifts?current=true'),
         apiJson<PricingStatus>('/api/pricing/status'),
         apiJson<Product[]>('/api/products?isActive=true'),
+        apiJson<{ key: string; value: string; label: string | null }>(
+          `/api/settings?key=${PARKING_FEE_KEY}`
+        ),
       ])
 
       // Auth là critical — nếu fail thì toàn màn hình báo lỗi
@@ -87,6 +97,9 @@ export function MoreScreen() {
         setActivePricingCount(pricingData.data?.activeCount ?? pricingData.data?.count ?? 0)
       }
       if (productData.success) setProducts(productData.data ?? [])
+      if (parkingFeeData.success) {
+        setParkingFeeValue(parkingFeeData.data?.value ?? '')
+      }
     } catch (err) {
       setError((err as Error).message || 'Lỗi kết nối máy chủ')
     } finally {
@@ -135,6 +148,33 @@ export function MoreScreen() {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
       setLoggingOut(false)
+    }
+  }
+
+  const handleSaveParkingFee = async () => {
+    setParkingFeeSaving(true)
+    try {
+      const data = await apiJson<{ key: string; value: string }>(
+        '/api/settings',
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: PARKING_FEE_KEY,
+            value: parkingFeeValue,
+            label: 'Phí gửi xe (VNĐ/xe)',
+          }),
+        }
+      )
+      if (!data.success) {
+        notifyError(data.error || 'Không lưu được phí gửi xe')
+        return
+      }
+      notifySuccess('Đã cập nhật phí gửi xe')
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setParkingFeeSaving(false)
     }
   }
 
@@ -242,6 +282,13 @@ export function MoreScreen() {
                 <AdminLink key={item.href} {...item} />
               ))}
             </div>
+
+            <ParkingFeeConfig
+              value={parkingFeeValue}
+              saving={parkingFeeSaving}
+              onChange={setParkingFeeValue}
+              onSave={handleSaveParkingFee}
+            />
           </section>
         )}
 
@@ -435,5 +482,57 @@ function AdminLink({
       </div>
       <ArrowRight size={16} className="shrink-0 text-zinc-400" />
     </Link>
+  )
+}
+
+function ParkingFeeConfig({
+  value,
+  saving,
+  onChange,
+  onSave,
+}: {
+  value: string
+  saving: boolean
+  onChange: (value: string) => void
+  onSave: () => void
+}) {
+  const numericValue = Number(value) || 0
+
+  return (
+    <div className="mt-4 space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+      <div className="flex items-center gap-2">
+        <Car size={16} className="text-zinc-500 dark:text-zinc-400" />
+        <Label htmlFor="parking-fee" className="text-sm font-medium text-zinc-950 dark:text-white">
+          Phí gửi xe
+        </Label>
+      </div>
+      <div className="flex items-center gap-2">
+        <Input
+          id="parking-fee"
+          type="number"
+          min={0}
+          step={1000}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="0"
+          className="flex-1"
+        />
+        <span className="text-sm text-zinc-500 dark:text-zinc-400">VNĐ/xe</span>
+      </div>
+      {numericValue > 0 && (
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Phí gửi xe sẽ được trừ vào tổng thanh toán tại checkout. Hiện tại: {money(numericValue)}/xe
+        </p>
+      )}
+      <Button
+        variant="primary"
+        size="sm"
+        loading={saving}
+        disabled={saving || Number(value) < 0}
+        onClick={onSave}
+      >
+        {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
+      </Button>
+    </div>
   )
 }

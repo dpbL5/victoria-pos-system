@@ -2,6 +2,7 @@
 
 import {
   Banknote,
+  Car,
   Clock,
   CreditCard,
   ReceiptText,
@@ -84,6 +85,7 @@ const itemTypeLabels: Record<string, string> = {
   PRODUCT: 'Hàng hoá',
   SERVICE: 'Dịch vụ',
   DISCOUNT: 'Giảm giá',
+  SURCHARGE: 'Phí gửi xe',
 }
 
 const itemTypeIcons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
@@ -92,6 +94,7 @@ const itemTypeIcons: Record<string, React.ComponentType<{ size?: number; classNa
   PRODUCT: ShoppingBag,
   SERVICE: ShoppingBag,
   DISCOUNT: Tag,
+  SURCHARGE: Car,
 }
 
 interface InvoiceDetailContentProps {
@@ -101,6 +104,9 @@ interface InvoiceDetailContentProps {
 export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
   const hasDiscount = invoice.discountTotal > 0
   const hasMembership = invoice.membershipPayments.length > 0
+  const parkingFeeTotal = invoice.items
+    .filter((item) => item.type === 'SURCHARGE')
+    .reduce((sum, item) => sum + Math.abs(item.total), 0)
 
   return (
     <div className="space-y-4">
@@ -236,7 +242,11 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
                       )}
                     </div>
                   </div>
-                  <p className="self-center text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
+                  <p className={`self-center text-sm font-bold tabular-nums ${
+                    item.total < 0
+                      ? 'text-red-600 dark:text-red-300'
+                      : 'text-zinc-950 dark:text-white'
+                  }`}>
                     {formatVND(item.total)}
                   </p>
                 </div>
@@ -258,6 +268,14 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
                 <span className="text-red-500">Giảm giá</span>
                 <span className="font-medium tabular-nums text-red-500">
                   -{formatVND(invoice.discountTotal)}
+                </span>
+              </div>
+            )}
+            {parkingFeeTotal > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-red-500">Phí gửi xe</span>
+                <span className="font-medium tabular-nums text-red-500">
+                  -{formatVND(parkingFeeTotal)}
                 </span>
               </div>
             )}

@@ -1681,7 +1681,7 @@ function CheckoutDrawer({
     .filter((line) => line.quantity > 0)
 
   const productSubtotal = cartLines.reduce((sum, line) => sum + line.total, 0)
-  const grandTotal = playTotal + pendingSellTotal + productSubtotal + parkingFeeTotal
+  const grandTotal = Math.max(0, playTotal + pendingSellTotal + productSubtotal - parkingFeeTotal)
 
   const changeCart = (product: Product, delta: number) => {
     setCart((current) => {
@@ -1943,12 +1943,19 @@ function CheckoutDrawer({
                 value={money(line.total)}
               />
             ))}
+            {parkingFeeTotal > 0 && (
+              <InvoiceRow
+                label="Phí gửi xe"
+                value={`-${money(parkingFeeTotal)}`}
+                warning
+              />
+            )}
             <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
               <InvoiceRow label="Tổng thu" value={quoteError ? '—' : money(grandTotal)} strong />
             </div>
           </div>
 
-          {/* Phí gửi xe */}
+          {/* Phí gửi xe (trừ vào tổng thanh toán) */}
           {parkingFeeUnitPrice > 0 && (
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
               <div className="flex items-center justify-between">
@@ -1972,12 +1979,20 @@ function CheckoutDrawer({
                 <button
                   type="button"
                   onClick={() => setParkingVehicleCount((c) => Math.min(20, c + 1))}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-950 text-white disabled:opacity-40 dark:bg-white dark:text-zinc-950"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-950 text-white disabled:opacity-40 dark:bg-white dark:text-zinc-900"
                 >
                   <Plus size={14} />
                 </button>
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">xe</span>
               </div>
+              {parkingVehicleCount > 0 && (
+                <div className="mt-2 flex justify-between text-sm">
+                  <span className="text-red-500 dark:text-red-300">Tạm tính trừ</span>
+                  <span className="font-semibold text-red-600 dark:text-red-300 tabular-nums">
+                    -{money(parkingFeeTotal)}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -2385,17 +2400,30 @@ function InvoiceRow({
   label,
   value,
   strong,
+  warning,
 }: {
   label: string
   value: string
   strong?: boolean
+  warning?: boolean
 }) {
+  const valueClass = warning
+    ? 'tabular-nums text-red-600 dark:text-red-300'
+    : 'tabular-nums text-zinc-950 dark:text-white'
+  const labelClass = strong
+    ? 'text-zinc-950 dark:text-white'
+    : warning
+      ? 'text-red-500 dark:text-red-300'
+      : 'text-zinc-500 dark:text-zinc-400'
+
   return (
     <div className={`flex justify-between gap-3 text-sm ${strong ? 'font-semibold' : ''}`}>
-      <span className={strong ? 'text-zinc-950 dark:text-white' : 'text-zinc-500 dark:text-zinc-400'}>
+      <span className={labelClass}>
         {label}
       </span>
-      <span className="tabular-nums text-zinc-950 dark:text-white">{value}</span>
+      <span className={valueClass}>
+        {value}
+      </span>
     </div>
   )
 }

@@ -349,14 +349,14 @@ export async function checkOut({
       },
     })
 
-    // ── Phí gửi xe ──
+    // ── Phí gửi xe (trừ vào tổng thanh toán) ──
     let parkingFeeTotal = 0
     if (parkingVehicleCount > 0) {
       const unitPrice = await getNumericSetting(SETTING_KEYS.PARKING_FEE_UNIT_PRICE, 0)
       if (unitPrice > 0) {
         parkingFeeTotal = parkingVehicleCount * unitPrice
-        invoiceSubtotal += parkingFeeTotal
-        invoiceGrandTotal += parkingFeeTotal
+        invoiceSubtotal -= parkingFeeTotal
+        invoiceGrandTotal = Math.max(0, invoiceGrandTotal - parkingFeeTotal)
 
         await tx.invoiceItem.create({
           data: {
@@ -365,9 +365,9 @@ export async function checkOut({
             description: `Phí gửi xe × ${parkingVehicleCount} xe`,
             quantity: parkingVehicleCount,
             unitPrice,
-            subtotal: parkingFeeTotal,
+            subtotal: -parkingFeeTotal,
             discountAmount: 0,
-            total: parkingFeeTotal,
+            total: -parkingFeeTotal,
             metadata: {
               surchargeType: 'PARKING',
               vehicleCount: parkingVehicleCount,
