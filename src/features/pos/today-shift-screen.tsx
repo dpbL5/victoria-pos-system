@@ -82,6 +82,7 @@ export function TodayShiftScreen() {
   const [membershipPlans, setMembershipPlans] = useState<MembershipPlan[]>([])
   const [pricingCount, setPricingCount] = useState<number | null>(null)
   const [activePricingCount, setActivePricingCount] = useState<number | null>(null)
+  const [authUserId, setAuthUserId] = useState<string | null>(null)
   const [authRole, setAuthRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -116,7 +117,7 @@ export function TodayShiftScreen() {
         apiJson<Product[]>('/api/products?isActive=true'),
         apiJson<MembershipPlan[]>('/api/membership-plans'),
         apiJson<{ count: number; activeCount?: number }>('/api/pricing/status'),
-        apiJson<{ role: string }>('/api/auth/me'),
+        apiJson<{ userId: string; role: string }>('/api/auth/me'),
         apiJson<{ id: string; name: string; quantity: number; isRequired: boolean }[]>('/api/tools'),
       ])
 
@@ -135,6 +136,7 @@ export function TodayShiftScreen() {
       setMembershipPlans((planData.data ?? []).filter((plan) => plan.isActive))
       setPricingCount(pricingData.data?.count ?? 0)
       setActivePricingCount(pricingData.data?.activeCount ?? pricingData.data?.count ?? 0)
+      setAuthUserId(authData.data?.userId ?? null)
       setAuthRole(authData.data?.role ?? null)
       setTools(toolsData.data ?? [])
     } catch (err) {
@@ -152,6 +154,10 @@ export function TodayShiftScreen() {
   const pricingReady = (activePricingCount ?? pricingCount ?? 0) > 0
   const isAdmin = authRole === 'ADMIN'
   const shiftReady = isAdmin || !!shift
+  const canJoinCurrentShift = isAdmin && !!authUserId && !!shift && shift.status === 'OPEN'
+    && !shift.participants?.some((participant) => (
+      !participant.leftAt && participant.staff.id === authUserId
+    ))
 
   const handleOpenShift = async (openingCash?: number, notes?: string, toolCounts?: { toolId: string; openCount: number }[]) => {
     setSubmitting(true)
@@ -258,6 +264,9 @@ export function TodayShiftScreen() {
               setTransactionsOpen(true)
             }
           }}
+          canJoin={canJoinCurrentShift}
+          onJoin={() => void handleOpenShift()}
+          submitting={submitting}
         />
 
         {!shiftReady && (
@@ -446,6 +455,9 @@ function ShiftRail({
   onOpen,
   onClose,
   onViewTransactions,
+  canJoin,
+  onJoin,
+  submitting,
 }: {
   shift: Shift | null
   activeCount: number
@@ -454,6 +466,9 @@ function ShiftRail({
   onOpen: () => void
   onClose: () => void
   onViewTransactions: () => void
+  canJoin: boolean
+  onJoin: () => void
+  submitting: boolean
 }) {
   const participantNames = shift?.participants?.map((participant) => participant.staff.fullName) ?? []
   const participantLabel = participantNames.length > 0
@@ -489,6 +504,16 @@ function ShiftRail({
             </div>
             {shift ? (
               <div className="flex items-center gap-2">
+                {canJoin && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={submitting}
+                    onClick={onJoin}
+                  >
+                    {submitting ? 'Đang tham gia...' : 'Tham gia ca làm'}
+                  </Button>
+                )}
                 <Button variant="secondary" size="sm" onClick={onViewTransactions}>
                   Xem giao dịch
                 </Button>
