@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label } from '@/components/ui/input'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -291,10 +292,18 @@ export function PromotionScreen() {
         onSaved={handleSaved}
       />
 
-      <DeletePromotionDialog
-        rule={deleteRule}
-        submitting={submitting}
+      <ConfirmDialog
+        open={!!deleteRule}
         onClose={() => setDeleteRule(null)}
+        title="Tạm dừng khuyến mại"
+        description={deleteRule ? `Khuyến mại "${deleteRule.name}" sẽ không còn hiển thị để chọn khi thu tiền.` : undefined}
+        body={
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Cấu hình được giữ lại để có thể bật lại sau này. Lượt đã check-in vẫn giữ thông tin khuyến mại đã được snapshot.
+          </p>
+        }
+        confirmLabel="Tạm dừng"
+        submitting={submitting}
         onConfirm={confirmDelete}
       />
     </div>
@@ -686,37 +695,6 @@ function WeeklyDaySelector({ value, onChange }: { value: number[]; onChange: (da
         <Button variant="secondary" size="xs" onClick={() => onChange(allWeekDays)}>Cả tuần</Button>
       </div>
     </div>
-  )
-}
-
-function DeletePromotionDialog({
-  rule,
-  submitting,
-  onClose,
-  onConfirm,
-}: {
-  rule: PromotionRule | null
-  submitting: boolean
-  onClose: () => void
-  onConfirm: () => void
-}) {
-  return (
-    <Modal
-      open={!!rule}
-      onClose={onClose}
-      title="Tạm dừng khuyến mại"
-      description={rule ? `Khuyến mại “${rule.name}” sẽ không còn hiển thị để chọn khi thu tiền.` : undefined}
-      footer={
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" size="lg" fullWidth onClick={onClose}>Hủy</Button>
-          <Button variant="danger" size="lg" fullWidth disabled={submitting} onClick={onConfirm}>{submitting ? 'Đang tạm dừng...' : 'Tạm dừng'}</Button>
-        </div>
-      }
-    >
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Cấu hình được giữ lại để có thể bật lại sau này. Lượt đã check-in vẫn giữ thông tin khuyến mại đã được snapshot.
-      </p>
-    </Modal>
   )
 }
 

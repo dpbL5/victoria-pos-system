@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label } from '@/components/ui/input'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -64,6 +65,7 @@ export function ToolsScreen() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [editTool, setEditTool] = useState<Tool | null>(null)
+  const [deleteTool, setDeleteTool] = useState<Tool | null>(null)
   const [form, setForm] = useState<ToolForm>(emptyForm)
 
   const loadTools = useCallback(async () => {
@@ -145,15 +147,18 @@ export function ToolsScreen() {
     }
   }
 
-  const handleDelete = async (tool: Tool) => {
+  const confirmDelete = async () => {
+    if (!deleteTool) return
+
     setSubmitting(true)
     try {
-      const data = await apiJson(`/api/tools/${tool.id}`, mutationRequest('DELETE'))
+      const data = await apiJson(`/api/tools/${deleteTool.id}`, mutationRequest('DELETE'))
       if (!data.success) {
         notifyError(data.error || 'Không xoá được dụng cụ')
         return
       }
       notifySuccess('Đã xoá dụng cụ')
+      setDeleteTool(null)
       await loadTools()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
@@ -267,7 +272,7 @@ export function ToolsScreen() {
                     size="xs"
                     icon={Trash2}
                     disabled={submitting}
-                    onClick={() => void handleDelete(tool)}
+                     onClick={() => setDeleteTool(tool)}
                     title="Xoá"
                   />
                 </div>
@@ -284,6 +289,16 @@ export function ToolsScreen() {
           onChange={setForm}
           onClose={closeForm}
           onSubmit={() => void handleSubmit()}
+        />
+
+        <ConfirmDialog
+          open={!!deleteTool}
+          onClose={() => setDeleteTool(null)}
+          title="Xóa dụng cụ"
+          description={deleteTool ? `Dụng cụ "${deleteTool.name}" sẽ bị xóa vĩnh viễn.` : undefined}
+          confirmLabel="Xóa"
+          submitting={submitting}
+          onConfirm={confirmDelete}
         />
       </div>
     </div>

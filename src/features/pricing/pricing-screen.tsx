@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label } from '@/components/ui/input'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -319,10 +320,18 @@ export function PricingScreen() {
         onSaved={handleSaved}
       />
 
-      <DeletePricingDialog
-        rule={deleteRule}
-        submitting={submitting}
+      <ConfirmDialog
+        open={!!deleteRule}
         onClose={() => setDeleteRule(null)}
+        title="Xóa quy tắc bảng giá"
+        description={deleteRule ? `Quy tắc "${deleteRule.name}" sẽ không còn được dùng cho lượt check-in mới.` : undefined}
+        body={
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Phiên đã check-in vẫn giữ giá đã snapshot. Thay đổi này chỉ ảnh hưởng các lượt check-in sau.
+          </p>
+        }
+        confirmLabel="Xóa"
+        submitting={submitting}
         onConfirm={confirmDelete}
       />
     </div>
@@ -812,41 +821,6 @@ function WeeklyStrip({ days }: { days: number[] }) {
         )
       })}
     </div>
-  )
-}
-
-function DeletePricingDialog({
-  rule,
-  submitting,
-  onClose,
-  onConfirm,
-}: {
-  rule: PricingRule | null
-  submitting: boolean
-  onClose: () => void
-  onConfirm: () => void
-}) {
-  return (
-    <Modal
-      open={!!rule}
-      onClose={onClose}
-      title="Xóa quy tắc bảng giá"
-      description={rule ? `Quy tắc "${rule.name}" sẽ không còn được dùng cho lượt check-in mới.` : undefined}
-      footer={
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" size="lg" fullWidth onClick={onClose}>
-            Hủy
-          </Button>
-          <Button variant="danger" size="lg" fullWidth disabled={submitting} onClick={onConfirm}>
-            {submitting ? 'Đang xóa...' : 'Xóa'}
-          </Button>
-        </div>
-      }
-    >
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Phiên đã check-in vẫn giữ giá đã snapshot. Thay đổi này chỉ ảnh hưởng các lượt check-in sau.
-      </p>
-    </Modal>
   )
 }
 
