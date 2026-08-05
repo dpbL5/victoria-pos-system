@@ -122,35 +122,21 @@ export async function DELETE(
       )
     }
 
-    if (!existing.isActive) {
-      return NextResponse.json({ success: true, message: 'Khuyến mại đã ngừng áp dụng' })
-    }
-
-    const deactivated = await prisma.$transaction(async (tx) => {
-      const rule = await tx.promotionRule.update({
-        where: { id },
-        data: { isActive: false },
-      })
+    await prisma.$transaction(async (tx) => {
+      await tx.promotionRule.delete({ where: { id } })
 
       await logActivity(tx, {
         userId: auth.userId,
-        action: 'PROMOTION_RULE_DEACTIVATE',
+        action: 'PROMOTION_RULE_DELETE',
         entityType: 'PromotionRule',
         entityId: id,
         details: {
           before: promotionAuditDetails(existing),
-          after: promotionAuditDetails(rule),
         },
       })
-
-      return rule
     })
 
-    return NextResponse.json({
-      success: true,
-      data: deactivated,
-      message: 'Đã ngừng áp dụng khuyến mại',
-    })
+    return NextResponse.json({ success: true, message: 'Đã xoá khuyến mại' })
   } catch (error) {
     return promotionErrorResponse(error, 'DELETE /api/promotions/[id] error:')
   }
