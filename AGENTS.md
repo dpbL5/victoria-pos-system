@@ -63,7 +63,7 @@
   12. `/reports` is the mobile operational report screen. Keep UI logic in `src/features/reports/`.
   13. Staff reports should show the current staff account/shift scope; admin reports can show all-system scope and CSV export.
   14. `/settings` is the mobile `Thêm` tab, not a plain settings page. Keep UI logic in `src/features/more/`.
-  15. The `Thêm` tab should show account, current shift status, operational shortcuts, theme controls, system status, and logout.
+  15. The `Thêm` tab should show account, current shift status, admin shortcuts first (các tab ẩn trên mobile: Bảng giá, Khuyến mại, Dụng cụ, Nhân viên, Gói hội viên), then operational shortcuts, theme controls, system status, and logout.
   16. Admin-only shortcuts such as pricing and staff management must be hidden from staff users in the `Thêm` tab.
   17. `/pricing` is the admin pricing-rule screen. Keep UI logic in `src/features/pricing/`.
 

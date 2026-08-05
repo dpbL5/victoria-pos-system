@@ -705,7 +705,7 @@ function PricingForm({
                     </span>
                   </div>
                 </div>
-                <div className="flex-[2]">
+                <div className="flex-2">
                   <Label>Giá/giờ</Label>
                   <Input
                     type="number"

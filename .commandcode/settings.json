@@ -17,7 +17,10 @@
       "Shell(ls /home/sivizstepp/LinhStuff/_Projects/qltruongcung/src/components/ui/ 2>/dev/null; echo \"---FEATURES---\"; ls -d /home/sivizstepp/LinhStuff/_Projects/qltruongcung/src/features/*/ 2>/dev/null)",
       "Shell(find:*)",
       "Shell(npx tsc --noEmit 2 >& 1)",
-      "Shell(npx vitest run src/features/tools src/features/shifts src/features/pricing src/features/promotions src/features/membership-plans src/components/ui/confirm-dialog 2 >& 1)"
+      "Shell(npx vitest run src/features/tools src/features/shifts src/features/pricing src/features/promotions src/features/membership-plans src/components/ui/confirm-dialog 2 >& 1)",
+      "Shell(npx vitest run 2 >& 1)",
+      "Shell(npx eslint src/features/tools/tools-screen.tsx src/features/inventory/inventory-screen.tsx src/components/layout/sidebar.tsx src/app/(dashboard)/tools/page.tsx --max-warnings 0 2 >& 1)",
+      "Shell(npx vitest run --reporter=verbose 2 >& 1)"
     ],
     "deny": [],
     "defaultMode": "default"

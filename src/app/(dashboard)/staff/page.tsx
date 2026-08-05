@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
+  Edit2,
   History,
   Key,
   LogIn,
@@ -268,6 +269,8 @@ function AccountsTab({
   const [submitting, setSubmitting] = useState(false)
   const [resetTarget, setResetTarget] = useState<UserRow | null>(null)
   const [newPassword, setNewPassword] = useState('')
+  const [roleEditTarget, setRoleEditTarget] = useState<UserRow | null>(null)
+  const [selectedRole, setSelectedRole] = useState<UserRole>('STAFF')
 
   const stats = useMemo(() => ({
     total: users.length,
@@ -316,6 +319,41 @@ function AccountsTab({
       }
 
       notifySuccess(user.isActive ? 'Đã vô hiệu hoá tài khoản' : 'Đã kích hoạt tài khoản')
+      await onReload()
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleSaveRole = async () => {
+    if (!roleEditTarget) return
+
+    // Chặn làm mất quản trị viên duy nhất còn lại.
+    if (selectedRole === 'STAFF' && roleEditTarget.role === 'ADMIN') {
+      const otherAdmins = users.filter((item) => item.role === 'ADMIN' && item.id !== roleEditTarget.id)
+      if (otherAdmins.length === 0) {
+        notifyError('Phải giữ lại ít nhất một quản trị viên.')
+        return
+      }
+    }
+
+    setSubmitting(true)
+    try {
+      const data = await apiJson<UserRow>(`/api/users/${roleEditTarget.id}`, jsonRequest('PUT', {
+        role: selectedRole,
+      }))
+
+      if (!data.success) {
+        notifyError(data.error || 'Không cập nhật được vai trò')
+        return
+      }
+
+      notifySuccess(
+        `Đã cập nhật vai trò ${roleEditTarget.fullName} → ${selectedRole === 'ADMIN' ? 'Quản trị viên' : 'Nhân viên'}`,
+      )
+      setRoleEditTarget(null)
       await onReload()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
@@ -516,6 +554,16 @@ function AccountsTab({
                         <Button
                           variant="secondary"
                           size="sm"
+                          icon={Edit2}
+                          title="Sửa vai trò"
+                          onClick={() => {
+                            setRoleEditTarget(item)
+                            setSelectedRole(item.role)
+                          }}
+                        />
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           icon={Key}
                           onClick={() => setResetTarget(item)}
                           title="Đổi mật khẩu"
@@ -578,6 +626,42 @@ function AccountsTab({
         {newPassword.length > 0 && newPassword.length < 6 && (
           <p className="mt-1 text-xs text-red-500">Mật khẩu phải có ít nhất 6 ký tự</p>
         )}
+      </Modal>
+
+      <Modal
+        open={!!roleEditTarget}
+        onClose={() => setRoleEditTarget(null)}
+        size="sm"
+        title="Vai trò tài khoản"
+        description={roleEditTarget ? `Tài khoản ${roleEditTarget.fullName}` : undefined}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setRoleEditTarget(null)}>
+              Hủy
+            </Button>
+            <Button
+              loading={submitting}
+              disabled={submitting}
+              onClick={() => void handleSaveRole()}
+            >
+              Lưu
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="role-edit-select">Vai trò</Label>
+            <Select
+              id="role-edit-select"
+              value={selectedRole}
+              onChange={(event) => setSelectedRole(event.target.value as UserRole)}
+            >
+              <option value="STAFF">Nhân viên</option>
+              <option value="ADMIN">Quản trị viên</option>
+            </Select>
+          </div>
+        </div>
       </Modal>
     </div>
   )

@@ -1,4 +1,5 @@
-# Taste (Continuously Learned by [CommandCode][cmd])
+- Negative financial values in UI displays should be shown in red (e.g., `text-red-600`/`text-red-500`) with an explicit '-' prefix (e.g., `-{money(amount)}`) to make the deduction visually clear. Confidence: 0.70
+- Financial records with linked transactions must be append-friendly/immutable: never hard-delete an invoice that has related payments, membership fees, or stock movements — doing so leaves orphaned references, doesn't reverse side-effects (inventory, balances, shift totals), and corrupts closed reports. Instead, use a void/cancel flow that marks the record and creates corrective entries (e.g., negative invoices, return stock movements) within a single transaction with audit logging. Hard-delete is permitted only for draft records with no linked transactions. Confidence: 0.85# Taste (Continuously Learned by [CommandCode][cmd])
 
 [cmd]: https://commandcode.ai/
 
@@ -9,8 +10,11 @@
 # ui
 See [ui/taste.md](ui/taste.md)
 # api
+- Audit-log destructive operations (e.g., DELETE endpoints) by writing to the activity journal/log with entity type and relevant field details (via `logActivity`) for traceability. Confidence: 0.75
 - Manually extract CSRF tokens from `document.cookie` and set the `X-CSRF-Token` header for mutation requests (PATCH/DELETE) when existing API helpers only support POST. Confidence: 0.70
 - Use `requireMutationAuth` for write operations (POST/PATCH/DELETE) and `requireAuth` for read operations; check `auth.role !== 'ADMIN'` for admin-only access rather than relying on a dedicated `requireAdmin` function. Confidence: 0.70
+- Use typed API client helpers (`apiJson<T>(url, options)` for responses, `jsonRequest(body)` for building POST/json request options) from `@/features/pos/api` instead of raw `fetch` in client components. Confidence: 0.70
+- Sanitize string inputs from request bodies on the backend: `JSON.parse` then trim, type-coerce (`String(...)`), and cap length before passing to business logic. Confidence: 0.65
 
 # performance
 - Use `Promise.all` to parallelize independent API/data-fetching calls rather than awaiting sequentially. Confidence: 0.60
@@ -21,6 +25,7 @@ See [ui/taste.md](ui/taste.md)
 
 # finance
 - Charges that reduce payment (e.g., parking fees, deductions) should be modeled as negative invoice line items — subtract from `subtotal` and `grandTotal` rather than accumulating into the total; guard totals with `Math.max(0, ...)` to prevent negative balances; invoice item `subtotal` and `total` fields should be negative for such deductions. Confidence: 0.75
+- Corrections to records whose originating reporting period (e.g., a closed shift) is already closed must be append-only: create corrective entries (e.g., negative payments, return stock movements) attached to that closed period's existing records and flag them in the audit log (e.g., `closedShiftCorrection`), rather than mutating the closed period's aggregated totals (e.g., `expectedCash`/`actualCash`) or blocking the correction entirely. Confidence: 0.82
 - Negative financial values in UI displays should be shown in red (e.g., `text-red-600`/`text-red-500`) with an explicit '-' prefix (e.g., `-{money(amount)}`) to make the deduction visually clear. Confidence: 0.70
 
 # architecture

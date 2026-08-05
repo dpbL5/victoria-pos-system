@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { Prisma } from '@/generated/prisma/client'
+import { requireAuth, requireMutationAuth } from '@/lib/auth'
+import { logActivity } from '@/lib/business/audit'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(
@@ -150,6 +152,103 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
     }
     console.error('GET /api/invoices/[id] error:', error)
+    return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
+  }
+}
+
+// ── DELETE /api/invoices/[id] ──────────────────────────────
+// Chỉ quản trị viên được xoá hoá đơn. Để bảo toàn dấu mốc kế toán,
+// chỉ cho phép xoá hoá đơn chưa có bất kỳ giao dịch tài chính nào liên
+// quan (không có thanh toán, phí hội viên, hay biến động tồn kho).
+// Hành động xoá luôn được ghi lại trong nhật ký hoạt động.
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = await requireMutationAuth(request)
+    if (auth.role !== 'ADMIN') {
+      throw new Error('FORBIDDEN')
+    }
+    const { id } = await params
+
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return NextResponse.json(
+        { success: false, error: 'ID hoá đơn không hợp lệ' },
+        { status: 400 }
+      )
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findUnique({
+        where: { id },
+        include: { items: { select: { id: true } } },
+      })
+
+      if (!invoice) {
+        throw new Error('INVOICE_NOT_FOUND')
+      }
+
+      const [payments, membershipPayments, stockMovements] = await Promise.all([
+        tx.payment.count({ where: { invoiceId: id } }),
+        tx.membershipPayment.count({ where: { invoiceId: id } }),
+        tx.stockMovement.count({ where: { invoiceItem: { invoiceId: id } } }),
+      ])
+
+      if (payments > 0 || membershipPayments > 0 || stockMovements > 0) {
+        throw new Error('INVOICE_LINKED')
+      }
+
+      if (invoice.items.length > 0) {
+        await tx.invoiceItem.deleteMany({ where: { invoiceId: id } })
+      }
+      await tx.invoice.delete({ where: { id } })
+
+      await logActivity(tx, {
+        userId: auth.userId,
+        action: 'INVOICE_DELETE',
+        entityType: 'Invoice',
+        entityId: id,
+        details: {
+          invoiceNo: invoice.invoiceNo,
+          status: invoice.status,
+          grandTotal: Number(invoice.grandTotal),
+          staffId: invoice.staffId,
+          customerId: invoice.customerId ?? null,
+        },
+      })
+    })
+
+    return NextResponse.json({ success: true, message: 'Đã xoá hoá đơn' })
+  } catch (error) {
+    const message = (error as Error).message
+    if (message === 'UNAUTHORIZED') {
+      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
+    }
+    if (message === 'CSRF_MISMATCH') {
+      return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
+    }
+    if (message === 'FORBIDDEN') {
+      return NextResponse.json({ success: false, error: 'Chỉ quản trị viên được xoá hoá đơn' }, { status: 403 })
+    }
+    if (message === 'INVOICE_NOT_FOUND') {
+      return NextResponse.json({ success: false, error: 'Không tìm thấy hoá đơn' }, { status: 404 })
+    }
+    if (message === 'INVOICE_LINKED') {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Không thể xoá hoá đơn đã có thanh toán, phí hội viên hoặc biến động tồn kho liên quan. ' +
+            'Hãy dùng chức năng huỷ hoá đơn (đặt trạng thái Đã huỷ) thay thế.',
+        },
+        { status: 409 }
+      )
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return NextResponse.json({ success: false, error: 'Không tìm thấy hoá đơn' }, { status: 404 })
+    }
+    console.error('DELETE /api/invoices/[id] error:', error)
     return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
   }
 }
