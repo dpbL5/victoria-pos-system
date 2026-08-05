@@ -14,7 +14,7 @@
 
 ## Business Invariants
 
-- One check-in session represents exactly one person/customer. Do not introduce group sessions, participant lists, or group checkout unless the product requirement changes.
+- One check-in session represents exactly one customer. Do not introduce group sessions, participant lists, or shared bills. A single customer session may still track multiple players (`Session.playerCount`) split into pricing groups (`SessionPricingGroup`, each with its own pricing-rule snapshot), and checkout can settle one pricing group at a time (`pricingGroupId`) — but the session always belongs to exactly one customer.
 - `WALK_IN` customers pay for play time from check-in to checkout. Price can use pricing rules and promotions.
 - `MEMBER` customers do not pay hourly play fees while their membership is active. Do not implement member play time as a fixed percentage discount.
 - Membership must be modeled separately from `Customer.type`: use `MembershipPlan`, `Membership`, and `MembershipPayment`.
@@ -31,8 +31,10 @@
 ## Target Domain Model
 
 - `Customer`: person profile, `type` is `WALK_IN` or `MEMBER`.
-- `Session`: one customer's play session, start/end time, status, staff, and optional notes.
-- `PricingRule`: hourly play pricing for `WALK_IN` customers.
+- `Session`: one customer's play session, start/end time, status, staff, `playerCount`, pricing/promotion snapshots, and optional notes.
+- `SessionPricingGroup`: pricing group inside one session — `playerCount`/`remainingCount` per pricing rule, with rule + tier snapshot; checkout decrements `remainingCount`.
+- `PricingRule`: hourly play pricing for `WALK_IN` customers, keyed by `daysOfWeek`/`dayType`, exclusive `hourTo`, and effective dates.
+- `PricingTier`: progressive hourly tiers per rule (`minHours` → `ratePerHour`); play price is computed tier-by-tier.
 - `PromotionRule`: optional discounts for walk-in play time or invoice items.
 - `MembershipPlan`: monthly membership package and fee.
 - `Membership`: a customer's active/expired/cancelled membership period.
@@ -44,6 +46,9 @@
 - `Payment`: payment against an invoice.
 - `Shift`: shared counter shift with opening cash, expected cash, actual cash, difference, notes, and the staff member who opened it.
 - `ShiftParticipant`: staff member participating in a shared shift, with join/leave timestamps and role.
+- `Tool`: equipment item (bows, etc.) with quantity, `isRequired`, display order.
+- `ShiftTool`: per-shift tool open/close counts, unique per `[shiftId, toolId]`.
+- `AppSetting`: system key-value settings (e.g. `PARKING_FEE_UNIT_PRICE`).
 - `ActivityLog`: audit trail for sensitive actions.
 
 ## Required Workflows
@@ -66,21 +71,25 @@
   15. The `Thêm` tab should show account, current shift status, admin shortcuts first (các tab ẩn trên mobile: Bảng giá, Khuyến mại, Dụng cụ, Nhân viên, Gói hội viên), then operational shortcuts, theme controls, system status, and logout.
   16. Admin-only shortcuts such as pricing and staff management must be hidden from staff users in the `Thêm` tab.
   17. `/pricing` is the admin pricing-rule screen. Keep UI logic in `src/features/pricing/`.
+  18. `/promotions` is the admin promotion-rule screen. Keep UI logic in `src/features/promotions/`. Only admin can create/edit/disable promotions; changes must write `ActivityLog`.
+  19. `/tools` is the admin equipment screen. Keep UI logic in `src/features/tools/`. Only admin can create/edit/delete tools; POS reads them for per-shift tool counts.
 
 - Check-in:
   1. Staff should have an open shift; current backend attaches it when present, and the UI should make opening shift mandatory before POS operations.
   2. Select or create one customer.
-  3. If customer is `WALK_IN`, require an applicable active `PricingRule` and snapshot the rate into the session.
-  4. If customer is `MEMBER`, verify active membership.
-  5. If membership is expired, require renewal flow before session creation unless the user explicitly changes the business rule.
+  3. Optionally set `playerCount` (multiple players under one customer). If players pay different rates, split them into `groups` (each `{ playerCount, pricingRuleId }`) — every group becomes a `SessionPricingGroup` with its own rule + tier snapshot.
+  4. If customer is `WALK_IN`, require an applicable active `PricingRule` and snapshot the rule + tiers into the session (no default-rate fallback).
+  5. If customer is `MEMBER`, verify active membership.
+  6. If membership is expired, require renewal flow before session creation unless the user explicitly changes the business rule.
 
 - Checkout:
   1. Validate the session is active and end time is not before start time.
   2. Build an invoice.
-  3. For `WALK_IN`, add `PLAY_TIME` item based on elapsed hours and pricing/promotion rules.
+  3. For `WALK_IN`, add `PLAY_TIME` item from elapsed hours, tiered pricing, and the selected promotion (all from snapshots; discount goes into the item's `discountAmount`/metadata — no separate `DISCOUNT` line). Checkout can settle one pricing group via `pricingGroupId`, decrementing its `remainingCount`.
   4. For active `MEMBER`, play time item should be `0đ` or omitted, but products/services still apply.
-  5. Deduct inventory for stock-tracked products through `StockMovement`.
-  6. Record payment, close session, update customer totals, and write audit logs in one transaction.
+  5. Optionally add a parking fee as a `SURCHARGE` line (`metadata.surchargeType: 'PARKING'`) priced from `AppSetting(PARKING_FEE_UNIT_PRICE)` — it reduces the invoice total.
+  6. Deduct inventory for stock-tracked products through `StockMovement`.
+  7. Record payment, close session, update customer totals, and write audit logs in one transaction.
 
 - Inventory:
   1. `GET /api/products` is available to authenticated staff for the mobile inventory and checkout flows.
@@ -95,6 +104,8 @@
   3. `hourTo` is exclusive: a `17-21` rule applies from 17:00 up to before 21:00.
   4. Validate `hourTo > hourFrom`, `ratePerHour > 0`, and `effectiveTo >= effectiveFrom`.
   5. `/api/pricing/status` should expose `activeCount`; POS readiness should use this, not just total pricing-rule count.
+  6. Rules may define `PricingTier`s (`minHours` → `ratePerHour`); play price is computed progressively per tier (`calculateTieredSubtotal`).
+  7. Snapshot rule + tiers at check-in and recompute from the snapshot at checkout; do not silently re-resolve pricing when recording payment.
 
 - Reports:
   1. Revenue reports must be based on `Payment` and `InvoiceItem`, not only `Session.totalAmount`.
@@ -127,5 +138,5 @@
 - Keep this as a modular monolith. Do not split into microservices.
 - Prefer use-case style functions for business flows such as check-in, checkout, membership renewal, stock adjustment, and shift close.
 - Avoid putting business rules directly in React pages or route handlers. Route handlers should validate, authorize, call use-case logic, and return API responses.
-- Financial records must be append-friendly and auditable. Prefer void/correction flows over destructive edits.
+- Financial records must be append-friendly and auditable. Prefer void/correction flows over destructive edits: invoice voids go through the `voidInvoice` use-case (mark `CANCELLED`, negative refund `Payment`, `VOID` stock movements, `INVOICE_VOID` activity log) — never hard-delete a paid invoice.
 - Report dates must use Vietnam business timezone semantics, not accidental UTC grouping.
