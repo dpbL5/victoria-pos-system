@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
         cashRevenue: 0,
         transferRevenue: 0,
         cardRevenue: 0,
+        memberRevenue: 0,
         paymentCount: 0,
         membershipCount: 0,
       }
@@ -88,6 +89,7 @@ export async function GET(request: NextRequest) {
         cashRevenue: rev.cashRevenue,
         transferRevenue: rev.transferRevenue,
         cardRevenue: rev.cardRevenue,
+        memberRevenue: rev.memberRevenue,
         paymentCount: rev.paymentCount,
         membershipCount: rev.membershipCount,
         sessionCount: shift._count.sessions,

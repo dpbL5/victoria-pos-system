@@ -15,6 +15,7 @@ export interface TransactionItem {
   customerType: string | null
   invoiceId: string | null
   invoiceNo: string | null
+  invoiceStatus: string | null
   staffName: string
   planName: string | null
 }
@@ -24,6 +25,7 @@ export interface ShiftRevenueData {
   cashRevenue: number
   transferRevenue: number
   cardRevenue: number
+  memberRevenue: number
   paymentCount: number
   membershipCount: number
 }
@@ -95,6 +97,7 @@ export async function calculateExpectedCash(
     where: {
       shiftId,
       paymentMethod: 'CASH',
+      invoice: { status: { not: 'CANCELLED' } },
     },
     _sum: { grandTotal: true },
   })
@@ -128,6 +131,7 @@ export async function getShiftTransactions(
     cashAmount: number
     transferAmount: number
     cardAmount: number
+    memberAmount: number
   }
 }> {
   const [payments, membershipPayments] = await Promise.all([
@@ -138,6 +142,7 @@ export async function getShiftTransactions(
           select: {
             id: true,
             invoiceNo: true,
+            status: true,
             customer: { select: { fullName: true, type: true } },
           },
         },
@@ -174,6 +179,7 @@ export async function getShiftTransactions(
     customerType: (p.invoice?.customer?.type ?? p.session?.customer?.type) ?? null,
     invoiceId: p.invoice?.id ?? null,
     invoiceNo: p.invoice?.invoiceNo ?? null,
+    invoiceStatus: p.invoice?.status ?? null,
     staffName: p.staff?.fullName ?? '—',
     planName: null,
   })
@@ -188,6 +194,7 @@ export async function getShiftTransactions(
     customerType: mp.customer?.type ?? null,
     invoiceId: null,
     invoiceNo: null,
+    invoiceStatus: null,
     staffName: mp.staff?.fullName ?? '—',
     planName: mp.plan?.name ?? null,
   })
@@ -199,23 +206,30 @@ export async function getShiftTransactions(
     (a, b) => new Date(a.paidAt).getTime() - new Date(b.paidAt).getTime()
   )
 
-  const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
+  // Loại trừ giao dịch từ hoá đơn đã huỷ khi tính tổng hợp
+  const activeTransactions = transactions.filter(
+    (t) => t.invoiceStatus !== 'CANCELLED'
+  )
+  const totalAmount = activeTransactions.reduce((sum, t) => sum + t.amount, 0)
 
   return {
     transactions,
     summary: {
       totalAmount,
-      totalCount: transactions.length,
-      paymentCount: payments.length,
-      membershipCount: membershipPayments.length,
-      cashAmount: transactions
+      totalCount: activeTransactions.length,
+      paymentCount: activeTransactions.filter((t) => t.type === 'payment').length,
+      membershipCount: activeTransactions.filter((t) => t.type === 'membership').length,
+      cashAmount: activeTransactions
         .filter((t) => t.paymentMethod === 'CASH')
         .reduce((sum, t) => sum + t.amount, 0),
-      transferAmount: transactions
+      transferAmount: activeTransactions
         .filter((t) => t.paymentMethod === 'TRANSFER')
         .reduce((sum, t) => sum + t.amount, 0),
-      cardAmount: transactions
+      cardAmount: activeTransactions
         .filter((t) => t.paymentMethod === 'CARD')
+        .reduce((sum, t) => sum + t.amount, 0),
+      memberAmount: activeTransactions
+        .filter((t) => t.paymentMethod === 'MEMBER')
         .reduce((sum, t) => sum + t.amount, 0),
     },
   }
@@ -226,9 +240,10 @@ export async function getShiftRevenueData(
   shiftId: string
 ): Promise<ShiftRevenueData> {
   const [paymentAgg, mpAgg] = await Promise.all([
+    // Báo cáo doanh thu tự lọc payment từ hoá đơn đã huỷ
     db.payment.groupBy({
       by: ['paymentMethod'],
-      where: { shiftId },
+      where: { shiftId, invoice: { status: { not: 'CANCELLED' } } },
       _sum: { grandTotal: true },
       _count: { _all: true },
     }),
@@ -243,6 +258,7 @@ export async function getShiftRevenueData(
   let cashRevenue = 0
   let transferRevenue = 0
   let cardRevenue = 0
+  let memberRevenue = 0
   let paymentCount = 0
   let membershipCount = 0
 
@@ -251,6 +267,7 @@ export async function getShiftRevenueData(
     if (row.paymentMethod === 'CASH') cashRevenue += amount
     else if (row.paymentMethod === 'TRANSFER') transferRevenue += amount
     else if (row.paymentMethod === 'CARD') cardRevenue += amount
+    else if (row.paymentMethod === 'MEMBER') memberRevenue += amount
     paymentCount += row._count?._all ?? 0
   }
 
@@ -259,12 +276,14 @@ export async function getShiftRevenueData(
     if (row.paymentMethod === 'CASH') cashRevenue += amount
     else if (row.paymentMethod === 'TRANSFER') transferRevenue += amount
     else if (row.paymentMethod === 'CARD') cardRevenue += amount
+    else if (row.paymentMethod === 'MEMBER') memberRevenue += amount
     membershipCount += row._count?._all ?? 0
   }
 
-  const totalRevenue = cashRevenue + transferRevenue + cardRevenue
+  // MEMBER là thanh toán qua hội viên, không thu tiền mặt — chỉ tính vào tổng doanh thu
+  const totalRevenue = cashRevenue + transferRevenue + cardRevenue + memberRevenue
 
-  return { totalRevenue, cashRevenue, transferRevenue, cardRevenue, paymentCount, membershipCount }
+  return { totalRevenue, cashRevenue, transferRevenue, cardRevenue, memberRevenue, paymentCount, membershipCount }
 }
 
 export interface ShiftDayGroup {
@@ -273,6 +292,7 @@ export interface ShiftDayGroup {
   cashRevenue: number
   transferRevenue: number
   cardRevenue: number
+  memberRevenue: number
   paymentCount: number
   membershipCount: number
   sessionCount: number

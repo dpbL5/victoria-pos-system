@@ -44,6 +44,7 @@ enum PaymentMethod {
   CASH
   TRANSFER
   CARD
+  MEMBER
 }
 
 enum MembershipStatus {

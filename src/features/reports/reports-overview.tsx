@@ -33,6 +33,7 @@ interface PaymentBreakdown {
   CASH: { total: number; count: number }
   TRANSFER: { total: number; count: number }
   CARD: { total: number; count: number }
+  MEMBER: { total: number; count: number }
 }
 
 type ItemBreakdown = Record<ItemType, number>
@@ -559,7 +560,7 @@ function PaymentPanel({
           <div key={method} className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                {method === 'CASH' ? <Banknote size={15} /> : <CreditCard size={15} />}
+                {method === 'CASH' ? <Banknote size={15} /> : method === 'MEMBER' ? <Users size={15} /> : <CreditCard size={15} />}
               </div>
               <div>
                 <p className="text-sm font-medium text-zinc-950 dark:text-white">
@@ -669,12 +670,13 @@ function RecentPaymentRow({
   )
 }
 
-const paymentMethods: PaymentMethod[] = ['CASH', 'TRANSFER', 'CARD']
+const paymentMethods: PaymentMethod[] = ['CASH', 'TRANSFER', 'CARD', 'MEMBER']
 
 function paymentMethodLabel(method: PaymentMethod): string {
   if (method === 'CASH') return 'Tiền mặt'
   if (method === 'TRANSFER') return 'Chuyển khoản'
-  return 'Thẻ'
+  if (method === 'CARD') return 'Thẻ'
+  return 'Hội viên'
 }
 
 function buildItemRows(items: ItemBreakdown) {

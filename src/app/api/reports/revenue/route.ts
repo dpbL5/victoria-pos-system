@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { toInputDate, parseStartOfDay, parseEndOfDay } from '@/lib/utils'
+import { Prisma } from '@/generated/prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,10 +20,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const paymentWhere = {
+    const paymentWhere: Prisma.PaymentWhereInput = {
       paidAt: { gte: fromDate, lte: toDate },
-      ...(auth.role === 'STAFF' ? { staffId: auth.userId } : {}),
+      invoice: { status: { not: 'CANCELLED' } },
     }
+    if (auth.role === 'STAFF') paymentWhere.staffId = auth.userId
 
     const [payments, recentPayments] = await Promise.all([
       prisma.payment.findMany({

@@ -1,24 +1,24 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Banknote,
   CreditCard,
   Download,
   Edit3,
   ReceiptText,
+  Users,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { formatClock, money } from '@/features/pos/format'
-import { InvoiceDetailModal } from '@/features/pos/invoice-detail-modal'
-import type { ShiftReportDetail, TransactionItem } from '@/types'
+import type { ShiftReportDetail } from '@/types'
 
 interface DetailResponse {
   success: boolean
@@ -34,6 +34,7 @@ interface ReportsShiftDetailProps {
 }
 
 export function ReportsShiftDetail({ shiftId, isAdmin, onClose, onUpdated }: ReportsShiftDetailProps) {
+  const router = useRouter()
   const toast = useToast()
   const [detail, setDetail] = useState<ShiftReportDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -42,7 +43,6 @@ export function ReportsShiftDetail({ shiftId, isAdmin, onClose, onUpdated }: Rep
   const [editDiff, setEditDiff] = useState('')
   const [editNotes, setEditNotes] = useState('')
   const [saving, setSaving] = useState(false)
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null)
 
   const loadDetail = useCallback(async () => {
     setLoading(true)
@@ -265,13 +265,13 @@ export function ReportsShiftDetail({ shiftId, isAdmin, onClose, onUpdated }: Rep
           {detail.byPaymentMethod && (
             <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <h3 className="text-sm font-semibold text-zinc-950 dark:text-white">Phương thức thanh toán</h3>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {(['CASH', 'TRANSFER', 'CARD'] as const).map((method) => (
+              <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                {(['CASH', 'TRANSFER', 'CARD', 'MEMBER'] as const).map((method) => (
                   <div key={method} className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
                     <div className="flex items-center gap-1.5">
-                      {method === 'CASH' ? <Banknote size={13} className="text-emerald-500" /> : <CreditCard size={13} className="text-blue-500" />}
+                      {method === 'CASH' ? <Banknote size={13} className="text-emerald-500" /> : method === 'MEMBER' ? <Users size={13} className="text-purple-500" /> : <CreditCard size={13} className="text-blue-500" />}
                       <p className="text-[10px] text-zinc-400">
-                        {method === 'CASH' ? 'Tiền mặt' : method === 'TRANSFER' ? 'CK' : 'Thẻ'}
+                        {method === 'CASH' ? 'Tiền mặt' : method === 'TRANSFER' ? 'CK' : method === 'CARD' ? 'Thẻ' : 'Hội viên'}
                       </p>
                     </div>
                     <p className="mt-1 text-xs font-semibold tabular-nums">{money(detail.byPaymentMethod[method].total)}</p>
@@ -366,7 +366,7 @@ export function ReportsShiftDetail({ shiftId, isAdmin, onClose, onUpdated }: Rep
             </section>
           )}
 
-          {/* Transaction List */}
+          {/* Giao dịch — xem toàn bộ ở trang riêng */}
           <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
               <h3 className="text-sm font-semibold text-zinc-950 dark:text-white">
@@ -382,91 +382,23 @@ export function ReportsShiftDetail({ shiftId, isAdmin, onClose, onUpdated }: Rep
                 </a>
               )}
             </div>
-
-            {detail.transactions.length === 0 ? (
-              <div className="p-4">
-                <EmptyState
-                  icon={ReceiptText}
-                  message="Chưa có giao dịch"
-                  description="Giao dịch của ca này sẽ hiện ở đây."
-                />
-              </div>
-            ) : (
-              <div className="max-h-80 overflow-y-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-zinc-100 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                      <th className="px-4 py-2 font-medium">Thời gian</th>
-                      <th className="px-4 py-2 font-medium">Khách</th>
-                      <th className="px-4 py-2 font-medium">Loại</th>
-                      <th className="px-4 py-2 font-medium hidden md:table-cell">PT</th>
-                      <th className="px-4 py-2 text-right font-medium">Số tiền</th>
-                      <th className="px-4 py-2 font-medium hidden sm:table-cell">NV</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800">
-                    {detail.transactions.map((tx) => (
-                      <TransactionRow
-                        key={tx.id}
-                        tx={tx}
-                        onClick={() => {
-                          if (tx.invoiceId) setSelectedInvoiceId(tx.invoiceId)
-                        }}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <div className="flex flex-col items-start gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Danh sách giao dịch đầy đủ và tổng hợp thu chi theo ca.
+              </p>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={ReceiptText}
+                onClick={() => router.push(`/transactions?shiftId=${shiftId}`)}
+              >
+                Xem toàn bộ giao dịch
+              </Button>
+            </div>
           </section>
         </div>
       </Modal>
 
-      {selectedInvoiceId && (
-        <InvoiceDetailModal
-          invoiceId={selectedInvoiceId}
-          open
-          onClose={() => setSelectedInvoiceId(null)}
-        />
-      )}
     </>
-  )
-}
-
-function TransactionRow({ tx, onClick }: { tx: TransactionItem; onClick: () => void }) {
-  const methodLabel: Record<string, string> = {
-    CASH: 'TM',
-    TRANSFER: 'CK',
-    CARD: 'Thẻ',
-  }
-
-  return (
-    <tr
-      className={`transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50 ${
-        tx.invoiceId ? 'cursor-pointer' : ''
-      }`}
-      onClick={tx.invoiceId ? onClick : undefined}
-    >
-      <td className="px-4 py-2.5 whitespace-nowrap text-zinc-500">
-        {formatClock(tx.paidAt)}
-      </td>
-      <td className="px-4 py-2.5 max-w-[120px] truncate font-medium text-zinc-950 dark:text-white">
-        {tx.customerName}
-      </td>
-      <td className="px-4 py-2.5 whitespace-nowrap">
-        <Badge variant="outline" size="sm">
-          {tx.type === 'payment' ? 'TT' : 'HV'}
-        </Badge>
-      </td>
-      <td className="px-4 py-2.5 whitespace-nowrap text-zinc-500 hidden md:table-cell">
-        {tx.paymentMethod ? methodLabel[tx.paymentMethod] ?? tx.paymentMethod : '—'}
-      </td>
-      <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-zinc-950 dark:text-white">
-        {money(tx.amount)}
-      </td>
-      <td className="px-4 py-2.5 whitespace-nowrap text-zinc-400 hidden sm:table-cell">
-        {tx.staffName}
-      </td>
-    </tr>
   )
 }

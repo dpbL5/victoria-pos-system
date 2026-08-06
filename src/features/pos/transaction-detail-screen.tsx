@@ -11,7 +11,6 @@ import { Label, Textarea } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
 import { apiJson, jsonRequest } from '@/features/pos/api'
 import type { UserSession } from '@/features/pos/types'
-import type { VoidInvoiceResult } from '@/lib/business/use-cases/voidInvoice'
 import { InvoiceDetailContent, type InvoiceDetail } from './invoice-detail-content'
 
 interface Props {
@@ -20,7 +19,7 @@ interface Props {
 
 export function TransactionDetailScreen({ id }: Props) {
   const router = useRouter()
-  const { success: notifySuccess, error: notifyError, toast } = useToast()
+  const { success: notifySuccess, error: notifyError } = useToast()
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null)
   const [user, setUser] = useState<UserSession | null>(null)
   const [loading, setLoading] = useState(true)
@@ -82,7 +81,7 @@ export function TransactionDetailScreen({ id }: Props) {
     if (!invoice) return
     setVoiding(true)
     try {
-      const data = await apiJson<VoidInvoiceResult>(
+      const data = await apiJson(
         `/api/invoices/${id}/void`,
         jsonRequest({ reason: voidReason })
       )
@@ -91,9 +90,6 @@ export function TransactionDetailScreen({ id }: Props) {
         return
       }
       notifySuccess('Đã huỷ hoá đơn')
-      if (data.data?.correction) {
-        toast('warning', 'Hoá đơn thuộc ca đã đóng — hoàn trả ghi nhận là điều chỉnh bản ghi.')
-      }
       setConfirmVoidOpen(false)
       setVoidReason('')
       void loadData()

@@ -10,6 +10,7 @@ import {
   ChevronRight,
   CreditCard,
   Search,
+  Users,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -267,11 +268,12 @@ function ShiftCard({
         · {shift.paymentCount + shift.membershipCount} giao dịch
       </p>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-5">
         <MiniMetric icon={Banknote} label="Tổng DT" value={money(shift.totalRevenue)} />
         <MiniMetric icon={Banknote} label="Tiền mặt" value={money(shift.cashRevenue)} />
         <MiniMetric icon={CreditCard} label="Chuyển khoản" value={money(shift.transferRevenue)} />
         <MiniMetric icon={CreditCard} label="Thẻ" value={money(shift.cardRevenue)} />
+        <MiniMetric icon={Users} label="Hội viên" value={money(shift.memberRevenue)} />
       </div>
 
       {shift.status === 'CLOSED' && shift.closingCash != null && (

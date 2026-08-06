@@ -71,5 +71,6 @@ export function paymentMethodLabel(method: string): string {
   if (method === 'CASH') return 'Tiền mặt'
   if (method === 'TRANSFER') return 'Chuyển khoản'
   if (method === 'CARD') return 'Thẻ'
+  if (method === 'MEMBER') return 'Hội viên'
   return method
 }

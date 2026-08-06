@@ -5,10 +5,8 @@ import { voidInvoice } from '@/lib/business/use-cases/voidInvoice'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // POST /api/invoices/[id]/void
-// Chỉ quản trị viên được huỷ (void) hoá đơn. Huỷ không xoá cứng mà chuyển
-// trạng thái CANCELLED + tạo các mục điều chỉnh (stock return, refund payment)
-// và ghi nhật ký hoạt động. Áp dụng cho ca đang mở và ca đã đóng (điều chỉnh
-// bản ghi trên ca đã đóng vẫn được ghi nhận kiểm toán).
+// Chỉ quản trị viên được huỷ (void) hoá đơn. Chuyển trạng thái CANCELLED,
+// hoàn trả tồn kho, ghi nhật ký kiểm toán. Không tạo payment hoàn trả.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -31,7 +29,7 @@ export async function POST(
     const body = await request.json().catch(() => ({}))
     const reason = body?.reason ? String(body.reason).slice(0, 500).trim() : undefined
 
-    const result = await voidInvoice({
+    await voidInvoice({
       invoiceId: id,
       staffId: auth.userId,
       reason: reason || undefined,
@@ -39,7 +37,6 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      data: result,
       message: 'Đã huỷ hoá đơn',
     })
   } catch (error) {

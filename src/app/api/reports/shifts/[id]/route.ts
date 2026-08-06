@@ -6,10 +6,10 @@ import { logActivity } from '@/lib/business/audit'
 import { adjustCashDifferenceSchema } from '@/lib/validations/shift'
 import type { ShiftReportDetail } from '@/types'
 
-type PaymentMethodKey = 'CASH' | 'TRANSFER' | 'CARD'
+type PaymentMethodKey = 'CASH' | 'TRANSFER' | 'CARD' | 'MEMBER'
 type ItemTypeKey = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT' | 'SURCHARGE'
 
-const paymentMethods: PaymentMethodKey[] = ['CASH', 'TRANSFER', 'CARD']
+const paymentMethods: PaymentMethodKey[] = ['CASH', 'TRANSFER', 'CARD', 'MEMBER']
 const itemTypes: ItemTypeKey[] = ['PLAY_TIME', 'MEMBERSHIP_FEE', 'PRODUCT', 'SERVICE', 'DISCOUNT', 'SURCHARGE']
 
 export async function GET(
@@ -45,7 +45,7 @@ export async function GET(
       getShiftTransactions(prisma as any, id),
       prisma.invoiceItem.groupBy({
         by: ['type'],
-        where: { invoice: { shiftId: id } },
+        where: { invoice: { shiftId: id, status: { not: 'CANCELLED' } } },
         _sum: { total: true },
       }),
     ])
@@ -55,6 +55,7 @@ export async function GET(
     ) as Record<PaymentMethodKey, { total: number; count: number }>
 
     for (const tx of txResult.transactions) {
+      if (tx.invoiceStatus === 'CANCELLED') continue
       const method = tx.paymentMethod as PaymentMethodKey
       if (byPaymentMethod[method]) {
         byPaymentMethod[method].total += tx.amount
@@ -85,6 +86,7 @@ export async function GET(
       cashRevenue: revenue.cashRevenue,
       transferRevenue: revenue.transferRevenue,
       cardRevenue: revenue.cardRevenue,
+      memberRevenue: revenue.memberRevenue,
       paymentCount: revenue.paymentCount,
       membershipCount: revenue.membershipCount,
       sessionCount: shift._count.sessions,
