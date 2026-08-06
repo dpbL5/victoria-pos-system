@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ReceiptText, Trash2, XCircle } from 'lucide-react'
+import { ArrowLeft, Pencil, ReceiptText, Trash2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/toast'
 import { apiJson, jsonRequest } from '@/features/pos/api'
 import type { UserSession } from '@/features/pos/types'
 import { InvoiceDetailContent, type InvoiceDetail } from './invoice-detail-content'
+import { InvoiceEditDialog } from './invoice-edit-dialog'
 
 interface Props {
   id: string
@@ -29,6 +30,8 @@ export function TransactionDetailScreen({ id }: Props) {
   const [confirmVoidOpen, setConfirmVoidOpen] = useState(false)
   const [voiding, setVoiding] = useState(false)
   const [voidReason, setVoidReason] = useState('')
+  const [editOpen, setEditOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -144,15 +147,26 @@ export function TransactionDetailScreen({ id }: Props) {
           {isAdmin && invoice && (
             <>
               {invoice.status === 'PAID' && (
-                <Button
-                  variant="outline-danger"
-                  size="sm"
-                  icon={XCircle}
-                  title="Huỷ hoá đơn"
-                  onClick={() => setConfirmVoidOpen(true)}
-                >
-                  Huỷ
-                </Button>
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={Pencil}
+                    title="Sửa hoá đơn"
+                    onClick={() => setEditOpen(true)}
+                  >
+                    Sửa
+                  </Button>
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    icon={XCircle}
+                    title="Huỷ hoá đơn"
+                    onClick={() => setConfirmVoidOpen(true)}
+                  >
+                    Huỷ
+                  </Button>
+                </>
               )}
               {invoice.status === 'DRAFT' && (
                 <Button
@@ -213,6 +227,18 @@ export function TransactionDetailScreen({ id }: Props) {
         cancelLabel="Hủy"
         submitting={voiding}
         onConfirm={handleVoidConfirm}
+      />
+
+      <InvoiceEditDialog
+        invoice={invoice}
+        open={editOpen}
+        submitting={editing}
+        setSubmitting={setEditing}
+        onClose={() => setEditOpen(false)}
+        onSaved={() => {
+          setEditOpen(false)
+          void loadData()
+        }}
       />
     </div>
   )

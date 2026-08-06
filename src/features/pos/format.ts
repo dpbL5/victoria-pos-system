@@ -28,8 +28,9 @@ export function formatDay(dateValue: string | Date): string {
   })
 }
 
-export function calcElapsedHMS(startTime: string): string {
-  const diffMs = Date.now() - new Date(startTime).getTime()
+export function calcElapsedHMS(startTime: string, endTime?: string | Date): string {
+  const end = endTime ? new Date(endTime).getTime() : Date.now()
+  const diffMs = end - new Date(startTime).getTime()
   if (diffMs < 0) return '00:00:00'
 
   const totalSeconds = Math.floor(diffMs / 1000)

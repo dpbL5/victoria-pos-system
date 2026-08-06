@@ -88,15 +88,15 @@
   --color-gold-bg: rgba(212, 181, 114, 0.1);
   --color-gold-border: rgba(212, 181, 114, 0.25);
 
-  --color-surface-primary: #09090b;
-  --color-surface-secondary: #18181b;
-  --color-surface-tertiary: #27272a;
-  --color-surface-elevated: #1f1f23;
+  --color-surface-primary: #18181b;
+  --color-surface-secondary: #27272a;
+  --color-surface-tertiary: #3f3f46;
+  --color-surface-elevated: #27272a;
   --color-surface-overlay: rgba(0, 0, 0, 0.7);
 
-  --color-border-default: #27272a;
-  --color-border-strong: #3f3f46;
-  --color-border-subtle: #1f1f23;
+  --color-border-default: #3f3f46;
+  --color-border-strong: #52525b;
+  --color-border-subtle: #27272a;
 
   --color-text-primary: #fafafa;
   --color-text-secondary: #a1a1aa;

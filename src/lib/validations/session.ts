@@ -11,6 +11,7 @@ export const createSessionSchema = z.object({
   pricingRuleId: z.string().uuid("ID bảng giá không hợp lệ").optional(),
   playerCount: z.number().int().min(1, "Số người chơi tối thiểu là 1").max(50, "Số người chơi tối đa là 50").default(1),
   groups: z.array(pricingGroupSchema).min(1).optional(),
+  startTime: z.string().datetime().optional(),
 }).refine(
   (data) => {
     if (data.groups) {

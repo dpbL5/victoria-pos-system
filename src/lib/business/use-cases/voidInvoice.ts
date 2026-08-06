@@ -32,6 +32,7 @@ export async function voidInvoice({
         status: true,
         notes: true,
         shiftId: true,
+        sessionId: true,
         items: {
           select: {
             id: true,
@@ -87,6 +88,53 @@ export async function voidInvoice({
           },
         })
         reversedStockItems += returnQty
+      }
+    }
+
+    // 1b. Hoàn trả tồn kho cho DRAFT invoice đã merge vào hoá đơn này
+    if (invoice.sessionId) {
+      const mergedDrafts = await tx.invoice.findMany({
+        where: {
+          sessionId: invoice.sessionId,
+          status: 'CANCELLED',
+          notes: { contains: `Đã gộp vào hóa đơn ${invoice.invoiceNo}` },
+        },
+        include: {
+          items: {
+            include: {
+              stockMovements: {
+                where: { type: 'SALE' },
+                select: { id: true, productId: true, quantity: true, unitCost: true },
+              },
+            },
+          },
+        },
+      })
+
+      for (const draft of mergedDrafts) {
+        for (const item of draft.items) {
+          if (!item.productId) continue
+          for (const movement of item.stockMovements) {
+            const returnQty = Math.abs(Number(movement.quantity))
+            await tx.product.update({
+              where: { id: movement.productId ?? item.productId },
+              data: { stockQuantity: { increment: returnQty } },
+            })
+            await tx.stockMovement.create({
+              data: {
+                productId: movement.productId ?? item.productId,
+                invoiceItemId: item.id,
+                shiftId: correctionShiftId,
+                staffId,
+                type: 'VOID',
+                quantity: returnQty,
+                unitCost: movement.unitCost ?? null,
+                reason: note,
+              },
+            })
+            reversedStockItems += returnQty
+          }
+        }
       }
     }
 

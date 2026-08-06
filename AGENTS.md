@@ -25,6 +25,7 @@
 - Checkout uses `Invoice -> InvoiceItem -> Payment`, not direct `Session -> Payment`, so one invoice can include play time, products, services, membership fees, discounts, and payment records.
 - Products and services must support inventory rules. `Product.type = PRODUCT` uses stock movements for sales, imports, corrections, and voids; `Product.type = SERVICE` does not track stock.
 - Inventory quantity must change only through transactional stock flows (`StockMovement` plus audit), never by directly editing `Product.stockQuantity` from UI code.
+- Void invoice must reverse stock for both the PAID invoice's own items AND any merged DRAFT invoices (status CANCELLED, notes `Đã gộp vào hóa đơn {invoiceNo}`). See `docs/architecture.md` ADR-004.
 - A staff shift is required for real POS operations. A shift is a shared counter shift: one open `Shift` can have multiple staff members through `ShiftParticipant`; each money-taking action must still record the acting `staffId`.
 - Do not implement split payment or group bill unless explicitly requested. Current requirement does not need it.
 
@@ -140,3 +141,20 @@
 - Avoid putting business rules directly in React pages or route handlers. Route handlers should validate, authorize, call use-case logic, and return API responses.
 - Financial records must be append-friendly and auditable. Prefer void/correction flows over destructive edits: invoice voids go through the `voidInvoice` use-case (mark `CANCELLED`, negative refund `Payment`, `VOID` stock movements, `INVOICE_VOID` activity log) — never hard-delete a paid invoice.
 - Report dates must use Vietnam business timezone semantics, not accidental UTC grouping.
+
+## Architecture Constraints (Port/Adapter + Domain Modules)
+
+**Dependency direction:** `shared/` ← `infrastructure/` ← `domain/` ← `app/` + `features/`
+
+- Business logic must live in `src/lib/<domain>/use-cases/`, never in route handlers or React components.
+- Use-cases must accept a `deps: Repositories` parameter (defaulting to the `repositories` singleton) instead of importing `prisma` directly.
+- Use-cases must return `Result<T>` from `@/lib/shared/result`. Do not `throw new Error('CODE')` in use-case code — use `return err()` (before transaction) or `fail()` (inside transaction).
+- Use-cases must export `mapXxxError(error: DomainError): HttpErrorInfo` for error-to-HTTP mapping.
+- Route handlers must use `resultToResponse()`, `apiSuccess()`, or `apiError()` from `@/lib/infrastructure/api-helpers`.
+- Each domain module must export its public API through `index.ts` (barrel export). Code outside the domain must import from the barrel, not from internal paths.
+- Cross-domain dependencies are type-only through `ports.ts`. Never import another domain's adapters or use-cases.
+- All multi-table mutations must go through `runInTransaction()`, never raw `prisma.$transaction()` inside use-cases.
+- New domain logic (pricing, promotions, membership math) must be a pure function when possible — no store/prisma dependency.
+- `import { prisma }` is allowed only in `src/lib/infrastructure/prisma.ts`, `src/lib/infrastructure/repositories.ts`, and `src/lib/infrastructure/db-helpers.ts`.
+- Read-only query helpers (e.g. `findOpenShiftForStaff`) accept a `db: Pick<Prisma.TransactionClient, ...>` parameter — they work with both `tx` and `prisma` via structural typing.
+- Barrel re-exports (`export * from './new-path'`) in old file locations are allowed only as migration shims and must be deleted when the migration completes.
