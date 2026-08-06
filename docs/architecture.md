@@ -112,3 +112,36 @@
 | CheckInDialog | `check-in-dialog.tsx` | ✅ Đã tách |
 | CheckoutDrawer | `checkout-drawer.tsx` | ✅ Đã tách |
 | TodayShiftScreen | `today-shift-screen.tsx` | Chỉ còn component chính (~409 dòng) |
+
+---
+
+## ADR-007: Port/Adapter Pattern cho Use-cases
+
+**Status:** Accepted (2026-08-07)
+
+**Context:**
+Use-cases hiện tại import `prisma` trực tiếp — không thể unit test nếu không có database thật,
+logic nghiệp vụ bị trộn với persistence. Helper functions đã có pattern inject `db: Pick<Prisma.TransactionClient, ...>`
+nhưng use-case thì chưa. ADR-001 đã nhận ra điều này: *"Thiếu interface port cho Prisma → khó mock DB trong test"*.
+
+**Decision:**
+1. Mỗi domain module định nghĩa `ports.ts` với repository interface. Adapter implement interface bằng Prisma
+   dùng store types `Pick<Prisma.TransactionClient, ...>` — kế thừa pattern đã có từ helpers.
+2. Use-case nhận `deps: Repositories` làm tham số (default = composition root singleton).
+3. Use-case return `Result<T>` thay vì throw error string. Validation trước transaction → `err()`.
+   Validation trong transaction → `fail()` (throw `RollbackSignal` để trigger rollback).
+4. Route handler inject `repositories` vào use-case, dùng `resultToResponse()` để convert sang HTTP response.
+5. Tổ chức code theo domain: `src/lib/<domain>/` với `ports.ts`, `use-cases/`, `validations.ts`, `helpers.ts`, `index.ts`.
+6. `import { prisma }` chỉ được dùng trong 3 file: `infrastructure/prisma.ts`, `infrastructure/repositories.ts`, `infrastructure/db-helpers.ts`.
+
+**Consequences:**
+- ✅ Use-case test được với mock repositories — không cần database thật
+- ✅ Ranh giới rõ giữa business logic và persistence
+- ✅ Import path ngắn gọn qua barrel exports
+- ✅ Transaction semantics giữ nguyên qua `fail()`/`RollbackSignal`
+- ❌ Phải migrate từng domain — có period tạm thời 2 pattern cùng tồn tại
+- ❌ `Pick<Prisma.TransactionClient, ...>` vẫn coupling vào Prisma type system (chấp nhận được — Prisma là ORM chính, và chỉ type-level)
+
+**Implementation plan:** `docs/architecture-refactor-plan.md`
+
+**Supersedes:** ADR-001 (phần "Thiếu interface port cho Prisma → khó mock DB trong test")
