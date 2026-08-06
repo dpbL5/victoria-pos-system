@@ -120,10 +120,9 @@ export function MoreScreen() {
 
   const isAdmin = user?.role === 'ADMIN'
   const coreLinks = [
-    { href: '/sessions', label: 'Ca hôm nay', description: 'Mở ca, check-in, checkout', Icon: Timer, tone: 'emerald' },
     { href: '/shifts', label: 'Ca làm', description: 'Lịch sử và nhân viên ca', Icon: CalendarClock, tone: 'blue' },
     { href: '/customers', label: 'Hội viên', description: 'Đăng ký và gia hạn', Icon: ShieldCheck, tone: 'purple' },
-    { href: '/inventory', label: 'Kho quầy', description: 'Xem tồn và hàng sắp hết', Icon: Package, tone: 'amber' },
+    { href: '/insventory', label: 'Kho quầy', description: 'Xem tồn và hàng sắp hết', Icon: Package, tone: 'amber' },
     { href: '/reports', label: 'Báo cáo', description: 'Đối soát ca và ngày', Icon: BarChart3, tone: 'blue' },
   ] as const
 
