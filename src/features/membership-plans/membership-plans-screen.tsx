@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label, Select } from '@/components/ui/input'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -286,10 +287,18 @@ export function MembershipPlansScreen() {
         onSaved={handleSaved}
       />
 
-      <DeletePlanDialog
-        plan={deletePlan}
-        submitting={submitting}
+      <ConfirmDialog
+        open={!!deletePlan}
         onClose={() => setDeletePlan(null)}
+        title="Xóa gói hội viên"
+        description={deletePlan ? `Gói "${deletePlan.name}" sẽ bị xóa nếu chưa phát sinh hội viên.` : undefined}
+        body={
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Nếu gói đã được dùng bởi hội viên, hệ thống sẽ chuyển gói sang trạng thái ngừng dùng để giữ lịch sử thu phí.
+          </p>
+        }
+        confirmLabel="Xóa"
+        submitting={submitting}
         onConfirm={confirmDelete}
       />
     </div>
@@ -564,41 +573,6 @@ function PlanForm({
         Gói ngừng dùng vẫn giữ lịch sử hội viên và thanh toán cũ, nhưng không xuất hiện trong form đăng ký hoặc gia hạn mới.
       </div>
     </div>
-  )
-}
-
-function DeletePlanDialog({
-  plan,
-  submitting,
-  onClose,
-  onConfirm,
-}: {
-  plan: MembershipPlan | null
-  submitting: boolean
-  onClose: () => void
-  onConfirm: () => void
-}) {
-  return (
-    <Modal
-      open={!!plan}
-      onClose={onClose}
-      title="Xóa gói hội viên"
-      description={plan ? `Gói "${plan.name}" sẽ bị xóa nếu chưa phát sinh hội viên.` : undefined}
-      footer={
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" size="lg" fullWidth onClick={onClose}>
-            Hủy
-          </Button>
-          <Button variant="danger" size="lg" fullWidth disabled={submitting} onClick={onConfirm}>
-            {submitting ? 'Đang xóa...' : 'Xóa'}
-          </Button>
-        </div>
-      }
-    >
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Nếu gói đã được dùng bởi hội viên, hệ thống sẽ chuyển gói sang trạng thái ngừng dùng để giữ lịch sử thu phí.
-      </p>
-    </Modal>
   )
 }
 

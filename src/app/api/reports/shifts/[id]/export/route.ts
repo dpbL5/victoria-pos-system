@@ -16,6 +16,7 @@ const paymentMethodLabel: Record<string, string> = {
   CASH: 'Tiền mặt',
   TRANSFER: 'Chuyển khoản',
   CARD: 'Thẻ',
+  MEMBER: 'Hội viên',
 }
 
 export async function GET(

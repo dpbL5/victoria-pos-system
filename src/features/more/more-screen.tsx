@@ -24,6 +24,7 @@ import {
   Ticket,
   Timer,
   UserCog,
+  Wrench,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -131,6 +132,7 @@ export function MoreScreen() {
     { href: '/promotions', label: 'Khuyến mại', description: 'Giảm giá giờ chơi vãng lai', Icon: Tag },
     { href: '/membership-plans', label: 'Gói hội viên', description: 'Phí tháng và thời hạn gói', Icon: Ticket },
     { href: '/staff', label: 'Nhân viên', description: 'Tài khoản và phân quyền', Icon: UserCog },
+    { href: '/tools', label: 'Dụng cụ', description: 'Công cụ hệ thống', Icon: Wrench },
   ] as const
 
   const handleLogout = async () => {
@@ -265,15 +267,6 @@ export function MoreScreen() {
           />
         </section>
 
-        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <SectionTitle title="Lối tắt vận hành" />
-          <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-5">
-            {coreLinks.map((item) => (
-              <ShortcutCard key={item.href} {...item} />
-            ))}
-          </div>
-        </section>
-
         {isAdmin && (
           <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <SectionTitle title="Quản trị" />
@@ -291,6 +284,15 @@ export function MoreScreen() {
             />
           </section>
         )}
+
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <SectionTitle title="Lối tắt vận hành" />
+          <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-5">
+            {coreLinks.map((item) => (
+              <ShortcutCard key={item.href} {...item} />
+            ))}
+          </div>
+        </section>
 
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <SectionTitle title="Giao diện" />

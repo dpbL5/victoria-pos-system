@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { toInputDate, parseStartOfDay, parseEndOfDay } from '@/lib/utils'
+import { Prisma } from '@/generated/prisma/client'
+
+const paymentMethodLabel: Record<string, string> = {
+  CASH: 'Tiền mặt',
+  TRANSFER: 'Chuyển khoản',
+  CARD: 'Thẻ',
+  MEMBER: 'Hội viên',
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,7 +47,7 @@ export async function GET(request: NextRequest) {
 
 async function buildRevenueCsv(fromDate: Date, toDate: Date): Promise<string> {
   const payments = await prisma.payment.findMany({
-    where: { paidAt: { gte: fromDate, lte: toDate } },
+    where: { paidAt: { gte: fromDate, lte: toDate }, invoice: { status: { not: 'CANCELLED' as const } } },
     include: {
       session: {
         select: {
@@ -70,7 +78,7 @@ async function buildRevenueCsv(fromDate: Date, toDate: Date): Promise<string> {
       String(Number(payment.subtotal)),
       String(Number(payment.discountTotal)),
       String(Number(payment.grandTotal)),
-      payment.paymentMethod,
+      paymentMethodLabel[payment.paymentMethod] ?? payment.paymentMethod,
       payment.staff.fullName,
     ])
   }

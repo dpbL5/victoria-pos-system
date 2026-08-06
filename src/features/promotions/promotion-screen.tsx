@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Tag,
   Ticket,
+  Trash2,
   type LucideIcon,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label } from '@/components/ui/input'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -81,7 +83,8 @@ export function PromotionScreen() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL')
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | null>(null)
   const [editingRule, setEditingRule] = useState<PromotionRule | null>(null)
-  const [deleteRule, setDeleteRule] = useState<PromotionRule | null>(null)
+  const [deactivateRule, setDeactivateRule] = useState<PromotionRule | null>(null)
+  const [removeRule, setRemoveRule] = useState<PromotionRule | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const loadData = useCallback(async () => {
@@ -143,18 +146,42 @@ export function PromotionScreen() {
     await loadData()
   }
 
-  const confirmDelete = async () => {
-    if (!deleteRule) return
+  const confirmDeactivate = async () => {
+    if (!deactivateRule) return
 
     setSubmitting(true)
     try {
-      const data = await apiJson(`/api/promotions/${deleteRule.id}`, { method: 'DELETE' })
+      const data = await apiJson(`/api/promotions/${deactivateRule.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: false }),
+      })
       if (!data.success) {
         notifyError(data.error || 'Không tạm dừng được khuyến mại')
         return
       }
       notifySuccess('Đã tạm dừng khuyến mại')
-      setDeleteRule(null)
+      setDeactivateRule(null)
+      await loadData()
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const confirmRemove = async () => {
+    if (!removeRule) return
+
+    setSubmitting(true)
+    try {
+      const data = await apiJson(`/api/promotions/${removeRule.id}`, { method: 'DELETE' })
+      if (!data.success) {
+        notifyError(data.error || 'Không xoá được khuyến mại')
+        return
+      }
+      notifySuccess('Đã xoá khuyến mại')
+      setRemoveRule(null)
       await loadData()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
@@ -269,7 +296,8 @@ export function PromotionScreen() {
                         setEditingRule(rule)
                         setDialogMode('edit')
                       }}
-                      onDeactivate={() => setDeleteRule(rule)}
+                      onDeactivate={() => setDeactivateRule(rule)}
+                      onRemove={() => setRemoveRule(rule)}
                     />
                   ))}
                 </div>
@@ -291,11 +319,34 @@ export function PromotionScreen() {
         onSaved={handleSaved}
       />
 
-      <DeletePromotionDialog
-        rule={deleteRule}
+      <ConfirmDialog
+        open={!!deactivateRule}
+        onClose={() => setDeactivateRule(null)}
+        title="Tạm dừng khuyến mại"
+        description={deactivateRule ? `Khuyến mại "${deactivateRule.name}" sẽ không còn hiển thị để chọn khi thu tiền.` : undefined}
+        body={
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Cấu hình được giữ lại để có thể bật lại sau này. Lượt đã check-in vẫn giữ thông tin khuyến mại đã được snapshot.
+          </p>
+        }
+        confirmLabel="Tạm dừng"
         submitting={submitting}
-        onClose={() => setDeleteRule(null)}
-        onConfirm={confirmDelete}
+        onConfirm={confirmDeactivate}
+      />
+
+      <ConfirmDialog
+        open={!!removeRule}
+        onClose={() => setRemoveRule(null)}
+        title="Xoá khuyến mại"
+        description={removeRule ? `Khuyến mại "${removeRule.name}" sẽ bị xoá vĩnh viễn.` : undefined}
+        body={
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Lượt đã check-in vẫn giữ thông tin khuyến mại đã snapshot. Hành động này không thể hoàn tác.
+          </p>
+        }
+        confirmLabel="Xoá"
+        submitting={submitting}
+        onConfirm={confirmRemove}
       />
     </div>
   )
@@ -348,15 +399,16 @@ function PromotionCard({
   rule,
   onEdit,
   onDeactivate,
+  onRemove,
 }: {
   rule: PromotionRule
   onEdit: () => void
   onDeactivate: () => void
+  onRemove: () => void
 }) {
   const status = getRuleStatus(rule)
   const isPercent = rule.discountType === 'PERCENT' || rule.discountType === 'PERCENT_PLAY_TIME'
   const isFixedAmount = rule.discountType === 'FIXED_AMOUNT'
-  const isFixedPerHour = rule.discountType === 'FIXED_PER_HOUR'
 
   return (
     <div className="grid grid-cols-[5px_1fr]">
@@ -401,6 +453,7 @@ function PromotionCard({
         <div className="mt-3 flex gap-2">
           <Button variant="secondary" size="sm" icon={Edit3} onClick={onEdit}>Sửa</Button>
           {rule.isActive && <Button variant="outline-danger" size="sm" icon={Pause} onClick={onDeactivate}>Tạm dừng</Button>}
+          <Button variant="outline-danger" size="sm" icon={Trash2} onClick={onRemove}>Xoá</Button>
         </div>
       </div>
     </div>
@@ -686,37 +739,6 @@ function WeeklyDaySelector({ value, onChange }: { value: number[]; onChange: (da
         <Button variant="secondary" size="xs" onClick={() => onChange(allWeekDays)}>Cả tuần</Button>
       </div>
     </div>
-  )
-}
-
-function DeletePromotionDialog({
-  rule,
-  submitting,
-  onClose,
-  onConfirm,
-}: {
-  rule: PromotionRule | null
-  submitting: boolean
-  onClose: () => void
-  onConfirm: () => void
-}) {
-  return (
-    <Modal
-      open={!!rule}
-      onClose={onClose}
-      title="Tạm dừng khuyến mại"
-      description={rule ? `Khuyến mại “${rule.name}” sẽ không còn hiển thị để chọn khi thu tiền.` : undefined}
-      footer={
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" size="lg" fullWidth onClick={onClose}>Hủy</Button>
-          <Button variant="danger" size="lg" fullWidth disabled={submitting} onClick={onConfirm}>{submitting ? 'Đang tạm dừng...' : 'Tạm dừng'}</Button>
-        </div>
-      }
-    >
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Cấu hình được giữ lại để có thể bật lại sau này. Lượt đã check-in vẫn giữ thông tin khuyến mại đã được snapshot.
-      </p>
-    </Modal>
   )
 }
 

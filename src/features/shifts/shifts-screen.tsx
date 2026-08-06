@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label, Select } from '@/components/ui/input'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -135,6 +136,7 @@ export function ShiftsScreen() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [manageShift, setManageShift] = useState<ShiftRow | null>(null)
+  const [removingParticipant, setRemovingParticipant] = useState<{ shift: ShiftRow; participant: ShiftParticipantRow } | null>(null)
   const [txShift, setTxShift] = useState<ShiftRow | null>(null)
   const [txDialogOpen, setTxDialogOpen] = useState(false)
   const [txList, setTxList] = useState<TransactionItem[]>([])
@@ -256,12 +258,14 @@ export function ShiftsScreen() {
     }
   }
 
-  const removeParticipant = async (shift: ShiftRow, staffId: string) => {
+  const confirmRemoveParticipant = async () => {
+    if (!removingParticipant) return
+    const { shift, participant } = removingParticipant
     setSubmitting(true)
     try {
       const data = await apiJson<ShiftRow>(
         `/api/shifts/${shift.id}/participants`,
-        jsonRequest('DELETE', { staffId })
+        jsonRequest('DELETE', { staffId: participant.staffId })
       )
       if (!data.success || !data.data) {
         notifyError(data.error || 'Không xoá được nhân viên khỏi ca')
@@ -269,6 +273,7 @@ export function ShiftsScreen() {
       }
       replaceShift(data.data)
       notifySuccess('Đã cho nhân viên rời ca')
+      setRemovingParticipant(null)
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -425,7 +430,7 @@ export function ShiftsScreen() {
                 onManage={setManageShift}
                 onViewTransactions={(shift) => void loadTransactions(shift)}
                 onRoleChange={upsertParticipant}
-                onRemove={removeParticipant}
+                onRemove={(shift, participant) => setRemovingParticipant({ shift, participant })}
               />
             ))
           )}
@@ -446,6 +451,21 @@ export function ShiftsScreen() {
         loading={txLoading}
         onClose={() => setTxDialogOpen(false)}
         open={txDialogOpen}
+      />
+
+      <ConfirmDialog
+        open={!!removingParticipant}
+        onClose={() => setRemovingParticipant(null)}
+        title="Cho nhân viên rời ca"
+        description={removingParticipant ? `Nhân viên "${removingParticipant.participant.staff.fullName}" sẽ rời khỏi ca.` : undefined}
+        body={
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Nhân viên có đang làm việc sẽ không thể thu ngân cho ca này sau khi rời ca.
+          </p>
+        }
+        confirmLabel="Xác nhận"
+        submitting={submitting}
+        onConfirm={confirmRemoveParticipant}
       />
     </div>
   )
@@ -468,7 +488,7 @@ function DayGroupSection({
   onManage: (shift: ShiftRow) => void
   onViewTransactions: (shift: ShiftRow) => void
   onRoleChange: (shift: ShiftRow, staffId: string, role: ShiftParticipantRole) => Promise<void>
-  onRemove: (shift: ShiftRow, staffId: string) => Promise<void>
+  onRemove: (shift: ShiftRow, participant: ShiftParticipantRow) => void
 }) {
   const dayLabel = new Date(group.date).toLocaleDateString('vi-VN', {
     weekday: 'long',
@@ -518,7 +538,7 @@ function DayGroupSection({
             onManage={() => onManage(shift)}
             onViewTransactions={() => onViewTransactions(shift)}
             onRoleChange={(p, role) => onRoleChange(shift, p.staffId, role)}
-            onRemove={(p) => onRemove(shift, p.staffId)}
+            onRemove={(p) => onRemove(shift, p)}
           />
         ))}
       </div>

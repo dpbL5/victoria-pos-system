@@ -107,6 +107,7 @@ export async function GET(request: NextRequest) {
         cashRevenue: number
         transferRevenue: number
         cardRevenue: number
+        memberRevenue: number
         paymentCount: number
         membershipCount: number
         sessionCount: number
@@ -122,6 +123,7 @@ export async function GET(request: NextRequest) {
             cashRevenue: 0,
             transferRevenue: 0,
             cardRevenue: 0,
+            memberRevenue: 0,
             paymentCount: 0,
             membershipCount: 0,
             sessionCount: 0,
@@ -129,12 +131,13 @@ export async function GET(request: NextRequest) {
           })
         }
         const group = groups.get(dayKey)!
-        const rev = revenueMap.get(shift.id) ?? { totalRevenue: 0, cashRevenue: 0, transferRevenue: 0, cardRevenue: 0, paymentCount: 0, membershipCount: 0 }
+        const rev = revenueMap.get(shift.id) ?? { totalRevenue: 0, cashRevenue: 0, transferRevenue: 0, cardRevenue: 0, memberRevenue: 0, paymentCount: 0, membershipCount: 0 }
 
         group.totalRevenue += rev.totalRevenue
         group.cashRevenue += rev.cashRevenue
         group.transferRevenue += rev.transferRevenue
         group.cardRevenue += rev.cardRevenue
+        group.memberRevenue += rev.memberRevenue
         group.paymentCount += rev.paymentCount
         group.membershipCount += rev.membershipCount
         group.sessionCount += shift._count.sessions

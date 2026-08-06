@@ -305,6 +305,8 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
                     <div className="flex items-center gap-1.5">
                       {payment.paymentMethod === 'CASH' ? (
                         <Banknote size={15} className="text-emerald-500" />
+                      ) : payment.paymentMethod === 'MEMBER' ? (
+                        <Users size={15} className="text-purple-500" />
                       ) : (
                         <CreditCard size={15} className="text-blue-500" />
                       )}
@@ -380,7 +382,9 @@ function getPromotionName(metadata: unknown): string | null {
 function paymentMethodLabel(method: string): string {
   if (method === 'CASH') return 'Tiền mặt'
   if (method === 'TRANSFER') return 'Chuyển khoản'
-  return 'Thẻ'
+  if (method === 'CARD') return 'Thẻ'
+  if (method === 'MEMBER') return 'Hội viên'
+  return method
 }
 
 function formatTime(date: string): string {

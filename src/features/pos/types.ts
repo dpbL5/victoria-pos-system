@@ -1,6 +1,6 @@
-import type { PricingRuleSnapshot, PromotionDiscountType, SessionPricingGroupDTO } from '@/types'
+import type { PaymentMethod, PricingRuleSnapshot, PromotionDiscountType, SessionPricingGroupDTO } from '@/types'
 
-export type PaymentMethod = 'CASH' | 'TRANSFER' | 'CARD'
+export type { PaymentMethod } from '@/types'
 export type CustomerType = 'WALK_IN' | 'MEMBER'
 export type ProductType = 'PRODUCT' | 'SERVICE'
 export type UserRole = 'ADMIN' | 'STAFF'

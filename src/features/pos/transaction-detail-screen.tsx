@@ -2,10 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ReceiptText } from 'lucide-react'
+import { ArrowLeft, ReceiptText, Trash2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Label, Textarea } from '@/components/ui/input'
+import { useToast } from '@/components/ui/toast'
+import { apiJson, jsonRequest } from '@/features/pos/api'
+import type { UserSession } from '@/features/pos/types'
 import { InvoiceDetailContent, type InvoiceDetail } from './invoice-detail-content'
 
 interface Props {
@@ -14,21 +19,31 @@ interface Props {
 
 export function TransactionDetailScreen({ id }: Props) {
   const router = useRouter()
+  const { success: notifySuccess, error: notifyError } = useToast()
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null)
+  const [user, setUser] = useState<UserSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmVoidOpen, setConfirmVoidOpen] = useState(false)
+  const [voiding, setVoiding] = useState(false)
+  const [voidReason, setVoidReason] = useState('')
 
-  const loadInvoice = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const response = await fetch(`/api/invoices/${id}`)
-      const data = await response.json()
-      if (!data.success) {
-        setError(data.error || 'Không tải được hoá đơn')
+      const [invoiceRes, userRes] = await Promise.all([
+        fetch(`/api/invoices/${id}`).then((res) => res.json()),
+        apiJson<UserSession>('/api/auth/me'),
+      ])
+      if (!invoiceRes.success) {
+        setError(invoiceRes.error || 'Không tải được hoá đơn')
         return
       }
-      setInvoice(data.data)
+      setInvoice(invoiceRes.data)
+      if (userRes.success) setUser(userRes.data ?? null)
     } catch {
       setError('Lỗi kết nối máy chủ')
     } finally {
@@ -37,9 +52,53 @@ export function TransactionDetailScreen({ id }: Props) {
   }, [id])
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => void loadInvoice(), 0)
+    const timeoutId = window.setTimeout(() => void loadData(), 0)
     return () => window.clearTimeout(timeoutId)
-  }, [loadInvoice])
+  }, [loadData])
+
+  const isAdmin = user?.role === 'ADMIN'
+
+  const handleDeleteConfirm = async () => {
+    if (!invoice) return
+    setDeleting(true)
+    try {
+      const data = await apiJson(`/api/invoices/${id}`, { method: 'DELETE' })
+      if (!data.success) {
+        notifyError(data.error || 'Không xoá được hoá đơn')
+        return
+      }
+      notifySuccess('Đã xoá hoá đơn')
+      setConfirmDeleteOpen(false)
+      router.back()
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleVoidConfirm = async () => {
+    if (!invoice) return
+    setVoiding(true)
+    try {
+      const data = await apiJson(
+        `/api/invoices/${id}/void`,
+        jsonRequest({ reason: voidReason })
+      )
+      if (!data.success) {
+        notifyError(data.error || 'Không huỷ được hoá đơn')
+        return
+      }
+      notifySuccess('Đã huỷ hoá đơn')
+      setConfirmVoidOpen(false)
+      setVoidReason('')
+      void loadData()
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setVoiding(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -78,11 +137,83 @@ export function TransactionDetailScreen({ id }: Props) {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-2xl">
-        <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.back()} className="mb-4">
-          Quay lại
-        </Button>
+        <div className="mb-4 flex items-center justify-between">
+          <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.back()}>
+            Quay lại
+          </Button>
+          {isAdmin && invoice && (
+            <>
+              {invoice.status === 'PAID' && (
+                <Button
+                  variant="outline-danger"
+                  size="sm"
+                  icon={XCircle}
+                  title="Huỷ hoá đơn"
+                  onClick={() => setConfirmVoidOpen(true)}
+                >
+                  Huỷ
+                </Button>
+              )}
+              {invoice.status === 'DRAFT' && (
+                <Button
+                  variant="outline-danger"
+                  size="sm"
+                  icon={Trash2}
+                  title="Xoá hoá đơn"
+                  onClick={() => setConfirmDeleteOpen(true)}
+                >
+                  Xoá
+                </Button>
+              )}
+            </>
+          )}
+        </div>
         <InvoiceDetailContent invoice={invoice} />
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        title="Xoá hoá đơn"
+        description={invoice ? `Bạn có chắc muốn xoá hoá đơn "${invoice.invoiceNo}" không?` : undefined}
+        body={
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Hành động này không thể hoàn tác. Chỉ xoá được hoá đơn chưa có thanh toán, phí hội viên
+            hoặc biến động tồn kho liên quan.
+          </p>
+        }
+        confirmLabel="Xoá hoá đơn"
+        cancelLabel="Hủy"
+        submitting={deleting}
+        onConfirm={handleDeleteConfirm}
+      />
+
+      <ConfirmDialog
+        open={confirmVoidOpen}
+        onClose={() => {
+          setConfirmVoidOpen(false)
+          setVoidReason('')
+        }}
+        title="Huỷ hoá đơn"
+        description={invoice ? `Xác nhận huỷ hoá đơn "${invoice.invoiceNo}"? Tiền và tồn kho sẽ được hoàn trả.` : undefined}
+        body={
+          <div className="space-y-2">
+            <Label htmlFor="void-reason">Lý do (tùy chọn)</Label>
+            <Textarea
+              id="void-reason"
+              rows={3}
+              placeholder="Ví dụ: khách hàng thanh toán nhầm"
+              value={voidReason}
+              onChange={(event) => setVoidReason(event.target.value)}
+              maxLength={500}
+            />
+          </div>
+        }
+        confirmLabel="Huỷ hoá đơn"
+        cancelLabel="Hủy"
+        submitting={voiding}
+        onConfirm={handleVoidConfirm}
+      />
     </div>
   )
 }

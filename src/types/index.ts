@@ -6,7 +6,7 @@ export type CustomerType = "WALK_IN" | "MEMBER"
 export type SessionStatus = "ACTIVE" | "COMPLETED" | "CANCELLED"
 export type DayType = "WEEKDAY" | "WEEKEND"
 export type PromotionDiscountType = "FIXED_AMOUNT" | "PERCENT" | "FIXED_PER_HOUR" | "PERCENT_PLAY_TIME"
-export type PaymentMethod = "CASH" | "TRANSFER" | "CARD"
+export type PaymentMethod = "CASH" | "TRANSFER" | "CARD" | "MEMBER"
 export type MembershipStatus = "ACTIVE" | "CANCELLED"
 export type InvoiceStatus = "DRAFT" | "PAID" | "CANCELLED"
 export type InvoiceItemType = "PLAY_TIME" | "MEMBERSHIP_FEE" | "PRODUCT" | "SERVICE" | "DISCOUNT" | "SURCHARGE"
@@ -150,6 +150,7 @@ export interface TransactionItem {
   customerType: string | null
   invoiceId: string | null
   invoiceNo: string | null
+  invoiceStatus: string | null
   staffName: string
   planName: string | null
 }
@@ -169,6 +170,7 @@ export interface ShiftRevenueSummary {
   cashRevenue: number
   transferRevenue: number
   cardRevenue: number
+  memberRevenue: number
   paymentCount: number
   membershipCount: number
   sessionCount: number

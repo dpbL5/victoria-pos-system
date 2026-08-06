@@ -45,20 +45,6 @@ import type {
   Shift,
 } from './types'
 
-interface TransactionItem {
-  id: string
-  type: 'payment' | 'membership'
-  amount: number
-  paymentMethod: string | null
-  paidAt: string
-  customerName: string
-  customerType: string | null
-  invoiceId: string | null
-  invoiceNo: string | null
-  staffName: string
-  planName: string | null
-}
-
 type CheckInMode = 'WALK_IN' | 'MEMBER'
 
 interface PricingRuleOption {
@@ -73,6 +59,7 @@ interface CheckoutResponse {
 }
 
 export function TodayShiftScreen() {
+  const router = useRouter()
   const { success: notifySuccess, error: notifyError } = useToast()
 
   const [shift, setShift] = useState<Shift | null>(null)
@@ -95,9 +82,6 @@ export function TodayShiftScreen() {
   const [checkoutSession, setCheckoutSession] = useState<SessionRow | null>(null)
   const [sellSession, setSellSession] = useState<SessionRow | null>(null)
   const [sellPickOpen, setSellPickOpen] = useState(false)
-  const [transactionsOpen, setTransactionsOpen] = useState(false)
-  const [shiftTransactions, setShiftTransactions] = useState<TransactionItem[]>([])
-  const [shiftTransactionsLoading, setShiftTransactionsLoading] = useState(false)
   const [tools, setTools] = useState<{ id: string; name: string; quantity: number; isRequired: boolean }[]>([])
 
   const [, setTick] = useState(0)
@@ -177,24 +161,6 @@ export function TodayShiftScreen() {
     }
   }
 
-  const loadShiftTransactions = async (shiftId: string) => {
-    setShiftTransactionsLoading(true)
-    try {
-      const data = await apiJson<{
-        transactions: TransactionItem[]
-      }>(`/api/shifts/${shiftId}/transactions`)
-      if (!data.success) {
-        notifyError(data.error || 'Không tải được giao dịch')
-        return
-      }
-      setShiftTransactions(data.data?.transactions ?? [])
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setShiftTransactionsLoading(false)
-    }
-  }
-
   const handleCloseShift = async (closingCash: number, notes?: string, toolCounts?: { toolId: string; openCount: number }[]) => {
     if (!shift) return
 
@@ -259,10 +225,7 @@ export function TodayShiftScreen() {
           onOpen={() => setOpenShiftDialog(true)}
           onClose={() => setCloseShiftDialog(true)}
           onViewTransactions={() => {
-            if (shift) {
-              void loadShiftTransactions(shift.id)
-              setTransactionsOpen(true)
-            }
+            if (shift) router.push(`/transactions?shiftId=${shift.id}`)
           }}
           canJoin={canJoinCurrentShift}
           onJoin={() => void handleOpenShift()}
@@ -422,12 +385,6 @@ export function TodayShiftScreen() {
         }}
       />
 
-      <TransactionsDialog
-        open={transactionsOpen}
-        transactions={shiftTransactions}
-        loading={shiftTransactionsLoading}
-        onClose={() => setTransactionsOpen(false)}
-      />
     </div>
   )
 }
@@ -1603,7 +1560,7 @@ function CheckoutDrawer({
   useEffect(() => {
     if (session) {
       /* eslint-disable react-hooks/set-state-in-effect */
-      setPaymentMethod('CASH')
+      setPaymentMethod(session.customer.type === 'MEMBER' ? 'MEMBER' : 'CASH')
       setCart({})
       setPromotionRuleId('')
       setPromotions([])
@@ -1797,8 +1754,8 @@ function CheckoutDrawer({
     >
       {session && (
         <div className="space-y-4">
-          {/* Group selection — only if session has multiple pricing groups */}
-          {(session.pricingGroups?.length ?? 0) > 0 ? (
+          {/* Group selection — chỉ khách vãng lai; hội viên không chia nhóm giá */}
+          {!isMember && (session.pricingGroups?.length ?? 0) > 0 ? (
             <div className="space-y-2">
               <Label>Nhóm giá</Label>
               {session.pricingGroups!.filter(g => g.remainingCount > 0).map((g) => {
@@ -1837,8 +1794,8 @@ function CheckoutDrawer({
             </div>
           ) : null}
 
-          {/* Per-group checkout count stepper */}
-          {selectedGroupId && (session.pricingGroups?.length ?? 0) > 0 && (() => {
+          {/* Per-group checkout count stepper — chỉ khách vãng lai */}
+          {!isMember && selectedGroupId && (session.pricingGroups?.length ?? 0) > 0 && (() => {
             const selectedGroup = session.pricingGroups!.find(g => g.id === selectedGroupId)
             if (!selectedGroup) return null
             const groupMax = selectedGroup.remainingCount
@@ -1878,7 +1835,7 @@ function CheckoutDrawer({
             )
           })()}
 
-          {isGroupSession && !selectedGroupId && (
+          {!isMember && isGroupSession && !selectedGroupId && (
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
               <Label htmlFor="checkout-player-count">Số người checkout</Label>
               <div className="mt-2 flex items-center gap-3">
@@ -1980,8 +1937,8 @@ function CheckoutDrawer({
             </div>
           </div>
 
-          {/* Phí gửi xe (trừ vào tổng thanh toán) */}
-          {parkingFeeUnitPrice > 0 && (
+          {/* Phí gửi xe (trừ vào tổng thanh toán) — chỉ khách vãng lai */}
+          {!isMember && parkingFeeUnitPrice > 0 && (
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
               <div className="flex items-center justify-between">
                 <Label>Phí gửi xe</Label>
@@ -2047,18 +2004,32 @@ function CheckoutDrawer({
             </div>
           )}
 
-          <div>
-            <Label htmlFor="payment-method">Phương thức thanh toán</Label>
-            <Select
-              id="payment-method"
-              value={paymentMethod}
-              onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
-            >
-              <option value="CASH">{paymentMethodLabel('CASH')}</option>
-              <option value="TRANSFER">{paymentMethodLabel('TRANSFER')}</option>
-              <option value="CARD">{paymentMethodLabel('CARD')}</option>
-            </Select>
-          </div>
+          {isMember ? (
+            <div>
+              <Label>Phương thức thanh toán</Label>
+              <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
+                <span className="text-sm font-medium text-zinc-950 dark:text-white">
+                  {paymentMethodLabel('MEMBER')}
+                </span>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Không thu tiền mặt tại quầy
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <Label htmlFor="payment-method">Phương thức thanh toán</Label>
+              <Select
+                id="payment-method"
+                value={paymentMethod}
+                onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+              >
+                <option value="CASH">{paymentMethodLabel('CASH')}</option>
+                <option value="TRANSFER">{paymentMethodLabel('TRANSFER')}</option>
+                <option value="CARD">{paymentMethodLabel('CARD')}</option>
+              </Select>
+            </div>
+          )}
 
           <div>
             <div className="mb-2 flex items-center justify-between">
@@ -2332,80 +2303,6 @@ function SellPickDialog({
             </Badge>
           </button>
         ))}
-      </div>
-    </Modal>
-  )
-}
-
-function TransactionsDialog({
-  open,
-  transactions,
-  loading,
-  onClose,
-}: {
-  open: boolean
-  transactions: TransactionItem[]
-  loading: boolean
-  onClose: () => void
-}) {
-  const router = useRouter()
-  const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Giao dịch trong ca"
-      description={`${transactions.length} giao dịch · Tổng ${money(totalAmount)}`}
-      size="lg"
-    >
-      <div className="max-h-[60vh] divide-y divide-zinc-100 overflow-y-auto dark:divide-zinc-800">
-        {loading ? (
-          <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-            Đang tải giao dịch...
-          </div>
-        ) : transactions.length === 0 ? (
-          <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-            Chưa có giao dịch nào trong ca.
-          </div>
-        ) : (
-          transactions.map((tx) => (
-            <button
-              key={`${tx.type}-${tx.id}`}
-              type="button"
-              disabled={!tx.invoiceId}
-              onClick={() => {
-                if (tx.invoiceId) router.push(`/invoices/${tx.invoiceId}`)
-              }}
-              className="grid w-full grid-cols-[1fr_auto] gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent dark:hover:bg-zinc-800/50"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
-                    {tx.customerName}
-                  </p>
-                  {tx.type === 'membership' ? (
-                    <Badge variant="purple" size="sm">Hội viên</Badge>
-                  ) : tx.customerType === 'MEMBER' ? (
-                    <Badge variant="purple" size="sm">HV</Badge>
-                  ) : (
-                    <Badge variant="default" size="sm">VL</Badge>
-                  )}
-                </div>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  {formatClock(tx.paidAt)}
-                  {tx.invoiceNo ? ` · ${tx.invoiceNo}` : ''}
-                  {tx.type === 'membership' && tx.planName ? ` · ${tx.planName}` : ''}
-                  {' · '}
-                  {tx.type === 'membership' ? 'Phí hội viên' : tx.paymentMethod ? paymentMethodLabel(tx.paymentMethod as PaymentMethod) : ''}
-                </p>
-              </div>
-              <p className="self-center text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
-                {money(tx.amount)}
-              </p>
-            </button>
-          ))
-        )}
       </div>
     </Modal>
   )
