@@ -62,6 +62,7 @@ Cây thư mục đầy đủ: **`docs/directory-structure.md`**. Vị trí chín
 - `src/components/` — `ui/` (primitives: badge, button, input, modal, toast, skeleton...), `layout/` (sidebar, bottom-nav, header, theme-provider)
 - `src/lib/` — business logic: prisma, auth, csrf, pricing engine, validations (Zod), `business/use-cases/` (checkIn, checkOut, closeShift, registerMember, renewMembership, sellItems, voidInvoice...)
 - `src/features/` — UI mobile-first theo từng màn (pos, shifts, inventory, memberships, reports, more, pricing, promotions, tools, membership-plans)
+  - `src/features/pos/` — `today-shift-screen.tsx` (main), `mini-stat.tsx`, `invoice-row.tsx`, `promotion-option.ts`, `tool-count-fields.tsx`, `today-shift-skeleton.tsx`, `quick-actions.tsx`, `sell-pick-dialog.tsx`, `invoice-detail-content.tsx`, `transaction-detail-screen.tsx`, `invoice-edit-dialog.tsx`, `format.ts`, `types.ts`, `api.ts`. Các dialog lớn (CheckInDialog, CheckoutDrawer, ShiftRail, ActiveSessionCard, OpenShiftDialog, CloseShiftDialog, GroupBuilder, SellDialog) hiện còn trong `today-shift-screen.tsx` — sẽ tách dần. Xem `docs/architecture.md` ADR-006.
 - `src/types/index.ts` — shared types + enums; `prisma/schema.prisma` — database schema
 
 ## Quy ước code
@@ -417,3 +418,62 @@ Một số model phụ thuộc vào sự tồn tại của model khác. Khi thi�
 2. Thêm cảnh báo trong UI (disable nút + hiển thị message hướng dẫn)
 3. Ghi nhận vào bảng này
 4. Ghi `ActivityLog` cho hành động tài chính hoặc hành động thay đổi dữ liệu nhạy cảm
+
+### 14. Architecture: Port/Adapter + Domain Modules
+
+**Cấu trúc module:** `src/lib/<domain>/` — mỗi domain đóng gói ports, use-cases, validations, helpers.
+
+| Module | Phụ trách |
+|--------|-----------|
+| `src/lib/shared/` | Cross-cutting: auth, utils, constants, Result type |
+| `src/lib/infrastructure/` | Prisma client, DB retry, adapters, API helpers, composition root |
+| `src/lib/sessions/` | Session, PricingRule, PricingTier, PromotionRule |
+| `src/lib/invoicing/` | Invoice, InvoiceItem, Payment |
+| `src/lib/memberships/` | Customer, Membership, MembershipPlan, MembershipPayment |
+| `src/lib/shifts/` | Shift, ShiftParticipant, ShiftTool |
+| `src/lib/inventory/` | Product, StockMovement |
+| `src/lib/pricing/` | PricingRule queries (read-side) |
+| `src/lib/promotions/` | PromotionRule queries (read-side) |
+| `src/lib/audit/` | ActivityLog |
+
+**Dependency rule:**
+- `shared/` ← `infrastructure/` ← `domain/` ← `app/` + `features/`
+- Domain KHÔNG import `prisma` trực tiếp — chỉ qua ports
+- Domain được `import type` từ ports của domain khác, không được import adapter/use-case của domain khác
+- Mỗi domain có `index.ts` barrel export; code ngoài domain chỉ import từ barrel
+
+**Port pattern:**
+- Mỗi domain có `ports.ts` định nghĩa repository interface
+- Adapter trong `src/lib/infrastructure/adapters/` implement port bằng Prisma
+- Store types (`Pick<Prisma.TransactionClient, ...>`) trong `src/lib/infrastructure/store-types.ts`
+- Adapter factory nhận store, hoạt động với cả `prisma` (singleton) và `tx` (transaction client)
+- Pattern này kế thừa từ helper hiện tại: `findOpenShiftForStaff(db, staffId)`, `findActiveMembership(db, customerId)`, `logActivity(db, input)`
+
+**Result type (`src/lib/shared/result.ts`):**
+- Use-case return `Result<T>` (`{ ok: true, value: T }` | `{ ok: false, error: DomainError }`)
+- `DomainError` có `code: string` (UPPER_SNAKE_CASE) + `detail?: string` (dynamic payload)
+- Validation trước transaction → `return err(code)`
+- Validation trong transaction (cần rollback) → `fail(code, detail)` — throw `RollbackSignal` để Prisma rollback
+- KHÔNG dùng `throw new Error('CODE')` trong use-case — reserved cho programmer errors
+- Mỗi use-case export `mapXxxError(error: DomainError): HttpErrorInfo`
+
+**Route handler pattern mới:**
+- Dùng `resultToResponse(result, mapXxxError)` hoặc `apiError()` / `apiSuccess()` từ `@/lib/infrastructure/api-helpers`
+- `try/catch` chỉ còn cho `UNAUTHORIZED`/`CSRF_MISMATCH` (từ auth layer) + lỗi 500 thực sự
+- Read-only routes dùng `repositories` singleton; mutation routes gọi use-case (use-case tự gọi `runInTransaction`)
+
+**Import Prisma:**
+- `import { prisma }` CHỈ được dùng trong:
+  - `src/lib/infrastructure/prisma.ts` (singleton)
+  - `src/lib/infrastructure/repositories.ts` (composition root)
+  - `src/lib/infrastructure/db-helpers.ts` (`runInTransaction`)
+- Tất cả code khác dùng ports hoặc `repositories` singleton
+
+**Thêm use-case mới:**
+1. Xác định domain → tạo file trong `src/lib/<domain>/use-cases/`
+2. Định nghĩa Input + Result interface, export `mapXxxError()`
+3. Port: nếu cần model Prisma mới, thêm method vào `ports.ts`
+4. Dùng `ok()` / `err()` / `fail()` — không throw error string
+5. Export qua `index.ts` barrel
+6. Route handler: validate → `resultToResponse(result, mapXxxError)`
+7. Test: fake repository object với `vi.fn()` — không cần mock `@/lib/prisma`
