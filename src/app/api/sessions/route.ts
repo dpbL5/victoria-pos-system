@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
       pricingRuleId: parsed.data.pricingRuleId,
       playerCount: parsed.data.playerCount,
       groups: parsed.data.groups,
+      now: parsed.data.startTime ? new Date(parsed.data.startTime) : undefined,
     })
 
     return NextResponse.json({ success: true, data: session }, { status: 201 })
