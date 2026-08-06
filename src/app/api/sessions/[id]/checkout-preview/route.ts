@@ -49,6 +49,7 @@ export async function GET(
 
     const promotionRuleId = _request.nextUrl.searchParams.get('promotionRuleId')
     const pricingGroupId = _request.nextUrl.searchParams.get('pricingGroupId')
+    const endTimeParam = _request.nextUrl.searchParams.get('endTime')
 
     const promotion = promotionRuleId
       ? await findAvailablePromotionById(promotionRuleId)
@@ -61,7 +62,8 @@ export async function GET(
       )
     }
 
-    const pricing = await calculateSessionPrice(id, new Date(), promotion, pricingGroupId ?? undefined)
+    const endTime = endTimeParam ? new Date(endTimeParam) : new Date()
+    const pricing = await calculateSessionPrice(id, endTime, promotion, pricingGroupId ?? undefined)
 
     // ── Lấy danh sách bán kèm chưa thanh toán (DRAFT invoices) ──
     const draftInvoices = await prisma.invoice.findMany({
