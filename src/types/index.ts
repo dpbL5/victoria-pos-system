@@ -7,6 +7,8 @@ export type SessionStatus = "ACTIVE" | "COMPLETED" | "CANCELLED"
 export type DayType = "WEEKDAY" | "WEEKEND"
 export type PromotionDiscountType = "FIXED_AMOUNT" | "PERCENT" | "FIXED_PER_HOUR" | "PERCENT_PLAY_TIME"
 export type PaymentMethod = "CASH" | "TRANSFER" | "CARD" | "MEMBER"
+/** Phương thức được chấp nhận khi thu tiền lúc checkout phiên chơi. */
+export type CheckoutPaymentMethod = Exclude<PaymentMethod, "MEMBER">
 export type MembershipStatus = "ACTIVE" | "CANCELLED"
 export type InvoiceStatus = "DRAFT" | "PAID" | "CANCELLED"
 export type InvoiceItemType = "PLAY_TIME" | "MEMBERSHIP_FEE" | "PRODUCT" | "SERVICE" | "DISCOUNT" | "SURCHARGE"

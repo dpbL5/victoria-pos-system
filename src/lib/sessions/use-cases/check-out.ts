@@ -13,7 +13,7 @@ import {
 import { calculateSessionPrice, type PricingResult } from '../pricing-engine'
 import { generateInvoiceNo } from '@/lib/invoicing'
 import { SETTING_KEYS } from '@/lib/settings'
-import type { PaymentMethod } from '@/types'
+import type { CheckoutPaymentMethod } from '@/types'
 import type { SessionWithDetails } from '../ports'
 import type { CheckoutLine } from './checkout-types'
 
@@ -25,7 +25,7 @@ export interface CheckoutLineInput {
 export interface CheckoutInput {
   sessionId: string
   staffId: string
-  paymentMethod: PaymentMethod
+  paymentMethod: CheckoutPaymentMethod
   promotionRuleId?: string
   endTime?: Date
   items: CheckoutLineInput[]
@@ -54,7 +54,7 @@ export interface CheckoutResult {
   grandTotal: number
   isMemberSession: boolean
   promotion: PromotionSnapshot | null
-  paymentMethod: PaymentMethod
+  paymentMethod: CheckoutPaymentMethod
   paymentId: string
   checkedOutPlayers: number
   remainingPlayers: number
@@ -68,7 +68,7 @@ export interface CheckoutContext {
   session: SessionWithDetails
   sessionId: string
   staffId: string
-  paymentMethod: PaymentMethod
+  paymentMethod: CheckoutPaymentMethod
   endTime: Date
   notes?: string
   checkoutCount: number

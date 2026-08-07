@@ -52,7 +52,7 @@ export function CheckoutDrawer({  session,
   useEffect(() => {
     if (session) {
       /* eslint-disable react-hooks/set-state-in-effect */
-      setPaymentMethod(session.customer.type === 'MEMBER' ? 'MEMBER' : 'CASH')
+      setPaymentMethod('CASH')
       setCart({})
       setPromotionRuleId('')
       setPromotions([])
@@ -566,37 +566,22 @@ export function CheckoutDrawer({  session,
             </div>
           </div>
 
-          {isMember ? (
-            <div>
-              <Label>Phương thức thanh toán</Label>
-              <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
-                <span className="text-sm font-medium text-zinc-950 dark:text-white">
-                  {paymentMethodLabel('MEMBER')}
-                </span>
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Không thu tiền mặt tại quầy
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <Label htmlFor="payment-method">Phương thức thanh toán</Label>
-              <Select
-                id="payment-method"
-                value={paymentMethod}
-                onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
-              >
-                <option value="CASH">{paymentMethodLabel('CASH')}</option>
-                <option value="TRANSFER">{paymentMethodLabel('TRANSFER')}</option>
-                <option value="CARD">{paymentMethodLabel('CARD')}</option>
-              </Select>
-            </div>
-          )}
+          <div>
+            <Label htmlFor="payment-method">Phương thức thanh toán</Label>
+            <Select
+              id="payment-method"
+              value={paymentMethod}
+              onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+            >
+              <option value="CASH">{paymentMethodLabel('CASH')}</option>
+              <option value="TRANSFER">{paymentMethodLabel('TRANSFER')}</option>
+              <option value="CARD">{paymentMethodLabel('CARD')}</option>
+            </Select>
+          </div>
         </div>
       )}
     </Modal>
   )
 }
-
 
 

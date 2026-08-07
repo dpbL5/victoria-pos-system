@@ -6,9 +6,9 @@ const PRODUCT_UUID = '123e4567-e89b-42d3-a456-426614174000'
 // ── checkoutSessionSchema ───────────────────────────────
 
 describe('checkoutSessionSchema', () => {
-  it('chấp nhận paymentMethod = MEMBER (thanh toán qua hội viên)', () => {
+  it('từ chối paymentMethod = MEMBER khi checkout', () => {
     const result = checkoutSessionSchema.safeParse({ paymentMethod: 'MEMBER' })
-    expect(result.success).toBe(true)
+    expect(result.success).toBe(false)
   })
 
   it('chấp nhận các phương thức CASH/TRANSFER/CARD', () => {
@@ -29,7 +29,7 @@ describe('checkoutSessionSchema', () => {
   })
 
   it('mặc định items = [] và parkingVehicleCount = 0', () => {
-    const result = checkoutSessionSchema.safeParse({ paymentMethod: 'MEMBER' })
+    const result = checkoutSessionSchema.safeParse({ paymentMethod: 'CASH' })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.items).toEqual([])
@@ -39,11 +39,11 @@ describe('checkoutSessionSchema', () => {
 
   it('chấp nhận promotionRuleId UUID hoặc null', () => {
     const withUuid = checkoutSessionSchema.safeParse({
-      paymentMethod: 'MEMBER',
+      paymentMethod: 'CASH',
       promotionRuleId: PRODUCT_UUID,
     })
     const withNull = checkoutSessionSchema.safeParse({
-      paymentMethod: 'MEMBER',
+      paymentMethod: 'CASH',
       promotionRuleId: null,
     })
     expect(withUuid.success).toBe(true)
@@ -52,7 +52,7 @@ describe('checkoutSessionSchema', () => {
 
   it('từ chối promotionRuleId không phải UUID', () => {
     const result = checkoutSessionSchema.safeParse({
-      paymentMethod: 'MEMBER',
+      paymentMethod: 'CASH',
       promotionRuleId: 'abc',
     })
     expect(result.success).toBe(false)
@@ -60,7 +60,7 @@ describe('checkoutSessionSchema', () => {
 
   it('từ chối notes > 500 ký tự', () => {
     const result = checkoutSessionSchema.safeParse({
-      paymentMethod: 'MEMBER',
+      paymentMethod: 'CASH',
       notes: 'A'.repeat(501),
     })
     expect(result.success).toBe(false)
@@ -68,7 +68,7 @@ describe('checkoutSessionSchema', () => {
 
   it('chấp nhận endTime datetime ISO', () => {
     const result = checkoutSessionSchema.safeParse({
-      paymentMethod: 'MEMBER',
+      paymentMethod: 'CASH',
       endTime: '2026-08-06T12:00:00Z',
     })
     expect(result.success).toBe(true)
@@ -76,7 +76,7 @@ describe('checkoutSessionSchema', () => {
 
   it('từ chối endTime không đúng định dạng', () => {
     const result = checkoutSessionSchema.safeParse({
-      paymentMethod: 'MEMBER',
+      paymentMethod: 'CASH',
       endTime: '06/08/2026',
     })
     expect(result.success).toBe(false)
@@ -84,7 +84,7 @@ describe('checkoutSessionSchema', () => {
 
   it('chấp nhận items hợp lệ kèm pricingGroupId + playerCount', () => {
     const result = checkoutSessionSchema.safeParse({
-      paymentMethod: 'MEMBER',
+      paymentMethod: 'CASH',
       items: [{ productId: PRODUCT_UUID, quantity: 2 }],
       pricingGroupId: PRODUCT_UUID,
       playerCount: 2,
@@ -94,7 +94,7 @@ describe('checkoutSessionSchema', () => {
 
   it('từ chối quantity = 0 trong items', () => {
     const result = checkoutSessionSchema.safeParse({
-      paymentMethod: 'MEMBER',
+      paymentMethod: 'CASH',
       items: [{ productId: PRODUCT_UUID, quantity: 0 }],
     })
     expect(result.success).toBe(false)
@@ -102,7 +102,7 @@ describe('checkoutSessionSchema', () => {
 
   it('từ chối playerCount = 0', () => {
     const result = checkoutSessionSchema.safeParse({
-      paymentMethod: 'MEMBER',
+      paymentMethod: 'CASH',
       playerCount: 0,
     })
     expect(result.success).toBe(false)
@@ -110,7 +110,7 @@ describe('checkoutSessionSchema', () => {
 
   it('từ chối parkingVehicleCount âm', () => {
     const result = checkoutSessionSchema.safeParse({
-      paymentMethod: 'MEMBER',
+      paymentMethod: 'CASH',
       parkingVehicleCount: -1,
     })
     expect(result.success).toBe(false)
