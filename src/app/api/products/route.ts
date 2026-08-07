@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@/generated/prisma/client'
 import { requireAdmin, requireAuth } from '@/lib/auth'
 import { validateCSRF } from '@/lib/csrf'
-import { logActivity } from '@/lib/business/audit'
+import { logActivity } from '@/lib/audit'
 import { prisma } from '@/lib/prisma'
 import { createProductSchema } from '@/lib/validations/product'
 

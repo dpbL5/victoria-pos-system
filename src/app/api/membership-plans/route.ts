@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin, requireAuth } from '@/lib/auth'
 import { validateCSRF } from '@/lib/csrf'
-import { createMembershipPlanSchema } from '@/lib/validations/membership'
+import { createMembershipPlanSchema } from '@/lib/memberships'
 
 export async function GET() {
   try {

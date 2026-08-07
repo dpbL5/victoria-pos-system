@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { findOpenOperationalShift, findOpenShiftForStaff } from '@/lib/business/shifts'
+import { findOpenOperationalShift, findOpenShiftForStaff } from '@/lib/shifts'
 import { prisma } from '@/lib/prisma'
 import { parseStartOfDay, toInputDate } from '@/lib/utils'
 import { Prisma } from '@/generated/prisma/client'
@@ -127,10 +127,10 @@ export async function GET() {
     ])
 
     const todayRevenue = Number(todayPayments._sum?.grandTotal ?? 0)
-    const todayPaymentBreakdown = normalizePaymentBreakdown(todayPaymentMethods as any)
-    const todayItemBreakdown = normalizeItemBreakdown(todayItemTypes as any)
-    const shiftPaymentBreakdown = normalizePaymentBreakdown(shiftPaymentMethods as any)
-    const shiftItemBreakdown = normalizeItemBreakdown(shiftItemTypes as any)
+    const todayPaymentBreakdown = normalizePaymentBreakdown(todayPaymentMethods)
+    const todayItemBreakdown = normalizeItemBreakdown(todayItemTypes)
+    const shiftPaymentBreakdown = normalizePaymentBreakdown(shiftPaymentMethods)
+    const shiftItemBreakdown = normalizeItemBreakdown(shiftItemTypes)
     const shiftCash = shiftPaymentBreakdown.CASH.total
     const shiftRevenue = Number(shiftPayments?._sum?.grandTotal ?? 0)
 
@@ -237,9 +237,9 @@ function getTodayRange() {
 
 function normalizePaymentBreakdown(
   rows: Array<{
-    paymentMethod: PaymentMethodKey
-    _sum: { grandTotal: unknown }
-    _count: { _all: number }
+    paymentMethod: PaymentMethodKey | null
+    _sum: { grandTotal: unknown } | null
+    _count: { _all: number } | null
   }>
 ): Record<PaymentMethodKey, { total: number; count: number }> {
   const empty = Object.fromEntries(
@@ -247,6 +247,7 @@ function normalizePaymentBreakdown(
   ) as Record<PaymentMethodKey, { total: number; count: number }>
 
   for (const row of rows) {
+    if (!row.paymentMethod || !row._sum || !row._count) continue
     empty[row.paymentMethod] = {
       total: Number(row._sum.grandTotal ?? 0),
       count: row._count._all,
@@ -258,8 +259,8 @@ function normalizePaymentBreakdown(
 
 function normalizeItemBreakdown(
   rows: Array<{
-    type: ItemTypeKey
-    _sum: { total: unknown }
+    type: ItemTypeKey | null
+    _sum: { total: unknown } | null
   }>
 ): Record<ItemTypeKey, number> {
   const empty = Object.fromEntries(
@@ -267,6 +268,7 @@ function normalizeItemBreakdown(
   ) as Record<ItemTypeKey, number>
 
   for (const row of rows) {
+    if (!row.type || !row._sum) continue
     empty[row.type] = Number(row._sum.total ?? 0)
   }
 

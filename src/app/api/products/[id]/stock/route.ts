@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { validateCSRF } from '@/lib/csrf'
-import { logActivity } from '@/lib/business/audit'
-import { findOpenShiftForStaff } from '@/lib/business/shifts'
+import { logActivity } from '@/lib/audit'
+import { findOpenShiftForStaff } from '@/lib/shifts'
 import { prisma } from '@/lib/prisma'
 import { stockMovementSchema } from '@/lib/validations/product'
 

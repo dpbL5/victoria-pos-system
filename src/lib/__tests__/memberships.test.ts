@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { addMonthsKeepingDay, calculateRenewalPeriod } from '@/lib/business/memberships'
+import { addMonthsKeepingDay, calculateRenewalPeriod } from '@/lib/memberships'
 
 describe('addMonthsKeepingDay', () => {
   it('cộng 1 tháng giữ ngày tương ứng', () => {

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { requireAuth, requireMutationAuth } from '@/lib/auth'
-import { getSetting, upsertSetting, SETTING_KEYS } from '@/lib/business/settings'
+import { SETTING_KEYS } from '@/lib/settings'
+import { repositories } from '@/lib/infrastructure/repositories'
 import { prisma } from '@/lib/prisma'
-import { logActivity } from '@/lib/business/audit'
+import { logActivity } from '@/lib/audit'
 import { z } from 'zod'
 
 const updateSchema = z.object({
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     const key = request.nextUrl.searchParams.get('key')
 
     if (key) {
-      const value = await getSetting(key)
+      const value = await repositories.settings.get(key)
       const row = await prisma.appSetting.findUnique({ where: { key } })
       return NextResponse.json({
         success: true,
@@ -61,9 +62,9 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    const oldValue = await getSetting(parsed.data.key)
+    const oldValue = await repositories.settings.get(parsed.data.key)
 
-    await upsertSetting(parsed.data.key, parsed.data.value, parsed.data.label)
+    await repositories.settings.upsert(parsed.data.key, parsed.data.value, parsed.data.label)
 
     await prisma.$transaction(async (tx) => {
       await logActivity(tx, {

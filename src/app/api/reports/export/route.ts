@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { toInputDate, parseStartOfDay, parseEndOfDay } from '@/lib/utils'
-import { Prisma } from '@/generated/prisma/client'
 
 const paymentMethodLabel: Record<string, string> = {
   CASH: 'Tiền mặt',

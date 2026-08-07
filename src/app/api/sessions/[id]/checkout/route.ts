@@ -1,7 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, requireMutationAuth } from '@/lib/auth'
+import { NextRequest } from 'next/server'
+import { requireMutationAuth } from '@/lib/auth'
 import { checkoutSessionSchema } from '@/lib/validations/session'
-import { checkOut, mapCheckoutError } from '@/lib/business/use-cases/checkOut'
+import { checkOut, mapCheckoutError } from '@/lib/sessions'
+import {
+  apiError,
+  resultToResponse,
+  ERR_UNAUTHORIZED,
+  ERR_CSRF,
+} from '@/lib/infrastructure/api-helpers'
 
 export async function POST(
   request: NextRequest,
@@ -15,10 +21,7 @@ export async function POST(
     const parsed = checkoutSessionSchema.safeParse(body)
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { success: false, error: parsed.error.issues[0].message },
-        { status: 400 }
-      )
+      return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     }
 
     const result = await checkOut({
@@ -34,20 +37,12 @@ export async function POST(
       parkingVehicleCount: parsed.data.parkingVehicleCount ?? 0,
     })
 
-    return NextResponse.json({ success: true, data: result })
+    return resultToResponse(result, mapCheckoutError)
   } catch (error) {
     const message = (error as Error).message
-    if (message === 'UNAUTHORIZED') {
-      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
-    }
-    if (message === 'CSRF_MISMATCH') {
-      return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
-    }
+    if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
+    if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
     console.error('POST /api/sessions/[id]/checkout error:', error)
-    const mapped = mapCheckoutError(error as Error)
-    return NextResponse.json(
-      { success: false, code: mapped.code, error: mapped.message },
-      { status: mapped.status }
-    )
+    return apiError({ code: 'SERVER_ERROR', message: 'Lỗi máy chủ', status: 500 })
   }
 }

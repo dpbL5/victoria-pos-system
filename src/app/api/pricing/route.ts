@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { validateCSRF } from '@/lib/csrf'
-import { logActivity } from '@/lib/business/audit'
-import { deriveDayTypeFromDays, findOverlappingRules, normalizeDaysOfWeek } from '@/lib/pricing'
+import { logActivity } from '@/lib/audit'
+import { deriveDayTypeFromDays, normalizeDaysOfWeek } from '@/lib/pricing'
+import { repositories } from '@/lib/infrastructure/repositories'
 import { prisma } from '@/lib/prisma'
 import { parseLocalDate, parseLocalDateEnd } from '@/lib/utils'
-import { createPricingRuleSchema } from '@/lib/validations/pricing'
+import { createPricingRuleSchema } from '@/lib/pricing'
 
 export async function GET() {
   try {
@@ -55,13 +56,13 @@ export async function POST(request: NextRequest) {
     const daysOfWeek = normalizeDaysOfWeek(parsed.data.daysOfWeek)
     const dayType = deriveDayTypeFromDays(daysOfWeek)
 
-    const overlaps = await findOverlappingRules(
+    const overlaps = await repositories.pricing.findOverlapping({
       daysOfWeek,
-      parsed.data.hourFrom,
-      parsed.data.hourTo ?? null,
+      hourFrom: parsed.data.hourFrom,
+      hourTo: parsed.data.hourTo ?? null,
       effectiveFrom,
       effectiveTo,
-    )
+    })
 
     const rule = await prisma.$transaction(async (tx) => {
       const created = await tx.pricingRule.create({

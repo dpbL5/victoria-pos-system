@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { getShiftTransactions } from '@/lib/business/shifts'
+import { getShiftTransactions } from '@/lib/shifts'
 
 export async function GET(
   _request: NextRequest,
@@ -34,7 +34,7 @@ export async function GET(
       )
     }
 
-    const result = await getShiftTransactions(prisma as any, id)
+    const result = await getShiftTransactions(prisma, id)
 
     return NextResponse.json({
       success: true,

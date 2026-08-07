@@ -1,7 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, requireMutationAuth } from '@/lib/auth'
-import { closeShiftSchema } from '@/lib/validations/shift'
-import { closeShift, mapCloseShiftError } from '@/lib/business/use-cases/closeShift'
+import { NextRequest } from 'next/server'
+import { requireMutationAuth } from '@/lib/auth'
+import { closeShift, mapCloseShiftError, closeShiftSchema } from '@/lib/shifts'
+import {
+  apiError,
+  resultToResponse,
+  ERR_UNAUTHORIZED,
+  ERR_CSRF,
+} from '@/lib/infrastructure/api-helpers'
 
 export async function POST(
   request: NextRequest,
@@ -15,10 +20,7 @@ export async function POST(
     const parsed = closeShiftSchema.safeParse(body)
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { success: false, error: parsed.error.issues[0].message },
-        { status: 400 }
-      )
+      return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     }
 
     const result = await closeShift({
@@ -32,19 +34,12 @@ export async function POST(
       toolCounts: parsed.data.toolCounts,
     })
 
-    return NextResponse.json({ success: true, data: result })
+    return resultToResponse(result, mapCloseShiftError)
   } catch (error) {
     const message = (error as Error).message
-    if (message === 'UNAUTHORIZED') {
-      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
-    }
-    if (message === 'CSRF_MISMATCH') {
-      return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
-    }
-    const mapped = mapCloseShiftError(error as Error)
-    return NextResponse.json(
-      { success: false, code: mapped.code, error: mapped.message },
-      { status: mapped.status }
-    )
+    if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
+    if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
+    console.error('POST /api/shifts/[id]/close error:', error)
+    return apiError({ code: 'SERVER_ERROR', message: 'Lỗi máy chủ', status: 500 })
   }
 }

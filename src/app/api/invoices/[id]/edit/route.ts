@@ -1,7 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { requireMutationAuth } from '@/lib/auth'
-import { editInvoice, mapEditInvoiceError } from '@/lib/business/use-cases/editInvoice'
+import { editInvoice, mapEditInvoiceError } from '@/lib/invoicing'
 import { editInvoiceSchema } from '@/lib/validations/invoice'
+import {
+  apiError,
+  resultToResponse,
+  ERR_UNAUTHORIZED,
+  ERR_CSRF,
+} from '@/lib/infrastructure/api-helpers'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -15,26 +21,20 @@ export async function POST(
   try {
     const auth = await requireMutationAuth(request)
     if (auth.role !== 'ADMIN') {
-      throw new Error('FORBIDDEN')
+      return apiError({ code: 'FORBIDDEN', message: 'Chỉ quản trị viên được sửa hoá đơn', status: 403 })
     }
 
     const { id } = await params
 
     if (!UUID_RE.test(id)) {
-      return NextResponse.json(
-        { success: false, error: 'ID hoá đơn không hợp lệ' },
-        { status: 400 }
-      )
+      return apiError({ code: 'VALIDATION', message: 'ID hoá đơn không hợp lệ', status: 400 })
     }
 
     const body = await request.json()
     const parsed = editInvoiceSchema.safeParse(body)
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { success: false, error: parsed.error.issues[0].message },
-        { status: 400 }
-      )
+      return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     }
 
     const result = await editInvoice({
@@ -45,23 +45,12 @@ export async function POST(
       notes: parsed.data.notes,
     })
 
-    return NextResponse.json({ success: true, data: result }, { status: 201 })
+    return resultToResponse(result, mapEditInvoiceError, 201)
   } catch (error) {
     const message = (error as Error).message
-    if (message === 'UNAUTHORIZED') {
-      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
-    }
-    if (message === 'CSRF_MISMATCH') {
-      return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
-    }
-    if (message === 'FORBIDDEN') {
-      return NextResponse.json({ success: false, error: 'Chỉ quản trị viên được sửa hoá đơn' }, { status: 403 })
-    }
+    if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
+    if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
     console.error('POST /api/invoices/[id]/edit error:', error)
-    const mapped = mapEditInvoiceError(error as Error)
-    return NextResponse.json(
-      { success: false, code: mapped.code, error: mapped.message },
-      { status: mapped.status }
-    )
+    return apiError({ code: 'SERVER_ERROR', message: 'Lỗi máy chủ', status: 500 })
   }
 }

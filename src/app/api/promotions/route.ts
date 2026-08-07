@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { validateCSRF } from '@/lib/csrf'
-import {
-  derivePromotionDayType,
-  normalizePromotionDays,
-} from '@/lib/business/promotions'
-import { logActivity } from '@/lib/business/audit'
+import { derivePromotionDayType, normalizePromotionDays } from '@/lib/promotions'
+import { logActivity } from '@/lib/audit'
 import { prisma } from '@/lib/prisma'
 import { parseLocalDate, parseLocalDateEnd } from '@/lib/utils'
-import { createPromotionRuleSchema } from '@/lib/validations/promotion'
+import { createPromotionRuleSchema } from '@/lib/promotions'
 
 export async function GET() {
   try {

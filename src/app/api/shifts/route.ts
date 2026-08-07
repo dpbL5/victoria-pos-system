@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, requireMutationAuth } from '@/lib/auth'
-import { openShiftSchema } from '@/lib/validations/shift'
+import { openShiftSchema, openOrJoinShift, mapOpenOrJoinShiftError } from '@/lib/shifts'
 import {
   findOpenShiftForStaff,
   findOpenOperationalShift,
   shiftWithParticipantsInclude,
   shiftWithAllParticipantsInclude,
   getShiftRevenueData,
-} from '@/lib/business/shifts'
-import { openOrJoinShift, mapOpenOrJoinShiftError } from '@/lib/business/use-cases/openOrJoinShift'
+} from '@/lib/shifts'
+import { apiError, ERR_UNAUTHORIZED, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
 import { parseStartOfDay, toInputDate } from '@/lib/utils'
 import { Prisma } from '@/generated/prisma/client'
 
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
       const revenueMap = new Map<string, Awaited<ReturnType<typeof getShiftRevenueData>>>()
       await Promise.all(
         shifts.map(async (s) => {
-          revenueMap.set(s.id, await getShiftRevenueData(prisma as any, s.id))
+          revenueMap.set(s.id, await getShiftRevenueData(prisma, s.id))
         })
       )
 
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
           status: shift.status,
           _count: shift._count,
           toolCounts: shift.toolCounts,
-          toolStats: calcToolStats(shift.toolCounts as any),
+          toolStats: calcToolStats(shift.toolCounts),
         })
       }
 
@@ -222,10 +222,7 @@ export async function POST(request: NextRequest) {
     const parsed = openShiftSchema.safeParse(body)
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { success: false, error: parsed.error.issues[0].message },
-        { status: 400 }
-      )
+      return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     }
 
     const result = await openOrJoinShift({
@@ -234,32 +231,25 @@ export async function POST(request: NextRequest) {
       notes: parsed.data.notes,
       toolCounts: parsed.data.toolCounts,
     })
+    if (!result.ok) return apiError(mapOpenOrJoinShiftError(result.error))
 
     return NextResponse.json(
       {
         success: true,
-        data: result.shift,
-        message: result.created
+        data: result.value.shift,
+        message: result.value.created
           ? 'Đã mở ca'
-          : result.joined
+          : result.value.joined
             ? 'Đã tham gia ca đang mở'
             : 'Bạn đang ở trong ca đang mở',
       },
-      { status: result.created ? 201 : 200 }
+      { status: result.value.created ? 201 : 200 }
     )
   } catch (error) {
     const message = (error as Error).message
-    if (message === 'UNAUTHORIZED') {
-      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
-    }
-    if (message === 'CSRF_MISMATCH') {
-      return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
-    }
+    if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
+    if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
     console.error('POST /api/shifts error:', error)
-    const mapped = mapOpenOrJoinShiftError(error as Error)
-    return NextResponse.json(
-      { success: false, code: mapped.code, error: mapped.message },
-      { status: mapped.status }
-    )
+    return apiError({ code: 'SERVER_ERROR', message: 'Lỗi máy chủ', status: 500 })
   }
 }

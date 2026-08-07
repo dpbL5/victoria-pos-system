@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { getApplicablePricingRules } from '@/lib/pricing'
+import { repositories } from '@/lib/infrastructure/repositories'
 
 export async function GET() {
   try {
     await requireAuth()
 
-    const rules = await getApplicablePricingRules()
+    const rules = await repositories.pricing.getApplicableRules(new Date())
 
     const data = rules.map((rule) => ({
       id: rule.id,

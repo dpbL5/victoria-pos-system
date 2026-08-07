@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
-import { getShiftRevenueData } from '@/lib/business/shifts'
+import { getShiftRevenueData } from '@/lib/shifts'
 import { prisma } from '@/lib/prisma'
 import { parseStartOfDay, toInputDate } from '@/lib/utils'
 import type { ShiftRevenueSummary } from '@/types'
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     const revenueMap = new Map<string, Awaited<ReturnType<typeof getShiftRevenueData>>>()
     await Promise.all(
       shiftIds.map(async (id) => {
-        revenueMap.set(id, await getShiftRevenueData(prisma as any, id))
+        revenueMap.set(id, await getShiftRevenueData(prisma, id))
       })
     )
 

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth, requireMutationAuth } from '@/lib/auth'
 import { createToolSchema } from '@/lib/validations/tool'
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     await requireAuth()
 

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { findAvailablePromotionById } from '@/lib/business/promotions'
-import { getNumericSetting, SETTING_KEYS } from '@/lib/business/settings'
-import { calculateSessionPrice } from '@/lib/pricing'
+import { SETTING_KEYS } from '@/lib/settings'
+import { calculateSessionPrice } from '@/lib/sessions'
+import { repositories } from '@/lib/infrastructure/repositories'
 import { prisma } from '@/lib/prisma'
-import type { PlayTimeQuote, SessionPricingGroupDTO } from '@/types'
+import type { PlayTimeQuote, PricingRuleSnapshot } from '@/types'
 
 export async function GET(
   _request: NextRequest,
@@ -52,7 +52,7 @@ export async function GET(
     const endTimeParam = _request.nextUrl.searchParams.get('endTime')
 
     const promotion = promotionRuleId
-      ? await findAvailablePromotionById(promotionRuleId)
+      ? await repositories.promotions.findAvailableById(promotionRuleId, new Date())
       : null
 
     if (promotionRuleId && !promotion) {
@@ -63,7 +63,16 @@ export async function GET(
     }
 
     const endTime = endTimeParam ? new Date(endTimeParam) : new Date()
-    const pricing = await calculateSessionPrice(id, endTime, promotion, pricingGroupId ?? undefined)
+    const pricingResult = await calculateSessionPrice(repositories, id, endTime, promotion, pricingGroupId ?? undefined)
+    if (!pricingResult.ok) {
+      return pricingResult.error.code === 'PRICING_RULE_NOT_FOUND'
+        ? NextResponse.json(
+            { success: false, error: 'Không tìm thấy bảng giá đã áp dụng cho phiên này' },
+            { status: 409 }
+          )
+        : NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
+    }
+    const pricing = pricingResult.value
 
     // ── Lấy danh sách bán kèm chưa thanh toán (DRAFT invoices) ──
     const draftInvoices = await prisma.invoice.findMany({
@@ -120,9 +129,9 @@ export async function GET(
         remainingCount: g.remainingCount,
         hourlyRate: Number(g.hourlyRate),
         pricingRuleId: g.pricingRuleId,
-        pricingSnapshot: g.pricingSnapshot as any,
+        pricingSnapshot: g.pricingSnapshot as unknown as PricingRuleSnapshot | null,
       })),
-      parkingFeeUnitPrice: (await getNumericSetting(SETTING_KEYS.PARKING_FEE_UNIT_PRICE, 0)) || undefined,
+      parkingFeeUnitPrice: (await repositories.settings.getNumeric(SETTING_KEYS.PARKING_FEE_UNIT_PRICE, 0)) || undefined,
     }
 
     return NextResponse.json({ success: true, data: quote })

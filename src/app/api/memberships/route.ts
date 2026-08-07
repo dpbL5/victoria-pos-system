@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
-import { findActiveMembership } from '@/lib/business/memberships'
+import { findActiveMembership } from '@/lib/memberships'
 
 export async function GET(request: NextRequest) {
   try {

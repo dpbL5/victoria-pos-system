@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, requireMutationAuth } from '@/lib/auth'
-import { checkIn, mapCheckInError } from '@/lib/business/use-cases/checkIn'
+import { checkIn, mapCheckInError } from '@/lib/sessions'
 import { prisma } from '@/lib/prisma'
 import { createSessionSchema } from '@/lib/validations/session'
+import {
+  apiError,
+  resultToResponse,
+  ERR_UNAUTHORIZED,
+  ERR_CSRF,
+} from '@/lib/infrastructure/api-helpers'
 
 export async function GET(request: NextRequest) {
   try {
@@ -123,10 +129,7 @@ export async function POST(request: NextRequest) {
     const parsed = createSessionSchema.safeParse(body)
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { success: false, error: parsed.error.issues[0].message },
-        { status: 400 }
-      )
+      return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     }
 
     const session = await checkIn({
@@ -138,20 +141,12 @@ export async function POST(request: NextRequest) {
       now: parsed.data.startTime ? new Date(parsed.data.startTime) : undefined,
     })
 
-    return NextResponse.json({ success: true, data: session }, { status: 201 })
+    return resultToResponse(session, mapCheckInError, 201)
   } catch (error) {
     const message = (error as Error).message
-    if (message === 'UNAUTHORIZED') {
-      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
-    }
-    if (message === 'CSRF_MISMATCH') {
-      return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
-    }
+    if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
+    if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
     console.error('POST /api/sessions error:', error)
-    const mapped = mapCheckInError(error as Error)
-    return NextResponse.json(
-      { success: false, code: mapped.code, error: mapped.message },
-      { status: mapped.status }
-    )
+    return apiError({ code: 'SERVER_ERROR', message: 'Lỗi máy chủ', status: 500 })
   }
 }

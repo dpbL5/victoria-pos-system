@@ -1,3 +1,6 @@
+> **⚠️ ARCHIVED (2026-08-07)** — Plan cũ theo layer-based approach đã bị abandon (thư mục `src/server/` rỗng).
+> Kế hoạch thay thế: **`docs/architecture-refactor-plan.md`** (port/adapter + domain modules, ADR-007) — đã thực hiện xong.
+
 # Kế hoạch dọn dẹp & đơn giản hoá kiến trúc
 
 ## Mục tiêu

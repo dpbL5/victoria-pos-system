@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/auth'
 import { validateCSRF } from '@/lib/csrf'
-import { updateMembershipPlanSchema } from '@/lib/validations/membership'
-import { logActivity } from '@/lib/business/audit'
+import { updateMembershipPlanSchema } from '@/lib/memberships'
+import { logActivity } from '@/lib/audit'
 
 export async function PUT(
   request: NextRequest,

@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, requireMutationAuth } from "@/lib/auth";
-import { logActivity } from "@/lib/business/audit";
+import { logActivity } from "@/lib/audit";
 import { updateSessionSchema } from "@/lib/validations/session";
 
 // ── Helper: kiểm tra staff có quyền truy cập session ────

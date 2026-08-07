@@ -6,3 +6,7 @@
 - When a series of `edit_file` calls corrupts a file, read the full file and rewrite it entirely from scratch rather than attempting to fix broken incremental edits. Confidence: 0.80
 - Organize tests by module/feature in `__tests__` directories, testing pure functions and Zod schemas with Vitest (`describe`/`it`/`expect` + `safeParse`). Confidence: 0.85
 - Verify changes in this order: typecheck (`tsc --noEmit`) and ESLint in a single combined step, then run tests (`vitest run`), then production build (`next build`). Confidence: 0.72
+- Commit changes as small, feature-grouped commits (prefixed with type like `feat`/`fix`/`chore`/`refactor`) rather than one large commit, each with a descriptive Vietnamese message and `Co-authored-by: CommandCodeBot` trailer. Confidence: 0.95
+- After merging a feature/dev branch into `master` or `main`, delete the merged branch both locally (`git branch -d`) and remotely (`git push origin --delete`). Confidence: 0.90
+- When merging dev into master/main, use `--no-ff` to preserve branch history and create an explicit merge commit. Confidence: 0.80
+- When a commit accidentally includes unrelated files (e.g., auto-generated config), use `git reset --soft HEAD~1` + `git restore --staged <unrelated>` to fix the commit scope without losing work. Confidence: 0.75

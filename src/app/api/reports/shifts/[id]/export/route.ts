@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
-import { getShiftTransactions } from '@/lib/business/shifts'
+import { getShiftTransactions } from '@/lib/shifts'
 import { prisma } from '@/lib/prisma'
 
 function csvEscape(value: string | null | undefined): string {
@@ -36,7 +36,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Không tìm thấy ca làm' }, { status: 404 })
     }
 
-    const { transactions } = await getShiftTransactions(prisma as any, id)
+    const { transactions } = await getShiftTransactions(prisma, id)
 
     const headers = [
       'Thời gian',

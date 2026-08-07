@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { validateCSRF } from '@/lib/csrf'
-import { logActivity } from '@/lib/business/audit'
+import { logActivity } from '@/lib/audit'
 import {
   deriveDayTypeFromDays,
-  findOverlappingRules,
   normalizeDaysOfWeek,
   resolveRuleDaysOfWeek,
 } from '@/lib/pricing'
+import { repositories } from '@/lib/infrastructure/repositories'
 import { prisma } from '@/lib/prisma'
 import { parseLocalDate, parseLocalDateEnd } from '@/lib/utils'
-import { updatePricingRuleSchema } from '@/lib/validations/pricing'
+import { updatePricingRuleSchema } from '@/lib/pricing'
 
 export async function PUT(
   request: NextRequest,
@@ -54,14 +54,14 @@ export async function PUT(
       ? (parsed.data.effectiveTo ? parseLocalDateEnd(parsed.data.effectiveTo) : null)
       : existing.effectiveTo
 
-    const overlaps = await findOverlappingRules(
+    const overlaps = await repositories.pricing.findOverlapping({
       daysOfWeek,
       hourFrom,
       hourTo,
       effectiveFrom,
       effectiveTo,
-      id,
-    )
+      excludeId: id,
+    })
 
     const updated = await prisma.$transaction(async (tx) => {
       const data: Record<string, unknown> = { ...parsed.data }

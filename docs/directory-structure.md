@@ -109,7 +109,14 @@ docs/                           # Tài liệu thiết kế quyết định (pric
 prisma/
 └── schema.prisma               # Database schema
 src/generated/
-└── prisma/                     # Generated Prisma client (Prisma 7, imported từ src/lib/prisma.ts)
+└── prisma/                     # Generated Prisma client (Prisma 7, imported từ src/lib/infrastructure/prisma.ts)
+
+> **Cập nhật (2026-08-07, ADR-007):** `src/lib/` đã refactor theo port/adapter + domain modules:
+> `shared/` (cross-cutting) ← `infrastructure/` (prisma, db-helpers, api-helpers, adapters, repositories) ←
+> `domain/` (`sessions/`, `invoicing/`, `memberships/`, `shifts/`, `pricing/`, `promotions/`, `settings/`, `audit/`)
+> ← `app/` + `features/`. Mỗi domain có `ports.ts`, `use-cases/`, `validations.ts`, `helpers.ts`, `index.ts` (barrel).
+> Use-cases return `Result<T>` (`@/lib/shared/result`), validation trong transaction dùng `fail()` (rollback).
+> Chi tiết: `docs/architecture-refactor-plan.md`.
 ```
 
 **Chú thích:**

@@ -1,6 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, requireMutationAuth } from '@/lib/auth'
-import { sellItems, mapSellItemsError } from '@/lib/business/use-cases/sellItems'
+import { NextRequest } from 'next/server'
+import { requireMutationAuth } from '@/lib/auth'
+import { sellItems, mapSellItemsError } from '@/lib/sessions'
+import {
+  apiError,
+  resultToResponse,
+  ERR_UNAUTHORIZED,
+  ERR_CSRF,
+} from '@/lib/infrastructure/api-helpers'
 import { z } from 'zod'
 
 const sellSchema = z.object({
@@ -27,10 +33,7 @@ export async function POST(
     const parsed = sellSchema.safeParse(body)
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { success: false, error: parsed.error.issues[0].message },
-        { status: 400 }
-      )
+      return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     }
 
     const result = await sellItems({
@@ -40,20 +43,12 @@ export async function POST(
       notes: parsed.data.notes,
     })
 
-    return NextResponse.json({ success: true, data: result })
+    return resultToResponse(result, mapSellItemsError)
   } catch (error) {
     const message = (error as Error).message
-    if (message === 'UNAUTHORIZED') {
-      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
-    }
-    if (message === 'CSRF_MISMATCH') {
-      return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
-    }
+    if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
+    if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
     console.error('POST /api/sessions/[id]/sell error:', error)
-    const mapped = mapSellItemsError(error as Error)
-    return NextResponse.json(
-      { success: false, code: mapped.code, error: mapped.message },
-      { status: mapped.status }
-    )
+    return apiError({ code: 'SERVER_ERROR', message: 'Lỗi máy chủ', status: 500 })
   }
 }

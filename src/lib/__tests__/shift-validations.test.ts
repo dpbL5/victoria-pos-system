@@ -5,7 +5,7 @@ import {
   adjustCashDifferenceSchema,
   manageShiftParticipantSchema,
   removeShiftParticipantSchema,
-} from '@/lib/validations/shift'
+} from '@/lib/shifts'
 
 const STAFF_A = '123e4567-e89b-42d3-a456-426614174000'
 const STAFF_B = '223e4567-e89b-42d3-a456-426614174001'

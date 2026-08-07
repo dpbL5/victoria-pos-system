@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { validateCSRF } from '@/lib/csrf'
-import { logActivity } from '@/lib/business/audit'
-import { shiftWithAllParticipantsInclude } from '@/lib/business/shifts'
+import { logActivity } from '@/lib/audit'
+import { shiftWithAllParticipantsInclude } from '@/lib/shifts'
 import { prisma } from '@/lib/prisma'
 import {
   manageShiftParticipantSchema,
   removeShiftParticipantSchema,
-} from '@/lib/validations/shift'
+} from '@/lib/shifts'
 
 export async function POST(
   request: NextRequest,

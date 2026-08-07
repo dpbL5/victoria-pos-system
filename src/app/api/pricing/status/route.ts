@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { countApplicablePricingRules } from '@/lib/pricing'
-import { prisma } from '@/lib/prisma'
+import { repositories } from '@/lib/infrastructure/repositories'
 
 export async function GET() {
   try {
@@ -9,8 +8,8 @@ export async function GET() {
 
     const now = new Date()
     const [count, activeCount] = await Promise.all([
-      prisma.pricingRule.count(),
-      countApplicablePricingRules(now),
+      repositories.pricing.countAll(),
+      repositories.pricing.countApplicable(now),
     ])
 
     return NextResponse.json({

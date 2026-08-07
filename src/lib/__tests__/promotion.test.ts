@@ -8,7 +8,7 @@ import {
 import {
   createPromotionRuleSchema,
   updatePromotionRuleSchema,
-} from '@/lib/validations/promotion'
+} from '@/lib/promotions'
 import { calculateTieredSubtotal } from '@/lib/promotion-calculation'
 
 const validPromotion = {

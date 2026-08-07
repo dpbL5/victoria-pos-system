@@ -4,7 +4,7 @@ import {
   updateMembershipPlanSchema,
   registerMemberSchema,
   renewMembershipSchema,
-} from '@/lib/validations/membership'
+} from '@/lib/memberships'
 
 // UUID hợp lệ cho test (Zod v4 yêu cầu UUID đúng chuẩn: version 1-8, variant 8-b)
 const CUST_A = '123e4567-e89b-42d3-a456-426614174000'

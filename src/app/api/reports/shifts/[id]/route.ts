@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin, requireMutationAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { getShiftTransactions, getShiftRevenueData } from '@/lib/business/shifts'
-import { logActivity } from '@/lib/business/audit'
-import { adjustCashDifferenceSchema } from '@/lib/validations/shift'
+import { getShiftTransactions, getShiftRevenueData } from '@/lib/shifts'
+import { logActivity } from '@/lib/audit'
+import { adjustCashDifferenceSchema } from '@/lib/shifts'
 import type { ShiftReportDetail } from '@/types'
 
 type PaymentMethodKey = 'CASH' | 'TRANSFER' | 'CARD' | 'MEMBER'
@@ -41,8 +41,8 @@ export async function GET(
     }
 
     const [revenue, txResult, itemTypeRows] = await Promise.all([
-      getShiftRevenueData(prisma as any, id),
-      getShiftTransactions(prisma as any, id),
+      getShiftRevenueData(prisma, id),
+      getShiftTransactions(prisma, id),
       prisma.invoiceItem.groupBy({
         by: ['type'],
         where: { invoice: { shiftId: id, status: { not: 'CANCELLED' } } },

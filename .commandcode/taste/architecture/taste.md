@@ -7,3 +7,4 @@
 - Hide /pricing tab from staff users in bottom navigation; keep exactly 5 staff tabs. Confidence: 0.65
 - Align cost rounding with documented rule: ceiling to nearest 10,000 VND instead of Math.round. Confidence: 0.65
 - Organize features by domain module (e.g., shifts module) rather than by report type; when a report-type feature fits better in a domain module, move it there and remove it from the report section. Confidence: 0.85
+- When explaining complex business logic flows (e.g., check-in → payment → checkout lifecycle), present the full state machine as an ASCII diagram with explicit states and named transitions, plus a summary table of steps/endpoints — rather than prose-only descriptions. Confidence: 0.65

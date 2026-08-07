@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { findAvailablePromotions } from '@/lib/business/promotions'
+import { repositories } from '@/lib/infrastructure/repositories'
 
 export async function GET() {
   try {
     await requireAuth()
-    const promotions = await findAvailablePromotions()
+    const promotions = await repositories.promotions.findAvailable(new Date())
 
     return NextResponse.json({ success: true, data: promotions })
   } catch (error) {

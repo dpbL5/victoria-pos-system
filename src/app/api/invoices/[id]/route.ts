@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@/generated/prisma/client'
 import { requireAuth, requireMutationAuth } from '@/lib/auth'
-import { logActivity } from '@/lib/business/audit'
+import { logActivity } from '@/lib/audit'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(

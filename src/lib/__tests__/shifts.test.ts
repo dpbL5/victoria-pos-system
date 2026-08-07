@@ -3,7 +3,7 @@ import {
   calculateExpectedCash,
   getShiftRevenueData,
   getShiftTransactions,
-} from '@/lib/business/shifts'
+} from '@/lib/shifts'
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -237,13 +237,11 @@ describe('getShiftRevenueData', () => {
 // ── calculateExpectedCash ───────────────────────────────
 
 describe('calculateExpectedCash', () => {
-  it('throw SHIFT_NOT_FOUND khi ca không tồn tại', async () => {
+  it('trả null khi ca không tồn tại (adapter chuyển thành fail SHIFT_NOT_FOUND)', async () => {
     const { db, shift } = createShiftStore()
     shift.findUnique.mockResolvedValue(null)
 
-    await expect(calculateExpectedCash(db, 'shift-1')).rejects.toThrow(
-      'SHIFT_NOT_FOUND'
-    )
+    await expect(calculateExpectedCash(db, 'shift-1')).resolves.toBeNull()
   })
 
   it('tiền mặt dự kiến = openingCash + tổng payment CASH', async () => {

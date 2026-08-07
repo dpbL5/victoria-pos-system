@@ -4,7 +4,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { validateCSRF } from "@/lib/csrf";
-import { logActivity } from "@/lib/business/audit";
+import { logActivity } from "@/lib/audit";
 import { resetPasswordSchema, updateUserSchema } from "@/lib/validations/auth";
 import bcrypt from "bcryptjs";
 
