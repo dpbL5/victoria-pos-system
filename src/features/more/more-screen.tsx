@@ -7,6 +7,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   AlertCircle,
   ArrowRight,
+  ArrowRightLeft,
   Banknote,
   BarChart3,
   CalendarClock,
@@ -132,6 +133,7 @@ export function MoreScreen() {
     { href: '/membership-plans', label: 'Gói hội viên', description: 'Phí tháng và thời hạn gói', Icon: Ticket },
     { href: '/staff', label: 'Nhân viên', description: 'Tài khoản và phân quyền', Icon: UserCog },
     { href: '/tools', label: 'Dụng cụ', description: 'Công cụ hệ thống', Icon: Wrench },
+    { href: '/cashflow', label: 'Thu chi', description: 'Theo dõi thu nhập và chi phí', Icon: ArrowRightLeft },
   ] as const
 
   const handleLogout = async () => {

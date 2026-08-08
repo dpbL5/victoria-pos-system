@@ -89,6 +89,11 @@ enum ShiftParticipantRole {
   STAFF
 }
 
+enum CashflowType {
+  INCOME
+  EXPENSE
+}
+
 // Models
 
 model User {
@@ -109,6 +114,7 @@ model User {
   stockMovements     StockMovement[]
   membershipPayments MembershipPayment[]
   activityLogs       ActivityLog[]
+  cashflowEntries    CashflowEntry[]
 
   @@map("users")
 }
@@ -507,6 +513,21 @@ model AppSetting {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("app_settings")
+}
+
+model CashflowEntry {
+  id         String       @id @default(uuid())
+  type       CashflowType
+  personName String       @map("person_name") @db.VarChar(100)
+  amount     Decimal      @db.Decimal(12, 0)
+  reason     String       @db.Text
+  staffId    String       @map("staff_id")
+  staff      User         @relation(fields: [staffId], references: [id])
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([type, createdAt])
+  @@map("cashflow_entries")
 }
 
 model ActivityLog {

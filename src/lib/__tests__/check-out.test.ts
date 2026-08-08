@@ -117,6 +117,14 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       decrementStockIfAvailable: vi.fn(async () => ({ count: 1 })),
       recordSaleMovement: vi.fn(async () => {}),
     },
+    cashflow: {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      list: vi.fn(async () => ({ entries: [], total: 0, page: 1, pageSize: 10 })),
+      summarize: vi.fn(),
+    },
   }
   return { ...base, ...overrides }
 }

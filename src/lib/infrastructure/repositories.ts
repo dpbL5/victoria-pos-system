@@ -9,6 +9,7 @@ import { createPromotionRepository } from './adapters/promotion-adapter'
 import { createSettingsRepository } from './adapters/settings-adapter'
 import { createSessionRepository } from './adapters/session-adapter'
 import { createProductRepository } from './adapters/product-adapter'
+import { createCashflowRepository } from './adapters/cashflow-adapter'
 import { createCachedSettingsRepository } from '@/lib/settings'
 import type { Prisma } from '@/generated/prisma/client'
 import type { BillingRepository } from '@/lib/invoicing/ports'
@@ -19,6 +20,7 @@ import type { PricingRepository } from '@/lib/pricing/ports'
 import type { PromotionRepository } from '@/lib/promotions/ports'
 import type { SettingsRepository } from '@/lib/settings/ports'
 import type { ProductRepository, SessionRepository } from '@/lib/sessions/ports'
+import type { CashflowRepository } from '@/lib/cashflow/ports'
 
 /**
  * Bundle các repository theo từng domain. Interface được bổ sung dần
@@ -36,6 +38,7 @@ export interface Repositories {
   settings: SettingsRepository
   session: SessionRepository
   product: ProductRepository
+  cashflow: CashflowRepository
 }
 
 export function createRepositories(store: Prisma.TransactionClient): Repositories {
@@ -52,6 +55,7 @@ export function createRepositories(store: Prisma.TransactionClient): Repositorie
     settings: createSettingsRepository(store),
     session: createSessionRepository(store),
     product: createProductRepository(store),
+    cashflow: createCashflowRepository(store),
   }
 }
 

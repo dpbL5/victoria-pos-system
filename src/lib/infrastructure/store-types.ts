@@ -11,4 +11,5 @@ export type ProductStore = Pick<Prisma.TransactionClient, 'product' | 'stockMove
 export type PricingStore = Pick<Prisma.TransactionClient, 'pricingRule' | 'pricingTier'>
 export type PromotionStore = Pick<Prisma.TransactionClient, 'promotionRule'>
 export type SettingsStore = Pick<Prisma.TransactionClient, 'appSetting'>
+export type CashflowStore = Pick<Prisma.TransactionClient, 'cashflowEntry'>
 export type AuditStore = Pick<Prisma.TransactionClient, 'activityLog'>

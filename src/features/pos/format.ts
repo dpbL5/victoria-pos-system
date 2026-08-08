@@ -1,4 +1,4 @@
-import { formatVND } from '@/lib/utils'
+import { formatVND, roundToNearestThousand } from '@/lib/utils'
 import {
   calculatePlayPrice,
   calculateTieredSubtotal,
@@ -9,8 +9,9 @@ export function toNumber(value: number | string | null | undefined): number {
   return Number(value ?? 0)
 }
 
-export function money(value: number | string | null | undefined): string {
-  return formatVND(toNumber(value))
+export function money(value: number | string | null | undefined, roundToThousands = true): string {
+  const num = toNumber(value)
+  return formatVND(roundToThousands ? roundToNearestThousand(num) : num)
 }
 
 export function formatClock(dateValue: string | Date): string {

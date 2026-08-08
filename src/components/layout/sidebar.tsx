@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
+  ArrowRightLeft,
   Banknote,
   BarChart3,
   CalendarClock,
@@ -38,6 +39,7 @@ export const staffMenuItems: MenuItem[] = [
   { href: '/promotions', label: 'Khuyến mại', Icon: Tag, adminOnly: true },
   { href: '/tools', label: 'Dụng cụ', Icon: Wrench, adminOnly: true },
   { href: '/staff', label: 'Nhân viên', Icon: UserCog, adminOnly: true },
+  { href: '/cashflow', label: 'Thu chi', Icon: ArrowRightLeft, adminOnly: true },
   { href: '/settings', label: 'Cài đặt', Icon: Settings },
 ]
 

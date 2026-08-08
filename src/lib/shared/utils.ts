@@ -1,7 +1,12 @@
 export function formatVND(amount: number | string): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount
-  const rounded = Math.ceil(num / 1000) * 1000
-  return `${rounded.toLocaleString('vi-VN')}đ`
+  return `${num.toLocaleString('vi-VN')}đ`
+}
+
+/** Làm tròn lên hàng nghìn (mặc định dùng cho tất cả màn POS). */
+export function roundToNearestThousand(amount: number | string): number {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
+  return Math.ceil(num / 1000) * 1000
 }
 
 export function formatHours(hours: number): string {

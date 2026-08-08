@@ -106,6 +106,14 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
       decrementStockIfAvailable: vi.fn(),
       recordSaleMovement: vi.fn(),
     },
+    cashflow: {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      list: vi.fn(async () => ({ entries: [], total: 0, page: 1, pageSize: 10 })),
+      summarize: vi.fn(),
+    },
   }
 }
 
