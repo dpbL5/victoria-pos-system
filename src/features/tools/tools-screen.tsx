@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Edit3,
   Plus,
@@ -10,13 +10,14 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
+import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/features/pos/api'
 
 function mutationRequest(method: string, body?: unknown): RequestInit {
@@ -60,31 +61,15 @@ const emptyForm: ToolForm = {
 
 export function ToolsScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
-  const [tools, setTools] = useState<Tool[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { data: toolsData, isLoading, mutate } = useApi<Tool[]>('/api/tools', { dedupingInterval: 300_000 })
   const [submitting, setSubmitting] = useState(false)
   const [editTool, setEditTool] = useState<Tool | null>(null)
   const [deleteTool, setDeleteTool] = useState<Tool | null>(null)
   const [form, setForm] = useState<ToolForm>(emptyForm)
 
-  const loadTools = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const data = await apiJson<Tool[]>('/api/tools')
-      if (!data.success) throw new Error(data.error || 'Không tải được danh sách dụng cụ')
-      setTools(data.data ?? [])
-    } catch (err) {
-      setError((err as Error).message || 'Lỗi kết nối máy chủ')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void loadTools()
-  }, [loadTools])
+  const tools = toolsData?.data ?? []
+  const error = !toolsData?.success ? (toolsData?.error ?? '') : ''
+  const loading = isLoading
 
   const [formOpen, setFormOpen] = useState(false)
 
@@ -139,7 +124,7 @@ export function ToolsScreen() {
 
       notifySuccess(editTool ? 'Đã cập nhật dụng cụ' : 'Đã tạo dụng cụ')
       closeForm()
-      await loadTools()
+      await mutate()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -147,7 +132,7 @@ export function ToolsScreen() {
     }
   }
 
-  const confirmDelete = async () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTool) return
 
     setSubmitting(true)
@@ -159,7 +144,7 @@ export function ToolsScreen() {
       }
       notifySuccess('Đã xoá dụng cụ')
       setDeleteTool(null)
-      await loadTools()
+      await mutate()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -168,6 +153,42 @@ export function ToolsScreen() {
   }
 
   const isFormOpen = formOpen
+
+  const toolColumns: Column<Tool>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Tên dụng cụ',
+      cellClassName: 'px-4 py-3 font-medium text-zinc-950 dark:text-white',
+      render: (item) => (
+        <div className="flex items-center gap-2">
+          {item.name}
+          {item.isRequired && <Badge variant="purple" size="sm">Bắt buộc</Badge>}
+        </div>
+      ),
+    },
+    {
+      key: 'description',
+      label: 'Mô tả',
+      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
+      render: (item) => item.description || '—',
+    },
+    {
+      key: 'quantity',
+      label: 'SL chuẩn',
+      cellClassName: 'px-4 py-3 text-sm tabular-nums text-zinc-950 dark:text-white',
+      render: (item) => item.quantity,
+    },
+    {
+      label: 'Thao tác',
+      cellClassName: 'px-4 py-3',
+      render: (item) => (
+        <div className="flex gap-1.5">
+          <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa" />
+          <Button variant="outline-danger" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteTool(item)} title="Xoá" />
+        </div>
+      ),
+    },
+  ], [submitting, openEdit])
 
   if (loading) {
     return (
@@ -202,7 +223,7 @@ export function ToolsScreen() {
               variant="secondary"
               size="sm"
               icon={RefreshCw}
-              onClick={() => void loadTools()}
+              onClick={() => void mutate()}
               title="Làm mới"
             />
             <Button variant="primary" size="sm" icon={Plus} onClick={openCreate}>
@@ -219,67 +240,16 @@ export function ToolsScreen() {
           />
         )}
 
-        {tools.length === 0 ? (
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <EmptyState
-              icon={Wrench}
-              message="Chưa có dụng cụ"
-              description="Thêm dụng cụ để nhân viên kiểm đếm khi mở và đóng ca."
-              action={
-                <Button variant="primary" size="sm" icon={Plus} onClick={openCreate}>
-                  Thêm dụng cụ
-                </Button>
-              }
-            />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {tools.map((tool) => (
-              <div
-                key={tool.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-zinc-950 dark:text-white">
-                      {tool.name}
-                    </p>
-                    {tool.isRequired && (
-                      <Badge variant="purple" size="sm">Bắt buộc</Badge>
-                    )}
-                  </div>
-                  <div className="mt-1 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-                    {tool.description && <span>{tool.description}</span>}
-                    {tool.quantity > 0 && (
-                      <span className="inline-flex items-center gap-1">
-                        <span className="h-1 w-1 rounded-full bg-zinc-400" />
-                        SL chuẩn: <span className="font-medium text-zinc-700 dark:text-zinc-300">{tool.quantity}</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex shrink-0 gap-1.5">
-                  <Button
-                    variant="secondary"
-                    size="xs"
-                    icon={Edit3}
-                    disabled={submitting}
-                    onClick={() => openEdit(tool)}
-                    title="Sửa"
-                  />
-                  <Button
-                    variant="outline-danger"
-                    size="xs"
-                    icon={Trash2}
-                    disabled={submitting}
-                     onClick={() => setDeleteTool(tool)}
-                    title="Xoá"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <SortableTable
+          columns={toolColumns}
+          data={tools}
+          keyExtractor={(t) => t.id}
+          sortableKeys={['name', 'quantity']}
+          defaultSortKey="name"
+          emptyIcon={Wrench}
+          emptyMessage="Chưa có dụng cụ"
+          emptyDescription="Thêm dụng cụ để nhân viên kiểm đếm khi mở và đóng ca."
+        />
 
         <ToolFormModal
           open={isFormOpen}
@@ -298,7 +268,7 @@ export function ToolsScreen() {
           description={deleteTool ? `Dụng cụ "${deleteTool.name}" sẽ bị xóa vĩnh viễn.` : undefined}
           confirmLabel="Xóa"
           submitting={submitting}
-          onConfirm={confirmDelete}
+          onConfirm={handleConfirmDelete}
         />
       </div>
     </div>

@@ -21,6 +21,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { SortableTable, type Column } from '@/components/ui/sortable-table'
+import { useApi } from '@/hooks/use-api'
 import { Input, Label, Select } from '@/components/ui/input'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Modal } from '@/components/ui/modal'
@@ -169,28 +171,11 @@ export default function StaffPage() {
 
 function StaffAdminPanel() {
   const [activeTab, setActiveTab] = useState<StaffTabId>('accounts')
-  const [users, setUsers] = useState<UserRow[]>([])
-  const [usersLoading, setUsersLoading] = useState(true)
-  const [usersError, setUsersError] = useState('')
 
-  const loadUsers = useCallback(async () => {
-    setUsersLoading(true)
-    setUsersError('')
-    try {
-      const data = await apiJson<UserRow[]>('/api/users')
-      if (!data.success) throw new Error(data.error || 'Không tải được danh sách nhân viên')
-      setUsers(data.data ?? [])
-    } catch (err) {
-      setUsersError((err as Error).message || 'Lỗi kết nối máy chủ')
-    } finally {
-      setUsersLoading(false)
-    }
-  }, [])
+  const { data: usersData, isLoading: usersLoading, mutate: reloadUsers } = useApi<UserRow[]>('/api/users', { dedupingInterval: 300_000 })
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadUsers()
-  }, [loadUsers])
+  const users: UserRow[] = usersData?.data ?? []
+  const usersError = !usersData?.success ? (usersData?.error as string ?? '') : ''
 
   return (
     <div className="space-y-4">
@@ -216,7 +201,7 @@ function StaffAdminPanel() {
           users={users}
           loading={usersLoading}
           error={usersError}
-          onReload={loadUsers}
+          onReload={async () => { await reloadUsers() }}
         />
       ) : (
         <ActivityLogsTab users={users} />
@@ -386,6 +371,80 @@ function AccountsTab({
     }
   }
 
+  const userColumns: Column<UserRow>[] = useMemo(() => [
+    {
+      key: 'fullName',
+      label: 'Họ tên',
+      cellClassName: 'px-4 py-3 font-medium text-zinc-950 dark:text-white',
+      render: (item) => item.fullName,
+    },
+    {
+      key: 'username',
+      label: 'Tên đăng nhập',
+      cellClassName: 'px-4 py-3 font-mono text-xs text-zinc-500 dark:text-zinc-400',
+      render: (item) => item.username,
+    },
+    {
+      key: 'role',
+      label: 'Vai trò',
+      cellClassName: 'px-4 py-3',
+      render: (item) => (
+        <Badge variant={item.role === 'ADMIN' ? 'purple' : 'default'} size="sm">
+          {item.role === 'ADMIN' ? 'Admin' : 'Nhân viên'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'isActive',
+      label: 'Trạng thái',
+      cellClassName: 'px-4 py-3',
+      render: (item) => (
+        <Badge variant={item.isActive ? 'success' : 'danger'} size="sm">
+          {item.isActive ? 'Đang hoạt động' : 'Đã khoá'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'createdAt',
+      label: 'Ngày tạo',
+      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
+      render: (item) => formatDate(item.createdAt),
+    },
+    {
+      label: 'Thao tác',
+      cellClassName: 'px-4 py-3',
+      render: (item) => (
+        <div className="flex gap-1.5">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Edit2}
+            title="Sửa vai trò"
+            onClick={() => {
+              setRoleEditTarget(item)
+              setSelectedRole(item.role)
+            }}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Key}
+            onClick={() => setResetTarget(item)}
+            title="Đổi mật khẩu"
+          />
+          <Button
+            variant={item.isActive ? 'outline-danger' : 'secondary'}
+            size="sm"
+            icon={item.isActive ? UserX : UserCheck}
+            disabled={submitting}
+            onClick={() => void handleToggleActive(item)}
+            title={item.isActive ? 'Vô hiệu hoá' : 'Kích hoạt'}
+          />
+        </div>
+      ),
+    },
+  ], [submitting, handleToggleActive])
+
   if (loading) {
     return <StaffSkeleton compact />
   }
@@ -507,84 +566,16 @@ function AccountsTab({
         )}
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        {users.length === 0 ? (
-          <EmptyState
-            icon={UserPlus}
-            message="Chưa có nhân viên nào"
-            description="Tạo tài khoản nội bộ đầu tiên để nhân viên đăng nhập POS."
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
-              <thead>
-                <tr className="border-b border-zinc-200 text-left dark:border-zinc-800">
-                  <TableHead>Họ tên</TableHead>
-                  <TableHead>Tên đăng nhập</TableHead>
-                  <TableHead>Vai trò</TableHead>
-                  <TableHead>Trạng thái</TableHead>
-                  <TableHead>Ngày tạo</TableHead>
-                  <TableHead>Thao tác</TableHead>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/70">
-                {users.map((item) => (
-                  <tr key={item.id} className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                    <td className="px-4 py-3 font-medium text-zinc-950 dark:text-white">
-                      {item.fullName}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-zinc-500 dark:text-zinc-400">
-                      {item.username}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={item.role === 'ADMIN' ? 'purple' : 'default'} size="sm">
-                        {item.role === 'ADMIN' ? 'Admin' : 'Nhân viên'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={item.isActive ? 'success' : 'danger'} size="sm">
-                        {item.isActive ? 'Đang hoạt động' : 'Đã khoá'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400">
-                      {formatDate(item.createdAt)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1.5">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          icon={Edit2}
-                          title="Sửa vai trò"
-                          onClick={() => {
-                            setRoleEditTarget(item)
-                            setSelectedRole(item.role)
-                          }}
-                        />
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          icon={Key}
-                          onClick={() => setResetTarget(item)}
-                          title="Đổi mật khẩu"
-                        />
-                        <Button
-                          variant={item.isActive ? 'outline-danger' : 'secondary'}
-                          size="sm"
-                          icon={item.isActive ? UserX : UserCheck}
-                          disabled={submitting}
-                          onClick={() => void handleToggleActive(item)}
-                          title={item.isActive ? 'Vô hiệu hoá' : 'Kích hoạt'}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <SortableTable
+        columns={userColumns}
+        data={users}
+        keyExtractor={(u) => u.id}
+        sortableKeys={['fullName', 'username', 'role', 'isActive', 'createdAt']}
+        defaultSortKey="createdAt"
+        emptyIcon={UserPlus}
+        emptyMessage="Chưa có nhân viên nào"
+        emptyDescription="Tạo tài khoản nội bộ đầu tiên để nhân viên đăng nhập POS."
+      />
 
       <Modal
         open={!!resetTarget}

@@ -11,11 +11,12 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useApi } from '@/hooks/use-api'
+import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { apiJson, jsonRequest } from '@/features/pos/api'
 import { formatDay, money, paymentMethodLabel } from '@/features/pos/format'
@@ -40,12 +41,6 @@ interface MembershipListResponse {
 
 export function MemberScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
-  const [user, setUser] = useState<UserSession | null>(null)
-  const [members, setMembers] = useState<MemberCustomer[]>([])
-  const [plans, setPlans] = useState<MembershipPlan[]>([])
-  const [shift, setShift] = useState<Shift | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
@@ -56,42 +51,24 @@ export function MemberScreen() {
   const [renewMember, setRenewMember] = useState<MemberCustomer | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const params = new URLSearchParams({
-        type: 'MEMBER',
-        includeMembershipStatus: 'true',
-        limit: '100',
-      })
-      if (searchQuery.trim()) params.set('search', searchQuery.trim())
+  const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
 
-      const [userData, memberData, planData, shiftData] = await Promise.all([
-        apiJson<UserSession>('/api/auth/me'),
-        apiJson<MemberCustomer[]>(`/api/customers?${params}`),
-        apiJson<MembershipPlan[]>('/api/membership-plans'),
-        apiJson<Shift | null>('/api/shifts?current=true'),
-      ])
-
-      if (!userData.success) throw new Error(userData.error || 'Không tải được tài khoản')
-      if (!memberData.success) throw new Error(memberData.error || 'Không tải được hội viên')
-      if (!planData.success) throw new Error(planData.error || 'Không tải được gói hội viên')
-      if (!shiftData.success) throw new Error(shiftData.error || 'Không tải được ca làm')
-
-      setUser(userData.data ?? null)
-      setMembers(memberData.data ?? [])
-      setPlans((planData.data ?? []).filter((plan) => plan.isActive))
-      setShift(shiftData.data ?? null)
-    } catch (err) {
-      setError((err as Error).message || 'Lỗi kết nối máy chủ')
-    } finally {
-      setLoading(false)
-    }
+  const membersUrl = useMemo(() => {
+    const params = new URLSearchParams({ type: 'MEMBER', includeMembershipStatus: 'true', limit: '100' })
+    if (searchQuery.trim()) params.set('search', searchQuery.trim())
+    return `/api/customers?${params}`
   }, [searchQuery])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadData() }, [loadData])
+  const { data: memberData, isLoading: memberLoading, mutate } = useApi<MemberCustomer[]>(membersUrl, { dedupingInterval: 120_000 })
+  const { data: planData } = useApi<MembershipPlan[]>('/api/membership-plans', { dedupingInterval: 300_000 })
+  const { data: shiftData } = useApi<Shift | null>('/api/shifts?current=true', { dedupingInterval: 30_000 })
+
+  const members: MemberCustomer[] = memberData?.data ?? []
+  const plans: MembershipPlan[] = (planData?.data ?? []).filter((plan: MembershipPlan) => plan.isActive)
+  const shift = shiftData?.data ?? null
+  const error = !memberData?.success ? (memberData?.error as string ?? '') : ''
+  const loading = memberLoading || userLoading
+  const user = userData?.data ?? null
 
   const filteredMembers = useMemo(
     () => statusFilter === 'ALL'
@@ -107,6 +84,63 @@ export function MemberScreen() {
     none: members.filter((member) => member.membershipStatus === 'NONE').length,
   }), [members])
   const isAdmin = user?.role === 'ADMIN'
+
+  const memberColumns: Column<MemberCustomer>[] = useMemo(() => [
+    {
+      key: 'fullName',
+      label: 'Tên hội viên',
+      cellClassName: 'px-4 py-3 font-medium text-zinc-950 dark:text-white',
+      render: (item) => (
+        <button type="button" onClick={() => void openMember(item)} className="text-left hover:text-blue-600">
+          <div className="flex items-center gap-2">
+            {item.fullName}
+            <StatusBadge status={item.membershipStatus} />
+          </div>
+        </button>
+      ),
+    },
+    {
+      key: 'phone',
+      label: 'Số điện thoại',
+      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
+      render: (item) => item.phone || '—',
+    },
+    {
+      key: 'membershipStatus',
+      label: 'Hạn',
+      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
+      render: (item) => {
+        const m = item.currentMembership ?? item.latestMembership
+        if (item.membershipStatus === 'ACTIVE' && item.currentMembership) {
+          return `Còn hạn đến ${formatDay(item.currentMembership.expiresAt)}`
+        }
+        if (item.membershipStatus === 'EXPIRED' && item.latestMembership) {
+          return `Hết hạn từ ${formatDay(item.latestMembership.expiresAt)}`
+        }
+        return 'Chưa đóng phí'
+      },
+    },
+    {
+      key: 'totalSpent',
+      label: 'Tổng chi',
+      cellClassName: 'px-4 py-3 text-sm tabular-nums text-zinc-950 dark:text-white',
+      render: (item) => money(item.totalSpent),
+    },
+    {
+      label: 'Thao tác',
+      cellClassName: 'px-4 py-3',
+      render: (item) => (
+        <Button
+          variant="inverse"
+          size="sm"
+          disabled={!shift}
+          onClick={() => setRenewMember(item)}
+        >
+          {item.membershipStatus === 'ACTIVE' ? 'Đóng tiếp' : 'Gia hạn'}
+        </Button>
+      ),
+    },
+  ], [shift])
 
   const openMember = async (member: MemberCustomer) => {
     setSelectedMember(member)
@@ -129,14 +163,14 @@ export function MemberScreen() {
   const handleRegistered = async () => {
     notifySuccess('Đã đăng ký hội viên')
     setRegisterOpen(false)
-    await loadData()
+    await mutate()
   }
 
   const handleRenewed = async () => {
     notifySuccess('Đã gia hạn hội viên')
     setRenewMember(null)
     setSelectedMember(null)
-    await loadData()
+    await mutate()
   }
 
   if (loading) {
@@ -169,7 +203,7 @@ export function MemberScreen() {
               variant="secondary"
               size="sm"
               icon={RefreshCw}
-              onClick={() => void loadData()}
+              onClick={() => void mutate()}
               title="Làm mới"
             />
           </div>
@@ -250,25 +284,16 @@ export function MemberScreen() {
             </Badge>
           </div>
 
-          {filteredMembers.length === 0 ? (
-            <EmptyState
-              icon={Users}
-              message="Không có hội viên"
-              description="Thử đổi bộ lọc hoặc đăng ký hội viên mới."
-            />
-          ) : (
-            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {filteredMembers.map((member) => (
-                <MemberCard
-                  key={member.id}
-                  member={member}
-                  onOpen={() => void openMember(member)}
-                  onRenew={() => setRenewMember(member)}
-                  renewDisabled={!shift}
-                />
-              ))}
-            </div>
-          )}
+          <SortableTable
+            columns={memberColumns}
+            data={filteredMembers}
+            keyExtractor={(m) => m.id}
+            sortableKeys={['fullName', 'phone', 'membershipStatus', 'totalSpent']}
+            defaultSortKey="fullName"
+            emptyIcon={Users}
+            emptyMessage="Không có hội viên"
+            emptyDescription="Thử đổi bộ lọc hoặc đăng ký hội viên mới."
+          />
         </section>
       </div>
 
@@ -348,54 +373,6 @@ function MemberStat({
         {value}
       </p>
     </button>
-  )
-}
-
-function MemberCard({
-  member,
-  renewDisabled,
-  onOpen,
-  onRenew,
-}: {
-  member: MemberCustomer
-  renewDisabled: boolean
-  onOpen: () => void
-  onRenew: () => void
-}) {
-  const status = member.membershipStatus
-  const membership = member.currentMembership ?? member.latestMembership
-
-  return (
-    <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3">
-      <button type="button" onClick={onOpen} className="min-w-0 text-left">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
-            {member.fullName}
-          </p>
-          <StatusBadge status={status} />
-        </div>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          {member.phone || 'Chưa có SĐT'}
-          {membership ? ` · ${membership.plan?.name ?? 'Gói hội viên'}` : ''}
-        </p>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          {status === 'ACTIVE' && member.currentMembership
-            ? `Còn hạn đến ${formatDay(member.currentMembership.expiresAt)}`
-            : status === 'EXPIRED' && member.latestMembership
-              ? `Hết hạn từ ${formatDay(member.latestMembership.expiresAt)}`
-              : 'Chưa đóng phí hội viên'}
-        </p>
-      </button>
-
-      <Button
-        variant="inverse"
-        size="xs"
-        disabled={renewDisabled}
-        onClick={onRenew}
-      >
-        {status === 'ACTIVE' ? 'Đóng tiếp' : 'Gia hạn'}
-      </Button>
-    </div>
   )
 }
 

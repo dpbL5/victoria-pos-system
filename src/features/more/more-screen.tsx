@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { LucideIcon } from 'lucide-react'
@@ -33,6 +33,7 @@ import { Input, Label } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/features/pos/api'
 import { formatClock, money } from '@/features/pos/format'
 import type { Product, Shift, UserSession } from '@/features/pos/types'
@@ -60,64 +61,33 @@ export function MoreScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  const [user, setUser] = useState<UserSession | null>(null)
-  const [shift, setShift] = useState<Shift | null>(null)
-  const [pricingCount, setPricingCount] = useState(0)
-  const [activePricingCount, setActivePricingCount] = useState(0)
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
-
   const [parkingFeeValue, setParkingFeeValue] = useState('')
   const [parkingFeeSaving, setParkingFeeSaving] = useState(false)
 
   const PARKING_FEE_KEY = 'PARKING_FEE_UNIT_PRICE'
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const [userData, shiftData, pricingData, productData, parkingFeeData] = await Promise.all([
-        apiJson<UserSession>('/api/auth/me'),
-        apiJson<Shift | null>('/api/shifts?current=true'),
-        apiJson<PricingStatus>('/api/pricing/status'),
-        apiJson<Product[]>('/api/products?isActive=true'),
-        apiJson<{ key: string; value: string; label: string | null }>(
-          `/api/settings?key=${PARKING_FEE_KEY}`
-        ),
-      ])
+  const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
+  const { data: shiftData, isLoading: shiftLoading } = useApi<Shift | null>('/api/shifts?current=true', { dedupingInterval: 60_000 })
+  const { data: pricingData } = useApi<PricingStatus>('/api/pricing/status', { dedupingInterval: 300_000 })
+  const { data: productData } = useApi<Product[]>('/api/products?isActive=true', { dedupingInterval: 300_000 })
+  const { data: parkingFeeData } = useApi<{ key: string; value: string; label: string | null }>(
+    `/api/settings?key=${PARKING_FEE_KEY}`,
+    { dedupingInterval: 300_000 }
+  )
 
-      // Auth là critical — nếu fail thì toàn màn hình báo lỗi
-      if (!userData.success) throw new Error(userData.error || 'Không tải được tài khoản')
-      setUser(userData.data ?? null)
-
-      // Các API còn lại degrade gracefully — không block toàn màn hình
-      if (shiftData.success) setShift(shiftData.data ?? null)
-      if (pricingData.success) {
-        setPricingCount(pricingData.data?.count ?? 0)
-        setActivePricingCount(pricingData.data?.activeCount ?? pricingData.data?.count ?? 0)
-      }
-      if (productData.success) setProducts(productData.data ?? [])
-      if (parkingFeeData.success) {
-        setParkingFeeValue(parkingFeeData.data?.value ?? '')
-      }
-    } catch (err) {
-      setError((err as Error).message || 'Lỗi kết nối máy chủ')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const user = userData?.data ?? null
+  const shift = shiftData?.data ?? null
+  const pricingCount = pricingData?.data?.count ?? 0
+  const activePricingCount = pricingData?.data?.activeCount ?? pricingData?.data?.count ?? 0
+  const products = productData?.data ?? []
+  const loading = userLoading || shiftLoading
+  const error = !userData?.success ? (userData?.error as string ?? '') : ''
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
   }, [])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadData()
-  }, [loadData])
 
   const isAdmin = user?.role === 'ADMIN'
   const coreLinks = [
@@ -201,7 +171,7 @@ export function MoreScreen() {
             variant="secondary"
             size="sm"
             icon={RefreshCw}
-            onClick={() => void loadData()}
+            onClick={() => { /* SWR auto-refresh on focus */ }}
             title="Làm mới"
           />
         </header>

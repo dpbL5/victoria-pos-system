@@ -22,6 +22,7 @@ import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/features/pos/api'
 import { formatDay, money } from '@/features/pos/format'
 import type { UserSession } from '@/features/pos/types'
@@ -88,10 +89,6 @@ const emptyForm: PricingFormState = {
 
 export function PricingScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
-  const [user, setUser] = useState<UserSession | null>(null)
-  const [rules, setRules] = useState<PricingRule[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
   const [dayFilter, setDayFilter] = useState<DayFilter>('ALL')
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | null>(null)
@@ -99,34 +96,13 @@ export function PricingScreen() {
   const [deleteRule, setDeleteRule] = useState<PricingRule | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const userData = await apiJson<UserSession>('/api/auth/me')
-      if (!userData.success) throw new Error(userData.error || 'Không tải được tài khoản')
+  const { data: pricingData, isLoading: pricingLoading, mutate } = useApi<PricingRule[]>('/api/pricing', { dedupingInterval: 300_000 })
+  const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
 
-      setUser(userData.data ?? null)
-
-      if (userData.data?.role !== 'ADMIN') {
-        setRules([])
-        return
-      }
-
-      const pricingData = await apiJson<PricingRule[]>('/api/pricing')
-      if (!pricingData.success) throw new Error(pricingData.error || 'Không tải được bảng giá')
-      setRules(pricingData.data ?? [])
-    } catch (err) {
-      setError((err as Error).message || 'Lỗi kết nối máy chủ')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadData()
-  }, [loadData])
+  const rules: PricingRule[] = pricingData?.data ?? []
+  const error = !pricingData?.success ? (pricingData?.error as string ?? '') : ''
+  const loading = pricingLoading || userLoading
+  const user = userData?.data ?? null
 
   const stats = useMemo(() => {
     const active = rules.filter((rule) => getRuleStatus(rule) === 'ACTIVE').length
@@ -166,7 +142,7 @@ export function PricingScreen() {
     notifySuccess(message)
     setDialogMode(null)
     setEditingRule(null)
-    await loadData()
+    await mutate()
   }
 
   const confirmDelete = async () => {
@@ -181,7 +157,7 @@ export function PricingScreen() {
       }
       notifySuccess('Đã xóa quy tắc bảng giá')
       setDeleteRule(null)
-      await loadData()
+      await mutate()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -211,7 +187,7 @@ export function PricingScreen() {
             variant="secondary"
             size="sm"
             icon={RefreshCw}
-            onClick={() => void loadData()}
+            onClick={() => void mutate()}
             title="Làm mới"
           />
         </header>

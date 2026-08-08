@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   ArrowRightLeft,
   Edit3,
@@ -22,6 +22,7 @@ import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
+import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/features/pos/api'
 import { formatDay, formatClock, money } from '@/features/pos/format'
 import type { UserSession } from '@/features/pos/types'
@@ -46,8 +47,6 @@ interface CashflowSummary {
   balance: number
 }
 
-type SortKey = 'createdAt' | 'type' | 'personName' | 'amount' | 'reason'
-
 interface Pagination {
   page: number
   pageSize: number
@@ -59,104 +58,39 @@ interface Pagination {
 
 export function CashflowScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
-  const [user, setUser] = useState<UserSession | null>(null)
-  const [entries, setEntries] = useState<CashflowRow[]>([])
-  const [summary, setSummary] = useState<CashflowSummary>({ income: 0, expense: 0, balance: 0 })
-  const [pagination, setPagination] = useState<Pagination>({ page: 1, pageSize: 10, total: 0, totalPages: 0 })
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL')
-  const [sortKey, setSortKey] = useState<SortKey>('createdAt')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingEntry, setEditingEntry] = useState<CashflowRow | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CashflowRow | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [page, setPage] = useState(1)
 
-  const loadData = useCallback(async (page?: number) => {
-    setLoading(true)
-    setError('')
-    try {
-      const userData = await apiJson<UserSession>('/api/auth/me')
-      if (!userData.success) {
-        throw new Error(userData.error || 'Không tải được tài khoản')
-      }
+  const url = useMemo(() => {
+    const params = new URLSearchParams()
+    if (typeFilter !== 'ALL') params.set('type', typeFilter)
+    params.set('page', String(page))
+    return `/api/cashflows?${params}`
+  }, [typeFilter, page])
 
-      setUser(userData.data ?? null)
-      if (userData.data?.role !== 'ADMIN') {
-        setEntries([])
-        setLoading(false)
-        return
-      }
+  const { data: apiData, isLoading, mutate } = useApi<{
+    entries: CashflowRow[]
+    summary: CashflowSummary
+    pagination: Pagination
+  }>(url, { dedupingInterval: 30_000 })
+  const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
 
-      const params = new URLSearchParams()
-      if (typeFilter !== 'ALL') params.set('type', typeFilter)
-      params.set('page', String(page ?? 1))
-
-      const data = await apiJson<{
-        entries: CashflowRow[]
-        summary: CashflowSummary
-        pagination: Pagination
-      }>(`/api/cashflows?${params}`)
-      if (!data.success) {
-        throw new Error(data.error || 'Không tải được dữ liệu thu chi')
-      }
-
-      setEntries(data.data?.entries ?? [])
-      setSummary(data.data?.summary ?? { income: 0, expense: 0, balance: 0 })
-      setPagination(data.data?.pagination ?? { page: 1, pageSize: 10, total: 0, totalPages: 0 })
-    } catch (err) {
-      setError((err as Error).message || 'Lỗi kết nối máy chủ')
-    } finally {
-      setLoading(false)
-    }
-  }, [typeFilter])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadData()
-  }, [loadData])
+  const entries = apiData?.data?.entries ?? []
+  const summary = apiData?.data?.summary ?? { income: 0, expense: 0, balance: 0 }
+  const pagination = apiData?.data?.pagination ?? { page: 1, pageSize: 10, total: 0, totalPages: 0 }
+  const error = !apiData?.success ? (apiData?.error as string ?? '') : ''
+  const loading = isLoading || userLoading
+  const user = userData?.data ?? null
 
   const isAdmin = user?.role === 'ADMIN'
 
-  // ── Client-side sort ──
-  const sortedEntries = useMemo(() => {
-    const sorted = [...entries]
-    sorted.sort((a, b) => {
-      let cmp: number
-      switch (sortKey) {
-        case 'createdAt':
-          cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          break
-        case 'amount':
-          cmp = a.amount - b.amount
-          break
-        case 'type':
-        case 'personName':
-        case 'reason':
-          cmp = (a[sortKey] ?? '').localeCompare(b[sortKey] ?? '', 'vi')
-          break
-        default:
-          cmp = 0
-      }
-      return sortDir === 'asc' ? cmp : -cmp
-    })
-    return sorted
-  }, [entries, sortKey, sortDir])
-
-  const handleSortChange = (key: string) => {
-    const k = key as SortKey
-    if (sortKey === k) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortKey(k)
-      setSortDir('desc')
-    }
-  }
-
   const goPage = (p: number) => {
     if (p < 1 || p > pagination.totalPages) return
-    void loadData(p)
+    setPage(p)
   }
 
   const filterByType = (f: TypeFilter) => {
@@ -243,7 +177,7 @@ export function CashflowScreen() {
       }
       notifySuccess('Đã thêm khoản thu chi')
       setDialogOpen(false)
-      await loadData()
+      await mutate()
       return true
     } catch {
       notifyError('Lỗi kết nối máy chủ')
@@ -272,7 +206,7 @@ export function CashflowScreen() {
       }
       notifySuccess('Đã cập nhật khoản thu chi')
       setEditingEntry(null)
-      await loadData()
+      await mutate()
       return true
     } catch {
       notifyError('Lỗi kết nối máy chủ')
@@ -293,7 +227,7 @@ export function CashflowScreen() {
       }
       notifySuccess('Đã xoá khoản thu chi')
       setDeleteTarget(null)
-      await loadData()
+      await mutate()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -320,7 +254,7 @@ export function CashflowScreen() {
             variant="secondary"
             size="sm"
             icon={RefreshCw}
-            onClick={() => void loadData()}
+            onClick={() => void mutate()}
             title="Làm mới"
           />
         </header>
@@ -393,11 +327,10 @@ export function CashflowScreen() {
             {/* Table */}
             <SortableTable
               columns={columns}
-              data={sortedEntries}
+              data={entries}
               keyExtractor={(e) => e.id}
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSortChange={handleSortChange}
+              sortableKeys={['createdAt', 'type', 'personName', 'amount', 'reason']}
+              defaultSortKey="createdAt"
               emptyIcon={ArrowRightLeft}
               emptyMessage="Chưa có khoản thu chi nào"
               emptyDescription='Nhấn "Thêm khoản thu chi" để ghi nhận khoản thu hoặc chi.'

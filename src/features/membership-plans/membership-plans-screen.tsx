@@ -20,6 +20,7 @@ import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/features/pos/api'
 import type { UserSession } from '@/features/pos/types'
 import { formatVND } from '@/lib/utils'
@@ -53,45 +54,19 @@ const emptyPlanForm: PlanFormState = {
 
 export function MembershipPlansScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
-  const [user, setUser] = useState<UserSession | null>(null)
-  const [plans, setPlans] = useState<MembershipPlan[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [filter, setFilter] = useState<PlanFilter>('ALL')
   const [dialogMode, setDialogMode] = useState<DialogMode | null>(null)
   const [editingPlan, setEditingPlan] = useState<MembershipPlan | null>(null)
   const [deletePlan, setDeletePlan] = useState<MembershipPlan | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const userData = await apiJson<UserSession>('/api/auth/me')
-      if (!userData.success) throw new Error(userData.error || 'Không tải được tài khoản')
+  const { data: plansData, isLoading: plansLoading, mutate } = useApi<MembershipPlan[]>('/api/membership-plans', { dedupingInterval: 300_000 })
+  const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
 
-      setUser(userData.data ?? null)
-
-      if (userData.data?.role !== 'ADMIN') {
-        setPlans([])
-        return
-      }
-
-      const planData = await apiJson<MembershipPlan[]>('/api/membership-plans')
-      if (!planData.success) throw new Error(planData.error || 'Không tải được gói hội viên')
-
-      setPlans(planData.data ?? [])
-    } catch (err) {
-      setError((err as Error).message || 'Lỗi kết nối máy chủ')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadData()
-  }, [loadData])
+  const plans: MembershipPlan[] = plansData?.data ?? []
+  const error = !plansData?.success ? (plansData?.error as string ?? '') : ''
+  const loading = plansLoading || userLoading
+  const user = userData?.data ?? null
 
   const stats = useMemo(() => {
     const active = plans.filter((plan) => plan.isActive).length
@@ -132,7 +107,7 @@ export function MembershipPlansScreen() {
     notifySuccess(message)
     setDialogMode(null)
     setEditingPlan(null)
-    await loadData()
+    await mutate()
   }
 
   const confirmDelete = async () => {
@@ -152,7 +127,7 @@ export function MembershipPlansScreen() {
         ? 'Gói đang được dùng, đã chuyển sang ngừng dùng'
         : 'Đã xóa gói hội viên')
       setDeletePlan(null)
-      await loadData()
+      await mutate()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -180,7 +155,7 @@ export function MembershipPlansScreen() {
             variant="secondary"
             size="sm"
             icon={RefreshCw}
-            onClick={() => void loadData()}
+            onClick={() => void mutate()}
             title="Làm mới"
           />
         </header>

@@ -26,6 +26,7 @@ import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/features/pos/api'
 import type { UserSession } from '@/features/pos/types'
 import { formatVND, toInputDate } from '@/lib/utils'
@@ -75,10 +76,6 @@ const emptyForm: PromotionFormState = {
 
 export function PromotionScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
-  const [user, setUser] = useState<UserSession | null>(null)
-  const [rules, setRules] = useState<PromotionRule[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL')
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | null>(null)
@@ -87,37 +84,13 @@ export function PromotionScreen() {
   const [removeRule, setRemoveRule] = useState<PromotionRule | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const userData = await apiJson<UserSession>('/api/auth/me')
-      if (!userData.success) {
-        throw new Error(userData.error || 'Không tải được tài khoản')
-      }
+  const { data: promoData, isLoading: promoLoading, mutate } = useApi<PromotionRule[]>('/api/promotions', { dedupingInterval: 300_000 })
+  const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
 
-      setUser(userData.data ?? null)
-      if (userData.data?.role !== 'ADMIN') {
-        setRules([])
-        return
-      }
-
-      const promotionData = await apiJson<PromotionRule[]>('/api/promotions')
-      if (!promotionData.success) {
-        throw new Error(promotionData.error || 'Không tải được khuyến mại')
-      }
-      setRules(promotionData.data ?? [])
-    } catch (loadError) {
-      setError((loadError as Error).message || 'Lỗi kết nối máy chủ')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadData()
-  }, [loadData])
+  const rules: PromotionRule[] = promoData?.data ?? []
+  const error = !promoData?.success ? (promoData?.error as string ?? '') : ''
+  const loading = promoLoading || userLoading
+  const user = userData?.data ?? null
 
   const stats = useMemo(() => ({
     total: rules.length,
@@ -143,7 +116,7 @@ export function PromotionScreen() {
     notifySuccess(message)
     setDialogMode(null)
     setEditingRule(null)
-    await loadData()
+    await mutate()
   }
 
   const confirmDeactivate = async () => {
@@ -162,7 +135,7 @@ export function PromotionScreen() {
       }
       notifySuccess('Đã tạm dừng khuyến mại')
       setDeactivateRule(null)
-      await loadData()
+      await mutate()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -182,7 +155,7 @@ export function PromotionScreen() {
       }
       notifySuccess('Đã xoá khuyến mại')
       setRemoveRule(null)
-      await loadData()
+      await mutate()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -210,7 +183,7 @@ export function PromotionScreen() {
             variant="secondary"
             size="sm"
             icon={RefreshCw}
-            onClick={() => void loadData()}
+            onClick={() => void mutate()}
             title="Làm mới"
           />
         </header>

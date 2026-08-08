@@ -10,13 +10,14 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
+import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/features/pos/api'
 import { money, toNumber } from '@/features/pos/format'
 import type { Product, ProductType, UserSession } from '@/features/pos/types'
@@ -26,10 +27,6 @@ type StockMovementType = 'RESTOCK' | 'ADJUSTMENT'
 
 export function InventoryScreen() {
   const { success: notifySuccess } = useToast()
-  const [products, setProducts] = useState<Product[]>([])
-  const [user, setUser] = useState<UserSession | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [filter, setFilter] = useState<InventoryFilter>('ALL')
@@ -37,29 +34,13 @@ export function InventoryScreen() {
   const [movementProduct, setMovementProduct] = useState<Product | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const [productData, userData] = await Promise.all([
-        apiJson<Product[]>('/api/products?isActive=true'),
-        apiJson<UserSession>('/api/auth/me'),
-      ])
+  const { data: productData, isLoading: prodLoading, mutate } = useApi<Product[]>('/api/products?isActive=true', { dedupingInterval: 300_000 })
+  const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
 
-      if (!productData.success) throw new Error(productData.error || 'Không tải được kho')
-      if (!userData.success) throw new Error(userData.error || 'Không tải được tài khoản')
-
-      setProducts(productData.data ?? [])
-      setUser(userData.data ?? null)
-    } catch (err) {
-      setError((err as Error).message || 'Lỗi kết nối máy chủ')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadData() }, [loadData])
+  const products: Product[] = productData?.data ?? []
+  const error = !productData?.success ? (productData?.error as string ?? '') : ''
+  const loading = prodLoading || userLoading
+  const user = userData?.data ?? null
 
   const canManageStock = user?.role === 'ADMIN'
   const lowStockProducts = useMemo(
@@ -96,8 +77,67 @@ export function InventoryScreen() {
     notifySuccess(message)
     setCreateOpen(false)
     setMovementProduct(null)
-    await loadData()
+    await mutate()
   }
+
+  const productColumns: Column<Product>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Tên mặt hàng',
+      cellClassName: 'px-4 py-3 font-medium text-zinc-950 dark:text-white',
+      render: (item) => (
+        <div className="flex items-center gap-2">
+          {item.name}
+          {item.type === 'SERVICE'
+            ? <Badge variant="blue" size="sm">Dịch vụ</Badge>
+            : item.stockQuantity === 0
+              ? <Badge variant="danger" size="sm">Hết</Badge>
+              : item.stockQuantity <= item.minStockLevel
+                ? <Badge variant="warning" size="sm">Sắp hết</Badge>
+                : null
+          }
+        </div>
+      ),
+    },
+    {
+      key: 'price',
+      label: 'Giá',
+      cellClassName: 'px-4 py-3 text-sm tabular-nums text-zinc-950 dark:text-white',
+      render: (item) => money(item.price),
+    },
+    {
+      key: 'stockQuantity',
+      label: 'Tồn kho',
+      cellClassName: 'px-4 py-3 text-sm tabular-nums',
+      render: (item) => {
+        if (item.type === 'SERVICE') return <span className="text-zinc-400">—</span>
+        const out = item.stockQuantity === 0
+        const low = item.stockQuantity <= item.minStockLevel
+        return (
+          <span className={`font-semibold ${
+            out ? 'text-red-600 dark:text-red-300' : low ? 'text-amber-600 dark:text-amber-300' : 'text-zinc-950 dark:text-white'
+          }`}>
+            {item.stockQuantity}
+          </span>
+        )
+      },
+    },
+    {
+      key: 'minStockLevel',
+      label: 'Tối thiểu',
+      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
+      render: (item) => item.type === 'PRODUCT' ? item.minStockLevel : '—',
+    },
+    {
+      label: 'Thao tác',
+      cellClassName: 'px-4 py-3',
+      render: (item) => (
+        item.type === 'PRODUCT' && canManageStock ? (
+          <Button variant="secondary" size="sm" onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
+        ) : null
+      ),
+    },
+  ], [canManageStock])
 
   if (loading) {
     return <InventorySkeleton />
@@ -119,7 +159,7 @@ export function InventoryScreen() {
             variant="secondary"
             size="sm"
             icon={RefreshCw}
-            onClick={() => void loadData()}
+            onClick={() => void mutate()}
             title="Làm mới"
           />
         </header>
@@ -236,24 +276,16 @@ export function InventoryScreen() {
             </Badge>
           </div>
 
-          {filteredProducts.length === 0 ? (
-            <EmptyState
-              icon={Package}
-              message="Không có hàng hóa"
-              description="Thử đổi bộ lọc hoặc thêm hàng hóa mới."
-            />
-          ) : (
-            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {filteredProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  canManageStock={canManageStock}
-                  onMoveStock={() => setMovementProduct(product)}
-                />
-              ))}
-            </div>
-          )}
+          <SortableTable
+            columns={productColumns}
+            data={filteredProducts}
+            keyExtractor={(p) => p.id}
+            sortableKeys={['name', 'price', 'stockQuantity', 'minStockLevel']}
+            defaultSortKey="name"
+            emptyIcon={Package}
+            emptyMessage="Không có hàng hóa"
+            emptyDescription="Thử đổi bộ lọc hoặc thêm hàng hóa mới."
+          />
         </section>
       </div>
 
