@@ -1,0 +1,9 @@
+# api
+- Audit-log destructive operations (e.g., DELETE endpoints) by writing to the activity journal/log with entity type and relevant field details (via `logActivity`) for traceability. Confidence: 0.75
+- Manually extract CSRF tokens from `document.cookie` and set the `X-CSRF-Token` header for mutation requests (PATCH/DELETE) when existing API helpers only support POST. Confidence: 0.70
+- Use `requireMutationAuth` for write operations (POST/PATCH/DELETE) and `requireAuth` for read operations; check `auth.role !== 'ADMIN'` for admin-only access rather than relying on a dedicated `requireAdmin` function. Confidence: 0.70
+- Use typed API client helpers (`apiJson<T>(url, options)` for responses, `jsonRequest(body)` for building POST/json request options) from `@/features/pos/api` instead of raw `fetch` in client components. Confidence: 0.70
+- Sanitize string inputs from request bodies on the backend: `JSON.parse` then trim, type-coerce (`String(...)`), and cap length before passing to business logic. Confidence: 0.65
+- Consolidate duplicated client API helpers (e.g., `api.ts`, `api-client.ts`) into a single API client exposing one typed `apiJson<T>()`/`jsonRequest()` contract with a single `getCSRFToken()` implementation, and fix reverse dependencies (e.g., a shared `swr-fetcher` importing from a feature folder) rather than tolerating parallel helper sets. Confidence: 0.85
+- Prefer a single error model across the API: return `Result`/`HttpErrorInfo` and let route handlers map uniformly via `resultToResponse`/`apiError`, instead of mixing it with thrown errors that routes catch by string-matching `error.message === 'UNAUTHORIZED'`. Confidence: 0.70
+- Reuse server-side Zod validation schemas for client forms (they're isomorphic) rather than letting client and server validation drift into separate definitions. Confidence: 0.60

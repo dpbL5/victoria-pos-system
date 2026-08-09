@@ -21,7 +21,14 @@
       "Shell(npx vitest run 2 >& 1)",
       "Shell(npx eslint src/features/tools/tools-screen.tsx src/features/inventory/inventory-screen.tsx src/components/layout/sidebar.tsx src/app/(dashboard)/tools/page.tsx --max-warnings 0 2 >& 1)",
       "Shell(npx vitest run --reporter=verbose 2 >& 1)",
-      "Shell(npx vitest run src/lib/__tests__/check-out.test.ts 2 >& 1)"
+      "Shell(npx vitest run src/lib/__tests__/check-out.test.ts 2 >& 1)",
+      "Shell(npm:*)",
+      "Shell(grep:*)",
+      "Shell(npx vitest run src/lib/__tests__/check-in.test.ts 2 >& 1)",
+      "Shell(rm:*)",
+      "Shell(for:*)",
+      "Shell(do:*)",
+      "Shell(done:*)"
     ],
     "deny": [],
     "defaultMode": "default"

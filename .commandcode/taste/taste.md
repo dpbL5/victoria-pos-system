@@ -6,16 +6,12 @@
 # communication
 - Communicate in Vietnamese for this project. Confidence: 0.85
 - Khi người dùng nói "bỏ nó đi" hoặc tỏ vẻ muốn xoá bỏ một tính năng trong lúc bực bội, hãy xác nhận lại phạm vi chính xác trước khi xoá code — tránh hiểu nhầm thành xoá toàn bộ thay vì đơn giản hoá/làm gọn. Confidence: 0.65
+- User occasionally types terse commands in English ("continue", "Let do first 6 candidates", "all i choose a") even in this Vietnamese-speaking project; respond in Vietnamese regardless. Confidence: 0.65
 
 # ui
 See [ui/taste.md](ui/taste.md)
 # api
-- Audit-log destructive operations (e.g., DELETE endpoints) by writing to the activity journal/log with entity type and relevant field details (via `logActivity`) for traceability. Confidence: 0.75
-- Manually extract CSRF tokens from `document.cookie` and set the `X-CSRF-Token` header for mutation requests (PATCH/DELETE) when existing API helpers only support POST. Confidence: 0.70
-- Use `requireMutationAuth` for write operations (POST/PATCH/DELETE) and `requireAuth` for read operations; check `auth.role !== 'ADMIN'` for admin-only access rather than relying on a dedicated `requireAdmin` function. Confidence: 0.70
-- Use typed API client helpers (`apiJson<T>(url, options)` for responses, `jsonRequest(body)` for building POST/json request options) from `@/features/pos/api` instead of raw `fetch` in client components. Confidence: 0.70
-- Sanitize string inputs from request bodies on the backend: `JSON.parse` then trim, type-coerce (`String(...)`), and cap length before passing to business logic. Confidence: 0.65
-
+See [api/taste.md](api/taste.md)
 # performance
 - Use `Promise.all` to parallelize independent API/data-fetching calls rather than awaiting sequentially. Confidence: 0.60
 - Paginate grouped data by day (not by individual records) to reduce query size; fetch a date range and group in memory at the API level. Confidence: 0.80
