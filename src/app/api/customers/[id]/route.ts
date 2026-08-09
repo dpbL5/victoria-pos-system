@@ -1,8 +1,8 @@
 // ── GET/PUT /api/customers/[id] ──────────────────────────
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { requireAuth, requireMutationAuth } from "@/lib/auth";
-import { updateCustomerSchema } from "@/lib/validations/customer";
+import { requireAuth, requireMutationAuth } from "@/lib/shared/auth";
+import { repositories } from "@/lib/infrastructure/repositories";
+import { updateCustomerSchema } from "@/lib/memberships";
 
 // ── GET: Chi tiết khách hàng ───────────────────────────
 export async function GET(
@@ -13,21 +13,7 @@ export async function GET(
     await requireAuth();
     const { id } = await params;
 
-    const customer = await prisma.customer.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        fullName: true,
-        phone: true,
-        type: true,
-        totalHoursPlayed: true,
-        totalSpent: true,
-        notes: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: { select: { sessions: true } },
-      },
-    });
+    const customer = await repositories.customer.findByIdWithCount(id);
 
     if (!customer) {
       return NextResponse.json(
@@ -55,7 +41,7 @@ export async function PUT(
     await requireMutationAuth(request);
     const { id } = await params;
 
-    const existing = await prisma.customer.findUnique({ where: { id } });
+    const existing = await repositories.customer.findById(id);
     if (!existing) {
       return NextResponse.json(
         { success: false, error: "Không tìm thấy khách hàng" },
@@ -74,23 +60,9 @@ export async function PUT(
     }
 
     // Chuẩn hóa phone rỗng về null
-    const customer = await prisma.customer.update({
-      where: { id },
-      data: {
-        ...parsed.data,
-        phone: parsed.data.phone || null,
-      },
-      select: {
-        id: true,
-        fullName: true,
-        phone: true,
-        type: true,
-        totalHoursPlayed: true,
-        totalSpent: true,
-        notes: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const customer = await repositories.customer.update(id, {
+      ...parsed.data,
+      phone: parsed.data.phone || null,
     });
 
     return NextResponse.json({ success: true, data: customer });

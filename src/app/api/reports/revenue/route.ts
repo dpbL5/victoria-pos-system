@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { toInputDate, parseStartOfDay, parseEndOfDay } from '@/lib/utils'
-import { Prisma } from '@/generated/prisma/client'
+import { requireAuth } from '@/lib/shared/auth'
+import { repositories } from '@/lib/infrastructure/repositories'
+import { toInputDate, parseStartOfDay, parseEndOfDay } from '@/lib/shared/utils'
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,38 +19,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const paymentWhere: Prisma.PaymentWhereInput = {
-      paidAt: { gte: fromDate, lte: toDate },
-      invoice: { status: { not: 'CANCELLED' } },
-    }
-    if (auth.role === 'STAFF') paymentWhere.staffId = auth.userId
-
-    const [payments, recentPayments] = await Promise.all([
-      prisma.payment.findMany({
-        where: paymentWhere,
-        orderBy: { paidAt: 'asc' },
-      }),
-      prisma.payment.findMany({
-        where: paymentWhere,
-        include: {
-          invoice: {
-            select: {
-              id: true,
-              invoiceNo: true,
-              customer: { select: { fullName: true } },
-            },
-          },
-          session: {
-            select: {
-              customer: { select: { fullName: true } },
-            },
-          },
-          staff: { select: { fullName: true } },
-        },
-        orderBy: { paidAt: 'desc' },
-        take: 5,
-      }),
-    ])
+    const { rows: payments, recentPayments } = await repositories.reporting.getRevenueData({
+      from: fromDate,
+      to: toDate,
+      scope: auth.role === 'STAFF' ? 'STAFF' : 'ALL',
+      staffId: auth.userId,
+    })
 
     const grouped: Record<string, { revenue: number; count: number }> = {}
     for (const payment of payments) {
@@ -86,13 +59,13 @@ export async function GET(request: NextRequest) {
         paidAt: payment.paidAt,
         customerName:
           payment.invoice?.customer?.fullName
-          ?? payment.session?.customer.fullName
+          ?? payment.session?.customer?.fullName
           ?? 'Khách lẻ',
         invoiceId: payment.invoice?.id ?? null,
         invoiceNo: payment.invoice?.invoiceNo ?? null,
         paymentMethod: payment.paymentMethod,
         grandTotal: Number(payment.grandTotal),
-        staffName: payment.staff.fullName,
+        staffName: payment.staff?.fullName ?? '—',
       })),
     })
   } catch (error) {
@@ -125,4 +98,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
   }
 }
-

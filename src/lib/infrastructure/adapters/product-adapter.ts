@@ -71,5 +71,105 @@ export function createProductRepository(store: ProductStore): ProductRepository 
         },
       })
     },
+
+    async findManyForAdmin(input) {
+      return store.product.findMany({
+        where: {
+          ...(input.search
+            ? {
+                OR: [
+                  { name: { contains: input.search, mode: 'insensitive' } },
+                  { sku: { contains: input.search, mode: 'insensitive' } },
+                ],
+              }
+            : {}),
+          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          type: true,
+          price: true,
+          stockQuantity: true,
+          minStockLevel: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+          // costPrice intentionally excluded — sensitive business data
+        },
+        orderBy: { name: 'asc' },
+        take: input.take ?? 100,
+      })
+    },
+
+    async findByIdAdmin(id) {
+      return store.product.findUnique({ where: { id } })
+    },
+
+    async createWithInitialStock(input) {
+      const created = await store.product.create({
+        data: {
+          name: input.name,
+          sku: input.sku,
+          type: input.type,
+          price: input.price,
+          costPrice: input.costPrice,
+          stockQuantity: input.type === 'SERVICE' ? 0 : input.stockQuantity,
+          minStockLevel: input.type === 'SERVICE' ? 0 : input.minStockLevel,
+          isActive: input.isActive,
+        },
+      })
+
+      if (created.type === 'PRODUCT' && created.stockQuantity > 0) {
+        await store.stockMovement.create({
+          data: {
+            productId: created.id,
+            staffId: input.staffId,
+            type: 'RESTOCK',
+            quantity: created.stockQuantity,
+            unitCost: input.costPrice,
+            reason: 'Tồn đầu kỳ',
+          },
+        })
+      }
+
+      return created
+    },
+
+    async applyStockMovement(input) {
+      const product = await store.product.findUnique({ where: { id: input.productId } })
+      if (!product) throw new Error('PRODUCT_NOT_FOUND')
+      if (product.type === 'SERVICE') throw new Error('SERVICE_HAS_NO_STOCK')
+
+      const nextStock = product.stockQuantity + input.quantity
+      if (nextStock < 0) throw new Error('NEGATIVE_STOCK')
+
+      const movement = await store.stockMovement.create({
+        data: {
+          productId: product.id,
+          shiftId: input.shiftId,
+          staffId: input.staffId,
+          type: input.type,
+          quantity: input.quantity,
+          unitCost: input.unitCost,
+          reason: input.reason,
+        },
+      })
+
+      const updatedProduct = await store.product.update({
+        where: { id: product.id },
+        data: { stockQuantity: nextStock },
+      })
+
+      return {
+        movementId: movement.id,
+        before: product.stockQuantity,
+        after: updatedProduct.stockQuantity,
+        shiftId: input.shiftId,
+        type: movement.type,
+        quantity: movement.quantity,
+      }
+    },
   }
 }

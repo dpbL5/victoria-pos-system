@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { toInputDate, parseStartOfDay, parseEndOfDay } from '@/lib/utils'
+import { requireAdmin } from '@/lib/shared/auth'
+import { repositories } from '@/lib/infrastructure/repositories'
+import { toCsv } from '@/lib/shared/csv'
+import { toInputDate, parseStartOfDay, parseEndOfDay } from '@/lib/shared/utils'
 
 const paymentMethodLabel: Record<string, string> = {
   CASH: 'Tiền mặt',
@@ -45,24 +46,7 @@ export async function GET(request: NextRequest) {
 }
 
 async function buildRevenueCsv(fromDate: Date, toDate: Date): Promise<string> {
-  const payments = await prisma.payment.findMany({
-    where: { paidAt: { gte: fromDate, lte: toDate }, invoice: { status: { not: 'CANCELLED' as const } } },
-    include: {
-      session: {
-        select: {
-          customer: { select: { fullName: true } },
-        },
-      },
-      invoice: {
-        select: {
-          invoiceNo: true,
-          customer: { select: { fullName: true } },
-        },
-      },
-      staff: { select: { fullName: true } },
-    },
-    orderBy: { paidAt: 'asc' },
-  })
+  const payments = await repositories.reporting.getRevenueExportRows(fromDate, toDate)
 
   const rows = [
     ['Thời gian', 'Mã hóa đơn', 'Khách hàng', 'Tổng giờ', 'Tạm tính', 'Giảm giá', 'Tổng tiền', 'PT thanh toán', 'Nhân viên'],
@@ -72,13 +56,13 @@ async function buildRevenueCsv(fromDate: Date, toDate: Date): Promise<string> {
     rows.push([
       payment.paidAt.toISOString(),
       payment.invoice?.invoiceNo ?? '',
-      payment.invoice?.customer?.fullName ?? payment.session?.customer.fullName ?? '',
+      payment.invoice?.customer?.fullName ?? payment.session?.customer?.fullName ?? '',
       String(Number(payment.totalHours)),
       String(Number(payment.subtotal)),
       String(Number(payment.discountTotal)),
       String(Number(payment.grandTotal)),
-      paymentMethodLabel[payment.paymentMethod] ?? payment.paymentMethod,
-      payment.staff.fullName,
+      paymentMethodLabel[payment.paymentMethod ?? ''] ?? payment.paymentMethod ?? '',
+      payment.staff?.fullName ?? '',
     ])
   }
 
@@ -86,14 +70,7 @@ async function buildRevenueCsv(fromDate: Date, toDate: Date): Promise<string> {
 }
 
 async function buildSessionsCsv(fromDate: Date, toDate: Date): Promise<string> {
-  const sessions = await prisma.session.findMany({
-    where: { createdAt: { gte: fromDate, lte: toDate } },
-    include: {
-      customer: { select: { fullName: true, type: true } },
-      staff: { select: { fullName: true } },
-    },
-    orderBy: { createdAt: 'asc' },
-  })
+  const sessions = await repositories.reporting.getSessionExportRows(fromDate, toDate)
 
   const rows = [
     ['Ngày tạo', 'Khách hàng', 'Loại khách', 'Trạng thái', 'Bắt đầu', 'Kết thúc', 'Tổng giờ', 'Tổng tiền', 'Nhân viên'],
@@ -102,28 +79,16 @@ async function buildSessionsCsv(fromDate: Date, toDate: Date): Promise<string> {
   for (const session of sessions) {
     rows.push([
       toInputDate(session.createdAt),
-      session.customer.fullName,
-      session.customer.type,
+      session.customer?.fullName ?? '',
+      session.customer?.type ?? '',
       session.status,
       session.startTime.toISOString(),
       session.endTime?.toISOString() || '',
       String(Number(session.totalHours ?? 0)),
       String(Number(session.totalAmount ?? 0)),
-      session.staff.fullName,
+      session.staff?.fullName ?? '',
     ])
   }
 
   return toCsv(rows)
-}
-
-function toCsv(rows: string[][]): string {
-  return rows
-    .map((row) => row.map(escapeCsvCell).join(','))
-    .join('\n')
-}
-
-function escapeCsvCell(value: string): string {
-  const safeValue = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
-  const escaped = safeValue.replaceAll('"', '""')
-  return `"${escaped}"`
 }

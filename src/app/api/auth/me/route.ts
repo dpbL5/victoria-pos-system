@@ -1,6 +1,6 @@
 // ── GET /api/auth/me ────────────────────────────────────
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth } from "@/lib/shared/auth";
 
 export async function GET() {
   try {

@@ -39,3 +39,28 @@ export type CreateMembershipPlanInput = z.infer<typeof createMembershipPlanSchem
 export type UpdateMembershipPlanInput = z.infer<typeof updateMembershipPlanSchema>
 export type RenewMembershipInput = z.infer<typeof renewMembershipSchema>
 export type RegisterMemberInput = z.infer<typeof registerMemberSchema>
+// ── Customer validation schemas ────────────────────────
+
+export const createCustomerSchema = z.object({
+  fullName: z.string().min(1, "Họ tên không được để trống").max(100),
+  phone: z
+    .string()
+    .regex(/^0\d{9,10}$/, "Số điện thoại không hợp lệ")
+    .optional()
+    .or(z.literal("")),
+  // Hội viên chỉ được tạo qua POST /api/memberships/register
+  type: z.enum(["WALK_IN"]).default("WALK_IN"),
+});
+
+export const updateCustomerSchema = z.object({
+  fullName: z.string().min(1).max(100).optional(),
+  phone: z
+    .string()
+    .regex(/^0\d{9,10}$/, "Số điện thoại không hợp lệ")
+    .optional()
+    .or(z.literal("")),
+  notes: z.string().max(500).optional(),
+});
+
+export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
+export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;

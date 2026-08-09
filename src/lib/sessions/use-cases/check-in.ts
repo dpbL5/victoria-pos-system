@@ -5,7 +5,7 @@ import { fail, runInTransaction } from '@/lib/infrastructure/db-helpers'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import { repositories } from '@/lib/infrastructure/repositories'
 import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
-import { getDayType, getVnDay, getVnHour, parseEndOfDay, parseStartOfDay } from '@/lib/utils'
+import { getDayType, getVnDay, getVnHour, parseEndOfDay, parseStartOfDay } from '@/lib/shared/utils'
 import type { PricingRuleSnapshot } from '@/types'
 import type { PricingRepository } from '@/lib/pricing/ports'
 
@@ -135,6 +135,150 @@ export async function checkIn(
   return checkInRegisteredCustomer({ staffId, customerId, pricingRuleId, playerCount, groups, now }, deps)
 }
 
+/**
+ * Input cho transaction body — mọi resolve đã xong (pre-tx), chỉ cần ghi DB.
+ * Tách riêng để unit test với fake repositories (pattern runCheckOutTx).
+ */
+export interface CheckInTxInput {
+  staffId: string
+  customerId: string | null
+  pricingRuleId?: string
+  playerCount: number
+  groups?: Array<{ playerCount: number; pricingRuleId: string }>
+  now: Date
+  /** Resolved snapshot (pre-tx) — session-level */
+  pricingRuleSnapshot: PricingRuleSnapshot | null
+  hourlyRate: number
+  /** Có khi customer là MEMBER đang active */
+  membershipId?: string
+  /** Các group đã resolve (khi groups được truyền) */
+  resolvedGroups?: ResolvedGroup[] | null
+  /** Tổng số người chơi (từ groups hoặc playerCount) */
+  totalPlayers: number
+}
+
+/** Kết quả transaction body — đủ cho entry để map thành CheckInResult */
+export interface CheckInTxResult {
+  id: string
+  customerId: string
+  staffId: string
+  shiftId: string | null
+  membershipId: string | null
+  startTime: Date
+  hourlyRate: number
+  pricingRuleId: string | null
+  pricingRuleSnapshot: PricingRuleSnapshot | null
+  playerCount: number
+  status: 'ACTIVE'
+  customer: { id: string; fullName: string; type: 'WALK_IN' | 'MEMBER' }
+  membership: { id: string; startsAt: Date; expiresAt: Date } | null
+  shift: { id: string; openedAt: Date; status: 'OPEN' | 'CLOSED' } | null
+}
+
+/**
+ * Thân transaction — tách riêng để unit test với fake repositories.
+ * Lỗi validation trong tx dùng fail() → throw RollbackSignal → rollback.
+ */
+export async function runCheckInTx(
+  tx: Repositories,
+  input: CheckInTxInput
+): Promise<CheckInTxResult> {
+  const {
+    staffId,
+    customerId,
+    pricingRuleId,
+    playerCount,
+    now,
+    pricingRuleSnapshot,
+    hourlyRate,
+    membershipId,
+    resolvedGroups,
+    totalPlayers,
+  } = input
+
+  // ── Dùng parseStartOfDay/parseEndOfDay để tính mốc ngày theo giờ Việt Nam (UTC+7) ──
+  const todayStr = now.toISOString().slice(0, 10)
+  const today = parseStartOfDay(todayStr)
+  const tomorrow = parseEndOfDay(todayStr)
+  // parseEndOfDay trả về 23:59:59.999 VN, cần +1ms để làm cận trên cho lt
+  const tomorrowBoundary = new Date(tomorrow.getTime() + 1)
+
+  let sessionCustomerId = customerId
+  if (!customerId) {
+    const anonCount = await tx.customer.countWalkInsBetween(today, tomorrowBoundary)
+    const anonCustomer = await tx.customer.create({
+      fullName: `Khách #${String(anonCount + 1).padStart(3, '0')}`,
+      type: 'WALK_IN',
+    })
+    sessionCustomerId = anonCustomer.id
+  }
+
+  const openShift = await tx.shift.findOpenForStaff(staffId)
+  if (!openShift) fail('SHIFT_REQUIRED')
+
+  const session = await tx.session.createWithRefs({
+    customerId: sessionCustomerId!,
+    staffId,
+    shiftId: openShift.id,
+    membershipId,
+    startTime: now,
+    hourlyRate,
+    pricingRuleId,
+    pricingRuleSnapshot,
+    playerCount: totalPlayers,
+  })
+
+  // ── Luôn tạo pricing groups ──
+  if (resolvedGroups) {
+    let i = 1
+    for (const g of resolvedGroups) {
+      await tx.session.createPricingGroup({
+        sessionId: session.id,
+        label: `Nhóm ${i}`,
+        playerCount: g.playerCount,
+        remainingCount: g.playerCount,
+        hourlyRate: g.pricingRuleSnapshot.ratePerHour,
+        pricingRuleId: g.pricingRuleId,
+        pricingSnapshot: g.pricingRuleSnapshot,
+      })
+      i += 1
+    }
+  } else {
+    // Legacy path: single group
+    await tx.session.createPricingGroup({
+      sessionId: session.id,
+      label: 'Nhóm 1',
+      playerCount: totalPlayers,
+      remainingCount: totalPlayers,
+      hourlyRate,
+      pricingRuleId,
+      pricingSnapshot: pricingRuleSnapshot ?? null,
+    })
+  }
+
+  await tx.audit.append({
+    userId: staffId,
+    action: 'SESSION_CHECK_IN',
+    entityType: 'Session',
+    entityId: session.id,
+    details: {
+      customerId: sessionCustomerId!,
+      customerType: session.customer?.type ?? 'WALK_IN',
+      membershipId,
+      shiftId: openShift.id,
+      hourlyRate,
+      pricingRuleId,
+      playerCount: totalPlayers,
+      groupCount: resolvedGroups?.length ?? 1,
+    },
+  })
+
+  return {
+    ...session,
+    hourlyRate: Number(session.hourlyRate),
+  } as CheckInTxResult
+}
+
 async function checkInAnonymousWalkIn(
   input: {
     staffId: string
@@ -170,87 +314,23 @@ async function checkInAnonymousWalkIn(
   const { pricingRuleId: resolvedId, pricingRuleSnapshot } = sessionLevel.value
   const applicableRate = resolvedGroups?.[0]?.pricingRuleSnapshot?.ratePerHour ?? pricingRuleSnapshot.ratePerHour
 
-  const result = await runInTransaction(async (tx) => {
-    // ── Dùng parseStartOfDay/parseEndOfDay để tính mốc ngày theo giờ Việt Nam (UTC+7) ──
-    const todayStr = now.toISOString().slice(0, 10)
-    const today = parseStartOfDay(todayStr)
-    const tomorrow = parseEndOfDay(todayStr)
-    // parseEndOfDay trả về 23:59:59.999 VN, cần +1ms để làm cận trên cho lt
-    const tomorrowBoundary = new Date(tomorrow.getTime() + 1)
-
-    const anonCount = await tx.customer.countWalkInsBetween(today, tomorrowBoundary)
-
-    const anonCustomer = await tx.customer.create({
-      fullName: `Khách #${String(anonCount + 1).padStart(3, '0')}`,
-      type: 'WALK_IN',
-    })
-
-    const openShift = await tx.shift.findOpenForStaff(staffId)
-    if (!openShift) fail('SHIFT_REQUIRED')
-
-    const session = await tx.session.createWithRefs({
-      customerId: anonCustomer.id,
+  const result = await runInTransaction((tx) =>
+    runCheckInTx(tx, {
       staffId,
-      shiftId: openShift.id,
-      startTime: now,
-      hourlyRate: applicableRate,
+      customerId: null,
       pricingRuleId: resolvedId,
+      playerCount,
+      groups,
+      now,
       pricingRuleSnapshot,
-      playerCount: totalPlayers,
+      hourlyRate: applicableRate,
+      resolvedGroups,
+      totalPlayers,
     })
-
-    // ── Luôn tạo pricing groups ──
-    if (resolvedGroups) {
-      let i = 1
-      for (const g of resolvedGroups) {
-        await tx.session.createPricingGroup({
-          sessionId: session.id,
-          label: `Nhóm ${i}`,
-          playerCount: g.playerCount,
-          remainingCount: g.playerCount,
-          hourlyRate: g.pricingRuleSnapshot.ratePerHour,
-          pricingRuleId: g.pricingRuleId,
-          pricingSnapshot: g.pricingRuleSnapshot,
-        })
-        i += 1
-      }
-    } else {
-      // Legacy path: single group
-      await tx.session.createPricingGroup({
-        sessionId: session.id,
-        label: 'Nhóm 1',
-        playerCount: totalPlayers,
-        remainingCount: totalPlayers,
-        hourlyRate: applicableRate,
-        pricingRuleId: resolvedId,
-        pricingSnapshot: pricingRuleSnapshot,
-      })
-    }
-
-    await tx.audit.append({
-      userId: staffId,
-      action: 'SESSION_CHECK_IN',
-      entityType: 'Session',
-      entityId: session.id,
-      details: {
-        customerId: anonCustomer.id,
-        customerType: 'WALK_IN',
-        shiftId: openShift.id,
-        hourlyRate: applicableRate,
-        pricingRuleId: resolvedId,
-        playerCount: totalPlayers,
-        groupCount: resolvedGroups?.length ?? 1,
-      },
-    })
-
-    return session
-  })
+  )
 
   if (!result.ok) return result
-  return ok({
-    ...result.value,
-    hourlyRate: Number(result.value.hourlyRate),
-  } as CheckInResult)
+  return ok(result.value as CheckInResult)
 }
 
 async function checkInRegisteredCustomer(
@@ -292,61 +372,24 @@ async function checkInRegisteredCustomer(
     resolvedPricingRuleId = resolvedGroups[0].pricingRuleId
     pricingRuleSnapshot = resolvedGroups[0].pricingRuleSnapshot
 
-    const result = await runInTransaction(async (tx) => {
-      const openShift = await tx.shift.findOpenForStaff(staffId)
-      if (!openShift) fail('SHIFT_REQUIRED')
-
-      const session = await tx.session.createWithRefs({
-        customerId: customer.id,
+    const result = await runInTransaction((tx) =>
+      runCheckInTx(tx, {
         staffId,
-        shiftId: openShift.id,
-        membershipId,
-        startTime: now,
-        hourlyRate: pricingRuleSnapshot!.ratePerHour,
+        customerId,
         pricingRuleId: resolvedPricingRuleId,
-        pricingRuleSnapshot,
-        playerCount: totalPlayers,
+        playerCount,
+        groups,
+        now,
+        pricingRuleSnapshot: pricingRuleSnapshot ?? null,
+        hourlyRate: pricingRuleSnapshot!.ratePerHour,
+        membershipId,
+        resolvedGroups,
+        totalPlayers,
       })
-
-      let i = 1
-      for (const g of resolvedGroups) {
-        await tx.session.createPricingGroup({
-          sessionId: session.id,
-          label: `Nhóm ${i}`,
-          playerCount: g.playerCount,
-          remainingCount: g.playerCount,
-          hourlyRate: g.pricingRuleSnapshot.ratePerHour,
-          pricingRuleId: g.pricingRuleId,
-          pricingSnapshot: g.pricingRuleSnapshot,
-        })
-        i += 1
-      }
-
-      await tx.audit.append({
-        userId: staffId,
-        action: 'SESSION_CHECK_IN',
-        entityType: 'Session',
-        entityId: session.id,
-        details: {
-          customerId: customer.id,
-          customerType: customer.type,
-          membershipId,
-          shiftId: openShift.id,
-          hourlyRate: pricingRuleSnapshot!.ratePerHour,
-          pricingRuleId: resolvedPricingRuleId,
-          playerCount: totalPlayers,
-          groupCount: resolvedGroups.length,
-        },
-      })
-
-      return session
-    })
+    )
 
     if (!result.ok) return result
-    return ok({
-      ...result.value,
-      hourlyRate: Number(result.value.hourlyRate),
-    } as CheckInResult)
+    return ok(result.value as CheckInResult)
   } else {
     // Legacy single-pricing check-in
     const resolved = await resolvePricingSnapshot(deps.pricing, pricingRuleId, now)
@@ -357,58 +400,24 @@ async function checkInRegisteredCustomer(
 
   const rate = membershipId ? 0 : (pricingRuleSnapshot?.ratePerHour ?? 0)
 
-  const result = await runInTransaction(async (tx) => {
-    const openShift = await tx.shift.findOpenForStaff(staffId)
-    if (!openShift) fail('SHIFT_REQUIRED')
-
-    const session = await tx.session.createWithRefs({
-      customerId: customer.id,
+  const result = await runInTransaction((tx) =>
+    runCheckInTx(tx, {
       staffId,
-      shiftId: openShift.id,
+      customerId,
+      pricingRuleId: resolvedPricingRuleId,
+      playerCount,
+      groups,
+      now,
+      pricingRuleSnapshot: pricingRuleSnapshot ?? null,
+      hourlyRate: rate,
       membershipId,
-      startTime: now,
-      hourlyRate: rate,
-      pricingRuleId: resolvedPricingRuleId,
-      pricingRuleSnapshot,
-      playerCount: totalPlayers,
+      resolvedGroups: null,
+      totalPlayers,
     })
-
-    // ── Luôn tạo 1 pricing group ──
-    await tx.session.createPricingGroup({
-      sessionId: session.id,
-      label: 'Nhóm 1',
-      playerCount: totalPlayers,
-      remainingCount: totalPlayers,
-      hourlyRate: rate,
-      pricingRuleId: resolvedPricingRuleId,
-      pricingSnapshot: pricingRuleSnapshot ?? null,
-    })
-
-    await tx.audit.append({
-      userId: staffId,
-      action: 'SESSION_CHECK_IN',
-      entityType: 'Session',
-      entityId: session.id,
-      details: {
-        customerId: customer.id,
-        customerType: customer.type,
-        membershipId,
-        shiftId: openShift.id,
-        hourlyRate: rate,
-        pricingRuleId: resolvedPricingRuleId,
-        playerCount: totalPlayers,
-        groupCount: 1,
-      },
-    })
-
-    return session
-  })
+  )
 
   if (!result.ok) return result
-  return ok({
-    ...result.value,
-    hourlyRate: Number(result.value.hourlyRate),
-  } as CheckInResult)
+  return ok(result.value as CheckInResult)
 }
 
 export function mapCheckInError(error: DomainError): HttpErrorInfo {

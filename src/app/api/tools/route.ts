@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { requireAuth, requireMutationAuth } from '@/lib/auth'
-import { createToolSchema } from '@/lib/validations/tool'
+import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
+import { repositories } from '@/lib/infrastructure/repositories'
+import { createToolSchema } from '@/lib/tools'
 
 export async function GET() {
   try {
     await requireAuth()
 
-    const tools = await prisma.tool.findMany({
-      orderBy: { order: 'asc' },
-    })
+    const tools = await repositories.tool.findMany()
 
     return NextResponse.json({ success: true, data: tools })
   } catch (error) {
@@ -38,9 +36,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const tool = await prisma.tool.create({
-      data: parsed.data,
-    })
+    const tool = await repositories.tool.create(parsed.data)
 
     return NextResponse.json({ success: true, data: tool }, { status: 201 })
   } catch (error) {

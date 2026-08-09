@@ -1,25 +1,14 @@
 // ── Pricing helpers — pure functions (không phụ thuộc store/prisma) ─────
-import { getVnDay } from '@/lib/utils'
+import { getVnDay } from '@/lib/shared/utils'
 import type { DayType } from '@/types'
 
-export function deriveDayTypeFromDays(daysOfWeek: number[]): DayType {
-  const normalizedDays = normalizeDaysOfWeek(daysOfWeek)
-  return normalizedDays.length > 0 && normalizedDays.every((day) => day === 0 || day === 6)
-    ? 'WEEKEND'
-    : 'WEEKDAY'
-}
-
-export function normalizeDaysOfWeek(daysOfWeek: number[]): number[] {
-  return [...new Set(daysOfWeek)]
-    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
-    .sort((left, right) => left - right)
-}
-
-export function resolveRuleDaysOfWeek(daysOfWeek: number[] | null | undefined, dayType: DayType): number[] {
-  const normalizedDays = normalizeDaysOfWeek(daysOfWeek ?? [])
-  if (normalizedDays.length > 0) return normalizedDays
-  return dayType === 'WEEKEND' ? [0, 6] : [1, 2, 3, 4, 5]
-}
+export {
+  deriveDayTypeFromDays,
+  normalizeDays as normalizeDaysOfWeek,
+  resolveDays as resolveRuleDaysOfWeek,
+  hasSharedDay,
+  type OverlapInfo,
+} from '@/lib/shared/overlap'
 
 /** Where clause cho rule đang hiệu lực đúng giờ/ngày (hourTo độc quyền) */
 export function pricingRuleWhere(
@@ -52,18 +41,4 @@ export function pricingRuleWhere(
       },
     ],
   }
-}
-
-export function hasSharedDay(left: number[], right: number[]): boolean {
-  return left.some((day) => right.includes(day))
-}
-
-export interface OverlapInfo {
-  id: string
-  name: string
-  daysOfWeek: number[]
-  hourFrom: number
-  hourTo: number | null
-  effectiveFrom: Date
-  effectiveTo: Date | null
 }

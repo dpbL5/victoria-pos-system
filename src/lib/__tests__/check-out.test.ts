@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest'
 // Test runCheckOutTx trực tiếp với fake repositories, không chạy transaction thật.
 vi.mock('@/lib/infrastructure/prisma', () => ({ prisma: {} }))
 
-import { runCheckOutTx, type CheckoutContext, type CheckoutTxState } from '@/lib/sessions/use-cases/check-out'
+import { runCheckOutTx, mapCheckoutError, type CheckoutContext, type CheckoutTxState } from '@/lib/sessions/use-cases/check-out'
 import { RollbackSignal } from '@/lib/infrastructure/db-helpers'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import type { SessionWithDetails } from '@/lib/sessions/ports'
@@ -66,11 +66,16 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       deleteInvoiceItems: vi.fn(),
       deletePayments: vi.fn(),
       updateInvoiceFinancials: vi.fn(),
+      findByIdWithDetails: vi.fn(),
+      findByIdForDelete: vi.fn(),
+      countLinkedTransactions: vi.fn(async () => ({ payments: 0, membershipPayments: 0, stockMovements: 0 })),
+      deleteInvoiceWithItems: vi.fn(),
+      findDraftSellPreview: vi.fn(),
     },
-    audit: { append: vi.fn(async () => {}) },
-    membership: { findLatest: vi.fn(), findActive: vi.fn(), create: vi.fn() },
-    membershipPlan: { findById: vi.fn() },
-    customer: { findById: vi.fn(), create: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), countWalkInsBetween: vi.fn() },
+    audit: { append: vi.fn(async () => {}), findMany: vi.fn() },
+    membership: { findLatest: vi.fn(), findActive: vi.fn(), create: vi.fn(), findManyByCustomer: vi.fn() },
+    membershipPlan: { findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), countUsage: vi.fn(), delete: vi.fn() },
+    customer: { findById: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), countWalkInsBetween: vi.fn() },
     shift: {
       findOpenForStaff: vi.fn(async () => ({ id: 'shift-1' }) as never),
       findOpenOperational: vi.fn(),
@@ -82,6 +87,12 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       upsertParticipant: vi.fn(),
       findByIdOrThrow: vi.fn(),
       createWithLead: vi.fn(),
+      update: vi.fn(async () => {}),
+      findByIdWithToolStats: vi.fn(),
+      findByIdAccess: vi.fn(),
+      findManyWithCount: vi.fn(),
+      findByIdExport: vi.fn(),
+      adjustCashDifference: vi.fn(),
     },
     pricing: {
       findApplicableRule: vi.fn(),
@@ -90,13 +101,23 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       countApplicable: vi.fn(),
       countAll: vi.fn(),
       findOverlapping: vi.fn(),
+      findManyWithTiers: vi.fn(),
+      findById: vi.fn(),
+      createWithTiers: vi.fn(),
+      update: vi.fn(),
+      deleteTiersByRule: vi.fn(),
+      createTiers: vi.fn(),
+      delete: vi.fn(),
     },
-    promotions: { findAvailable: vi.fn(), findAvailableById: vi.fn(), findOverlapping: vi.fn() },
-    settings: { get: vi.fn(), getNumeric: vi.fn(async () => 0), upsert: vi.fn() },
+    promotions: { findAvailable: vi.fn(), findAvailableById: vi.fn(), findOverlapping: vi.fn(), findMany: vi.fn(), findById: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    settings: { get: vi.fn(), getNumeric: vi.fn(async () => 0), upsert: vi.fn(), getWithLabel: vi.fn(), findAll: vi.fn() },
     session: {
       findByIdForCheckout: vi.fn(),
       findByIdWithCustomer: vi.fn(),
       findActiveByCustomer: vi.fn(),
+      findMany: vi.fn(),
+      findByIdForPreview: vi.fn(),
+      findDraftSellTotals: vi.fn(),
       createWithRefs: vi.fn(),
       createPricingGroup: vi.fn(),
       update: vi.fn(async () => {}),
@@ -116,6 +137,10 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       })),
       decrementStockIfAvailable: vi.fn(async () => ({ count: 1 })),
       recordSaleMovement: vi.fn(async () => {}),
+      findManyForAdmin: vi.fn(),
+      findByIdAdmin: vi.fn(),
+      createWithInitialStock: vi.fn(),
+      applyStockMovement: vi.fn(),
     },
     cashflow: {
       create: vi.fn(),
@@ -124,6 +149,16 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       delete: vi.fn(),
       list: vi.fn(async () => ({ entries: [], total: 0, page: 1, pageSize: 10 })),
       summarize: vi.fn(),
+    },
+    user: { findByUsername: vi.fn(), findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), findActiveOpenShiftParticipants: vi.fn() },
+    tool: { findMany: vi.fn(), findById: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    reporting: {
+      getDashboardData: vi.fn(),
+      getRevenueData: vi.fn(),
+      getRevenueExportRows: vi.fn(),
+      getSessionExportRows: vi.fn(),
+      getShiftDayGroups: vi.fn(),
+      getShiftRevenue: vi.fn(),
     },
   }
   return { ...base, ...overrides }
@@ -309,5 +344,124 @@ describe('runCheckOutTx', () => {
     expect(surchargeCall![0]).toMatchObject({ quantity: 2, total: -10000 })
     expect(repos.billing.updateInvoiceTotals).toHaveBeenCalledWith('inv-1', 120000, 120000)
     expect(result.parkingFeeTotal).toBe(10000)
+  })
+
+  it('trả PRICING_GROUP_UNDERFLOW khi decrement nhóm xuống dưới 0', async () => {
+    const repos = makeRepositories({
+      session: {
+        ...makeRepositories().session,
+        decrementGroupRemaining: vi.fn(async () => ({ remainingCount: -1 })),
+      },
+    })
+    await expectTxError(repos, 'PRICING_GROUP_UNDERFLOW')
+  })
+
+  it('trả END_TIME_BEFORE_START khi endTime trước startTime', async () => {
+    // Guard này nằm ở entry `checkOut` (pre-tx), không trong runCheckOutTx.
+    // Ta test qua mapCheckoutError cho mapper mapping đúng.
+    const mapped = mapCheckoutError({ code: 'END_TIME_BEFORE_START' })
+    expect(mapped.status).toBe(400)
+    expect(mapped.code).toBe('END_TIME_BEFORE_START')
+  })
+
+  it('trả NO_PLAYERS_TO_CHECKOUT khi không còn người chơi để checkout', async () => {
+    const mapped = mapCheckoutError({ code: 'NO_PLAYERS_TO_CHECKOUT' })
+    expect(mapped.status).toBe(400)
+    expect(mapped.code).toBe('NO_PLAYERS_TO_CHECKOUT')
+  })
+
+  it('mapCheckoutError: PRICING_GROUP_UNDERFLOW mapping thành 400 (bug fix)', async () => {
+    const mapped = mapCheckoutError({ code: 'PRICING_GROUP_UNDERFLOW' })
+    expect(mapped.status).toBe(400)
+    expect(mapped.code).toBe('PRICING_GROUP_UNDERFLOW')
+  })
+
+  it('checkout khách vãng lai với pricing tiered: nhiều bậc giá', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    ctx.pricing = { ...pricing, totalHours: 5, subtotal: 250000, grandTotal: 250000 }
+    const state = makeState()
+    state.finalPricing = { ...pricing, totalHours: 5, subtotal: 250000, grandTotal: 250000 }
+    state.playTotal = 250000
+    state.invoiceSubtotal = 280000 // 250000 + 30000 product
+    state.invoiceGrandTotal = 280000
+    const result = await runCheckOutTx(repos, ctx, state)
+
+    // PLAY_TIME quantity = totalHours 5 × checkoutCount 1, unitPrice = rate
+    const items = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls
+    const playTimeCall = items.find((c) => c[0].type === 'PLAY_TIME')
+    expect(playTimeCall![0]).toMatchObject({
+      quantity: 5,
+      unitPrice: 50000,
+      total: 250000,
+    })
+    expect(result.finalPricing.subtotal).toBe(250000)
+  })
+
+  it('checkout hội viên: PLAY_TIME với isMemberSession + total 0, không trừ kho', async () => {
+    const repos = makeRepositories({
+      membership: {
+        ...makeRepositories().membership,
+        findActive: vi.fn(async () => ({
+          id: 'mem-1',
+          customerId: 'cust-1',
+          planId: 'plan-1',
+          startsAt: new Date('2026-01-01'),
+          expiresAt: new Date('2026-12-31'),
+          status: 'ACTIVE' as const,
+          plan: { id: 'plan-1', name: 'VIP', durationMonths: 12, price: 1000000, isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        }) as never),
+      },
+    })
+    const session = makeSession()
+    session.customer.type = 'MEMBER'
+    session.hourlyRate = 0 as never
+    session.membership = {
+      id: 'mem-1',
+      customerId: 'cust-1',
+      planId: 'plan-1',
+      startsAt: new Date('2026-01-01'),
+      expiresAt: new Date('2026-12-31'),
+      status: 'ACTIVE' as const,
+      plan: { id: 'plan-1', name: 'VIP', durationMonths: 12, price: 1000000, isActive: true, createdAt: new Date(), updatedAt: new Date() },
+    } as never
+    const ctx = makeCtx()
+    ctx.session = session
+    ctx.pricing = { ...pricing, hourlyRate: 0, subtotal: 0, grandTotal: 0, isMemberSession: true }
+    // Member checkout không kèm sản phẩm
+    ctx.checkoutLines = []
+    ctx.productSubtotal = 0
+    ctx.newQuantityByProductId = new Map()
+    const state = makeState()
+    state.finalPricing = { ...pricing, hourlyRate: 0, subtotal: 0, grandTotal: 0, isMemberSession: true }
+    state.playTotal = 0
+    state.invoiceSubtotal = 30000 // chỉ product
+    state.invoiceGrandTotal = 30000
+    const result = await runCheckOutTx(repos, ctx, state)
+
+    const items = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls
+    const playTimeCall = items.find((c) => c[0].type === 'PLAY_TIME')
+    expect(playTimeCall![0]).toMatchObject({
+      quantity: 2,
+      unitPrice: 0,
+      total: 0,
+      description: 'Giờ chơi hội viên × 1 người',
+    })
+    expect(repos.product.decrementStockIfAvailable).not.toHaveBeenCalled()
+    expect(result.finalPricing.isMemberSession).toBe(true)
+  })
+
+  it('checkout full với merged drafts: hủy draft invoices khi đóng phiên', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    ctx.draftInvoiceIds = ['draft-1', 'draft-2']
+    const result = await runCheckOutTx(repos, ctx, makeState())
+
+    // Full checkout → cancel drafts với note gộp vào invoice
+    expect(repos.billing.cancelDraftInvoices).toHaveBeenCalledWith(
+      ['draft-1', 'draft-2'],
+      'Đã gộp vào hóa đơn INV-1'
+    )
+    expect(result.remainingPlayers).toBe(0)
   })
 })

@@ -1,10 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { Prisma } from '@/generated/prisma/client'
-import { requireAdmin, requireAuth } from '@/lib/auth'
-import { validateCSRF } from '@/lib/csrf'
-import { logActivity } from '@/lib/audit'
-import { prisma } from '@/lib/prisma'
-import { createProductSchema } from '@/lib/validations/product'
+import { NextRequest } from 'next/server'
+import { requireAdmin, requireAuth } from '@/lib/shared/auth'
+import { validateCSRF } from '@/lib/shared/csrf'
+import { createProduct, mapCreateProductError } from '@/lib/sessions'
+import { repositories } from '@/lib/infrastructure/repositories'
+import { createProductSchema } from '@/lib/sessions'
+import {
+  apiSuccess,
+  apiError,
+  resultToResponse,
+  ERR_UNAUTHORIZED,
+  ERR_FORBIDDEN,
+  ERR_CSRF,
+} from '@/lib/infrastructure/api-helpers'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,44 +19,19 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || ''
-    const isActive = searchParams.get('isActive')
+    const isActiveParam = searchParams.get('isActive')
 
-    const products = await prisma.product.findMany({
-      where: {
-        ...(search
-          ? {
-              OR: [
-                { name: { contains: search, mode: 'insensitive' } },
-                { sku: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-        ...(isActive ? { isActive: isActive === 'true' } : {}),
-      },
-      select: {
-        id: true,
-        name: true,
-        sku: true,
-        type: true,
-        price: true,
-        stockQuantity: true,
-        minStockLevel: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-        // costPrice intentionally excluded — sensitive business data
-      },
-      orderBy: { name: 'asc' },
+    const products = await repositories.product.findManyForAdmin({
+      ...(search ? { search } : {}),
+      ...(isActiveParam ? { isActive: isActiveParam === 'true' } : {}),
       take: 100,
     })
 
-    return NextResponse.json({ success: true, data: products })
+    return apiSuccess(products)
   } catch (error) {
-    if ((error as Error).message === 'UNAUTHORIZED') {
-      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
-    }
+    if ((error as Error).message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
     console.error('GET /api/products error:', error)
-    return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
+    return apiError({ code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 })
   }
 }
 
@@ -61,71 +43,27 @@ export async function POST(request: NextRequest) {
     const parsed = createProductSchema.safeParse(body)
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { success: false, error: parsed.error.issues[0].message },
-        { status: 400 }
-      )
+      return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     }
 
-    const product = await prisma.$transaction(async (tx) => {
-      const created = await tx.product.create({
-        data: {
-          name: parsed.data.name.trim(),
-          sku: parsed.data.sku?.trim() || null,
-          type: parsed.data.type,
-          price: parsed.data.price,
-          costPrice: parsed.data.costPrice,
-          stockQuantity: parsed.data.type === 'SERVICE' ? 0 : parsed.data.stockQuantity,
-          minStockLevel: parsed.data.type === 'SERVICE' ? 0 : parsed.data.minStockLevel,
-          isActive: parsed.data.isActive,
-        },
-      })
-
-      if (created.type === 'PRODUCT' && created.stockQuantity > 0) {
-        await tx.stockMovement.create({
-          data: {
-            productId: created.id,
-            staffId: auth.userId,
-            type: 'RESTOCK',
-            quantity: created.stockQuantity,
-            unitCost: parsed.data.costPrice,
-            reason: 'Tồn đầu kỳ',
-          },
-        })
-      }
-
-      await logActivity(tx, {
-        userId: auth.userId,
-        action: 'PRODUCT_CREATE',
-        entityType: 'Product',
-        entityId: created.id,
-        details: {
-          name: created.name,
-          sku: created.sku,
-          type: created.type,
-          stockQuantity: created.stockQuantity,
-        },
-      })
-
-      return created
+    const result = await createProduct({
+      staffId: auth.userId,
+      name: parsed.data.name,
+      sku: parsed.data.sku ?? null,
+      type: parsed.data.type,
+      price: parsed.data.price,
+      costPrice: parsed.data.costPrice ?? null,
+      stockQuantity: parsed.data.stockQuantity,
+      minStockLevel: parsed.data.minStockLevel,
+      isActive: parsed.data.isActive,
     })
-
-    return NextResponse.json({ success: true, data: product }, { status: 201 })
+    return resultToResponse(result, mapCreateProductError, 201)
   } catch (error) {
     const message = (error as Error).message
-    if (message === 'UNAUTHORIZED') {
-      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
-    }
-    if (message === 'CSRF_MISMATCH') {
-      return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
-    }
-    if (message === 'FORBIDDEN') {
-      return NextResponse.json({ success: false, error: 'Không có quyền' }, { status: 403 })
-    }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return NextResponse.json({ success: false, error: 'Mã SKU đã tồn tại' }, { status: 400 })
-    }
+    if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
+    if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
+    if (message === 'FORBIDDEN') return apiError(ERR_FORBIDDEN)
     console.error('POST /api/products error:', error)
-    return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
+    return apiError({ code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 })
   }
 }

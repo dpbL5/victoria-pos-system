@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { checkoutSessionSchema } from '@/lib/validations/session'
+import { checkoutSessionSchema } from '@/lib/sessions'
 
 const PRODUCT_UUID = '123e4567-e89b-42d3-a456-426614174000'
 

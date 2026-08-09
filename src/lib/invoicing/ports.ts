@@ -167,6 +167,49 @@ export interface ReverseStockInput {
   reason: string
 }
 
+/** Invoice chi tiết (deep include) — GET /api/invoices/[id] */
+export type InvoiceDetail = Prisma.InvoiceGetPayload<{
+  include: {
+    customer: { select: { id: true; fullName: true; phone: true; type: true } }
+    session: { select: { id: true; startTime: true; endTime: true; status: true } }
+    shift: { select: { id: true; openedAt: true; closedAt: true } }
+    staff: { select: { id: true; fullName: true } }
+    items: {
+      include: { product: { select: { id: true; name: true; sku: true; type: true } } }
+      orderBy: { createdAt: 'asc' }
+    }
+    payments: { include: { staff: { select: { id: true; fullName: true } } } }
+    membershipPayments: {
+      include: { membership: { include: { plan: { select: { name: true } } } } }
+    }
+  }
+}>
+
+/** Invoice tối giản — cho DELETE guard (INVOICE_LINKED) */
+export interface InvoiceDeleteTarget {
+  id: string
+  invoiceNo: string
+  status: string
+  grandTotal: number
+  staffId: string
+  customerId: string | null
+  items: Array<{ id: string }>
+}
+
+/** Draft items bán kèm phiên — cho checkout-preview */
+export interface DraftSellPreview {
+  id: string
+  grandTotal: number
+  items: Array<{
+    productId: string
+    description: string
+    type: string
+    quantity: number
+    unitPrice: number
+    subtotal: number
+  }>
+}
+
 export interface BillingRepository {
   /** Invoice + items + StockMovement SALE + staff — dùng cho void */
   findVoidTarget(invoiceId: string): Promise<VoidInvoiceTarget | null>
@@ -197,4 +240,14 @@ export interface BillingRepository {
   deleteInvoiceItems(invoiceId: string): Promise<void>
   deletePayments(invoiceId: string): Promise<void>
   updateInvoiceFinancials(invoiceId: string, input: UpdateInvoiceFinancialsInput): Promise<void>
+  /** Invoice chi tiết (deep include) — GET /api/invoices/[id] */
+  findByIdWithDetails(invoiceId: string): Promise<InvoiceDetail | null>
+  /** Invoice tối giản — cho DELETE guard */
+  findByIdForDelete(invoiceId: string): Promise<InvoiceDeleteTarget | null>
+  /** Đếm payment/membershipPayment/stockMovement gắn invoice — INVOICE_LINKED guard */
+  countLinkedTransactions(invoiceId: string): Promise<{ payments: number; membershipPayments: number; stockMovements: number }>
+  /** Xoá items + invoice (chỉ gọi khi không có giao dịch liên quan) */
+  deleteInvoiceWithItems(invoiceId: string): Promise<void>
+  /** Draft invoices + items bán kèm phiên — cho checkout-preview */
+  findDraftSellPreview(sessionId: string): Promise<DraftSellPreview[]>
 }

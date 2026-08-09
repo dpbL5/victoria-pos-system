@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/auth'
-import { getShiftRevenueData } from '@/lib/shifts'
-import { prisma } from '@/lib/prisma'
-import { parseStartOfDay, toInputDate } from '@/lib/utils'
+import { requireAdmin } from '@/lib/shared/auth'
+import { calcToolStats } from '@/lib/shifts'
+import { repositories } from '@/lib/infrastructure/repositories'
+import { parseStartOfDay, toInputDate } from '@/lib/shared/utils'
 import type { ShiftRevenueSummary } from '@/types'
 
 export async function GET(request: NextRequest) {
@@ -20,48 +20,22 @@ export async function GET(request: NextRequest) {
     const fromDate = parseStartOfDay(fromStr)
     const toDate = new Date(parseStartOfDay(toStr).getTime() + 24 * 60 * 60 * 1000)
 
-    const where: Record<string, unknown> = {
-      openedAt: { gte: fromDate, lt: toDate },
-    }
-    if (status) where.status = status
-
-    const [shifts, total] = await Promise.all([
-      prisma.shift.findMany({
-        where,
-        include: {
-          staff: { select: { id: true, fullName: true } },
-          _count: { select: { sessions: true } },
-          toolCounts: {
-            include: { tool: { select: { id: true, name: true, quantity: true, isRequired: true } } },
-          },
-        },
-        orderBy: { openedAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.shift.count({ where }),
-    ])
+    const { rows: shifts, total } = await repositories.shift.findManyWithCount({
+      from: fromDate,
+      to: toDate,
+      ...(status ? { status } : {}),
+      skip: (page - 1) * limit,
+      take: limit,
+    })
 
     const shiftIds = shifts.map((s) => s.id)
 
-    const revenueMap = new Map<string, Awaited<ReturnType<typeof getShiftRevenueData>>>()
+    const revenueMap = new Map<string, Awaited<ReturnType<typeof repositories.reporting.getShiftRevenue>>>()
     await Promise.all(
       shiftIds.map(async (id) => {
-        revenueMap.set(id, await getShiftRevenueData(prisma, id))
+        revenueMap.set(id, await repositories.reporting.getShiftRevenue(id))
       })
     )
-
-    function calcToolStats(tcs: { openCount: number; closeCount: number | null }[]) {
-      if (tcs.length === 0) return undefined
-      let matched = 0
-      let mismatched = 0
-      for (const tc of tcs) {
-        if (tc.closeCount == null) continue
-        if (tc.closeCount === tc.openCount) matched++
-        else mismatched++
-      }
-      return { total: tcs.length, matched, mismatched }
-    }
 
     const data: ShiftRevenueSummary[] = shifts.map((shift) => {
       const rev = revenueMap.get(shift.id) ?? {

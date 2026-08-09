@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { requireMutationAuth } from '@/lib/auth'
-import { updateToolSchema } from '@/lib/validations/tool'
+import { requireMutationAuth } from '@/lib/shared/auth'
+import { repositories } from '@/lib/infrastructure/repositories'
+import { updateToolSchema } from '@/lib/tools'
 
 async function requireAdminMutation(request: NextRequest) {
   const auth = await requireMutationAuth(request)
@@ -29,7 +29,7 @@ export async function PATCH(
       )
     }
 
-    const existing = await prisma.tool.findUnique({ where: { id } })
+    const existing = await repositories.tool.findById(id)
     if (!existing) {
       return NextResponse.json(
         { success: false, error: 'Không tìm thấy dụng cụ' },
@@ -37,10 +37,7 @@ export async function PATCH(
       )
     }
 
-    const tool = await prisma.tool.update({
-      where: { id },
-      data: parsed.data,
-    })
+    const tool = await repositories.tool.update(id, parsed.data)
 
     return NextResponse.json({ success: true, data: tool })
   } catch (error) {
@@ -67,7 +64,7 @@ export async function DELETE(
     await requireAdminMutation(request)
     const { id } = await params
 
-    const existing = await prisma.tool.findUnique({ where: { id } })
+    const existing = await repositories.tool.findById(id)
     if (!existing) {
       return NextResponse.json(
         { success: false, error: 'Không tìm thấy dụng cụ' },
@@ -75,7 +72,7 @@ export async function DELETE(
       )
     }
 
-    await prisma.tool.delete({ where: { id } })
+    await repositories.tool.delete(id)
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -2,7 +2,7 @@
 // Wrapper quanh fetch() tự động đọc CSRF cookie và gửi
 // header X-CSRF-Token cho các mutation requests.
 
-import { CSRF_HEADER, CSRF_COOKIE } from "@/lib/constants";
+import { CSRF_HEADER, CSRF_COOKIE } from "@/lib/shared/constants";
 
 function getCSRFToken(): string | null {
   if (typeof document === "undefined") return null;

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Prisma } from '@/generated/prisma/client'
-import { requireAdmin } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/shared/auth'
+import { repositories } from '@/lib/infrastructure/repositories'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
@@ -17,47 +16,13 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')?.trim()
     const limit = parseLimit(searchParams.get('limit'))
 
-    const where: Prisma.ActivityLogWhereInput = {
+    const { rows: logs, total } = await repositories.audit.findMany({
       ...(userId ? { userId } : {}),
       ...(action ? { action } : {}),
       ...(entityType ? { entityType } : {}),
-      ...(search
-        ? {
-            OR: [
-              { action: { contains: search, mode: 'insensitive' } },
-              { entityType: { contains: search, mode: 'insensitive' } },
-              { user: { fullName: { contains: search, mode: 'insensitive' } } },
-              { user: { username: { contains: search, mode: 'insensitive' } } },
-            ],
-          }
-        : {}),
-    }
-
-    const [logs, total] = await Promise.all([
-      prisma.activityLog.findMany({
-        where,
-        select: {
-          id: true,
-          userId: true,
-          action: true,
-          entityType: true,
-          entityId: true,
-          details: true,
-          createdAt: true,
-          user: {
-            select: {
-              id: true,
-              username: true,
-              fullName: true,
-              role: true,
-            },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-      }),
-      prisma.activityLog.count({ where }),
-    ])
+      ...(search ? { search } : {}),
+      take: limit,
+    })
 
     return NextResponse.json({
       success: true,

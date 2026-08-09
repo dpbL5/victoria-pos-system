@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireMutationAuth } from '@/lib/auth'
+import { requireMutationAuth } from '@/lib/shared/auth'
 import { renewMembership, mapRenewMembershipError, renewMembershipSchema } from '@/lib/memberships'
 import {
   apiError,

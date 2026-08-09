@@ -1,22 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin } from '@/lib/shared/auth'
 import { getShiftTransactions } from '@/lib/shifts'
-import { prisma } from '@/lib/prisma'
-
-function csvEscape(value: string | null | undefined): string {
-  if (value == null) return '—'
-  const str = String(value)
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`
-  }
-  return str
-}
+import { repositories } from '@/lib/infrastructure/repositories'
+import { toCsv } from '@/lib/shared/csv'
 
 const paymentMethodLabel: Record<string, string> = {
   CASH: 'Tiền mặt',
   TRANSFER: 'Chuyển khoản',
   CARD: 'Thẻ',
   MEMBER: 'Hội viên',
+}
+
+function cell(value: string | null | undefined): string {
+  return value == null ? '—' : String(value)
 }
 
 export async function GET(
@@ -27,16 +23,13 @@ export async function GET(
     await requireAdmin()
     const { id } = await params
 
-    const shift = await prisma.shift.findUnique({
-      where: { id },
-      select: { id: true, status: true, openedAt: true },
-    })
+    const shift = await repositories.shift.findByIdExport(id)
 
     if (!shift) {
       return NextResponse.json({ success: false, error: 'Không tìm thấy ca làm' }, { status: 404 })
     }
 
-    const { transactions } = await getShiftTransactions(prisma, id)
+    const { transactions } = await getShiftTransactions(repositories as never, id)
 
     const headers = [
       'Thời gian',
@@ -49,17 +42,16 @@ export async function GET(
     ]
 
     const rows = transactions.map((tx) => [
-      csvEscape(tx.paidAt),
-      csvEscape(tx.invoiceNo),
-      csvEscape(tx.customerName),
-      csvEscape(tx.type === 'payment' ? 'Thanh toán' : 'Phí hội viên'),
-      csvEscape(tx.paymentMethod ? paymentMethodLabel[tx.paymentMethod] ?? tx.paymentMethod : '—'),
-      csvEscape(tx.amount.toString()),
-      csvEscape(tx.staffName),
+      cell(tx.paidAt),
+      cell(tx.invoiceNo),
+      cell(tx.customerName),
+      cell(tx.type === 'payment' ? 'Thanh toán' : 'Phí hội viên'),
+      cell(tx.paymentMethod ? paymentMethodLabel[tx.paymentMethod] ?? tx.paymentMethod : '—'),
+      cell(tx.amount.toString()),
+      cell(tx.staffName),
     ])
 
-    const bom = '\uFEFF'
-    const csv = bom + [headers, ...rows].map((row) => row.join(',')).join('\n')
+    const csv = toCsv([headers, ...rows], { bom: true })
 
     const filename = `giao-dich-ca-${shift.id.slice(0, 8)}.csv`
 

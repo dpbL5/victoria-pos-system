@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
-import { requireMutationAuth } from '@/lib/auth'
-import { checkoutSessionSchema } from '@/lib/validations/session'
+import { requireMutationAuth } from '@/lib/shared/auth'
+import { checkoutSessionSchema } from '@/lib/sessions'
 import { checkOut, mapCheckoutError } from '@/lib/sessions'
 import {
   apiError,

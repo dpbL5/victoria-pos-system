@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
-import { formatVND } from '@/lib/utils'
+import { formatVND } from '@/lib/shared/utils'
 
 interface InvoiceItem {
   id: string

@@ -341,5 +341,87 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
         },
       })
     },
+
+    async findByIdWithDetails(invoiceId) {
+      return store.invoice.findUnique({
+        where: { id: invoiceId },
+        include: {
+          customer: { select: { id: true, fullName: true, phone: true, type: true } },
+          session: { select: { id: true, startTime: true, endTime: true, status: true } },
+          shift: { select: { id: true, openedAt: true, closedAt: true } },
+          staff: { select: { id: true, fullName: true } },
+          items: {
+            include: { product: { select: { id: true, name: true, sku: true, type: true } } },
+            orderBy: { createdAt: 'asc' },
+          },
+          payments: { include: { staff: { select: { id: true, fullName: true } } } },
+          membershipPayments: {
+            include: { membership: { include: { plan: { select: { name: true } } } } },
+          },
+        },
+      })
+    },
+
+    async findByIdForDelete(invoiceId) {
+      const invoice = await store.invoice.findUnique({
+        where: { id: invoiceId },
+        select: {
+          id: true,
+          invoiceNo: true,
+          status: true,
+          grandTotal: true,
+          staffId: true,
+          customerId: true,
+          items: { select: { id: true } },
+        },
+      })
+      if (!invoice) return null
+      return { ...invoice, grandTotal: Number(invoice.grandTotal) }
+    },
+
+    async countLinkedTransactions(invoiceId) {
+      const [payments, membershipPayments, stockMovements] = await Promise.all([
+        store.payment.count({ where: { invoiceId } }),
+        store.membershipPayment.count({ where: { invoiceId } }),
+        store.stockMovement.count({ where: { invoiceItem: { invoiceId } } }),
+      ])
+      return { payments, membershipPayments, stockMovements }
+    },
+
+    async deleteInvoiceWithItems(invoiceId) {
+      await store.invoiceItem.deleteMany({ where: { invoiceId } })
+      await store.invoice.delete({ where: { id: invoiceId } })
+    },
+
+    async findDraftSellPreview(sessionId) {
+      const drafts = await store.invoice.findMany({
+        where: { sessionId, status: 'DRAFT' },
+        include: {
+          items: {
+            where: { productId: { not: null } },
+            select: {
+              productId: true,
+              description: true,
+              type: true,
+              quantity: true,
+              unitPrice: true,
+              subtotal: true,
+            },
+          },
+        },
+      })
+      return drafts.map((d) => ({
+        id: d.id,
+        grandTotal: Number(d.grandTotal),
+        items: d.items.map((item) => ({
+          productId: item.productId!,
+          description: item.description,
+          type: item.type,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+          subtotal: Number(item.subtotal),
+        })),
+      }))
+    },
   }
 }

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth } from '@/lib/shared/auth'
 import { DashboardClientLayout } from '@/components/layout/dashboard-client-layout'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {

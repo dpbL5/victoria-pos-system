@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { requireAuth, requireMutationAuth } from '@/lib/auth'
-import { createCustomerSchema } from '@/lib/validations/customer'
+import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
+import { repositories } from '@/lib/infrastructure/repositories'
+import { createCustomerSchema } from '@/lib/memberships'
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,37 +15,12 @@ export async function GET(request: NextRequest) {
     const limit = clampPositiveInt(searchParams.get('limit'), 20, 1, 100)
     const skip = (page - 1) * limit
 
-    const where: Record<string, unknown> = {}
-    if (search) {
-      where.OR = [
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search } },
-      ]
-    }
-    if (type === 'WALK_IN' || type === 'MEMBER') {
-      where.type = type
-    }
-
-    const [customers, total] = await Promise.all([
-      prisma.customer.findMany({
-        where,
-        select: {
-          id: true,
-          fullName: true,
-          phone: true,
-          type: true,
-          totalHoursPlayed: true,
-          totalSpent: true,
-          createdAt: true,
-          updatedAt: true,
-          // notes intentionally excluded from list view — may contain PII
-        },
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.customer.count({ where }),
-    ])
+    const { rows: customers, total } = await repositories.customer.findMany({
+      search,
+      ...(type === 'WALK_IN' || type === 'MEMBER' ? { type } : {}),
+      skip,
+      take: limit,
+    })
 
     if (!includeMembershipStatus || customers.length === 0) {
       return NextResponse.json({
@@ -62,17 +37,11 @@ export async function GET(request: NextRequest) {
 
     const now = new Date()
     const customerIds = customers.map((customer) => customer.id)
-    const memberships = await prisma.membership.findMany({
-      where: {
-        customerId: { in: customerIds },
-        status: 'ACTIVE',
-      },
-      include: { plan: true },
-      orderBy: [{ customerId: 'asc' }, { expiresAt: 'desc' }],
-    })
+    const memberships = await repositories.membership.findManyByCustomer()
+    const scoped = memberships.filter((m) => customerIds.includes(m.customerId))
 
-    const membershipsByCustomer = new Map<string, typeof memberships>()
-    for (const membership of memberships) {
+    const membershipsByCustomer = new Map<string, typeof scoped>()
+    for (const membership of scoped) {
       const existing = membershipsByCustomer.get(membership.customerId) ?? []
       existing.push(membership)
       membershipsByCustomer.set(membership.customerId, existing)
@@ -141,12 +110,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const customer = await prisma.customer.create({
-      data: {
-        fullName: parsed.data.fullName,
-        phone: parsed.data.phone || null,
-        type: parsed.data.type,
-      },
+    const customer = await repositories.customer.create({
+      fullName: parsed.data.fullName,
+      phone: parsed.data.phone || null,
+      type: parsed.data.type,
     })
 
     return NextResponse.json({ success: true, data: customer }, { status: 201 })

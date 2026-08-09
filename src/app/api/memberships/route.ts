@@ -1,26 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth'
-import { findActiveMembership } from '@/lib/memberships'
+import { requireAuth } from '@/lib/shared/auth'
+import { repositories } from '@/lib/infrastructure/repositories'
 
 export async function GET(request: NextRequest) {
   try {
     await requireAuth()
 
     const { searchParams } = new URL(request.url)
-    const customerId = searchParams.get('customerId')
-    const where = customerId ? { customerId } : {}
+    const customerId = searchParams.get('customerId') || undefined
 
     const [memberships, activeMembership] = await Promise.all([
-      prisma.membership.findMany({
-        where,
-        include: {
-          customer: { select: { id: true, fullName: true, phone: true, type: true } },
-          plan: true,
-        },
-        orderBy: { startsAt: 'desc' },
-      }),
-      customerId ? findActiveMembership(prisma, customerId) : Promise.resolve(null),
+      repositories.membership.findManyByCustomer(customerId),
+      customerId ? repositories.membership.findActive(customerId, new Date()) : Promise.resolve(null),
     ])
 
     return NextResponse.json({

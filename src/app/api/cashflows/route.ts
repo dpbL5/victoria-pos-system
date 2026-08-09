@@ -1,7 +1,7 @@
 // ── API: /api/cashflows — quản lý thu chi (admin only) ─────
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/auth'
-import { validateCSRF } from '@/lib/csrf'
+import { requireAdmin } from '@/lib/shared/auth'
+import { validateCSRF } from '@/lib/shared/csrf'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { createCashflowSchema } from '@/lib/cashflow/validations'
 import { createCashflow, mapCreateCashflowError } from '@/lib/cashflow'

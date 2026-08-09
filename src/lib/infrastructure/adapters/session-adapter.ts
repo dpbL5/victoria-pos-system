@@ -29,6 +29,101 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
         select: { id: true },
       }),
 
+    async findMany(input) {
+      const where: Record<string, unknown> = {}
+      if (input.status) where.status = input.status
+      if (input.customerId) where.customerId = input.customerId
+      if (input.date) {
+        const dayStart = new Date(input.date)
+        const dayEnd = new Date(input.date)
+        dayEnd.setDate(dayEnd.getDate() + 1)
+        where.createdAt = { gte: dayStart, lt: dayEnd }
+      }
+
+      const [rows, total] = await Promise.all([
+        store.session.findMany({
+          where,
+          select: {
+            id: true,
+            startTime: true,
+            endTime: true,
+            status: true,
+            hourlyRate: true,
+            pricingRuleId: true,
+            pricingRuleSnapshot: true,
+            totalHours: true,
+            subtotal: true,
+            discountAmount: true,
+            totalAmount: true,
+            playerCount: true,
+            promotionRuleId: true,
+            promotionName: true,
+            promotionDiscountType: true,
+            promotionDiscountValue: true,
+            customer: { select: { id: true, fullName: true, phone: true, type: true } },
+            staff: { select: { id: true, fullName: true } },
+            membership: { select: { id: true, startsAt: true, expiresAt: true } },
+            shift: { select: { id: true, openedAt: true, status: true } },
+            pricingGroups: {
+              select: {
+                id: true,
+                label: true,
+                playerCount: true,
+                remainingCount: true,
+                hourlyRate: true,
+                pricingRuleId: true,
+                pricingSnapshot: true,
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+          skip: input.skip,
+          take: input.take,
+          orderBy: { createdAt: 'desc' },
+        }),
+        store.session.count({ where }),
+      ])
+      return { rows, total }
+    },
+
+    async findByIdForPreview(id) {
+      return store.session.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          status: true,
+          playerCount: true,
+          pricingGroups: {
+            select: {
+              id: true,
+              label: true,
+              playerCount: true,
+              remainingCount: true,
+              hourlyRate: true,
+              pricingRuleId: true,
+              pricingSnapshot: true,
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      })
+    },
+
+    async findDraftSellTotals(sessionIds) {
+      if (sessionIds.length === 0) return {}
+      const drafts = await store.invoice.findMany({
+        where: { sessionId: { in: sessionIds }, status: 'DRAFT' },
+        select: { sessionId: true, grandTotal: true },
+      })
+      const totals: Record<string, number> = {}
+      for (const d of drafts) {
+        if (d.sessionId) {
+          totals[d.sessionId] = (totals[d.sessionId] ?? 0) + Number(d.grandTotal)
+        }
+      }
+      return totals
+    },
+
     async createWithRefs(data) {
       return store.session.create({
         data: {

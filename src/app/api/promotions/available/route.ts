@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth } from '@/lib/shared/auth'
 import { repositories } from '@/lib/infrastructure/repositories'
 
 export async function GET() {

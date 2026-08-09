@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth } from '@/lib/shared/auth'
 import { SETTING_KEYS } from '@/lib/settings'
 import { calculateSessionPrice } from '@/lib/sessions'
 import { repositories } from '@/lib/infrastructure/repositories'
-import { prisma } from '@/lib/prisma'
 import type { PlayTimeQuote, PricingRuleSnapshot } from '@/types'
 
 export async function GET(
@@ -13,26 +12,7 @@ export async function GET(
   try {
     await requireAuth()
     const { id } = await params
-    const session = await prisma.session.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        status: true,
-        playerCount: true,
-        pricingGroups: {
-          select: {
-            id: true,
-            label: true,
-            playerCount: true,
-            remainingCount: true,
-            hourlyRate: true,
-            pricingRuleId: true,
-            pricingSnapshot: true,
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-    })
+    const session = await repositories.session.findByIdForPreview(id)
 
     if (!session) {
       return NextResponse.json(
@@ -75,30 +55,15 @@ export async function GET(
     const pricing = pricingResult.value
 
     // ── Lấy danh sách bán kèm chưa thanh toán (DRAFT invoices) ──
-    const draftInvoices = await prisma.invoice.findMany({
-      where: { sessionId: id, status: 'DRAFT' },
-      include: {
-        items: {
-          where: { productId: { not: null } },
-          select: {
-            productId: true,
-            description: true,
-            type: true,
-            quantity: true,
-            unitPrice: true,
-            subtotal: true,
-          },
-        },
-      },
-    })
+    const draftInvoices = await repositories.billing.findDraftSellPreview(id)
 
     let pendingSellTotal = 0
     const pendingSellItems: PlayTimeQuote['pendingSellItems'] = []
     for (const draft of draftInvoices) {
-      pendingSellTotal += Number(draft.grandTotal)
+      pendingSellTotal += draft.grandTotal
       for (const item of draft.items) {
         pendingSellItems.push({
-          productId: item.productId!,
+          productId: item.productId,
           productName: item.description,
           type: item.type as 'PRODUCT' | 'SERVICE',
           quantity: Number(item.quantity),

@@ -1,6 +1,6 @@
 // Generic fetch helpers used across features.
 import type { ApiResponse } from '@/types'
-import { CSRF_HEADER, CSRF_COOKIE } from '@/lib/constants'
+import { CSRF_HEADER, CSRF_COOKIE } from '@/lib/shared/constants'
 
 function getCSRFToken(): string | null {
   if (typeof document === 'undefined') return null

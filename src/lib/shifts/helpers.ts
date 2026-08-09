@@ -305,3 +305,16 @@ export interface ShiftDayGroup {
   sessionCount: number
   shifts: Array<Record<string, unknown>>
 }
+
+/** Thống kê dụng cụ đối soát: matched = openCount === closeCount, bỏ qua chưa đóng */
+export function calcToolStats(tcs: { openCount: number; closeCount: number | null }[]) {
+  if (tcs.length === 0) return undefined
+  let matched = 0
+  let mismatched = 0
+  for (const tc of tcs) {
+    if (tc.closeCount == null) continue
+    if (tc.closeCount === tc.openCount) matched++
+    else mismatched++
+  }
+  return { total: tcs.length, matched, mismatched }
+}

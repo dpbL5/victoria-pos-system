@@ -1,8 +1,8 @@
 // ── POST /api/auth/login ───────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { createSession } from "@/lib/auth";
-import { loginSchema } from "@/lib/validations/auth";
+import { createSession } from "@/lib/shared/auth";
+import { repositories } from "@/lib/infrastructure/repositories";
+import { loginSchema } from "@/lib/users";
 import bcrypt from "bcryptjs";
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -36,9 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Tìm user
-    const user = await prisma.user.findUnique({
-      where: { username },
-    });
+    const user = await repositories.user.findByUsername(username);
 
     if (!user || !user.isActive) {
       recordFailedLogin(rateLimitKey);

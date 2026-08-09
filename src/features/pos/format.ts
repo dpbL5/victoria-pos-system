@@ -1,4 +1,4 @@
-import { formatVND, roundToNearestThousand } from '@/lib/utils'
+import { formatVND, roundToNearestThousand } from '@/lib/shared/utils'
 import {
   calculatePlayPrice,
   calculateTieredSubtotal,

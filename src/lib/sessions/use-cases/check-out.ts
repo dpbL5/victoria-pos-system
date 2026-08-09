@@ -634,6 +634,8 @@ export function mapCheckoutError(error: DomainError): HttpErrorInfo {
       return { code: 'PRICING_GROUP_NOT_FOUND', message: 'Không tìm thấy nhóm giá', status: 400 }
     case 'PRICING_GROUP_EMPTY':
       return { code: 'PRICING_GROUP_EMPTY', message: 'Nhóm giá đã checkout hết người', status: 400 }
+    case 'PRICING_GROUP_UNDERFLOW':
+      return { code: 'PRICING_GROUP_UNDERFLOW', message: 'Số người checkout vượt quá số người còn lại của nhóm giá', status: 400 }
     case 'PRODUCT_NOT_FOUND':
       return { code: 'PRODUCT_NOT_FOUND', message: 'Có sản phẩm không tồn tại hoặc đã ngừng bán', status: 400 }
     case 'PRODUCT_UNAVAILABLE':

@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Prisma } from '@/generated/prisma/client'
-import { requireAuth, requireMutationAuth } from '@/lib/auth'
-import { logActivity } from '@/lib/audit'
-import { prisma } from '@/lib/prisma'
+import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
+import { deleteInvoice, mapDeleteInvoiceError } from '@/lib/invoicing'
+import { repositories } from '@/lib/infrastructure/repositories'
+import {
+  apiSuccess,
+  apiError,
+  ERR_UNAUTHORIZED,
+  ERR_FORBIDDEN,
+  ERR_CSRF,
+} from '@/lib/infrastructure/api-helpers'
 
 export async function GET(
   _request: NextRequest,
@@ -20,70 +26,19 @@ export async function GET(
       )
     }
 
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
-      include: {
-        customer: {
-          select: { id: true, fullName: true, phone: true, type: true },
-        },
-        session: {
-          select: {
-            id: true,
-            startTime: true,
-            endTime: true,
-            status: true,
-          },
-        },
-        shift: {
-          select: { id: true, openedAt: true, closedAt: true },
-        },
-        staff: {
-          select: { id: true, fullName: true },
-        },
-        items: {
-          include: {
-            product: {
-              select: { id: true, name: true, sku: true, type: true },
-            },
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-        payments: {
-          include: {
-            staff: { select: { id: true, fullName: true } },
-          },
-        },
-        membershipPayments: {
-          include: {
-            membership: {
-              include: {
-                plan: { select: { name: true } },
-              },
-            },
-          },
-        },
-      },
-    })
+    const invoice = await repositories.billing.findByIdWithDetails(id)
 
     if (!invoice) {
-      return NextResponse.json(
-        { success: false, error: 'Không tìm thấy hoá đơn' },
-        { status: 404 }
-      )
+      return apiError({ code: 'INVOICE_NOT_FOUND', message: 'Không tìm thấy hoá đơn', status: 404 })
     }
 
     const isAdmin = auth.role === 'ADMIN'
     const isOwner = invoice.staffId === auth.userId
     if (!isAdmin && !isOwner) {
-      return NextResponse.json(
-        { success: false, error: 'Không có quyền xem hoá đơn này' },
-        { status: 403 }
-      )
+      return apiError({ code: 'FORBIDDEN', message: 'Không có quyền xem hoá đơn này', status: 403 })
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
+    return apiSuccess({
         id: invoice.id,
         invoiceNo: invoice.invoiceNo,
         status: invoice.status,
@@ -145,8 +100,7 @@ export async function GET(
           paidAt: mp.paidAt.toISOString(),
           planName: mp.membership?.plan?.name ?? null,
         })),
-      },
-    })
+      })
   } catch (error) {
     if ((error as Error).message === 'UNAUTHORIZED') {
       return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
@@ -167,88 +121,23 @@ export async function DELETE(
 ) {
   try {
     const auth = await requireMutationAuth(request)
-    if (auth.role !== 'ADMIN') {
-      throw new Error('FORBIDDEN')
-    }
+    if (auth.role !== 'ADMIN') return apiError(ERR_FORBIDDEN)
     const { id } = await params
 
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-      return NextResponse.json(
-        { success: false, error: 'ID hoá đơn không hợp lệ' },
-        { status: 400 }
-      )
+      return apiError({ code: 'INVALID_ID', message: 'ID hoá đơn không hợp lệ', status: 400 })
     }
 
-    await prisma.$transaction(async (tx) => {
-      const invoice = await tx.invoice.findUnique({
-        where: { id },
-        include: { items: { select: { id: true } } },
-      })
+    const result = await deleteInvoice({ invoiceId: id, staffId: auth.userId, role: auth.role })
+    if (!result.ok) return apiError(mapDeleteInvoiceError(result.error))
 
-      if (!invoice) {
-        throw new Error('INVOICE_NOT_FOUND')
-      }
-
-      const [payments, membershipPayments, stockMovements] = await Promise.all([
-        tx.payment.count({ where: { invoiceId: id } }),
-        tx.membershipPayment.count({ where: { invoiceId: id } }),
-        tx.stockMovement.count({ where: { invoiceItem: { invoiceId: id } } }),
-      ])
-
-      if (payments > 0 || membershipPayments > 0 || stockMovements > 0) {
-        throw new Error('INVOICE_LINKED')
-      }
-
-      if (invoice.items.length > 0) {
-        await tx.invoiceItem.deleteMany({ where: { invoiceId: id } })
-      }
-      await tx.invoice.delete({ where: { id } })
-
-      await logActivity(tx, {
-        userId: auth.userId,
-        action: 'INVOICE_DELETE',
-        entityType: 'Invoice',
-        entityId: id,
-        details: {
-          invoiceNo: invoice.invoiceNo,
-          status: invoice.status,
-          grandTotal: Number(invoice.grandTotal),
-          staffId: invoice.staffId,
-          customerId: invoice.customerId ?? null,
-        },
-      })
-    })
-
-    return NextResponse.json({ success: true, message: 'Đã xoá hoá đơn' })
+    return apiSuccess({ message: 'Đã xoá hoá đơn' })
   } catch (error) {
     const message = (error as Error).message
-    if (message === 'UNAUTHORIZED') {
-      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
-    }
-    if (message === 'CSRF_MISMATCH') {
-      return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
-    }
-    if (message === 'FORBIDDEN') {
-      return NextResponse.json({ success: false, error: 'Chỉ quản trị viên được xoá hoá đơn' }, { status: 403 })
-    }
-    if (message === 'INVOICE_NOT_FOUND') {
-      return NextResponse.json({ success: false, error: 'Không tìm thấy hoá đơn' }, { status: 404 })
-    }
-    if (message === 'INVOICE_LINKED') {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            'Không thể xoá hoá đơn đã có thanh toán, phí hội viên hoặc biến động tồn kho liên quan. ' +
-            'Hãy dùng chức năng huỷ hoá đơn (đặt trạng thái Đã huỷ) thay thế.',
-        },
-        { status: 409 }
-      )
-    }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ success: false, error: 'Không tìm thấy hoá đơn' }, { status: 404 })
-    }
+    if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
+    if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
+    if (message === 'FORBIDDEN') return apiError({ code: 'FORBIDDEN', message: 'Chỉ quản trị viên được xoá hoá đơn', status: 403 })
     console.error('DELETE /api/invoices/[id] error:', error)
-    return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
+    return apiError({ code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 })
   }
 }

@@ -38,5 +38,15 @@ export function createCachedSettingsRepository(
       await inner.upsert(key, value, label)
       cache.delete(key)
     },
+
+    async getWithLabel(key) {
+      const value = await this.get(key)
+      if (value === null) return null
+      return { key, value, label: null }
+    },
+
+    async findAll() {
+      return inner.findAll()
+    },
   }
 }

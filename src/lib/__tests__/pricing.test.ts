@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createPricingRuleSchema, updatePricingRuleSchema } from '@/lib/pricing'
-import { calcHours, getDayType } from '@/lib/utils'
+import { calcHours, getDayType } from '@/lib/shared/utils'
 
 // ── createPricingRuleSchema ───────────────────────────────
 

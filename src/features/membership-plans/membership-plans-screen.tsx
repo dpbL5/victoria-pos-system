@@ -23,7 +23,7 @@ import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/features/pos/api'
 import type { UserSession } from '@/features/pos/types'
-import { formatVND } from '@/lib/utils'
+import { formatVND } from '@/lib/shared/utils'
 
 type PlanFilter = 'ALL' | 'ACTIVE' | 'INACTIVE'
 type DialogMode = 'create' | 'edit'

@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth } from '@/lib/shared/auth'
 import { findOpenOperationalShift, findOpenShiftForStaff } from '@/lib/shifts'
-import { prisma } from '@/lib/prisma'
-import { parseStartOfDay, toInputDate } from '@/lib/utils'
-import { Prisma } from '@/generated/prisma/client'
+import { repositories } from '@/lib/infrastructure/repositories'
+import { parseStartOfDay, toInputDate } from '@/lib/shared/utils'
 import type { DashboardStats } from '@/types'
+import type { ItemTypeRow, PaymentMethodRow } from '@/lib/reports'
 
 type PaymentMethodKey = 'CASH' | 'TRANSFER' | 'CARD' | 'MEMBER'
 type ItemTypeKey = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT' | 'SURCHARGE'
@@ -16,123 +16,28 @@ export async function GET() {
   try {
     const auth = await requireAuth()
     const { start, end } = getTodayRange()
-    const paymentWhere: Prisma.PaymentWhereInput = {
-      paidAt: { gte: start, lt: end },
-      invoice: { status: { not: 'CANCELLED' } },
-    }
-    if (auth.role === 'STAFF') paymentWhere.staffId = auth.userId
-    const invoiceWhere: Prisma.InvoiceWhereInput = {
-      paidAt: { gte: start, lt: end },
-      status: { not: 'CANCELLED' },
-    }
-    if (auth.role === 'STAFF') invoiceWhere.staffId = auth.userId
+    const scope = auth.role === 'STAFF' ? 'STAFF' : 'ALL'
 
     const currentShift = auth.role === 'ADMIN'
-      ? await findOpenOperationalShift(prisma)
-      : await findOpenShiftForStaff(prisma, auth.userId)
-    const currentShiftId = currentShift?.id
+      ? await findOpenOperationalShift(repositories as never)
+      : await findOpenShiftForStaff(repositories as never, auth.userId)
+    const currentShiftId = currentShift?.id ?? null
 
-    // ── Batch 1: Core today stats (5-6 queries) ──
-    const [
-      todayPayments,
-      todayPaymentCount,
-      todayInvoices,
-      todaySessions,
-      completedSessions,
-      activeSessions,
-      totalCustomersToday,
-    ] = await Promise.all([
-      prisma.payment.aggregate({
-        where: paymentWhere,
-        _sum: { grandTotal: true },
-      }),
-      prisma.payment.count({ where: paymentWhere }),
-      prisma.invoice.count({ where: invoiceWhere }),
-      prisma.session.count({
-        where: {
-          createdAt: { gte: start, lt: end },
-          ...(auth.role === 'STAFF' ? { staffId: auth.userId } : {}),
-        },
-      }),
-      prisma.session.count({
-        where: {
-          status: 'COMPLETED',
-          endTime: { gte: start, lt: end },
-          ...(auth.role === 'STAFF' ? { staffId: auth.userId } : {}),
-        },
-      }),
-      prisma.session.count({
-        where: {
-          status: 'ACTIVE',
-          ...(auth.role === 'STAFF' ? { staffId: auth.userId } : {}),
-        },
-      }),
-      prisma.customer.count({
-        where: { createdAt: { gte: start, lt: end } },
-      }),
-    ])
+    const data = await repositories.reporting.getDashboardData({
+      start,
+      end,
+      scope: auth.role === 'STAFF' ? 'STAFF' : 'ALL',
+      staffId: auth.userId,
+      currentShiftId,
+    })
 
-    // ── Batch 2: Breakdowns today + shift (4-6 queries) ──
-    const [
-      todayPaymentMethods,
-      todayItemTypes,
-      shiftPayments,
-      shiftPaymentCount,
-      shiftPaymentMethods,
-      shiftItemTypes,
-      shiftActiveSessions,
-      shiftCompletedSessions,
-    ] = await Promise.all([
-      prisma.payment.groupBy({
-        by: ['paymentMethod'],
-        where: paymentWhere,
-        _sum: { grandTotal: true },
-        _count: { _all: true },
-      }),
-      prisma.invoiceItem.groupBy({
-        by: ['type'],
-        where: { invoice: invoiceWhere },
-        _sum: { total: true },
-      }),
-      currentShiftId
-        ? prisma.payment.aggregate({
-            where: { shiftId: currentShiftId, invoice: { status: { not: 'CANCELLED' as const } } },
-            _sum: { grandTotal: true },
-          })
-        : Promise.resolve(null),
-      currentShiftId
-        ? prisma.payment.count({ where: { shiftId: currentShiftId, invoice: { status: { not: 'CANCELLED' as const } } } })
-        : Promise.resolve(0),
-      currentShiftId
-        ? prisma.payment.groupBy({
-            by: ['paymentMethod'],
-            where: { shiftId: currentShiftId, invoice: { status: { not: 'CANCELLED' as const } } },
-            _sum: { grandTotal: true },
-            _count: { _all: true },
-          })
-        : Promise.resolve([]),
-      currentShiftId
-        ? prisma.invoiceItem.groupBy({
-            by: ['type'],
-            where: { invoice: { shiftId: currentShiftId, status: { not: 'CANCELLED' as const } } },
-            _sum: { total: true },
-          })
-        : Promise.resolve([]),
-      currentShiftId
-        ? prisma.session.count({ where: { shiftId: currentShiftId, status: 'ACTIVE' } })
-        : Promise.resolve(0),
-      currentShiftId
-        ? prisma.session.count({ where: { shiftId: currentShiftId, status: 'COMPLETED' } })
-        : Promise.resolve(0),
-    ])
-
-    const todayRevenue = Number(todayPayments._sum?.grandTotal ?? 0)
-    const todayPaymentBreakdown = normalizePaymentBreakdown(todayPaymentMethods)
-    const todayItemBreakdown = normalizeItemBreakdown(todayItemTypes)
-    const shiftPaymentBreakdown = normalizePaymentBreakdown(shiftPaymentMethods)
-    const shiftItemBreakdown = normalizeItemBreakdown(shiftItemTypes)
+    const todayRevenue = data.today.revenue
+    const todayPaymentBreakdown = normalizePaymentBreakdown(data.today.byPaymentMethod)
+    const todayItemBreakdown = normalizeItemBreakdown(data.today.byItemType)
+    const shiftPaymentBreakdown = normalizePaymentBreakdown(data.shift?.byPaymentMethod ?? [])
+    const shiftItemBreakdown = normalizeItemBreakdown(data.shift?.byItemType ?? [])
     const shiftCash = shiftPaymentBreakdown.CASH.total
-    const shiftRevenue = Number(shiftPayments?._sum?.grandTotal ?? 0)
+    const shiftRevenue = data.shift?.revenue ?? 0
 
     const stats: DashboardStats & {
       scope: 'STAFF' | 'ALL'
@@ -163,23 +68,23 @@ export async function GET() {
       }
     } = {
       todayRevenue,
-      todaySessions,
-      activeSessions,
-      totalCustomersToday,
-      scope: auth.role === 'STAFF' ? 'STAFF' : 'ALL',
+      todaySessions: data.today.sessionsCreated,
+      activeSessions: data.today.activeSessions,
+      totalCustomersToday: data.today.newCustomers,
+      scope: scope === 'STAFF' ? 'STAFF' : 'ALL',
       today: {
         revenue: todayRevenue,
-        paymentCount: todayPaymentCount,
-        invoiceCount: todayInvoices,
-        sessionsCreated: todaySessions,
-        completedSessions,
-        activeSessions,
-        newCustomers: totalCustomersToday,
-        averagePayment: todayPaymentCount > 0 ? Math.round(todayRevenue / todayPaymentCount) : 0,
+        paymentCount: data.today.paymentCount,
+        invoiceCount: data.today.invoiceCount,
+        sessionsCreated: data.today.sessionsCreated,
+        completedSessions: data.today.completedSessions,
+        activeSessions: data.today.activeSessions,
+        newCustomers: data.today.newCustomers,
+        averagePayment: data.today.paymentCount > 0 ? Math.round(todayRevenue / data.today.paymentCount) : 0,
         byPaymentMethod: todayPaymentBreakdown,
         byItemType: todayItemBreakdown,
       },
-      currentShift: currentShift
+      currentShift: currentShift && data.shift
         ? {
             id: currentShift.id,
             openedAt: currentShift.openedAt,
@@ -187,9 +92,9 @@ export async function GET() {
             revenue: shiftRevenue,
             cashRevenue: shiftCash,
             expectedCash: Number(currentShift.openingCash) + shiftCash,
-            paymentCount: shiftPaymentCount,
-            activeSessions: shiftActiveSessions,
-            completedSessions: shiftCompletedSessions,
+            paymentCount: data.shift.paymentCount,
+            activeSessions: data.shift.activeSessions,
+            completedSessions: data.shift.completedSessions,
             byPaymentMethod: shiftPaymentBreakdown,
             byItemType: shiftItemBreakdown,
           }
@@ -236,11 +141,7 @@ function getTodayRange() {
 }
 
 function normalizePaymentBreakdown(
-  rows: Array<{
-    paymentMethod: PaymentMethodKey | null
-    _sum: { grandTotal: unknown } | null
-    _count: { _all: number } | null
-  }>
+  rows: PaymentMethodRow[]
 ): Record<PaymentMethodKey, { total: number; count: number }> {
   const empty = Object.fromEntries(
     paymentMethods.map((method) => [method, { total: 0, count: 0 }])
@@ -248,7 +149,9 @@ function normalizePaymentBreakdown(
 
   for (const row of rows) {
     if (!row.paymentMethod || !row._sum || !row._count) continue
-    empty[row.paymentMethod] = {
+    const method = row.paymentMethod as PaymentMethodKey
+    if (!(method in empty)) continue
+    empty[method] = {
       total: Number(row._sum.grandTotal ?? 0),
       count: row._count._all,
     }
@@ -258,10 +161,7 @@ function normalizePaymentBreakdown(
 }
 
 function normalizeItemBreakdown(
-  rows: Array<{
-    type: ItemTypeKey | null
-    _sum: { total: unknown } | null
-  }>
+  rows: ItemTypeRow[]
 ): Record<ItemTypeKey, number> {
   const empty = Object.fromEntries(
     itemTypes.map((type) => [type, 0])
@@ -269,7 +169,9 @@ function normalizeItemBreakdown(
 
   for (const row of rows) {
     if (!row.type || !row._sum) continue
-    empty[row.type] = Number(row._sum.total ?? 0)
+    const type = row.type as ItemTypeKey
+    if (!(type in empty)) continue
+    empty[type] = Number(row._sum.total ?? 0)
   }
 
   return empty

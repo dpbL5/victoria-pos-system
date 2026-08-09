@@ -26,7 +26,7 @@ import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/features/pos/api'
 import { formatDay, money } from '@/features/pos/format'
 import type { UserSession } from '@/features/pos/types'
-import { toInputDate } from '@/lib/utils'
+import { toInputDate } from '@/lib/shared/utils'
 
 type DayType = 'WEEKDAY' | 'WEEKEND'
 type StatusFilter = 'ALL' | 'ACTIVE' | 'FUTURE' | 'EXPIRED'

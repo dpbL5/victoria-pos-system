@@ -1,6 +1,6 @@
 // ── Adapter: implement PricingRepository bằng Prisma ─────
 import type { PricingStore } from '../store-types'
-import { getDayType, getVnHour } from '@/lib/utils'
+import { getDayType, getVnHour } from '@/lib/shared/utils'
 import {
   hasSharedDay,
   normalizeDaysOfWeek,
@@ -92,6 +92,70 @@ export function createPricingRepository(store: PricingStore): PricingRepository 
           effectiveTo: rule.effectiveTo,
         }))
         .filter((rule) => hasSharedDay(normalizedDays, rule.daysOfWeek))
+    },
+
+    async findManyWithTiers() {
+      return store.pricingRule.findMany({
+        orderBy: [
+          { dayType: 'asc' },
+          { hourFrom: 'asc' },
+          { effectiveFrom: 'desc' },
+        ],
+        include: {
+          tiers: { orderBy: { minHours: 'asc' } },
+        },
+      })
+    },
+
+    async findById(id) {
+      return store.pricingRule.findUnique({ where: { id } })
+    },
+
+    async createWithTiers(data) {
+      const rule = await store.pricingRule.create({
+        data: {
+          name: data.name,
+          hourFrom: data.hourFrom,
+          hourTo: data.hourTo,
+          ratePerHour: data.ratePerHour,
+          daysOfWeek: data.daysOfWeek,
+          dayType: data.dayType,
+          effectiveFrom: data.effectiveFrom,
+          effectiveTo: data.effectiveTo,
+        },
+      })
+      if (data.tiers && data.tiers.length > 0) {
+        await store.pricingTier.createMany({
+          data: data.tiers.map((t) => ({
+            ruleId: rule.id,
+            minHours: t.minHours,
+            ratePerHour: t.ratePerHour,
+          })),
+        })
+      }
+      return rule
+    },
+
+    async update(id, data) {
+      return store.pricingRule.update({ where: { id }, data })
+    },
+
+    async deleteTiersByRule(ruleId) {
+      await store.pricingTier.deleteMany({ where: { ruleId } })
+    },
+
+    async createTiers(ruleId, tiers) {
+      await store.pricingTier.createMany({
+        data: tiers.map((t) => ({
+          ruleId,
+          minHours: t.minHours,
+          ratePerHour: t.ratePerHour,
+        })),
+      })
+    },
+
+    async delete(id) {
+      await store.pricingRule.delete({ where: { id } })
     },
   }
 }

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
-import { requireMutationAuth } from '@/lib/auth'
+import { requireMutationAuth } from '@/lib/shared/auth'
 import { editInvoice, mapEditInvoiceError } from '@/lib/invoicing'
-import { editInvoiceSchema } from '@/lib/validations/invoice'
+import { editInvoiceSchema } from '@/lib/invoicing'
 import {
   apiError,
   resultToResponse,

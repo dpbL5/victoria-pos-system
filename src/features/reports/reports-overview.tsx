@@ -24,7 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { apiJson } from '@/features/pos/api'
 import { formatClock, money } from '@/features/pos/format'
 import type { PaymentMethod, UserSession } from '@/features/pos/types'
-import { toInputDate } from '@/lib/utils'
+import { toInputDate } from '@/lib/shared/utils'
 
 type ItemType = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT' | 'SURCHARGE'
 type Scope = 'STAFF' | 'ALL'

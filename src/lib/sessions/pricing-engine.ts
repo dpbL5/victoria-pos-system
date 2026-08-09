@@ -6,7 +6,7 @@ import {
   calculateTieredSubtotal,
   type PromotionSnapshot,
 } from '@/lib/promotion-calculation'
-import { calcHours, getDayType, getVnHour } from '@/lib/utils'
+import { calcHours, getDayType, getVnHour } from '@/lib/shared/utils'
 import type { PricingRuleSnapshot } from '@/types'
 import type { SessionRepository, SessionWithDetails } from './ports'
 import type { MembershipRepository } from '@/lib/memberships/ports'

@@ -28,4 +28,28 @@ export interface PricingRepository {
   countAll(): Promise<number>
   /** Rule trùng giờ/ngày/ngày hiệu lực (trừ excludeId) — admin overlap check */
   findOverlapping(input: FindOverlappingRulesInput): Promise<OverlapInfo[]>
+  /** Toàn bộ rule + tiers — GET /api/pricing */
+  findManyWithTiers(): Promise<PricingRuleWithTiers[]>
+  /** Rule đơn (không tiers) — cho PUT/DELETE */
+  findById(id: string): Promise<Prisma.PricingRuleGetPayload<object> | null>
+  /** Tạo rule + tiers trong 1 transaction */
+  createWithTiers(data: {
+    name: string
+    hourFrom: number
+    hourTo: number | null
+    ratePerHour: number
+    daysOfWeek: number[]
+    dayType: DayType
+    effectiveFrom: Date
+    effectiveTo: Date | null
+    tiers?: Array<{ minHours: number; ratePerHour: number }>
+  }): Promise<Prisma.PricingRuleGetPayload<object>>
+  /** Cập nhật rule (không đụng tiers) */
+  update(id: string, data: Record<string, unknown>): Promise<Prisma.PricingRuleGetPayload<object>>
+  /** Xoá toàn bộ tiers của rule — thay thế bộ tiers mới */
+  deleteTiersByRule(ruleId: string): Promise<void>
+  /** Tạo nhiều tiers cho rule */
+  createTiers(ruleId: string, tiers: Array<{ minHours: number; ratePerHour: number }>): Promise<void>
+  /** Xoá rule + tiers (cascade) */
+  delete(id: string): Promise<void>
 }

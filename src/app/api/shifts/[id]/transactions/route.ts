@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/shared/auth'
 import { getShiftTransactions } from '@/lib/shifts'
+import { repositories } from '@/lib/infrastructure/repositories'
 
 export async function GET(
   _request: NextRequest,
@@ -11,10 +11,7 @@ export async function GET(
     const auth = await requireAuth()
     const { id } = await params
 
-    const shift = await prisma.shift.findUnique({
-      where: { id },
-      select: { id: true, staffId: true, status: true, participants: { select: { staffId: true } } },
-    })
+    const shift = await repositories.shift.findByIdAccess(id)
 
     if (!shift) {
       return NextResponse.json(
@@ -34,7 +31,7 @@ export async function GET(
       )
     }
 
-    const result = await getShiftTransactions(prisma, id)
+    const result = await getShiftTransactions(repositories as never, id)
 
     return NextResponse.json({
       success: true,

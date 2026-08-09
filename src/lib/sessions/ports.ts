@@ -22,6 +22,97 @@ export type SessionRefs = Prisma.SessionGetPayload<{
   }
 }>
 
+/** Dòng phiên trong danh sách — GET /api/sessions */
+export type SessionListRow = Prisma.SessionGetPayload<{
+  select: {
+    id: true
+    startTime: true
+    endTime: true
+    status: true
+    hourlyRate: true
+    pricingRuleId: true
+    pricingRuleSnapshot: true
+    totalHours: true
+    subtotal: true
+    discountAmount: true
+    totalAmount: true
+    playerCount: true
+    promotionRuleId: true
+    promotionName: true
+    promotionDiscountType: true
+    promotionDiscountValue: true
+    customer: { select: { id: true; fullName: true; phone: true; type: true } }
+    staff: { select: { id: true; fullName: true } }
+    membership: { select: { id: true; startsAt: true; expiresAt: true } }
+    shift: { select: { id: true; openedAt: true; status: true } }
+    pricingGroups: {
+      select: {
+        id: true
+        label: true
+        playerCount: true
+        remainingCount: true
+        hourlyRate: true
+        pricingRuleId: true
+        pricingSnapshot: true
+      }
+      orderBy: { createdAt: 'asc' }
+    }
+  }
+}>
+
+export interface SessionListFilter {
+  status?: string
+  customerId?: string
+  date?: string
+  skip: number
+  take: number
+}
+
+/** Preview checkout — session + pricingGroups (cho tính giá) */
+export type SessionPreviewRow = Prisma.SessionGetPayload<{
+  select: {
+    id: true
+    status: true
+    playerCount: true
+    pricingGroups: {
+      select: {
+        id: true
+        label: true
+        playerCount: true
+        remainingCount: true
+        hourlyRate: true
+        pricingRuleId: true
+        pricingSnapshot: true
+      }
+      orderBy: { createdAt: 'asc' }
+    }
+  }
+}>
+
+export interface SessionRepository {
+  /** Session + customer + membership + pricingGroups (orderBy createdAt asc) — cho checkout */
+  findByIdForCheckout(id: string): Promise<SessionWithDetails | null>
+  /** Session + customer — cho sellItems */
+  findByIdWithCustomer(id: string): Promise<SessionWithCustomer | null>
+  /** Phiên ACTIVE hiện có của khách (chặn check-in trùng) */
+  findActiveByCustomer(customerId: string): Promise<{ id: string } | null>
+  /** Danh sách phiên (filter + phân trang) — GET /api/sessions */
+  findMany(input: SessionListFilter): Promise<{ rows: SessionListRow[]; total: number }>
+  /** Session + pricingGroups — cho checkout-preview */
+  findByIdForPreview(id: string): Promise<SessionPreviewRow | null>
+  /** Tổng grandTotal của DRAFT invoices theo từng session — enrich pendingSellTotal */
+  findDraftSellTotals(sessionIds: string[]): Promise<Record<string, number>>
+  /** Tạo session kèm customer/membership/shift refs */
+  createWithRefs(data: CreateSessionData): Promise<SessionRefs>
+  createPricingGroup(data: CreatePricingGroupData): Promise<void>
+  /** Unchecked update — cho phép set trực tiếp shiftId, playerCount, promotion fields... */
+  update(id: string, data: Prisma.SessionUncheckedUpdateInput): Promise<void>
+  /** Giảm remainingCount của group — trả về remainingCount mới */
+  decrementGroupRemaining(groupId: string, count: number): Promise<{ remainingCount: number }>
+  /** Tổng remainingCount của tất cả groups trong session */
+  sumRemainingPlayers(sessionId: string): Promise<number>
+}
+
 export interface CreateSessionData {
   customerId: string
   staffId: string
@@ -46,24 +137,6 @@ export interface CreatePricingGroupData {
   pricingSnapshot: PricingRuleSnapshot | null
 }
 
-export interface SessionRepository {
-  /** Session + customer + membership + pricingGroups (orderBy createdAt asc) — cho checkout */
-  findByIdForCheckout(id: string): Promise<SessionWithDetails | null>
-  /** Session + customer — cho sellItems */
-  findByIdWithCustomer(id: string): Promise<SessionWithCustomer | null>
-  /** Phiên ACTIVE hiện có của khách (chặn check-in trùng) */
-  findActiveByCustomer(customerId: string): Promise<{ id: string } | null>
-  /** Tạo session kèm customer/membership/shift refs */
-  createWithRefs(data: CreateSessionData): Promise<SessionRefs>
-  createPricingGroup(data: CreatePricingGroupData): Promise<void>
-  /** Unchecked update — cho phép set trực tiếp shiftId, playerCount, promotion fields... */
-  update(id: string, data: Prisma.SessionUncheckedUpdateInput): Promise<void>
-  /** Giảm remainingCount của group — trả về remainingCount mới */
-  decrementGroupRemaining(groupId: string, count: number): Promise<{ remainingCount: number }>
-  /** Tổng remainingCount của tất cả groups trong session */
-  sumRemainingPlayers(sessionId: string): Promise<number>
-}
-
 export interface ProductRecord {
   id: string
   name: string
@@ -73,6 +146,25 @@ export interface ProductRecord {
   stockQuantity: number
   isActive: boolean
 }
+
+/** Dòng sản phẩm cho admin — costPrice cố ý loại (dữ liệu nhạy cảm) */
+export type ProductAdminRow = Prisma.ProductGetPayload<{
+  select: {
+    id: true
+    name: true
+    sku: true
+    type: true
+    price: true
+    stockQuantity: true
+    minStockLevel: true
+    isActive: true
+    createdAt: true
+    updatedAt: true
+  }
+}>
+
+/** Product đầy đủ (cả costPrice) — cho admin edit/stock */
+export type ProductAdminDetail = Prisma.ProductGetPayload<object>
 
 export interface ProductRepository {
   /** Sản phẩm theo danh sách id (isActive: true) — pre-tx check */
@@ -91,4 +183,30 @@ export interface ProductRepository {
     unitCost: number | null
     reason: string
   }): Promise<void>
+  /** Danh sách sản phẩm cho admin (search/isActive, exclude costPrice) — GET /api/products */
+  findManyForAdmin(input: { search?: string; isActive?: boolean; take?: number }): Promise<ProductAdminRow[]>
+  /** Product đầy đủ (kèm stock) — cho POST stock & PUT product */
+  findByIdAdmin(id: string): Promise<ProductAdminDetail | null>
+  /** Tạo product + StockMovement RESTOCK tồn đầu kỳ (PRODUCT) — trong 1 transaction */
+  createWithInitialStock(input: {
+    name: string
+    sku: string | null
+    type: 'PRODUCT' | 'SERVICE'
+    price: number
+    costPrice: number | null
+    stockQuantity: number
+    minStockLevel: number
+    isActive: boolean
+    staffId: string
+  }): Promise<ProductAdminDetail>
+  /** Ghi StockMovement (RESTOCK/ADJUSTMENT) + cập nhật stockQuantity — POST /api/products/[id]/stock */
+  applyStockMovement(input: {
+    productId: string
+    staffId: string
+    type: 'RESTOCK' | 'ADJUSTMENT'
+    quantity: number
+    unitCost: number | null
+    reason: string | null
+    shiftId: string | null
+  }): Promise<{ movementId: string; before: number; after: number; shiftId: string | null; type: string; quantity: number }>
 }

@@ -11,7 +11,7 @@
  *   ADMIN_FULL_NAME (mặc định: Quản trị viên)
  */
 import 'dotenv/config'
-import { prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/infrastructure/prisma'
 import { UserRole } from '@/generated/prisma/enums'
 import bcrypt from 'bcryptjs'
 

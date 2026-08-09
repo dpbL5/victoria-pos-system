@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { requireAuth, requireMutationAuth } from '@/lib/auth'
+import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
 import { openShiftSchema, openOrJoinShift, mapOpenOrJoinShiftError } from '@/lib/shifts'
 import {
   findOpenShiftForStaff,
   findOpenOperationalShift,
   shiftWithParticipantsInclude,
   shiftWithAllParticipantsInclude,
-  getShiftRevenueData,
 } from '@/lib/shifts'
 import { apiError, ERR_UNAUTHORIZED, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
-import { parseStartOfDay, toInputDate } from '@/lib/utils'
+import { parseStartOfDay, toInputDate } from '@/lib/shared/utils'
 import { Prisma } from '@/generated/prisma/client'
+import { repositories } from '@/lib/infrastructure/repositories'
 
 const stripeShiftInclude = {
   staff: { select: { id: true, fullName: true } },
@@ -41,15 +40,15 @@ export async function GET(request: NextRequest) {
         : undefined
 
     if (current) {
-      let shift = await findOpenShiftForStaff(prisma, auth.userId)
+      let shift = await repositories.shift.findOpenForStaff(auth.userId)
       if (!shift && auth.role === 'ADMIN') {
-        shift = await findOpenOperationalShift(prisma)
+        shift = await repositories.shift.findOpenOperational()
       }
       return NextResponse.json({ success: true, data: shift })
     }
 
     if (openOperational) {
-      const shift = await findOpenOperationalShift(prisma)
+      const shift = await repositories.shift.findOpenOperational()
       return NextResponse.json({ success: true, data: shift })
     }
 
@@ -62,103 +61,15 @@ export async function GET(request: NextRequest) {
       const fromDate = parseStartOfDay(fromStr)
       const toDate = new Date(parseStartOfDay(toStr).getTime() + 24 * 60 * 60 * 1000)
 
-      const where: Record<string, unknown> = {
-        openedAt: { gte: fromDate, lt: toDate },
-        ...(auth.role === 'STAFF'
-          ? {
-              OR: [
-                { staffId: auth.userId },
-                { participants: { some: { staffId: auth.userId } } },
-              ],
-            }
-          : {}),
+      const groups = await repositories.reporting.getShiftDayGroups({
+        from: fromDate,
+        to: toDate,
         ...(status ? { status } : {}),
-      }
-
-      const shifts = await prisma.shift.findMany({
-        where,
-        include: stripeShiftInclude,
-        orderBy: { openedAt: 'desc' },
+        scope: auth.role === 'STAFF' ? 'STAFF' : 'ALL',
+        staffId: auth.userId,
       })
 
-      const revenueMap = new Map<string, Awaited<ReturnType<typeof getShiftRevenueData>>>()
-      await Promise.all(
-        shifts.map(async (s) => {
-          revenueMap.set(s.id, await getShiftRevenueData(prisma, s.id))
-        })
-      )
-
-      function calcToolStats(tcs: { openCount: number; closeCount: number | null }[]) {
-        if (tcs.length === 0) return undefined
-        let matched = 0
-        let mismatched = 0
-        for (const tc of tcs) {
-          if (tc.closeCount == null) continue
-          if (tc.closeCount === tc.openCount) matched++
-          else mismatched++
-        }
-        return { total: tcs.length, matched, mismatched }
-      }
-
       const todayStr = toInputDate(new Date())
-      const groups = new Map<string, {
-        date: string
-        totalRevenue: number
-        cashRevenue: number
-        transferRevenue: number
-        cardRevenue: number
-        memberRevenue: number
-        paymentCount: number
-        membershipCount: number
-        sessionCount: number
-        shifts: Array<Record<string, unknown>>
-      }>()
-
-      for (const shift of shifts) {
-        const dayKey = toInputDate(shift.openedAt)
-        if (!groups.has(dayKey)) {
-          groups.set(dayKey, {
-            date: dayKey,
-            totalRevenue: 0,
-            cashRevenue: 0,
-            transferRevenue: 0,
-            cardRevenue: 0,
-            memberRevenue: 0,
-            paymentCount: 0,
-            membershipCount: 0,
-            sessionCount: 0,
-            shifts: [],
-          })
-        }
-        const group = groups.get(dayKey)!
-        const rev = revenueMap.get(shift.id) ?? { totalRevenue: 0, cashRevenue: 0, transferRevenue: 0, cardRevenue: 0, memberRevenue: 0, paymentCount: 0, membershipCount: 0 }
-
-        group.totalRevenue += rev.totalRevenue
-        group.cashRevenue += rev.cashRevenue
-        group.transferRevenue += rev.transferRevenue
-        group.cardRevenue += rev.cardRevenue
-        group.memberRevenue += rev.memberRevenue
-        group.paymentCount += rev.paymentCount
-        group.membershipCount += rev.membershipCount
-        group.sessionCount += shift._count.sessions
-
-        group.shifts.push({
-          id: shift.id,
-          staffId: shift.staffId,
-          staff: shift.staff,
-          openedAt: shift.openedAt.toISOString(),
-          closedAt: shift.closedAt?.toISOString() ?? null,
-          openingCash: Number(shift.openingCash),
-          closingCash: shift.closingCash != null ? Number(shift.closingCash) : null,
-          expectedCash: shift.expectedCash != null ? Number(shift.expectedCash) : null,
-          cashDifference: shift.cashDifference != null ? Number(shift.cashDifference) : null,
-          status: shift.status,
-          _count: shift._count,
-          toolCounts: shift.toolCounts,
-          toolStats: calcToolStats(shift.toolCounts),
-        })
-      }
-
       let sortedDays = Array.from(groups.values())
       sortedDays.sort((a, b) => b.date.localeCompare(a.date))
 
@@ -185,22 +96,13 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const shifts = await prisma.shift.findMany({
-      where: {
-        ...(auth.role === 'STAFF'
-          ? {
-              OR: [
-                { staffId: auth.userId },
-                { participants: { some: { staffId: auth.userId } } },
-              ],
-            }
-          : {}),
-        ...(status ? { status } : {}),
-      },
-      include: includeParticipants === 'all'
-        ? shiftWithAllParticipantsInclude
-        : shiftWithParticipantsInclude,
-      orderBy: { openedAt: 'desc' },
+    const { rows: shifts } = await repositories.shift.findManyWithCount({
+      from: new Date(0),
+      to: new Date(),
+      ...(auth.role === 'STAFF' ? { staffId: auth.userId } : {}),
+      ...(status ? { status } : {}),
+      includeParticipants: includeParticipants === 'all' ? 'all' : 'active',
+      skip: 0,
       take,
     })
 

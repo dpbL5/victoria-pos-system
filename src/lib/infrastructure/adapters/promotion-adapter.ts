@@ -81,5 +81,45 @@ export function createPromotionRepository(store: PromotionStore): PromotionRepos
         }))
         .filter((rule) => hasSharedDay(normalizedDays, rule.daysOfWeek))
     },
+
+    async findMany() {
+      return store.promotionRule.findMany({
+        orderBy: [
+          { isActive: 'desc' },
+          { dayType: 'asc' },
+          { hourFrom: 'asc' },
+          { effectiveFrom: 'desc' },
+        ],
+      })
+    },
+
+    async findById(id) {
+      return store.promotionRule.findUnique({ where: { id } })
+    },
+
+    async create(data) {
+      return store.promotionRule.create({
+        data: {
+          name: data.name,
+          discountType: data.discountType as 'FIXED_PER_HOUR' | 'PERCENT_PLAY_TIME' | 'FIXED_AMOUNT' | 'PERCENT',
+          discountValue: data.discountValue,
+          daysOfWeek: data.daysOfWeek,
+          hourFrom: data.hourFrom,
+          hourTo: data.hourTo,
+          dayType: data.dayType as 'WEEKDAY' | 'WEEKEND',
+          effectiveFrom: data.effectiveFrom,
+          effectiveTo: data.effectiveTo,
+          isActive: data.isActive,
+        },
+      })
+    },
+
+    async update(id, data) {
+      return store.promotionRule.update({ where: { id }, data })
+    },
+
+    async delete(id) {
+      await store.promotionRule.delete({ where: { id } })
+    },
   }
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireMutationAuth } from '@/lib/auth'
+import { requireMutationAuth } from '@/lib/shared/auth'
 import { voidInvoice, mapVoidInvoiceError } from '@/lib/invoicing'
 import { apiError, ERR_UNAUTHORIZED, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
 

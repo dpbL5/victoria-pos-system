@@ -1,10 +1,10 @@
 // ── JWT Auth với jose ───────────────────────────────────
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-import { generateCSRFToken, setCSRFCookie, clearCSRFCookie, validateCSRF } from "@/lib/csrf";
-import { rateLimit } from "@/lib/rate-limit";
-import { withRetry } from "@/lib/db-retry";
+import { prisma } from "@/lib/infrastructure/prisma";
+import { generateCSRFToken, setCSRFCookie, clearCSRFCookie, validateCSRF } from "@/lib/shared/csrf";
+import { rateLimit } from "@/lib/shared/rate-limit";
+import { withRetry } from "@/lib/infrastructure/db-retry";
 import type { SessionPayload } from "@/types";
 
 // ── Config ─────────────────────────────────────────────

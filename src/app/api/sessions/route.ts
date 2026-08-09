@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, requireMutationAuth } from '@/lib/auth'
+import { NextRequest } from 'next/server'
+import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
 import { checkIn, mapCheckInError } from '@/lib/sessions'
-import { prisma } from '@/lib/prisma'
-import { createSessionSchema } from '@/lib/validations/session'
+import { repositories } from '@/lib/infrastructure/repositories'
+import { createSessionSchema } from '@/lib/sessions'
 import {
+  apiSuccess,
   apiError,
   resultToResponse,
   ERR_UNAUTHORIZED,
@@ -15,98 +16,35 @@ export async function GET(request: NextRequest) {
     await requireAuth()
 
     const { searchParams } = new URL(request.url)
-    const status = searchParams.get('status')
-    const customerId = searchParams.get('customerId')
-    const date = searchParams.get('date')
+    const status = searchParams.get('status') || undefined
+    const customerId = searchParams.get('customerId') || undefined
+    const date = searchParams.get('date') || undefined
     const page = clampPositiveInt(searchParams.get('page'), 1, 1, 500)
     const limit = clampPositiveInt(searchParams.get('limit'), 20, 1, 100)
     const skip = (page - 1) * limit
 
-    const where: Record<string, unknown> = {}
-    if (status) where.status = status
-    if (customerId) where.customerId = customerId
-    if (date) {
-      const dayStart = new Date(date)
-      const dayEnd = new Date(date)
-      dayEnd.setDate(dayEnd.getDate() + 1)
-      where.createdAt = { gte: dayStart, lt: dayEnd }
-    }
-
-    const [data, total] = await Promise.all([
-      prisma.session.findMany({
-        where,
-        select: {
-          id: true,
-          startTime: true,
-          endTime: true,
-          status: true,
-          hourlyRate: true,
-          pricingRuleId: true,
-          pricingRuleSnapshot: true,
-          totalHours: true,
-          subtotal: true,
-          discountAmount: true,
-          totalAmount: true,
-          playerCount: true,
-          promotionRuleId: true,
-          promotionName: true,
-          promotionDiscountType: true,
-          promotionDiscountValue: true,
-          customer: { select: { id: true, fullName: true, phone: true, type: true } },
-          staff: { select: { id: true, fullName: true } },
-          membership: { select: { id: true, startsAt: true, expiresAt: true } },
-          shift: { select: { id: true, openedAt: true, status: true } },
-          pricingGroups: {
-            select: {
-              id: true,
-              label: true,
-              playerCount: true,
-              remainingCount: true,
-              hourlyRate: true,
-              pricingRuleId: true,
-              pricingSnapshot: true,
-            },
-            orderBy: { createdAt: 'asc' },
-          },
-        },
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.session.count({ where }),
-    ])
+    const { rows: data, total } = await repositories.session.findMany({
+      status,
+      customerId,
+      date,
+      skip,
+      take: limit,
+    })
 
     // ── Tính tổng tiền bán kèm chưa thanh toán (DRAFT invoices) cho từng phiên ──
     const sessionIds = data.map((s) => s.id)
-    const draftTotals: Record<string, number> = {}
-    if (sessionIds.length > 0) {
-      const drafts = await prisma.invoice.findMany({
-        where: { sessionId: { in: sessionIds }, status: 'DRAFT' },
-        select: { sessionId: true, grandTotal: true },
-      })
-      for (const d of drafts) {
-        if (d.sessionId) {
-          draftTotals[d.sessionId] = (draftTotals[d.sessionId] ?? 0) + Number(d.grandTotal)
-        }
-      }
-    }
+    const draftTotals = await repositories.session.findDraftSellTotals(sessionIds)
 
     const enriched = data.map((s) => ({
       ...s,
       pendingSellTotal: draftTotals[s.id] ?? 0,
     }))
 
-    return NextResponse.json({
-      success: true,
-      data: enriched,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    })
+    return apiSuccess(enriched, 200)
   } catch (error) {
-    if ((error as Error).message === 'UNAUTHORIZED') {
-      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
-    }
+    if ((error as Error).message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
     console.error('GET /api/sessions error:', error)
-    return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
+    return apiError({ code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 })
   }
 }
 

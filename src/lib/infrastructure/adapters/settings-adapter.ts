@@ -23,5 +23,14 @@ export function createSettingsRepository(store: SettingsStore): SettingsReposito
         create: { key, value, label },
       })
     },
+
+    async getWithLabel(key) {
+      const row = await store.appSetting.findUnique({ where: { key } })
+      return row ? { key: row.key, value: row.value, label: row.label } : null
+    },
+
+    async findAll() {
+      return store.appSetting.findMany({ orderBy: { key: 'asc' } })
+    },
   }
 }

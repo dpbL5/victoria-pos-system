@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/auth'
-import { validateCSRF } from '@/lib/csrf'
-import { logActivity } from '@/lib/audit'
+import { requireAdmin } from '@/lib/shared/auth'
+import { validateCSRF } from '@/lib/shared/csrf'
 import {
-  deriveDayTypeFromDays,
-  normalizeDaysOfWeek,
-  resolveRuleDaysOfWeek,
+  updatePricingRule,
+  mapUpdatePricingRuleError,
+  deletePricingRule,
+  mapDeletePricingRuleError,
 } from '@/lib/pricing'
 import { repositories } from '@/lib/infrastructure/repositories'
-import { prisma } from '@/lib/prisma'
-import { parseLocalDate, parseLocalDateEnd } from '@/lib/utils'
+import { parseLocalDate, parseLocalDateEnd } from '@/lib/shared/utils'
 import { updatePricingRuleSchema } from '@/lib/pricing'
+import {
+  apiError,
+  ERR_UNAUTHORIZED,
+  ERR_FORBIDDEN,
+  ERR_CSRF,
+} from '@/lib/infrastructure/api-helpers'
 
 export async function PUT(
   request: NextRequest,
@@ -24,18 +29,12 @@ export async function PUT(
     const parsed = updatePricingRuleSchema.safeParse(body)
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { success: false, error: parsed.error.issues[0].message },
-        { status: 400 }
-      )
+      return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     }
 
-    const existing = await prisma.pricingRule.findUnique({ where: { id } })
+    const existing = await repositories.pricing.findById(id)
     if (!existing) {
-      return NextResponse.json(
-        { success: false, error: 'Không tìm thấy quy tắc bảng giá' },
-        { status: 404 }
-      )
+      return apiError({ code: 'PRICING_RULE_NOT_FOUND', message: 'Không tìm thấy quy tắc bảng giá', status: 404 })
     }
 
     const legacyDayType = parsed.data.dayType ?? existing.dayType
@@ -54,94 +53,37 @@ export async function PUT(
       ? (parsed.data.effectiveTo ? parseLocalDateEnd(parsed.data.effectiveTo) : null)
       : existing.effectiveTo
 
-    const overlaps = await repositories.pricing.findOverlapping({
-      daysOfWeek,
+    const result = await updatePricingRule({
+      staffId: auth.userId,
+      ruleId: id,
+      name: parsed.data.name,
       hourFrom,
       hourTo,
-      effectiveFrom,
-      effectiveTo,
-      excludeId: id,
+      ratePerHour: parsed.data.ratePerHour,
+      daysOfWeek: parsed.data.daysOfWeek !== undefined ? daysOfWeek : undefined,
+      dayType: parsed.data.daysOfWeek !== undefined ? dayType : undefined,
+      effectiveFrom: parsed.data.effectiveFrom ? effectiveFrom : undefined,
+      effectiveTo: parsed.data.effectiveTo !== undefined ? effectiveTo : undefined,
+      tiers: parsed.data.tiers,
     })
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const data: Record<string, unknown> = { ...parsed.data }
-      if (parsed.data.name) data.name = parsed.data.name.trim()
-      if (parsed.data.daysOfWeek !== undefined) {
-        data.daysOfWeek = daysOfWeek
-        data.dayType = dayType
-      }
-      if (parsed.data.effectiveFrom) data.effectiveFrom = parseLocalDate(parsed.data.effectiveFrom)
-      if (parsed.data.effectiveTo !== undefined) {
-        data.effectiveTo = parsed.data.effectiveTo ? parseLocalDateEnd(parsed.data.effectiveTo) : null
-      }
-      delete data.tiers
+    if (!result.ok) return apiError(mapUpdatePricingRuleError(result.error))
 
-      const rule = await tx.pricingRule.update({
-        where: { id },
-        data,
-      })
-
-      if (parsed.data.tiers !== undefined) {
-        await tx.pricingTier.deleteMany({ where: { ruleId: id } })
-        if (parsed.data.tiers.length > 0) {
-          await tx.pricingTier.createMany({
-            data: parsed.data.tiers.map((t) => ({
-              ruleId: id,
-              minHours: t.minHours,
-              ratePerHour: t.ratePerHour,
-            })),
-          })
-        }
-      }
-
-      await logActivity(tx, {
-        userId: auth.userId,
-        action: 'PRICING_RULE_UPDATE',
-        entityType: 'PricingRule',
-        entityId: id,
-        details: {
-          before: {
-            name: existing.name,
-            hourFrom: existing.hourFrom,
-            hourTo: existing.hourTo,
-            ratePerHour: Number(existing.ratePerHour),
-            daysOfWeek: existing.daysOfWeek,
-            dayType: existing.dayType,
-          },
-          after: {
-            name: rule.name,
-            hourFrom: rule.hourFrom,
-            hourTo: rule.hourTo,
-            ratePerHour: Number(rule.ratePerHour),
-            daysOfWeek: rule.daysOfWeek,
-            dayType: rule.dayType,
-          },
-        },
-      })
-
-      return rule
-    })
-
+    const { rule, warnings } = result.value
     return NextResponse.json(
       {
         success: true,
-        data: updated,
-        ...(overlaps.length > 0 ? { warnings: overlaps.map(o => `Trùng khung giờ với quy tắc "${o.name}"`) } : {}),
+        data: rule,
+        ...(warnings.length > 0 ? { warnings } : {}),
       }
     )
   } catch (error) {
     const message = (error as Error).message
-    if (message === 'UNAUTHORIZED') {
-      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
-    }
-    if (message === 'CSRF_MISMATCH') {
-      return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
-    }
-    if (message === 'FORBIDDEN') {
-      return NextResponse.json({ success: false, error: 'Không có quyền' }, { status: 403 })
-    }
+    if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
+    if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
+    if (message === 'FORBIDDEN') return apiError(ERR_FORBIDDEN)
     console.error('PUT /api/pricing/[id] error:', error)
-    return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
+    return apiError({ code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 })
   }
 }
 
@@ -154,46 +96,19 @@ export async function DELETE(
     await validateCSRF(request)
     const { id } = await params
 
-    const existing = await prisma.pricingRule.findUnique({ where: { id } })
-    if (!existing) {
-      return NextResponse.json(
-        { success: false, error: 'Không tìm thấy quy tắc bảng giá' },
-        { status: 404 }
-      )
-    }
+    const result = await deletePricingRule({ staffId: auth.userId, ruleId: id })
+    if (!result.ok) return apiError(mapDeletePricingRuleError(result.error))
 
-    await prisma.$transaction(async (tx) => {
-      await tx.pricingRule.delete({ where: { id } })
-
-      await logActivity(tx, {
-        userId: auth.userId,
-        action: 'PRICING_RULE_DELETE',
-        entityType: 'PricingRule',
-        entityId: id,
-        details: {
-          name: existing.name,
-          hourFrom: existing.hourFrom,
-          hourTo: existing.hourTo,
-          ratePerHour: Number(existing.ratePerHour),
-          daysOfWeek: existing.daysOfWeek,
-          dayType: existing.dayType,
-        },
-      })
-    })
-
-    return NextResponse.json({ success: true, message: 'Đã xóa quy tắc bảng giá' })
+    return apiError({ code: 'OK', message: 'Đã xóa quy tắc bảng giá', status: 200 } as never)
   } catch (error) {
     const message = (error as Error).message
-    if (message === 'UNAUTHORIZED') {
-      return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
-    }
-    if (message === 'CSRF_MISMATCH') {
-      return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
-    }
-    if (message === 'FORBIDDEN') {
-      return NextResponse.json({ success: false, error: 'Không có quyền' }, { status: 403 })
-    }
+    if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
+    if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
+    if (message === 'FORBIDDEN') return apiError(ERR_FORBIDDEN)
     console.error('DELETE /api/pricing/[id] error:', error)
-    return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
+    return apiError({ code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 })
   }
 }
+
+// Re-export normalize helpers used in route
+import { deriveDayTypeFromDays, normalizeDaysOfWeek, resolveRuleDaysOfWeek } from '@/lib/pricing'

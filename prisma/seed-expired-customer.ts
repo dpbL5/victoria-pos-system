@@ -5,7 +5,7 @@
  * Chạy: npm run seed:expired
  */
 import 'dotenv/config'
-import { prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/infrastructure/prisma'
 import bcrypt from 'bcryptjs'
 
 if (!process.env.DATABASE_URL) {

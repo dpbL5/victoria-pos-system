@@ -14,7 +14,7 @@
 
 import { cookies } from 'next/headers'
 import { randomBytes } from 'crypto'
-import { CSRF_COOKIE, CSRF_HEADER } from '@/lib/constants'
+import { CSRF_COOKIE, CSRF_HEADER } from '@/lib/shared/constants'
 
 const TOKEN_BYTES = 32
 

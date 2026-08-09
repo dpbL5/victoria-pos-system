@@ -30,7 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { apiJson } from '@/features/pos/api'
 import { formatClock, formatDay, money, paymentMethodLabel, toNumber } from '@/features/pos/format'
-import { toInputDate } from '@/lib/utils'
+import { toInputDate } from '@/lib/shared/utils'
 import type { PaymentMethod, ShiftParticipantRole, UserRole, UserSession } from '@/features/pos/types'
 
 interface TransactionItem {

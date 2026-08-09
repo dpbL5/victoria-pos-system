@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createToolSchema, updateToolSchema } from '@/lib/validations/tool'
+import { createToolSchema, updateToolSchema } from '@/lib/tools'
 import {
   openShiftSchema,
   closeShiftSchema,

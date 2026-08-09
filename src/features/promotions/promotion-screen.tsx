@@ -29,7 +29,7 @@ import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/features/pos/api'
 import type { UserSession } from '@/features/pos/types'
-import { formatVND, toInputDate } from '@/lib/utils'
+import { formatVND, toInputDate } from '@/lib/shared/utils'
 import type { PromotionDiscountType, PromotionRule } from '@/types'
 
 type StatusFilter = 'ALL' | 'ACTIVE' | 'FUTURE' | 'INACTIVE'
