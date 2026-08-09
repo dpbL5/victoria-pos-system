@@ -28,7 +28,8 @@
       "Shell(rm:*)",
       "Shell(for:*)",
       "Shell(do:*)",
-      "Shell(done:*)"
+      "Shell(done:*)",
+      "Shell(git commit -F - <<'EOF' chore: cập nhật commandcode config, taste và skills lock Co-authored-by: CommandCodeBot <noreply@commandcode.ai> EOF)"
     ],
     "deny": [],
     "defaultMode": "default"
