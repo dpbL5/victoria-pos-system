@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { formatClock, money } from '@/features/pos/format'
+import { apiJson } from '@/lib/api'
 import type { ShiftReportDetail } from '@/types'
 
 interface DetailResponse {
@@ -48,9 +49,7 @@ export function ReportsShiftDetail({ shiftId, isAdmin, onClose, onUpdated }: Rep
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/reports/shifts/${shiftId}`)
-      const data: DetailResponse = await res.json()
-
+      const data = await apiJson<DetailResponse['data']>(`/api/reports/shifts/${shiftId}`)
       if (!data.success) {
         setError(data.error || 'Không tải được chi tiết ca')
         return
@@ -90,12 +89,11 @@ export function ReportsShiftDetail({ shiftId, isAdmin, onClose, onUpdated }: Rep
 
     setSaving(true)
     try {
-      const res = await fetch(`/api/reports/shifts/${shiftId}`, {
+      const data = await apiJson(`/api/reports/shifts/${shiftId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cashDifference: diff, notes: editNotes || undefined }),
       })
-      const data = await res.json()
 
       if (!data.success) {
         toast.error(data.error || 'Không cập nhật được')

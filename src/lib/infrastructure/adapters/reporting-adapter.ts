@@ -18,18 +18,24 @@ import type {
   ShiftDayGroupInput,
 } from '@/lib/reports/ports'
 
-/** Cast store về delegate cụ thể — khu trú việc `as never` chỉ ở adapter */
+// Store types đã có đủ delegates trong ReportingStore — không cần cast
 function payment(store: ReportingStore) {
-  return (store as unknown as { payment: Prisma.PaymentDelegate }).payment
+  return store.payment
 }
 function invoiceItem(store: ReportingStore) {
-  return (store as unknown as { invoiceItem: Prisma.InvoiceItemDelegate }).invoiceItem
+  return store.invoiceItem
 }
 function session(store: ReportingStore) {
-  return (store as unknown as { session: Prisma.SessionDelegate }).session
+  return store.session
 }
 function customer(store: ReportingStore) {
-  return (store as unknown as { customer: Prisma.CustomerDelegate }).customer
+  return store.customer
+}
+function membershipPayment(store: ReportingStore) {
+  return store.membershipPayment
+}
+function shift(store: ReportingStore) {
+  return store.shift
 }
 
 function scopeWhere(scope: DashboardScope, staffId: string) {
@@ -169,8 +175,14 @@ async function getRevenueData(store: ReportingStore, input: RevenueInput): Promi
     invoice: { status: { not: 'CANCELLED' as const } },
     ...scopeWhere(input.scope, input.staffId),
   }
-  const [rows, recentPayments] = await Promise.all([
-    payment(store).findMany({ where, orderBy: { paidAt: 'asc' } }),
+  const [groupedRows, recentPayments] = await Promise.all([
+    // Gộp doanh thu theo ngày bằng SQL — thay vì tải hết rows rồi gộp trong JS
+    payment(store).groupBy({
+      by: ['paidAt'],
+      where,
+      _sum: { grandTotal: true },
+      _count: { _all: true },
+    }),
     payment(store).findMany({
       where,
       include: {
@@ -193,8 +205,18 @@ async function getRevenueData(store: ReportingStore, input: RevenueInput): Promi
       take: 5,
     }),
   ])
+
+  const grouped = groupedRows
+    .map((row) => ({
+      period: toInputDate(row.paidAt),
+      revenue: Number(row._sum?.grandTotal ?? 0),
+      count: row._count?._all ?? 0,
+    }))
+    .sort((a, b) => (a.period < b.period ? -1 : a.period > b.period ? 1 : 0))
+
   return {
-    rows: rows as unknown as RevenueRow[],
+    rows: groupedRows as unknown as RevenueRow[],
+    grouped,
     recentPayments: recentPayments as unknown as RevenueRow[],
   }
 }
@@ -242,12 +264,74 @@ async function getSessionExportRows(store: ReportingStore, from: Date, to: Date)
   return rows as unknown as SessionExportRow[]
 }
 
-async function getShiftDayGroups(store: ReportingStore, input: ShiftDayGroupInput): Promise<ShiftDayGroup[]> {
-  const shiftDb = (store as unknown as { shift: Prisma.ShiftDelegate }).shift
-  const membershipPaymentDb = (store as unknown as { membershipPayment: Prisma.MembershipPaymentDelegate }).membershipPayment
-  const paymentDb = payment(store)
+/**
+ * Tổng hợp doanh thu của nhiều shift bằng 2 groupBy (payment + membershipPayment).
+ * Thay thế N+1 loop `getShiftRevenueData` từng shift.
+ */
+async function aggregateShiftRevenueByShiftIds(
+  store: ReportingStore,
+  shiftIds: string[]
+): Promise<Map<string, ShiftRevenueData>> {
+  const result = new Map<string, ShiftRevenueData>()
+  if (shiftIds.length === 0) return result
 
-  const shifts = await shiftDb.findMany({
+  const [paymentRows, mpRows] = await Promise.all([
+    payment(store).groupBy({
+      by: ['shiftId', 'paymentMethod'],
+      where: { shiftId: { in: shiftIds }, invoice: { status: { not: 'CANCELLED' as const } } },
+      _sum: { grandTotal: true },
+      _count: { _all: true },
+    }),
+    membershipPayment(store).groupBy({
+      by: ['shiftId', 'paymentMethod'],
+      where: { shiftId: { in: shiftIds } },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+  ])
+
+  // Init từng shift với giá trị rỗng — đảm bảo shift không có payment vẫn xuất hiện
+  for (const id of shiftIds) {
+    result.set(id, {
+      totalRevenue: 0,
+      cashRevenue: 0,
+      transferRevenue: 0,
+      cardRevenue: 0,
+      memberRevenue: 0,
+      paymentCount: 0,
+      membershipCount: 0,
+    })
+  }
+
+  for (const row of paymentRows) {
+    if (!row.shiftId) continue
+    const entry = result.get(row.shiftId)!
+    const amount = Number(row._sum?.grandTotal ?? 0)
+    if (row.paymentMethod === 'CASH') entry.cashRevenue += amount
+    else if (row.paymentMethod === 'TRANSFER') entry.transferRevenue += amount
+    else if (row.paymentMethod === 'CARD') entry.cardRevenue += amount
+    else if (row.paymentMethod === 'MEMBER') entry.memberRevenue += amount
+    entry.paymentCount += row._count?._all ?? 0
+    entry.totalRevenue += amount
+  }
+
+  for (const row of mpRows) {
+    if (!row.shiftId) continue
+    const entry = result.get(row.shiftId)!
+    const amount = Number(row._sum?.amount ?? 0)
+    if (row.paymentMethod === 'CASH') entry.cashRevenue += amount
+    else if (row.paymentMethod === 'TRANSFER') entry.transferRevenue += amount
+    else if (row.paymentMethod === 'CARD') entry.cardRevenue += amount
+    else if (row.paymentMethod === 'MEMBER') entry.memberRevenue += amount
+    entry.membershipCount += row._count?._all ?? 0
+    entry.totalRevenue += amount
+  }
+
+  return result
+}
+
+async function getShiftDayGroups(store: ReportingStore, input: ShiftDayGroupInput): Promise<ShiftDayGroup[]> {
+  const shifts = await shift(store).findMany({
     where: {
       openedAt: { gte: input.from, lt: input.to },
       ...(input.scope === 'STAFF'
@@ -270,6 +354,11 @@ async function getShiftDayGroups(store: ReportingStore, input: ShiftDayGroupInpu
     orderBy: { openedAt: 'desc' },
   })
 
+  const revenueByShiftId = await aggregateShiftRevenueByShiftIds(
+    store,
+    shifts.map((s) => s.id)
+  )
+
   const groups = new Map<string, ShiftDayGroup>()
   for (const shift of shifts) {
     const dayKey = toInputDate(shift.openedAt)
@@ -288,10 +377,15 @@ async function getShiftDayGroups(store: ReportingStore, input: ShiftDayGroupInpu
       })
     }
     const group = groups.get(dayKey)!
-    const revenue = await getShiftRevenueData(
-      { payment: paymentDb, membershipPayment: membershipPaymentDb },
-      shift.id
-    )
+    const revenue = revenueByShiftId.get(shift.id) ?? {
+      totalRevenue: 0,
+      cashRevenue: 0,
+      transferRevenue: 0,
+      cardRevenue: 0,
+      memberRevenue: 0,
+      paymentCount: 0,
+      membershipCount: 0,
+    }
 
     group.totalRevenue += revenue.totalRevenue
     group.cashRevenue += revenue.cashRevenue
@@ -323,9 +417,11 @@ async function getShiftDayGroups(store: ReportingStore, input: ShiftDayGroupInpu
 }
 
 async function getShiftRevenue(store: ReportingStore, shiftId: string): Promise<ShiftRevenueData> {
-  const paymentDb = payment(store)
-  const membershipPaymentDb = (store as unknown as { membershipPayment: Prisma.MembershipPaymentDelegate }).membershipPayment
-  return getShiftRevenueData({ payment: paymentDb, membershipPayment: membershipPaymentDb }, shiftId)
+  return getShiftRevenueData({ payment: payment(store), membershipPayment: membershipPayment(store) }, shiftId)
+}
+
+async function getShiftRevenues(store: ReportingStore, shiftIds: string[]): Promise<Map<string, ShiftRevenueData>> {
+  return aggregateShiftRevenueByShiftIds(store, shiftIds)
 }
 
 /** Factory — nhận store (prisma hoặc tx) → repository */
@@ -337,5 +433,6 @@ export function createReportingRepository(store: ReportingStore): ReportingRepos
     getSessionExportRows: (from, to) => getSessionExportRows(store, from, to),
     getShiftDayGroups: (input) => getShiftDayGroups(store, input),
     getShiftRevenue: (shiftId) => getShiftRevenue(store, shiftId),
+    getShiftRevenues: (shiftIds) => getShiftRevenues(store, shiftIds),
   }
 }

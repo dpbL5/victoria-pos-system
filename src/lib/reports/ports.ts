@@ -5,7 +5,7 @@ import type { ShiftRevenueData } from '@/lib/shifts'
 /** Store tối thiểu mà reporting adapter cần — structural pick từ Prisma client */
 export type ReportingStore = Pick<
   Prisma.TransactionClient,
-  'payment' | 'invoiceItem' | 'session' | 'customer'
+  'payment' | 'invoiceItem' | 'session' | 'customer' | 'shift' | 'membershipPayment'
 >
 
 export type DashboardScope = 'STAFF' | 'ALL'
@@ -77,6 +77,8 @@ export interface RevenueInput {
 
 export interface RevenueResult {
   rows: RevenueRow[]
+  /** Doanh thu gộp theo ngày (tính bằng SQL groupBy theo paidAt) — thay vì gộp trong JS */
+  grouped: Array<{ period: string; revenue: number; count: number }>
   recentPayments: RevenueRow[]
 }
 
@@ -143,4 +145,6 @@ export interface ReportingRepository {
   getShiftDayGroups(input: ShiftDayGroupInput): Promise<ShiftDayGroup[]>
   /** Revenue tổng hợp của 1 shift (payment + membershipPayment) — cho per-shift list */
   getShiftRevenue(shiftId: string): Promise<ShiftRevenueData>
+  /** Revenue tổng hợp của nhiều shift cùng lúc — thay thế N+1 `getShiftRevenue` loop bằng 2 groupBy */
+  getShiftRevenues(shiftIds: string[]): Promise<Map<string, ShiftRevenueData>>
 }

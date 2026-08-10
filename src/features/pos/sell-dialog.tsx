@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
-import { apiJson, jsonRequest } from './api'
+import { apiJson, jsonRequest } from '@/lib/api'
 import { money, toNumber } from './format'
 import type { Product, SessionRow } from './types'
 

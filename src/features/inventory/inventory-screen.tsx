@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
-import { apiJson, jsonRequest } from '@/features/pos/api'
+import { apiJson, jsonRequest } from '@/lib/api'
 import { money, toNumber } from '@/features/pos/format'
 import type { Product, ProductType, UserSession } from '@/features/pos/types'
 

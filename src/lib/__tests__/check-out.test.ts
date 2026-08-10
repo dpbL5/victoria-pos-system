@@ -163,6 +163,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       getSessionExportRows: vi.fn(),
       getShiftDayGroups: vi.fn(),
       getShiftRevenue: vi.fn(),
+      getShiftRevenues: vi.fn(),
     },
   }
   return { ...base, ...overrides }

@@ -21,7 +21,7 @@ import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
-import { apiJson, jsonRequest } from '@/features/pos/api'
+import { apiJson, jsonRequest } from '@/lib/api'
 import type { UserSession } from '@/features/pos/types'
 import { formatVND } from '@/lib/shared/utils'
 

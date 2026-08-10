@@ -34,7 +34,7 @@ import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
-import { apiJson } from '@/features/pos/api'
+import { apiJson } from '@/lib/api'
 import { formatClock, money } from '@/features/pos/format'
 import type { Product, Shift, UserSession } from '@/features/pos/types'
 import { useTheme, type Theme } from '@/hooks/use-theme'
@@ -109,8 +109,7 @@ export function MoreScreen() {
   const handleLogout = async () => {
     setLoggingOut(true)
     try {
-      const response = await fetch('/api/auth/logout', { method: 'POST' })
-      const data = await response.json() as { success: boolean; error?: string }
+      const data = await apiJson<{ success: boolean; error?: string }>('/api/auth/logout', { method: 'POST' })
       if (!data.success) {
         notifyError(data.error || 'Không đăng xuất được')
         return

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
-import { apiJson, jsonRequest } from './api'
+import { apiJson, jsonRequest } from '@/lib/api'
 import { formatDay } from './format'
 import type { Customer, Membership, SessionRow } from './types'
 

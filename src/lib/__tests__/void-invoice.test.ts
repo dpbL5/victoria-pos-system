@@ -158,6 +158,7 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
       getSessionExportRows: vi.fn(),
       getShiftDayGroups: vi.fn(),
       getShiftRevenue: vi.fn(),
+      getShiftRevenues: vi.fn(),
     },
   }
 }

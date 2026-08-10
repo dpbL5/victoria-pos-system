@@ -18,20 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
-import { apiJson } from '@/features/pos/api'
-
-function mutationRequest(method: string, body?: unknown): RequestInit {
-  const headers: Record<string, string> = body ? { 'Content-Type': 'application/json' } : {}
-  const csrfToken = typeof document !== 'undefined'
-    ? document.cookie.match(/(?:^|;\s*)qltrungcung_csrf=([^;]*)/)?.[1]
-    : null
-  if (csrfToken) headers['X-CSRF-Token'] = decodeURIComponent(csrfToken)
-  return {
-    method,
-    headers,
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  }
-}
+import { apiJson } from '@/lib/api'
 
 interface Tool {
   id: string
@@ -114,8 +101,8 @@ export function ToolsScreen() {
       }
 
       const data = editTool
-        ? await apiJson<Tool>(`/api/tools/${editTool.id}`, mutationRequest('PATCH', body))
-        : await apiJson<Tool>('/api/tools', mutationRequest('POST', body))
+        ? await apiJson<Tool>(`/api/tools/${editTool.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        : await apiJson<Tool>('/api/tools', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
       if (!data.success) {
         notifyError(data.error || 'Không lưu được dụng cụ')
@@ -137,7 +124,7 @@ export function ToolsScreen() {
 
     setSubmitting(true)
     try {
-      const data = await apiJson(`/api/tools/${deleteTool.id}`, mutationRequest('DELETE'))
+      const data = await apiJson(`/api/tools/${deleteTool.id}`, { method: 'DELETE' })
       if (!data.success) {
         notifyError(data.error || 'Không xoá được dụng cụ')
         return

@@ -1,5 +1,5 @@
 // ── SWR fetcher — wrap apiJson cho useSWR ─────
-import { apiJson } from '@/features/pos/api'
+import { apiJson } from '@/lib/api'
 import type { ApiResponse } from '@/types'
 
 /**

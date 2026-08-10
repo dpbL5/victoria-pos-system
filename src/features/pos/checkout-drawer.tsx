@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Label, Select } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
-import { apiJson, jsonRequest } from './api'
+import { apiJson, jsonRequest } from '@/lib/api'
 import { calcElapsedHMS, money, paymentMethodLabel, toNumber } from './format'
 import { formatPromotionOption } from './promotion-option'
 import { InvoiceRow } from './invoice-row'
@@ -158,14 +158,6 @@ export function CheckoutDrawer({  session,
     }
 
     void loadQuote()
-    // Không poll nếu đã freeze thời gian — timer đã dừng
-    if (!frozenAt) {
-      const intervalId = window.setInterval(() => void loadQuote(), 30_000)
-      return () => {
-        cancelled = true
-        window.clearInterval(intervalId)
-      }
-    }
     return () => { cancelled = true }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [session, promotionRuleId, needsPricing, pricingMode, checkoutPricingRuleId, checkoutGroups, selectedGroupId, frozenAt])

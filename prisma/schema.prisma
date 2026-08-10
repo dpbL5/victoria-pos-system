@@ -7,7 +7,7 @@ generator client {
 
 // url và directUrl đã chuyển sang prisma.config.ts (Prisma 7 requirement)
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
 }
 
 // Enums
@@ -144,7 +144,9 @@ model Session {
   id                     String                 @id @default(uuid())
   customerId             String?                @map("customer_id")
   customer               Customer?              @relation(fields: [customerId], references: [id])
-  /** Tên khách vãng lai lưu ngay trên phiên (không tạo Customer) — hội viên lấy từ customer.fullName */
+  /**
+   * Tên khách vãng lai lưu ngay trên phiên (không tạo Customer) — hội viên lấy từ customer.fullName
+   */
   customerName           String?                @map("customer_name") @db.VarChar(100)
   staffId                String                 @map("staff_id")
   staff                  User                   @relation(fields: [staffId], references: [id])
@@ -182,6 +184,7 @@ model Session {
   @@index([membershipId])
   @@index([pricingRuleId])
   @@index([promotionRuleId])
+  @@index([createdAt])
   @@map("sessions")
 }
 
@@ -203,19 +206,19 @@ model SessionPricingGroup {
 }
 
 model PricingRule {
-  id            String        @id @default(uuid())
-  name          String        @db.VarChar(100)
-  daysOfWeek    Int[]         @default([]) @map("days_of_week")
-  hourFrom      Int           @map("hour_from")
-  hourTo        Int?          @map("hour_to")
-  ratePerHour   Decimal       @map("rate_per_hour") @db.Decimal(12, 2)
-  dayType       DayType       @default(WEEKDAY) @map("day_type")
-  effectiveFrom DateTime      @map("effective_from")
-  effectiveTo   DateTime?     @map("effective_to")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+  id            String    @id @default(uuid())
+  name          String    @db.VarChar(100)
+  daysOfWeek    Int[]     @default([]) @map("days_of_week")
+  hourFrom      Int       @map("hour_from")
+  hourTo        Int?      @map("hour_to")
+  ratePerHour   Decimal   @map("rate_per_hour") @db.Decimal(12, 2)
+  dayType       DayType   @default(WEEKDAY) @map("day_type")
+  effectiveFrom DateTime  @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  tiers         PricingTier[]
+  tiers PricingTier[]
 
   @@index([dayType, hourFrom, hourTo])
   @@map("pricing_rules")
@@ -435,6 +438,7 @@ model Payment {
 
   @@index([invoiceId])
   @@index([shiftId])
+  @@index([paidAt])
   @@map("payments")
 }
 
@@ -489,7 +493,7 @@ model Tool {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  shiftTools  ShiftTool[]
+  shiftTools ShiftTool[]
 
   @@map("tools")
 }
@@ -545,5 +549,8 @@ model ActivityLog {
   details    Json?    @db.JsonB
   createdAt  DateTime @default(now()) @map("created_at")
 
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
   @@map("activity_logs")
 }

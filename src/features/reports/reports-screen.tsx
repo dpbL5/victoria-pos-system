@@ -5,7 +5,7 @@ import { BarChart3, CalendarClock, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { apiJson } from '@/features/pos/api'
+import { apiJson } from '@/lib/api'
 import type { UserSession } from '@/features/pos/types'
 import { ReportsOverview } from './reports-overview'
 

@@ -21,7 +21,7 @@ import { useApi } from '@/hooks/use-api'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
-import { apiJson, jsonRequest } from '@/features/pos/api'
+import { apiJson, jsonRequest } from '@/lib/api'
 import { formatDay, money, paymentMethodLabel } from '@/features/pos/format'
 import type { Customer, Membership, MembershipPlan, PaymentMethod, Shift, UserSession } from '@/features/pos/types'
 
