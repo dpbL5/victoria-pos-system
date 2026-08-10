@@ -22,6 +22,9 @@ import type {
 function payment(store: ReportingStore) {
   return store.payment
 }
+function invoice(store: ReportingStore) {
+  return store.invoice
+}
 function invoiceItem(store: ReportingStore) {
   return store.invoiceItem
 }
@@ -99,7 +102,7 @@ async function getDashboardData(store: ReportingStore, input: DashboardInput): P
   ] = await Promise.all([
     payment(store).aggregate({ where: paymentWhere, _sum: { grandTotal: true } }),
     payment(store).count({ where: paymentWhere }),
-    payment(store).count({ where: invoiceWhere }),
+    invoice(store).count({ where: invoiceWhere }),
     session(store).count({ where: sessionWhere }),
     session(store).count({ where: completedWhere }),
     session(store).count({ where: activeWhere }),

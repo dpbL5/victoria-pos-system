@@ -5,7 +5,7 @@ import type { ShiftRevenueData } from '@/lib/shifts'
 /** Store tối thiểu mà reporting adapter cần — structural pick từ Prisma client */
 export type ReportingStore = Pick<
   Prisma.TransactionClient,
-  'payment' | 'invoiceItem' | 'session' | 'customer' | 'shift' | 'membershipPayment'
+  'payment' | 'invoiceItem' | 'session' | 'customer' | 'shift' | 'membershipPayment' | 'invoice'
 >
 
 export type DashboardScope = 'STAFF' | 'ALL'
