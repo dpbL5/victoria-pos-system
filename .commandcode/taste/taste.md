@@ -7,7 +7,7 @@
 - Communicate in Vietnamese for this project. Confidence: 0.85
 - User reports bugs as concrete step-by-step reproduction flows (exact navigation path, button labels, observed error message) plus the business risk of repeating the action (e.g., "ấn nhiều lần tạo nhiều customer") — expects the agent to reason through the full sequence and side-effect risks, not just the headline error. Confidence: 0.55
 - Khi người dùng nói "bỏ nó đi" hoặc tỏ vẻ muốn xoá bỏ một tính năng trong lúc bực bội, hãy xác nhận lại phạm vi chính xác trước khi xoá code — tránh hiểu nhầm thành xoá toàn bộ thay vì đơn giản hoá/làm gọn. Confidence: 0.65
-- User occasionally types terse commands in English ("continue", "Let do first 6 candidates", "all i choose a") even in this Vietnamese-speaking project; respond in Vietnamese regardless. Confidence: 0.70
+- User occasionally types terse commands in English ("continue", "Let do first 6 candidates", "all i choose a", "commit changes", "I need you to remove agents/skills that I would rarely use for this projects") even in this Vietnamese-speaking project; respond in Vietnamese regardless. Confidence: 0.80
 
 # ui
 See [ui/taste.md](ui/taste.md)
