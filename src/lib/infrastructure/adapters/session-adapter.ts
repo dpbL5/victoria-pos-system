@@ -6,7 +6,7 @@ import type { SessionRepository } from '@/lib/sessions/ports'
 export function createSessionRepository(store: SessionStore): SessionRepository {
   return {
     async findByIdForCheckout(id) {
-      return store.session.findUnique({
+      const session = await store.session.findUnique({
         where: { id },
         include: {
           customer: true,
@@ -14,6 +14,9 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
           pricingGroups: { orderBy: { createdAt: 'asc' } },
         },
       })
+      // SessionWithDetails là payload trực tiếp từ Prisma — sau khi sửa schema,
+      // cột customerName đã có sẵn trong model, không cần map tay.
+      return session
     },
 
     async findByIdWithCustomer(id) {
@@ -56,6 +59,9 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
             discountAmount: true,
             totalAmount: true,
             playerCount: true,
+            customerName: true,
+            pausedAt: true,
+            totalPausedSeconds: true,
             promotionRuleId: true,
             promotionName: true,
             promotionDiscountType: true,
@@ -128,6 +134,7 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
       return store.session.create({
         data: {
           customerId: data.customerId,
+          customerName: data.customerName ?? null,
           staffId: data.staffId,
           shiftId: data.shiftId,
           membershipId: data.membershipId,
@@ -146,6 +153,12 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
       })
     },
 
+    async countCreatedBetween(from, to) {
+      return store.session.count({
+        where: { createdAt: { gte: from, lt: to } },
+      })
+    },
+
     async createPricingGroup(data) {
       await store.sessionPricingGroup.create({
         data: {
@@ -155,6 +168,20 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
           remainingCount: data.remainingCount,
           hourlyRate: data.hourlyRate,
           pricingRuleId: data.pricingRuleId ?? null,
+          pricingSnapshot: (data.pricingSnapshot ?? Prisma.JsonNull) as unknown as Prisma.InputJsonValue,
+        },
+      })
+    },
+
+    async updatePricingGroup(groupId, data) {
+      await store.sessionPricingGroup.update({
+        where: { id: groupId },
+        data: {
+          ...(data.label !== undefined ? { label: data.label } : {}),
+          ...(data.playerCount !== undefined ? { playerCount: data.playerCount } : {}),
+          ...(data.remainingCount !== undefined ? { remainingCount: data.remainingCount } : {}),
+          ...(data.hourlyRate !== undefined ? { hourlyRate: data.hourlyRate } : {}),
+          ...(data.pricingRuleId !== undefined ? { pricingRuleId: data.pricingRuleId } : {}),
           pricingSnapshot: (data.pricingSnapshot ?? Prisma.JsonNull) as unknown as Prisma.InputJsonValue,
         },
       })

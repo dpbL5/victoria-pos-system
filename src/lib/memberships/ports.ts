@@ -58,7 +58,10 @@ export interface CustomerListResult {
 }
 
 export interface CustomerRepository {
+  /** Customer chưa bị xoá mềm (deletedAt null) */
   findById(id: string): Promise<CustomerRecord | null>
+  /** Customer bất kể đã xoá hay chưa — dùng trong use-case xoá để phân biệt trạng thái */
+  findByIdIncludingDeleted(id: string): Promise<CustomerRecord | null>
   /** Chi tiết khách + _count.sessions — GET /api/customers/[id] */
   findByIdWithCount(id: string): Promise<(CustomerRecord & { _count: { sessions: number } }) | null>
   create(data: {
@@ -70,6 +73,8 @@ export interface CustomerRepository {
   findMany(input: CustomerListInput): Promise<CustomerListResult>
   /** Cập nhật hồ sơ khách (phone rỗng → null) — PUT /api/customers/[id] */
   update(id: string, data: { fullName?: string; phone?: string | null; notes?: string }): Promise<CustomerRecord>
+  /** Xoá mềm: set deletedAt — hội viên ẩn khỏi list/tìm kiếm nhưng giữ lịch sử tài chính */
+  softDelete(id: string, at: Date): Promise<void>
   /** Cộng totalSpent; setTypeMember = true cũng đổi type sang MEMBER (khi gia hạn) */
   addSpend(customerId: string, amount: number, setTypeMember?: boolean): Promise<void>
   /** Cộng totalHoursPlayed + totalSpent (sau checkout) */

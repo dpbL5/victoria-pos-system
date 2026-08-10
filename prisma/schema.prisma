@@ -127,6 +127,7 @@ model Customer {
   totalHoursPlayed Decimal      @default(0) @map("total_hours_played") @db.Decimal(10, 2)
   totalSpent       Decimal      @default(0) @map("total_spent") @db.Decimal(12, 0)
   notes            String?      @db.Text
+  deletedAt        DateTime?    @map("deleted_at")
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
 
@@ -141,8 +142,10 @@ model Customer {
 
 model Session {
   id                     String                 @id @default(uuid())
-  customerId             String                 @map("customer_id")
-  customer               Customer               @relation(fields: [customerId], references: [id])
+  customerId             String?                @map("customer_id")
+  customer               Customer?              @relation(fields: [customerId], references: [id])
+  /** Tên khách vãng lai lưu ngay trên phiên (không tạo Customer) — hội viên lấy từ customer.fullName */
+  customerName           String?                @map("customer_name") @db.VarChar(100)
   staffId                String                 @map("staff_id")
   staff                  User                   @relation(fields: [staffId], references: [id])
   shiftId                String?                @map("shift_id")
@@ -151,6 +154,8 @@ model Session {
   membership             Membership?            @relation(fields: [membershipId], references: [id])
   startTime              DateTime               @map("start_time")
   endTime                DateTime?              @map("end_time")
+  pausedAt               DateTime?              @map("paused_at")
+  totalPausedSeconds     Int                    @default(0) @map("total_paused_seconds")
   status                 SessionStatus          @default(ACTIVE)
   totalHours             Decimal?               @map("total_hours") @db.Decimal(5, 2)
   hourlyRate             Decimal                @map("hourly_rate") @db.Decimal(10, 0)

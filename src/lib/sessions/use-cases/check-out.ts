@@ -10,8 +10,9 @@ import {
   toPromotionMetadata,
   type PromotionSnapshot,
 } from '@/lib/promotion-calculation'
-import { calculateSessionPrice, type PricingResult } from '../pricing-engine'
+import { calculateSessionPrice, calculateSessionPriceFromLoaded, type PendingGroupPricing, type PricingResult } from '../pricing-engine'
 import { generateInvoiceNo } from '@/lib/invoicing'
+import { getDayType, getVnDay, getVnHour } from '@/lib/shared/utils'
 import { SETTING_KEYS } from '@/lib/settings'
 import type { CheckoutPaymentMethod } from '@/types'
 import type { SessionWithDetails } from '../ports'
@@ -20,6 +21,12 @@ import type { CheckoutLine } from './checkout-types'
 export interface CheckoutLineInput {
   productId: string
   quantity: number
+}
+
+/** Nhóm bảng giá chọn tại checkout cho session chưa gán giá (khách vãng lai) */
+export interface CheckoutPricingGroupInput {
+  playerCount: number
+  pricingRuleId: string
 }
 
 export interface CheckoutInput {
@@ -36,6 +43,10 @@ export interface CheckoutInput {
   playerCount?: number
   /** Số lượng xe gửi (phí gửi xe) */
   parkingVehicleCount?: number
+  /** Bảng giá áp dụng cho cả phiên — session chưa gán giá lúc check-in */
+  pricingRuleId?: string
+  /** Chia nhóm bảng giá tại checkout — session chưa gán giá lúc check-in */
+  groups?: CheckoutPricingGroupInput[]
 }
 
 export interface CheckoutResult {
@@ -63,6 +74,16 @@ export interface CheckoutResult {
   parkingFeeTotal?: number
 }
 
+/** Bảng giá chọn tại checkout cần gán (persist) vào SessionPricingGroup trước khi tạo invoice */
+export interface PendingAssignment {
+  /** Nhóm đã tồn tại (Nhóm 1 trống) — null nếu tạo nhóm mới (2..N) */
+  groupId: string | null
+  label: string
+  playerCount: number
+  pricingRuleId: string
+  snapshot: import('@/types').PricingRuleSnapshot
+}
+
 /** Context đã tính trước transaction — truyền vào runCheckOutTx để test được */
 export interface CheckoutContext {
   session: SessionWithDetails
@@ -80,7 +101,12 @@ export interface CheckoutContext {
   newQuantityByProductId: Map<string, number>
   parkingVehicleCount: number
   checkoutAt: Date
-  customerId: string
+  /** Null với khách vãng lai (không tạo Customer) */
+  customerId: string | null
+  /** Tên khách vãng lai (từ session.customerName) — null với hội viên */
+  customerName: string | null
+  /** Bảng giá chọn tại checkout — persist vào pricing groups trước khi tính tiền (session mới) */
+  pendingAssignments?: PendingAssignment[]
 }
 
 export async function checkOut(
@@ -98,6 +124,8 @@ export async function checkOut(
     pricingGroupId,
     playerCount,
     parkingVehicleCount = 0,
+    pricingRuleId,
+    groups,
   } = input
 
   // ── Pha 1: Guard trước transaction ──
@@ -108,11 +136,36 @@ export async function checkOut(
   }
   if (endTime < session.startTime) return err('END_TIME_BEFORE_START')
 
+  // ── Session khách vãng lai check-in để trống giá → chọn bảng giá tại checkout ──
+  const isMemberSession = session.customer?.type === 'MEMBER' || !!session.membership
+  const needsPricingAssignment = !isMemberSession
+    && session.pricingGroups.length > 0
+    && session.pricingGroups.every(g => !g.pricingSnapshot && Number(g.hourlyRate) === 0)
+
+  const checkoutAt = new Date()
+
   // ── Xác định group và số người checkout ──
   let checkoutCount: number
   let targetGroupId: string | undefined
+  let pendingAssignments: PendingAssignment[] | undefined
+  let pendingGroups: PendingGroupPricing[] | undefined
 
-  if (pricingGroupId) {
+  if (needsPricingAssignment) {
+    const resolved = await resolveCheckoutPricing(deps, session, { pricingRuleId, groups }, checkoutAt)
+    if (!resolved.ok) return resolved
+    pendingAssignments = resolved.value.pendingAssignments
+    pendingGroups = resolved.value.pendingGroups
+
+    // Luôn thu từ nhóm đầu tiên (Nhóm 1) khi mới gán giá — UI thu tuần tự từng nhóm
+    const firstGroup = session.pricingGroups[0]
+    targetGroupId = firstGroup.id
+    const firstGroupCount = pendingGroups[0].playerCount
+    checkoutCount = Math.min(
+      playerCount ?? firstGroupCount,
+      firstGroupCount
+    )
+    if (checkoutCount <= 0) return err('NO_PLAYERS_TO_CHECKOUT')
+  } else if (pricingGroupId) {
     const group = session.pricingGroups.find(g => g.id === pricingGroupId)
     if (!group) return err('PRICING_GROUP_NOT_FOUND')
     if (group.remainingCount <= 0) return err('PRICING_GROUP_EMPTY')
@@ -144,7 +197,6 @@ export async function checkOut(
     }
   }
 
-  const checkoutAt = new Date()
   const selectedPromotion = promotionRuleId
     ? await deps.promotions.findAvailableById(promotionRuleId, checkoutAt)
     : null
@@ -153,7 +205,24 @@ export async function checkOut(
     return err('PROMOTION_UNAVAILABLE')
   }
 
-  const pricingResult = await calculateSessionPrice(deps, sessionId, endTime, selectedPromotion, targetGroupId)
+  // ── Tính pausedSeconds cho pricing engine ──
+  let pausedSeconds = session.totalPausedSeconds ?? 0
+  if (session.pausedAt) {
+    pausedSeconds += Math.round(Math.max(0, (checkoutAt.getTime() - new Date(session.pausedAt).getTime())) / 1000)
+  }
+
+  const pricingResult = needsPricingAssignment && pendingGroups
+    ? await calculateSessionPriceFromLoaded(
+        deps,
+        session,
+        endTime,
+        selectedPromotion,
+        targetGroupId,
+        pendingGroups,
+        0,
+        pausedSeconds
+      )
+    : await calculateSessionPrice(deps, sessionId, endTime, selectedPromotion, targetGroupId, undefined, 0, pausedSeconds)
   if (!pricingResult.ok) return pricingResult
   const pricing = pricingResult.value
   if (pricing.isMemberSession && promotionRuleId) {
@@ -243,6 +312,8 @@ export async function checkOut(
     parkingVehicleCount,
     checkoutAt,
     customerId: session.customerId,
+    customerName: session.customerName ?? null,
+    pendingAssignments,
   }
 
   const result = await runInTransaction((tx) =>
@@ -271,7 +342,7 @@ export async function checkOut(
     sessionId,
     invoiceId: result.value.invoice.id,
     invoiceNo: result.value.invoice.invoiceNo,
-    customerName: session.customer.fullName,
+    customerName: session.customerName ?? session.customer?.fullName ?? 'Khách lẻ',
     startTime: session.startTime,
     endTime,
     totalHours: finalPricing.totalHours,
@@ -289,6 +360,107 @@ export async function checkOut(
     remainingPlayers: result.value.remainingPlayers,
     sessionClosed: isFullCheckout,
     parkingFeeTotal: result.value.parkingFeeTotal,
+  })
+}
+
+/**
+ * Resolve bảng giá tại checkout cho session chưa gán giá (pre-tx).
+ * - `input.groups` (chia nhóm): resolve từng rule, kiểm tra hiệu lực, tổng người khớp session.
+ * - `input.pricingRuleId` (1 bảng giá cho cả phiên): resolve rule đó, áp cho toàn bộ.
+ * - Không gửi gì: auto-resolve rule hiệu lực tại giờ checkout.
+ * Trả về PendingAssignment[] (để persist vào group) + PendingGroupPricing[] (để tính giá).
+ */
+async function resolveCheckoutPricing(
+  deps: Repositories,
+  session: SessionWithDetails,
+  input: { pricingRuleId?: string; groups?: CheckoutPricingGroupInput[] },
+  at: Date
+): Promise<Result<{ pendingAssignments: PendingAssignment[]; pendingGroups: PendingGroupPricing[] }>> {
+  const snapshotOf = (rule: NonNullable<Awaited<ReturnType<Repositories['pricing']['findByIdWithTiers']>>>): PendingAssignment['snapshot'] => ({
+    ruleId: rule.id,
+    name: rule.name,
+    ratePerHour: Number(rule.ratePerHour),
+    tiers: rule.tiers.map((t) => ({ minHours: t.minHours, ratePerHour: Number(t.ratePerHour) })),
+  })
+
+  const isEffective = (rule: NonNullable<Awaited<ReturnType<Repositories['pricing']['findByIdWithTiers']>>>): boolean => {
+    const currentDay = getVnDay(at)
+    const dayMatches = rule.daysOfWeek.length === 0 || rule.daysOfWeek.includes(currentDay)
+    const effectiveFromOk = rule.effectiveFrom <= at
+    const effectiveToOk = !rule.effectiveTo || rule.effectiveTo >= at
+    return dayMatches && effectiveFromOk && effectiveToOk
+  }
+
+  // Nhóm 1 trống đã tồn tại trong DB (check-in), nhóm 2..N tạo mới khi persist
+  const existingGroup = session.pricingGroups[0]
+
+  if (input.groups && input.groups.length > 0) {
+    const totalPlayers = input.groups.reduce((sum, g) => sum + g.playerCount, 0)
+    if (totalPlayers !== session.playerCount) {
+      return err('GROUP_PLAYER_COUNT_MISMATCH')
+    }
+
+    const pendingAssignments: PendingAssignment[] = []
+    const pendingGroups: PendingGroupPricing[] = []
+    for (let i = 0; i < input.groups.length; i += 1) {
+      const groupInput = input.groups[i]
+      const rule = await deps.pricing.findByIdWithTiers(groupInput.pricingRuleId)
+      if (!rule) return err('PRICING_RULE_NOT_FOUND')
+      if (!isEffective(rule)) return err('PRICING_RULE_NOT_EFFECTIVE')
+
+      const snapshot = snapshotOf(rule)
+      pendingAssignments.push({
+        groupId: i === 0 ? (existingGroup?.id ?? null) : null,
+        label: `Nhóm ${i + 1}`,
+        playerCount: groupInput.playerCount,
+        pricingRuleId: rule.id,
+        snapshot,
+      })
+      pendingGroups.push({
+        groupId: i === 0 ? existingGroup?.id : undefined,
+        playerCount: groupInput.playerCount,
+        snapshot,
+      })
+    }
+    return ok({ pendingAssignments, pendingGroups })
+  }
+
+  if (input.pricingRuleId) {
+    const rule = await deps.pricing.findByIdWithTiers(input.pricingRuleId)
+    if (!rule) return err('PRICING_RULE_NOT_FOUND')
+    if (!isEffective(rule)) return err('PRICING_RULE_NOT_EFFECTIVE')
+
+    const snapshot = snapshotOf(rule)
+    const totalPlayers = session.playerCount
+    return ok({
+      pendingAssignments: [{
+        groupId: existingGroup?.id ?? null,
+        label: 'Nhóm 1',
+        playerCount: totalPlayers,
+        pricingRuleId: rule.id,
+        snapshot,
+      }],
+      pendingGroups: [{ groupId: existingGroup?.id, playerCount: totalPlayers, snapshot }],
+    })
+  }
+
+  // Auto-resolve theo giờ checkout
+  const currentHour = getVnHour(at)
+  const dayType = getDayType(at)
+  const rule = await deps.pricing.findApplicableRule(currentHour, dayType, at)
+  if (!rule) return err('PRICING_RULE_NOT_FOUND')
+
+  const snapshot = snapshotOf(rule)
+  const totalPlayers = session.playerCount
+  return ok({
+    pendingAssignments: [{
+      groupId: existingGroup?.id ?? null,
+      label: 'Nhóm 1',
+      playerCount: totalPlayers,
+      pricingRuleId: rule.id,
+      snapshot,
+    }],
+    pendingGroups: [{ groupId: existingGroup?.id, playerCount: totalPlayers, snapshot }],
   })
 }
 
@@ -342,6 +514,8 @@ export async function runCheckOutTx(
     parkingVehicleCount,
     checkoutAt,
     customerId,
+    customerName,
+    pendingAssignments,
   } = ctx
   const { paidAt, promotionRuleId } = state
   let {
@@ -357,8 +531,35 @@ export async function runCheckOutTx(
 
   const shiftId = openShift.id
 
+  // ── Gán bảng giá cho pricing groups (session mới, chọn giá tại checkout) ──
+  if (pendingAssignments && pendingAssignments.length > 0) {
+    for (const assignment of pendingAssignments) {
+      if (assignment.groupId) {
+        await tx.session.updatePricingGroup(assignment.groupId, {
+          label: assignment.label,
+          playerCount: assignment.playerCount,
+          remainingCount: assignment.playerCount,
+          hourlyRate: assignment.snapshot.ratePerHour,
+          pricingRuleId: assignment.pricingRuleId,
+          pricingSnapshot: assignment.snapshot,
+        })
+      } else {
+        await tx.session.createPricingGroup({
+          sessionId,
+          label: assignment.label,
+          playerCount: assignment.playerCount,
+          remainingCount: assignment.playerCount,
+          hourlyRate: assignment.snapshot.ratePerHour,
+          pricingRuleId: assignment.pricingRuleId,
+          pricingSnapshot: assignment.snapshot,
+        })
+      }
+    }
+  }
+
   // ── Re-validate membership trong transaction (TOCTOU guard) ──
   if (pricing.isMemberSession) {
+    if (!customerId) fail('MEMBERSHIP_EXPIRED_DURING_CHECKOUT')
     const activeNow = await tx.membership.findActive(customerId, new Date())
     if (!activeNow) {
       fail('MEMBERSHIP_EXPIRED_DURING_CHECKOUT')
@@ -429,7 +630,8 @@ export async function runCheckOutTx(
     total: playTotal,
     metadata: {
       sessionId,
-      customerType: session.customer.type,
+      customerType: session.customer?.type ?? 'WALK_IN',
+      customerName: customerName ?? session.customer?.fullName ?? null,
       membershipId: session.membershipId,
       isMemberSession: finalPricing.isMemberSession,
       promotion: toPromotionMetadata(finalPricing.promotion),
@@ -547,6 +749,7 @@ export async function runCheckOutTx(
       playerCount: 0,
       totalHours: finalPricing.totalHours,
       subtotal: finalPricing.subtotal,
+      pausedAt: null,
       promotionRuleId: finalPricing.promotion?.ruleId,
       promotionName: finalPricing.promotion?.name,
       promotionDiscountType: finalPricing.promotion?.discountType,
@@ -561,11 +764,14 @@ export async function runCheckOutTx(
     })
   }
 
-  // Cập nhật customer totals
-  await tx.customer.recordPlay(customerId, {
-    hours: +(finalPricing.totalHours * checkoutCount).toFixed(2),
-    spent: invoiceGrandTotal,
-  })
+  // Cập nhật customer totals — chỉ với khách đã đăng ký (hội viên);
+  // khách vãng lai không có Customer nên không tích luỹ tổng chi tiêu.
+  if (customerId) {
+    await tx.customer.recordPlay(customerId, {
+      hours: +(finalPricing.totalHours * checkoutCount).toFixed(2),
+      spent: invoiceGrandTotal,
+    })
+  }
 
   // ── Chỉ huỷ hóa đơn DRAFT khi checkout toàn bộ phiên ──
   if (isFullCheckout && draftInvoiceIds.length > 0) {
@@ -596,6 +802,8 @@ export async function runCheckOutTx(
       pricingGroupId: targetGroupId ?? null,
       mergedDraftInvoices: isFullCheckout && draftInvoiceIds.length > 0 ? draftInvoiceIds : undefined,
       parkingFeeTotal: parkingFeeTotal || undefined,
+      pricingAssignedAtCheckout: (pendingAssignments?.length ?? 0) > 0,
+      assignedPricingRuleIds: pendingAssignments?.map(a => a.pricingRuleId),
     },
   })
 
@@ -652,6 +860,16 @@ export function mapCheckoutError(error: DomainError): HttpErrorInfo {
       return { code: 'PROMOTION_UNAVAILABLE', message: 'Khuyến mại không còn hiệu lực. Vui lòng chọn lại trước khi thu tiền.', status: 409 }
     case 'PROMOTION_NOT_APPLICABLE':
       return { code: 'PROMOTION_NOT_APPLICABLE', message: 'Khuyến mại chỉ áp dụng cho tiền giờ chơi khách vãng lai.', status: 400 }
+    case 'GROUP_PLAYER_COUNT_MISMATCH':
+      return { code: 'GROUP_PLAYER_COUNT_MISMATCH', message: 'Tổng số người trong các nhóm không khớp số người chơi của phiên', status: 400 }
+    case 'PRICING_RULE_NOT_EFFECTIVE':
+      return { code: 'PRICING_RULE_NOT_EFFECTIVE', message: 'Bảng giá đã chọn không còn hiệu lực. Vui lòng chọn bảng giá khác.', status: 400 }
+    case 'PRICING_RULE_NOT_FOUND':
+      return {
+        code: 'PRICING_RULE_NOT_FOUND',
+        message: 'Không có quy tắc bảng giá hiệu lực cho thời điểm hiện tại. Vui lòng cập nhật bảng giá trước khi thu tiền.',
+        status: 400,
+      }
     default:
       return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
   }

@@ -7,6 +7,7 @@ export {
 } from './helpers'
 export { registerMember, mapRegisterMemberError } from './use-cases/register-member'
 export { renewMembership, mapRenewMembershipError } from './use-cases/renew-membership'
+export { deleteMember, runDeleteMemberTx, mapDeleteMemberError } from './use-cases/delete-member'
 export {
   createMembershipPlan,
   mapCreateMembershipPlanError,
@@ -19,6 +20,10 @@ export type {
   RegisterMemberInput,
   RegisterMemberResult,
 } from './use-cases/register-member'
+export type {
+  DeleteMemberInput,
+  DeleteMemberResult,
+} from './use-cases/delete-member'
 export type {
   RenewMembershipInput,
   RenewMembershipResult,

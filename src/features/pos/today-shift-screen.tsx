@@ -3,41 +3,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Clock,
-  LogIn,
-  Minus,
-  Package,
-  Plus,
-  ReceiptText,
   RefreshCw,
-  Search,
   ShieldCheck,
   Timer,
-  UserPlus,
-  Users,
 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Input, Label, Select, Textarea } from '@/components/ui/input'
-import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { apiJson, jsonRequest } from './api'
-import {
-  calcCurrentPlayCost,
-  calcElapsedHMS,
-  formatClock,
-  formatDay,
-  money,
-  paymentMethodLabel,
-  toNumber,
-} from './format'
-import { MiniStat } from './mini-stat'
-import { InvoiceRow } from './invoice-row'
-import { formatPromotionOption } from './promotion-option'
-import { ToolCountFields } from './tool-count-fields'
 import { TodayShiftSkeleton } from './today-shift-skeleton'
 import { QuickActions } from './quick-actions'
 import { SellPickDialog } from './sell-pick-dialog'
@@ -45,33 +19,17 @@ import { ShiftRail } from './shift-rail'
 import { ActiveSessionCard } from './active-session-card'
 import { OpenShiftDialog } from './open-shift-dialog'
 import { CloseShiftDialog } from './close-shift-dialog'
-import { GroupBuilder } from './group-builder'
+import { ToolCountDialog } from './tool-count-dialog'
 import { SellDialog } from './sell-dialog'
 import { CheckInDialog } from './check-in-dialog'
 import { CheckoutDrawer } from './checkout-drawer'
-import type { PlayTimeQuote, PromotionSnapshot } from '@/types'
 import type {
-  Customer,
-  Membership,
-  MembershipPlan,
-  PaymentMethod,
   Product,
   SessionRow,
   Shift,
 } from './types'
 
 type CheckInMode = 'WALK_IN' | 'MEMBER'
-
-interface PricingRuleOption {
-  id: string
-  name: string
-  ratePerHour: number
-  tiers: { minHours: number; ratePerHour: number }[]
-}
-
-interface CheckoutResponse {
-  grandTotal: number
-}
 
 export function TodayShiftScreen() {
   const router = useRouter()
@@ -81,9 +39,6 @@ export function TodayShiftScreen() {
   const [openOperationalShift, setOpenOperationalShift] = useState<Shift | null>(null)
   const [sessions, setSessions] = useState<SessionRow[]>([])
   const [products, setProducts] = useState<Product[]>([])
-  const [membershipPlans, setMembershipPlans] = useState<MembershipPlan[]>([])
-  const [pricingCount, setPricingCount] = useState<number | null>(null)
-  const [activePricingCount, setActivePricingCount] = useState<number | null>(null)
   const [authUserId, setAuthUserId] = useState<string | null>(null)
   const [authRole, setAuthRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -92,6 +47,7 @@ export function TodayShiftScreen() {
 
   const [openShiftDialog, setOpenShiftDialog] = useState(false)
   const [closeShiftDialog, setCloseShiftDialog] = useState(false)
+  const [countToolsDialog, setCountToolsDialog] = useState(false)
   const [checkInDialog, setCheckInDialog] = useState(false)
   const [checkInInitialMode, setCheckInInitialMode] = useState<CheckInMode>('WALK_IN')
   const [checkoutSession, setCheckoutSession] = useState<SessionRow | null>(null)
@@ -110,13 +66,11 @@ export function TodayShiftScreen() {
     setLoading(true)
     setError('')
     try {
-      const [shiftData, openShiftData, sessionData, productData, planData, pricingData, authData, toolsData] = await Promise.all([
+      const [shiftData, openShiftData, sessionData, productData, authData, toolsData] = await Promise.all([
         apiJson<Shift | null>('/api/shifts?current=true'),
         apiJson<Shift | null>('/api/shifts?openOperational=true'),
         apiJson<SessionRow[]>('/api/sessions?status=ACTIVE&limit=50'),
         apiJson<Product[]>('/api/products?isActive=true'),
-        apiJson<MembershipPlan[]>('/api/membership-plans'),
-        apiJson<{ count: number; activeCount?: number }>('/api/pricing/status'),
         apiJson<{ userId: string; role: string }>('/api/auth/me'),
         apiJson<{ id: string; name: string; quantity: number; isRequired: boolean }[]>('/api/tools'),
       ])
@@ -125,17 +79,12 @@ export function TodayShiftScreen() {
       if (!openShiftData.success) throw new Error(openShiftData.error || 'Không tải được ca đang mở')
       if (!sessionData.success) throw new Error(sessionData.error || 'Không tải được phiên chơi')
       if (!productData.success) throw new Error(productData.error || 'Không tải được hàng hóa')
-      if (!planData.success) throw new Error(planData.error || 'Không tải được gói hội viên')
-      if (!pricingData.success) throw new Error(pricingData.error || 'Không tải được bảng giá')
       if (!authData.success) throw new Error(authData.error || 'Không tải được thông tin đăng nhập')
 
       setShift(shiftData.data ?? null)
       setOpenOperationalShift(openShiftData.data ?? null)
       setSessions(sessionData.data ?? [])
       setProducts(productData.data ?? [])
-      setMembershipPlans((planData.data ?? []).filter((plan) => plan.isActive))
-      setPricingCount(pricingData.data?.count ?? 0)
-      setActivePricingCount(pricingData.data?.activeCount ?? pricingData.data?.count ?? 0)
       setAuthUserId(authData.data?.userId ?? null)
       setAuthRole(authData.data?.role ?? null)
       setTools(toolsData.data ?? [])
@@ -149,20 +98,21 @@ export function TodayShiftScreen() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadData() }, [loadData])
 
-  const activeWalkIns = sessions.filter((session) => session.customer.type === 'WALK_IN').length
-  const activeMembers = sessions.filter((session) => session.customer.type === 'MEMBER').length
-  const pricingReady = (activePricingCount ?? pricingCount ?? 0) > 0
+  const activeWalkIns = sessions.filter((session) => session.customer?.type === 'WALK_IN').length
+  const activeMembers = sessions.filter((session) => session.customer?.type === 'MEMBER').length
   const isAdmin = authRole === 'ADMIN'
   const shiftReady = isAdmin || !!shift
   const canJoinCurrentShift = isAdmin && !!authUserId && !!shift && shift.status === 'OPEN'
     && !shift.participants?.some((participant) => (
       !participant.leftAt && participant.staff.id === authUserId
     ))
+  // Đã đếm dụng cụ khi có ít nhất một ShiftTool.openCount > 0
+  const hasCountedTools = !!shift?.toolCounts?.some((tc) => tc.openCount > 0)
 
-  const handleOpenShift = async (openingCash?: number, notes?: string, toolCounts?: { toolId: string; openCount: number }[]) => {
+  const handleOpenShift = async (openingCash?: number, notes?: string) => {
     setSubmitting(true)
     try {
-      const data = await apiJson<Shift>('/api/shifts', jsonRequest({ openingCash, notes, toolCounts }))
+      const data = await apiJson<Shift>('/api/shifts', jsonRequest({ openingCash, notes }))
       if (!data.success) {
         notifyError(data.error || 'Không mở được ca')
         return
@@ -192,6 +142,40 @@ export function TodayShiftScreen() {
       }
       notifySuccess('Đã đóng ca')
       setCloseShiftDialog(false)
+      await loadData()
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handlePause = async (session: SessionRow) => {
+    setSubmitting(true)
+    try {
+      const data = await apiJson(`/api/sessions/${session.id}/pause`, jsonRequest({}))
+      if (!data.success) {
+        notifyError(data.error || 'Không tạm dừng được')
+        return
+      }
+      notifySuccess('Đã tạm dừng phiên')
+      await loadData()
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleResume = async (session: SessionRow) => {
+    setSubmitting(true)
+    try {
+      const data = await apiJson(`/api/sessions/${session.id}/resume`, jsonRequest({}))
+      if (!data.success) {
+        notifyError(data.error || 'Không tiếp tục được')
+        return
+      }
+      notifySuccess('Đã tiếp tục phiên')
       await loadData()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
@@ -243,6 +227,8 @@ export function TodayShiftScreen() {
           onViewTransactions={() => {
             if (shift) router.push(`/transactions?shiftId=${shift.id}`)
           }}
+          onCountTools={() => setCountToolsDialog(true)}
+          hasCounted={hasCountedTools}
           canJoin={canJoinCurrentShift}
           onJoin={() => void handleOpenShift()}
           submitting={submitting}
@@ -324,7 +310,10 @@ export function TodayShiftScreen() {
                   key={session.id}
                   session={session}
                   checkoutDisabled={!shiftReady}
+                  pauseDisabled={!shiftReady}
                   onCheckout={() => { setCheckoutFrozenAt(new Date().toISOString()); setCheckoutSession(session) }}
+                  onPause={() => void handlePause(session)}
+                  onResume={() => void handleResume(session)}
                 />
               ))}
             </div>
@@ -335,7 +324,6 @@ export function TodayShiftScreen() {
       <OpenShiftDialog
         open={openShiftDialog}
         existingShift={!shift ? openOperationalShift : null}
-        tools={tools}
         submitting={submitting}
         onClose={() => setOpenShiftDialog(false)}
         onSubmit={handleOpenShift}
@@ -350,12 +338,25 @@ export function TodayShiftScreen() {
         onSubmit={handleCloseShift}
       />
 
+      <ToolCountDialog
+        open={countToolsDialog}
+        shift={shift}
+        tools={tools}
+        hasCounted={hasCountedTools}
+        submitting={submitting}
+        setSubmitting={setSubmitting}
+        onClose={() => setCountToolsDialog(false)}
+        onDone={async () => {
+          setCountToolsDialog(false)
+          await loadData()
+        }}
+      />
+
       <CheckInDialog
         open={checkInDialog}
         initialMode={checkInInitialMode}
-        pricingReady={pricingReady}
         shiftReady={shiftReady}
-        membershipPlans={membershipPlans}
+        shiftOpenedAt={shift?.openedAt}
         submitting={submitting}
         setSubmitting={setSubmitting}
         onClose={() => setCheckInDialog(false)}

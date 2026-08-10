@@ -1,8 +1,10 @@
-// ── GET/PUT /api/customers/[id] ──────────────────────────
+// ── GET/PUT/DELETE /api/customers/[id] ──────────────────────────
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireMutationAuth } from "@/lib/shared/auth";
+import { requireAdmin, requireAuth, requireMutationAuth } from "@/lib/shared/auth";
+import { validateCSRF } from "@/lib/shared/csrf";
 import { repositories } from "@/lib/infrastructure/repositories";
-import { updateCustomerSchema } from "@/lib/memberships";
+import { deleteMember, mapDeleteMemberError, updateCustomerSchema } from "@/lib/memberships";
+import { apiError, resultToResponse, ERR_CSRF, ERR_FORBIDDEN, ERR_UNAUTHORIZED } from "@/lib/infrastructure/api-helpers";
 
 // ── GET: Chi tiết khách hàng ───────────────────────────
 export async function GET(
@@ -76,5 +78,31 @@ export async function PUT(
     }
     console.error('PUT /api/customers/[id] error:', error);
     return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 });
+  }
+}
+
+// ── DELETE: Xoá mềm hội viên (chỉ admin) ─────────────────
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = await requireAdmin()
+    await validateCSRF(request)
+    const { id } = await params
+
+    const result = await deleteMember({
+      staffId: auth.userId,
+      customerId: id,
+    })
+
+    return resultToResponse(result, mapDeleteMemberError)
+  } catch (error) {
+    const message = (error as Error).message
+    if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
+    if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
+    if (message === 'FORBIDDEN') return apiError(ERR_FORBIDDEN)
+    console.error('DELETE /api/customers/[id] error:', error)
+    return apiError({ code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 })
   }
 }

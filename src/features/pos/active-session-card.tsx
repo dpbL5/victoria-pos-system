@@ -1,59 +1,51 @@
-import { Timer } from 'lucide-react'
+import { Pause, Play, Timer } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { calcCurrentPlayCost, calcElapsedHMS, formatClock, money, toNumber } from './format'
+import { calcElapsedHMS, formatClock, money, toNumber } from './format'
 import type { SessionRow } from './types'
 
 export function ActiveSessionCard({
   session,
   checkoutDisabled,
+  pauseDisabled,
   onCheckout,
+  onPause,
+  onResume,
 }: {
   session: SessionRow
   checkoutDisabled: boolean
+  pauseDisabled: boolean
   onCheckout: () => void
+  onPause: () => void
+  onResume: () => void
 }) {
-  const isMember = session.customer.type === 'MEMBER'
+  const isMember = session.customer?.type === 'MEMBER' || !!session.membership
   const playerCount = session.playerCount ?? 1
   const isGroup = playerCount > 1
-  const groups = session.pricingGroups ?? []
-  const hasGroups = groups.length > 0
-
-  // Calculate total running cost
-  const currentCost = isMember
-    ? 0
-    : hasGroups
-      ? groups
-          .filter(g => g.remainingCount > 0)
-          .reduce((sum, g) => {
-            return sum + calcCurrentPlayCost(
-              session.startTime,
-              g.hourlyRate,
-              undefined,
-              g.pricingSnapshot?.tiers,
-              g.remainingCount,
-            )
-          }, 0)
-      : calcCurrentPlayCost(
-          session.startTime,
-          session.hourlyRate,
-          undefined,
-          session.pricingRuleSnapshot?.tiers,
-          playerCount,
-        )
+  const isPaused = !!session.pausedAt
   const pendingSell = toNumber(session.pendingSellTotal ?? 0)
-  const runningTotal = currentCost + pendingSell
+
+  const elapsed = isPaused
+    ? calcElapsedHMS(session.startTime, session.pausedAt ?? undefined, session.totalPausedSeconds ?? 0)
+    : calcElapsedHMS(session.startTime, undefined, session.totalPausedSeconds ?? 0)
 
   return (
     <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
-            {session.customer.fullName}
+            {session.customerName ?? session.customer?.fullName ?? 'Khách lẻ'}
           </p>
-          <Badge variant={isMember ? 'purple' : 'default'} size="sm">
-            {isMember ? 'Hội viên' : 'Vãng lai'}
-          </Badge>
+          {isMember && (
+            <Badge variant="purple" size="sm">
+              Hội viên
+            </Badge>
+          )}
+          {isPaused && (
+            <Badge variant="warning" size="sm">
+              Tạm dừng
+            </Badge>
+          )}
           {isGroup && (
             <Badge variant="outline" size="sm">
               {playerCount} người
@@ -61,61 +53,36 @@ export function ActiveSessionCard({
           )}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-          <span className="inline-flex items-center gap-1 tabular-nums">
-            <Timer size={13} />
-            {calcElapsedHMS(session.startTime)}
-          </span>
           <span>{formatClock(session.startTime)}</span>
           {session.shift ? <span>Ca {formatClock(session.shift.openedAt)}</span> : <span>Chưa gắn ca</span>}
         </div>
-        {!isMember && hasGroups && (
-          <div className="mt-2 space-y-1">
-            {groups.filter(g => g.remainingCount > 0).map((g) => {
-              const groupCost = calcCurrentPlayCost(
-                session.startTime,
-                g.hourlyRate,
-                undefined,
-                g.pricingSnapshot?.tiers,
-                g.remainingCount,
-              )
-              return (
-                <div key={g.id} className="flex items-center justify-between text-xs">
-                  <span className="truncate text-zinc-400 dark:text-zinc-500">
-                    {g.label}: {g.remainingCount} người · {g.pricingSnapshot?.name ?? 'Bảng giá'}
-                  </span>
-                  <span className="shrink-0 tabular-nums text-zinc-600 dark:text-zinc-300">
-                    {money(groupCost)}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        )}
-        {!isMember && !hasGroups && session.pricingRuleSnapshot && (
-          <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-            Bảng giá: {session.pricingRuleSnapshot.name} — {money(session.pricingRuleSnapshot.ratePerHour)}/giờ
-          </p>
-        )}
       </div>
       <div className="flex flex-col items-end justify-between gap-2">
-        <div className="text-right">
-          <p className="text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
-            {money(runningTotal)}
-          </p>
-          {isGroup && !isMember && !hasGroups && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {money(currentCost / playerCount)}/người
-            </p>
-          )}
+        <span className={`inline-flex items-center gap-1.5 text-sm font-semibold tabular-nums ${isPaused ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-950 dark:text-white'}`}>
+          <Timer size={15} className={isPaused ? 'text-amber-600 dark:text-amber-400' : isMember ? 'text-purple-600 dark:text-purple-400' : 'text-emerald-600 dark:text-emerald-400'} />
+          {elapsed}
+        </span>
+        <div className="flex items-center gap-2">
           {pendingSell > 0 && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {!isGroup && !isMember ? `${money(currentCost)} giờ + ` : ''}{money(pendingSell)} thêm
-            </p>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              Tạm tính: <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">{money(pendingSell)}</span>
+            </span>
           )}
+          {isPaused ? (
+            <Button variant="inverse" size="xs" disabled={pauseDisabled} onClick={onResume} title="Tiếp tục chơi">
+              <Play size={12} className="mr-1" />
+              Chơi
+            </Button>
+          ) : (
+            <Button variant="secondary" size="xs" disabled={pauseDisabled} onClick={onPause} title="Tạm dừng">
+              <Pause size={12} className="mr-1" />
+              Dừng
+            </Button>
+          )}
+          <Button variant="inverse" size="xs" disabled={checkoutDisabled} onClick={onCheckout}>
+            Thu
+          </Button>
         </div>
-        <Button variant="inverse" size="xs" disabled={checkoutDisabled} onClick={onCheckout}>
-          Thu
-        </Button>
       </div>
     </div>
   )

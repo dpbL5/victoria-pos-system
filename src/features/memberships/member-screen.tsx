@@ -6,16 +6,19 @@ import {
   RefreshCw,
   Search,
   Ticket,
+  Trash2,
   UserPlus,
   Users,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useApi } from '@/hooks/use-api'
+import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { apiJson, jsonRequest } from '@/features/pos/api'
@@ -49,6 +52,7 @@ export function MemberScreen() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [registerOpen, setRegisterOpen] = useState(false)
   const [renewMember, setRenewMember] = useState<MemberCustomer | null>(null)
+  const [memberToDelete, setMemberToDelete] = useState<MemberCustomer | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
@@ -85,6 +89,81 @@ export function MemberScreen() {
   }), [members])
   const isAdmin = user?.role === 'ADMIN'
 
+  const openMember = useCallback(async (member: MemberCustomer) => {
+    setSelectedMember(member)
+    setHistory([])
+    setHistoryLoading(true)
+    try {
+      const data = await apiJson<Membership[]>(`/api/memberships?customerId=${member.id}`) as MembershipListResponse
+      if (!data.success) {
+        notifyError(data.error || 'Không tải được lịch sử hội viên')
+        return
+      }
+      setHistory(data.data ?? [])
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [notifyError])
+
+  const renderRenewButton = useCallback((item: MemberCustomer) => (
+    <Button
+      variant="inverse"
+      size="sm"
+      disabled={!shift}
+      onClick={() => setRenewMember(item)}
+    >
+      {item.membershipStatus === 'ACTIVE' ? 'Đóng tiếp' : 'Gia hạn'}
+    </Button>
+  ), [shift])
+
+  const renderActions = useCallback((item: MemberCustomer) => (
+    <div className="flex items-center gap-2">
+      {renderRenewButton(item)}
+      {isAdmin && (
+        <Button
+          variant="outline-danger"
+          size="sm"
+          icon={Trash2}
+          onClick={() => setMemberToDelete(item)}
+          title="Xoá hội viên"
+        >
+          Xoá
+        </Button>
+      )}
+    </div>
+  ), [renderRenewButton, isAdmin])
+
+  const confirmDelete = async () => {
+    if (!memberToDelete) return
+    setSubmitting(true)
+    try {
+      const data = await apiJson(`/api/customers/${memberToDelete.id}`, { method: 'DELETE' })
+      if (!data.success) {
+        notifyError(data.error || 'Không xoá được hội viên')
+        return
+      }
+      notifySuccess(`Đã xoá hội viên ${memberToDelete.fullName}`)
+      setMemberToDelete(null)
+      await mutate()
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const renderMembershipStatus = useCallback((item: MemberCustomer) => {
+    if (item.membershipStatus === 'ACTIVE' && item.currentMembership) {
+      return formatDay(item.currentMembership.expiresAt)
+    }
+    if (item.membershipStatus === 'EXPIRED' && item.latestMembership) {
+      return formatDay(item.latestMembership.expiresAt)
+    }
+    return 'Chưa đóng phí'
+  }, [])
+
   const memberColumns: Column<MemberCustomer>[] = useMemo(() => [
     {
       key: 'fullName',
@@ -109,56 +188,41 @@ export function MemberScreen() {
       key: 'membershipStatus',
       label: 'Hạn',
       cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
-      render: (item) => {
-        const m = item.currentMembership ?? item.latestMembership
-        if (item.membershipStatus === 'ACTIVE' && item.currentMembership) {
-          return `Còn hạn đến ${formatDay(item.currentMembership.expiresAt)}`
-        }
-        if (item.membershipStatus === 'EXPIRED' && item.latestMembership) {
-          return `Hết hạn từ ${formatDay(item.latestMembership.expiresAt)}`
-        }
-        return 'Chưa đóng phí'
-      },
-    },
-    {
-      key: 'totalSpent',
-      label: 'Tổng chi',
-      cellClassName: 'px-4 py-3 text-sm tabular-nums text-zinc-950 dark:text-white',
-      render: (item) => money(item.totalSpent),
+      render: (item) => renderMembershipStatus(item),
     },
     {
       label: 'Thao tác',
       cellClassName: 'px-4 py-3',
+      render: (item) => renderActions(item),
+    },
+  ], [openMember, renderActions, renderMembershipStatus])
+
+  const memberCardColumns: CardColumn<MemberCustomer>[] = useMemo(() => [
+    {
+      key: 'fullName',
+      label: 'Tên hội viên',
       render: (item) => (
-        <Button
-          variant="inverse"
-          size="sm"
-          disabled={!shift}
-          onClick={() => setRenewMember(item)}
-        >
-          {item.membershipStatus === 'ACTIVE' ? 'Đóng tiếp' : 'Gia hạn'}
-        </Button>
+        <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
+          {item.fullName}
+          <StatusBadge status={item.membershipStatus} />
+        </span>
       ),
     },
-  ], [shift])
-
-  const openMember = async (member: MemberCustomer) => {
-    setSelectedMember(member)
-    setHistory([])
-    setHistoryLoading(true)
-    try {
-      const data = await apiJson<Membership[]>(`/api/memberships?customerId=${member.id}`) as MembershipListResponse
-      if (!data.success) {
-        notifyError(data.error || 'Không tải được lịch sử hội viên')
-        return
-      }
-      setHistory(data.data ?? [])
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setHistoryLoading(false)
-    }
-  }
+    {
+      key: 'phone',
+      label: 'SĐT',
+      render: (item) => item.phone || '—',
+    },
+    {
+      key: 'membershipStatus',
+      label: 'Hạn',
+      render: (item) => renderMembershipStatus(item),
+    },
+    {
+      label: '',
+      render: (item) => renderActions(item),
+    },
+  ], [renderActions, renderMembershipStatus])
 
   const handleRegistered = async () => {
     notifySuccess('Đã đăng ký hội viên')
@@ -284,16 +348,33 @@ export function MemberScreen() {
             </Badge>
           </div>
 
-          <SortableTable
-            columns={memberColumns}
-            data={filteredMembers}
-            keyExtractor={(m) => m.id}
-            sortableKeys={['fullName', 'phone', 'membershipStatus', 'totalSpent']}
-            defaultSortKey="fullName"
-            emptyIcon={Users}
-            emptyMessage="Không có hội viên"
-            emptyDescription="Thử đổi bộ lọc hoặc đăng ký hội viên mới."
-          />
+          {/* Mobile: card list */}
+          <div className="md:hidden">
+            <SortableCardList
+              columns={memberCardColumns}
+              data={filteredMembers}
+              keyExtractor={(m) => m.id}
+              sortableKeys={['fullName', 'phone', 'membershipStatus']}
+              defaultSortKey="fullName"
+              emptyIcon={Users}
+              emptyMessage="Không có hội viên"
+              emptyDescription="Thử đổi bộ lọc hoặc đăng ký hội viên mới."
+            />
+          </div>
+
+          {/* Desktop: table */}
+          <div className="hidden md:block">
+            <SortableTable
+              columns={memberColumns}
+              data={filteredMembers}
+              keyExtractor={(m) => m.id}
+              sortableKeys={['fullName', 'phone', 'membershipStatus']}
+              defaultSortKey="fullName"
+              emptyIcon={Users}
+              emptyMessage="Không có hội viên"
+              emptyDescription="Thử đổi bộ lọc hoặc đăng ký hội viên mới."
+            />
+          </div>
         </section>
       </div>
 
@@ -326,6 +407,21 @@ export function MemberScreen() {
             setRenewMember(selectedMember)
           }
         }}
+      />
+
+      <ConfirmDialog
+        open={!!memberToDelete}
+        onClose={() => setMemberToDelete(null)}
+        title="Xoá hội viên"
+        description={memberToDelete ? `Xoá ${memberToDelete.fullName}?` : undefined}
+        body={
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Hội viên sẽ bị ẩn khỏi danh sách và không thể check-in. Lịch sử thanh toán được giữ nguyên.
+          </p>
+        }
+        confirmLabel="Xoá"
+        submitting={submitting}
+        onConfirm={() => void confirmDelete()}
       />
     </div>
   )

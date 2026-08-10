@@ -29,8 +29,19 @@ export interface PricingResult {
 }
 
 /**
+ * Bảng giá chưa persist — chọn tại checkout cho session mới (check-in để trống giá).
+ * groupId có khi nhóm trống đã tồn tại trong DB (Nhóm 1), undefined cho nhóm tạo mới.
+ */
+export interface PendingGroupPricing {
+  groupId?: string
+  playerCount: number
+  snapshot: PricingRuleSnapshot
+}
+
+/**
  * Tính tiền chơi cho session — snapshot-first:
  * - pricingGroupId → snapshot của SessionPricingGroup
+ * - pendingGroups → bảng giá chọn tại checkout (session mới)
  * - Session.pricingRuleSnapshot → snapshot lúc check-in
  * - Fallback resolve lại rule từ DB (tương thích session cũ)
  *
@@ -42,12 +53,15 @@ export async function calculateSessionPrice(
   sessionId: string,
   endTime: Date,
   promotion: PromotionSnapshot | null = null,
-  pricingGroupId?: string
+  pricingGroupId?: string,
+  pendingGroups?: PendingGroupPricing[],
+  pendingIndex = 0,
+  pausedSeconds = 0
 ): Promise<Result<PricingResult>> {
   const session = await deps.session.findByIdForCheckout(sessionId)
   if (!session) return err('SESSION_NOT_FOUND')
 
-  return calculateSessionPriceFromLoaded(deps, session, endTime, promotion, pricingGroupId)
+  return calculateSessionPriceFromLoaded(deps, session, endTime, promotion, pricingGroupId, pendingGroups, pendingIndex, pausedSeconds)
 }
 
 /** Core tính toán trên session đã load — pure với deps cho fallback DB */
@@ -56,16 +70,19 @@ export async function calculateSessionPriceFromLoaded(
   session: SessionWithDetails,
   endTime: Date,
   promotion: PromotionSnapshot | null = null,
-  pricingGroupId?: string
+  pricingGroupId?: string,
+  pendingGroups?: PendingGroupPricing[],
+  pendingIndex = 0,
+  pausedSeconds = 0
 ): Promise<Result<PricingResult>> {
-  const totalHours = calcHours(session.startTime, endTime)
+  const totalHours = calcHours(session.startTime, endTime, pausedSeconds)
 
   const activeMembership = session.membership
-    ?? (session.customer.type === 'MEMBER'
+    ?? (session.customer?.type === 'MEMBER' && session.customerId
       ? await deps.membership.findActive(session.customerId, session.startTime)
       : null)
 
-  if (session.customer.type === 'MEMBER' && activeMembership) {
+  if (session.customer?.type === 'MEMBER' && activeMembership) {
     return ok({
       hourlyRate: 0,
       totalHours,
@@ -80,8 +97,16 @@ export async function calculateSessionPriceFromLoaded(
   let hourlyRate: number
   let tiers: { minHours: number; ratePerHour: number }[] = []
 
-  // ── Nếu có pricingGroupId, dùng snapshot của group đó ──
-  if (pricingGroupId) {
+  // ── Nếu có pendingGroups (bảng giá chọn tại checkout) — ưu tiên cao nhất ──
+  const pending = pendingGroups?.[pendingIndex]
+  if (pending) {
+    hourlyRate = pending.snapshot.ratePerHour
+    tiers = pending.snapshot.tiers.map((t) => ({
+      minHours: t.minHours,
+      ratePerHour: t.ratePerHour,
+    }))
+  } else if (pricingGroupId) {
+    // ── Nếu có pricingGroupId, dùng snapshot của group đó ──
     const group = session.pricingGroups.find(g => g.id === pricingGroupId)
     if (!group || group.remainingCount <= 0) return err('PRICING_GROUP_NOT_FOUND')
     const snapshot = group.pricingSnapshot as PricingRuleSnapshot | null

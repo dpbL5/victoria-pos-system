@@ -13,6 +13,7 @@ function makeSession(): SessionWithDetails {
   return {
     id: 'session-1',
     customerId: 'cust-1',
+    customerName: null,
     membershipId: null,
     staffId: 'staff-1',
     shiftId: 'shift-1',
@@ -75,7 +76,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     audit: { append: vi.fn(async () => {}), findMany: vi.fn() },
     membership: { findLatest: vi.fn(), findActive: vi.fn(), create: vi.fn(), findManyByCustomer: vi.fn() },
     membershipPlan: { findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), countUsage: vi.fn(), delete: vi.fn() },
-    customer: { findById: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), countWalkInsBetween: vi.fn() },
+    customer: { findById: vi.fn(), findByIdIncludingDeleted: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), softDelete: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), countWalkInsBetween: vi.fn() },
     shift: {
       findOpenForStaff: vi.fn(async () => ({ id: 'shift-1' }) as never),
       findOpenOperational: vi.fn(),
@@ -83,6 +84,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       calculateExpectedCash: vi.fn(),
       markParticipantsLeft: vi.fn(),
       upsertToolCloseCount: vi.fn(),
+      upsertToolOpenCount: vi.fn(),
       close: vi.fn(),
       upsertParticipant: vi.fn(),
       findByIdOrThrow: vi.fn(),
@@ -118,8 +120,10 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findMany: vi.fn(),
       findByIdForPreview: vi.fn(),
       findDraftSellTotals: vi.fn(),
+      countCreatedBetween: vi.fn(async () => 0),
       createWithRefs: vi.fn(),
       createPricingGroup: vi.fn(),
+      updatePricingGroup: vi.fn(),
       update: vi.fn(async () => {}),
       decrementGroupRemaining: vi.fn(async () => ({ remainingCount: 0 })),
       sumRemainingPlayers: vi.fn(async () => 0),
@@ -184,6 +188,7 @@ function makeCtx(): CheckoutContext {
     parkingVehicleCount: 0,
     checkoutAt: new Date('2026-08-07T12:00:00Z'),
     customerId: 'cust-1',
+    customerName: null,
   }
 }
 
@@ -313,6 +318,29 @@ describe('runCheckOutTx', () => {
     expect(result.invoiceNo).toBe('INV-1')
   })
 
+  it('checkout khách vãng lai (không Customer): không gọi recordPlay, invoice customerId null', async () => {
+    const repos = makeRepositories()
+    const session = makeSession()
+    session.customerId = null
+    session.customerName = 'Nguyễn Văn A'
+    session.customer = null as never
+    const ctx = makeCtx()
+    ctx.session = session
+    ctx.customerId = null
+    ctx.customerName = 'Nguyễn Văn A'
+    const result = await runCheckOutTx(repos, ctx, makeState())
+
+    expect(repos.billing.createPaidInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: null })
+    )
+    expect(repos.customer.recordPlay).not.toHaveBeenCalled()
+    // metadata PLAY_TIME có tên khách vãng lai
+    const items = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls
+    const playTimeCall = items.find((c) => c[0].type === 'PLAY_TIME')
+    expect(playTimeCall![0].metadata).toMatchObject({ customerType: 'WALK_IN', customerName: 'Nguyễn Văn A' })
+    expect(result.remainingPlayers).toBe(0)
+  })
+
   it('không đóng phiên khi còn người chơi (partial checkout)', async () => {
     const repos = makeRepositories({
       session: {
@@ -414,7 +442,7 @@ describe('runCheckOutTx', () => {
       },
     })
     const session = makeSession()
-    session.customer.type = 'MEMBER'
+    session.customer!.type = 'MEMBER'
     session.hourlyRate = 0 as never
     session.membership = {
       id: 'mem-1',
@@ -463,5 +491,110 @@ describe('runCheckOutTx', () => {
       'Đã gộp vào hóa đơn INV-1'
     )
     expect(result.remainingPlayers).toBe(0)
+  })
+
+  it('WALK_IN session chưa có giá: persist bảng giá vào group 1 trước khi tạo invoice', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    ctx.session = {
+      ...makeSession(),
+      hourlyRate: 0 as never,
+      pricingGroups: [{
+        id: 'group-1',
+        label: 'Nhóm 1',
+        playerCount: 2,
+        remainingCount: 2,
+        hourlyRate: 0,
+        pricingRuleId: null,
+        pricingSnapshot: null,
+      }],
+    } as unknown as SessionWithDetails
+    ctx.pendingAssignments = [{
+      groupId: 'group-1',
+      label: 'Nhóm 1',
+      playerCount: 2,
+      pricingRuleId: 'rule-1',
+      snapshot: { ruleId: 'rule-1', name: 'Giờ vàng', ratePerHour: 50000, tiers: [] },
+    }]
+    ctx.pricing = { ...pricing, hourlyRate: 50000 }
+    const state = makeState()
+    state.finalPricing = { ...pricing, hourlyRate: 50000 }
+    const result = await runCheckOutTx(repos, ctx, state)
+
+    expect(repos.session.updatePricingGroup).toHaveBeenCalledWith('group-1', expect.objectContaining({
+      label: 'Nhóm 1',
+      playerCount: 2,
+      remainingCount: 2,
+      hourlyRate: 50000,
+      pricingRuleId: 'rule-1',
+      pricingSnapshot: { ruleId: 'rule-1', name: 'Giờ vàng', ratePerHour: 50000, tiers: [] },
+    }))
+    expect(repos.session.createPricingGroup).not.toHaveBeenCalled()
+    // Audit đánh dấu gán giá tại checkout
+    const auditCall = (repos.audit.append as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(auditCall.details.pricingAssignedAtCheckout).toBe(true)
+    expect(auditCall.details.assignedPricingRuleIds).toEqual(['rule-1'])
+    expect(result.finalPricing.hourlyRate).toBe(50000)
+  })
+
+  it('WALK_IN chia nhóm tại checkout: update group 1 + create group 2..N', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    ctx.session = {
+      ...makeSession(),
+      hourlyRate: 0 as never,
+      playerCount: 3,
+      pricingGroups: [{
+        id: 'group-1',
+        label: 'Nhóm 1',
+        playerCount: 3,
+        remainingCount: 3,
+        hourlyRate: 0,
+        pricingRuleId: null,
+        pricingSnapshot: null,
+      }],
+    } as unknown as SessionWithDetails
+    ctx.pendingAssignments = [
+      { groupId: 'group-1', label: 'Nhóm 1', playerCount: 2, pricingRuleId: 'rule-1', snapshot: { ruleId: 'rule-1', name: 'Giờ vàng', ratePerHour: 50000, tiers: [] } },
+      { groupId: null, label: 'Nhóm 2', playerCount: 1, pricingRuleId: 'rule-2', snapshot: { ruleId: 'rule-2', name: 'Giờ tối', ratePerHour: 40000, tiers: [] } },
+    ]
+    const state = makeState()
+    state.finalPricing = { ...pricing, hourlyRate: 50000 }
+    await runCheckOutTx(repos, ctx, state)
+
+    expect(repos.session.updatePricingGroup).toHaveBeenCalledTimes(1)
+    expect(repos.session.updatePricingGroup).toHaveBeenCalledWith('group-1', expect.objectContaining({
+      playerCount: 2,
+      remainingCount: 2,
+      hourlyRate: 50000,
+      pricingRuleId: 'rule-1',
+    }))
+    expect(repos.session.createPricingGroup).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'session-1',
+      label: 'Nhóm 2',
+      playerCount: 1,
+      remainingCount: 1,
+      hourlyRate: 40000,
+      pricingRuleId: 'rule-2',
+    }))
+  })
+
+  it('không persist bảng giá khi group đã có snapshot (session cũ)', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    ctx.pendingAssignments = undefined
+    const result = await runCheckOutTx(repos, ctx, makeState())
+
+    expect(repos.session.updatePricingGroup).not.toHaveBeenCalled()
+    expect(repos.session.createPricingGroup).not.toHaveBeenCalled()
+    const auditCall = (repos.audit.append as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(auditCall.details.pricingAssignedAtCheckout).toBe(false)
+    expect(result.remainingPlayers).toBe(0)
+  })
+
+  it('mapCheckoutError: PRICING_RULE_NOT_FOUND + GROUP_PLAYER_COUNT_MISMATCH mapping', async () => {
+    expect(mapCheckoutError({ code: 'PRICING_RULE_NOT_FOUND' } as never)).toMatchObject({ status: 400, message: expect.stringContaining('bảng giá') })
+    expect(mapCheckoutError({ code: 'GROUP_PLAYER_COUNT_MISMATCH' } as never)).toMatchObject({ status: 400, message: expect.stringContaining('nhóm') })
+    expect(mapCheckoutError({ code: 'PRICING_RULE_NOT_EFFECTIVE' } as never)).toMatchObject({ status: 400 })
   })
 })

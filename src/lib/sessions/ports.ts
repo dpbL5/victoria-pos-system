@@ -12,7 +12,7 @@ export type SessionWithDetails = Prisma.SessionGetPayload<{
 
 export type SessionWithCustomer = Prisma.SessionGetPayload<{
   include: { customer: true }
-}>
+}> & { customerName: string | null }
 
 export type SessionRefs = Prisma.SessionGetPayload<{
   include: {
@@ -20,7 +20,7 @@ export type SessionRefs = Prisma.SessionGetPayload<{
     membership: { select: { id: true; startsAt: true; expiresAt: true } }
     shift: { select: { id: true; openedAt: true; status: true } }
   }
-}>
+}> & { customerName: string | null }
 
 /** Dòng phiên trong danh sách — GET /api/sessions */
 export type SessionListRow = Prisma.SessionGetPayload<{
@@ -37,6 +37,9 @@ export type SessionListRow = Prisma.SessionGetPayload<{
     discountAmount: true
     totalAmount: true
     playerCount: true
+    customerName: true
+    pausedAt: true
+    totalPausedSeconds: true
     promotionRuleId: true
     promotionName: true
     promotionDiscountType: true
@@ -102,9 +105,13 @@ export interface SessionRepository {
   findByIdForPreview(id: string): Promise<SessionPreviewRow | null>
   /** Tổng grandTotal của DRAFT invoices theo từng session — enrich pendingSellTotal */
   findDraftSellTotals(sessionIds: string[]): Promise<Record<string, number>>
+  /** Đếm session tạo trong khoảng thời gian (đặt tên khách vãng lai `Khách #NNN`) */
+  countCreatedBetween(from: Date, to: Date): Promise<number>
   /** Tạo session kèm customer/membership/shift refs */
   createWithRefs(data: CreateSessionData): Promise<SessionRefs>
   createPricingGroup(data: CreatePricingGroupData): Promise<void>
+  /** Gán bảng giá (snapshot) cho pricing group — dùng khi chọn bảng giá tại checkout */
+  updatePricingGroup(groupId: string, data: UpdatePricingGroupData): Promise<void>
   /** Unchecked update — cho phép set trực tiếp shiftId, playerCount, promotion fields... */
   update(id: string, data: Prisma.SessionUncheckedUpdateInput): Promise<void>
   /** Giảm remainingCount của group — trả về remainingCount mới */
@@ -114,13 +121,15 @@ export interface SessionRepository {
 }
 
 export interface CreateSessionData {
-  customerId: string
+  customerId: string | null
+  /** Tên khách vãng lai — null khi là hội viên (lấy từ customer.fullName) */
+  customerName?: string | null
   staffId: string
   shiftId: string
   membershipId?: string
   startTime: Date
   hourlyRate: number
-  pricingRuleId?: string
+  pricingRuleId?: string | null
   pricingRuleSnapshot?: PricingRuleSnapshot | null
   playerCount: number
 }
@@ -132,9 +141,19 @@ export interface CreatePricingGroupData {
   remainingCount: number
   hourlyRate: number
   /** null cho session hội viên (không gắn bảng giá) */
-  pricingRuleId?: string
+  pricingRuleId?: string | null
   /** null cho session hội viên (không tính tiền giờ) */
   pricingSnapshot: PricingRuleSnapshot | null
+}
+
+export interface UpdatePricingGroupData {
+  label?: string
+  playerCount?: number
+  remainingCount?: number
+  /** null khi xoá bảng giá đã gán */
+  pricingRuleId?: string | null
+  pricingSnapshot: PricingRuleSnapshot | null
+  hourlyRate?: number
 }
 
 export interface ProductRecord {
