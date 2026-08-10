@@ -80,6 +80,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findMany: vi.fn(),
       findByIdForPreview: vi.fn(),
       findDraftSellTotals: vi.fn(),
+      findPlayersForPause: vi.fn(),
       countCreatedBetween: vi.fn(async () => 0),
       createWithRefs: vi.fn(async () => ({
         id: 'session-1',
@@ -107,6 +108,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       pausePlayer: vi.fn(),
       resumePlayer: vi.fn(),
       markPlayersCheckedOut: vi.fn(),
+      movePlayersToGroup: vi.fn(async () => {}),
     },
     product: {
       findManyByIds: vi.fn(),

@@ -131,8 +131,10 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       decrementGroupRemaining: vi.fn(async () => ({ remainingCount: 0 })),
       sumRemainingPlayers: vi.fn(async () => 0),
       findByIdWithPlayers: vi.fn(),
+      findPlayersForPause: vi.fn(),
       pausePlayer: vi.fn(async () => {}),
       resumePlayer: vi.fn(async () => {}),
+      movePlayersToGroup: vi.fn(async () => {}),
       markPlayersCheckedOut: vi.fn(async () => {}),
     },
     product: {
@@ -195,6 +197,7 @@ function makeCtx(): CheckoutContext {
     newQuantityByProductId: new Map([['prod-1', 2]]),
     parkingVehicleCount: 0,
     checkoutAt: new Date('2026-08-07T12:00:00Z'),
+    pauseRef: new Date('2026-08-07T12:00:00Z'),
     customerId: 'cust-1',
     customerName: null,
     playersToBill: [],
@@ -525,6 +528,7 @@ describe('runCheckOutTx', () => {
       playerCount: 2,
       pricingRuleId: 'rule-1',
       snapshot: { ruleId: 'rule-1', name: 'Giờ vàng', ratePerHour: 50000, tiers: [] },
+      playerIds: [],
     }]
     ctx.pricing = { ...pricing, hourlyRate: 50000 }
     const state = makeState()
@@ -566,8 +570,8 @@ describe('runCheckOutTx', () => {
       }],
     } as unknown as SessionWithPlayers
     ctx.pendingAssignments = [
-      { groupId: 'group-1', label: 'Nhóm 1', playerCount: 2, pricingRuleId: 'rule-1', snapshot: { ruleId: 'rule-1', name: 'Giờ vàng', ratePerHour: 50000, tiers: [] } },
-      { groupId: null, label: 'Nhóm 2', playerCount: 1, pricingRuleId: 'rule-2', snapshot: { ruleId: 'rule-2', name: 'Giờ tối', ratePerHour: 40000, tiers: [] } },
+      { groupId: 'group-1', label: 'Nhóm 1', playerCount: 2, pricingRuleId: 'rule-1', snapshot: { ruleId: 'rule-1', name: 'Giờ vàng', ratePerHour: 50000, tiers: [] }, playerIds: [] },
+      { groupId: null, label: 'Nhóm 2', playerCount: 1, pricingRuleId: 'rule-2', snapshot: { ruleId: 'rule-2', name: 'Giờ tối', ratePerHour: 40000, tiers: [] }, playerIds: [] },
     ]
     const state = makeState()
     state.finalPricing = { ...pricing, hourlyRate: 50000 }

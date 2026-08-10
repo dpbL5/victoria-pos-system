@@ -132,9 +132,11 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
       decrementGroupRemaining: vi.fn(),
       sumRemainingPlayers: vi.fn(),
       findByIdWithPlayers: vi.fn(),
+      findPlayersForPause: vi.fn(),
       pausePlayer: vi.fn(),
       resumePlayer: vi.fn(),
       markPlayersCheckedOut: vi.fn(),
+      movePlayersToGroup: vi.fn(async () => {}),
     },
     product: {
       findManyByIds: vi.fn(),
