@@ -178,6 +178,7 @@ model Session {
   payments      Payment[]
   invoices      Invoice[]
   pricingGroups SessionPricingGroup[]
+  players       SessionPlayer[]
 
   @@index([customerId, status])
   @@index([shiftId])
@@ -201,8 +202,28 @@ model SessionPricingGroup {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
+  players SessionPlayer[]
+
   @@index([sessionId])
   @@map("session_pricing_groups")
+}
+
+model SessionPlayer {
+  id                 String              @id @default(uuid())
+  sessionId          String              @map("session_id")
+  session            Session             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  groupId            String              @map("group_id")
+  group              SessionPricingGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name               String?             @db.VarChar(100)
+  pausedAt           DateTime?           @map("paused_at")
+  totalPausedSeconds Int                 @default(0) @map("total_paused_seconds")
+  checkedOutAt       DateTime?           @map("checked_out_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  @@index([sessionId])
+  @@index([groupId])
+  @@map("session_players")
 }
 
 model PricingRule {

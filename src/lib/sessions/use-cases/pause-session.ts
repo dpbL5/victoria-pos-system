@@ -94,6 +94,156 @@ export async function resumeSession(
   return result
 }
 
+// ── Pause theo từng người chơi (phiên nhiều người) ─────
+
+export interface PausePlayerInput {
+  sessionId: string
+  playerId: string
+  staffId: string
+  now?: Date
+}
+
+export interface PausePlayerResult {
+  sessionId: string
+  playerId: string
+  pausedAt: Date
+}
+
+export interface ResumePlayerInput {
+  sessionId: string
+  playerId: string
+  staffId: string
+  now?: Date
+}
+
+export interface ResumePlayerResult {
+  sessionId: string
+  playerId: string
+  pausedSeconds: number
+}
+
+/** Tìm player trong session (qua pricingGroups) — trả null nếu không thuộc session */
+function findPlayerInSession(
+  session: { pricingGroups: Array<{ players: Array<{ id: string; pausedAt: Date | null; totalPausedSeconds: number }> }> },
+  playerId: string
+) {
+  for (const group of session.pricingGroups) {
+    const player = group.players.find((p) => p.id === playerId)
+    if (player) return player
+  }
+  return null
+}
+
+/**
+ * Tạm dừng 1 người chơi trong phiên nhiều người — set pausedAt trên SessionPlayer.
+ * Chỉ hỗ trợ phiên nhiều người (playerCount > 1 / nhiều pricing group):
+ * phiên 1 người dùng pauseSession (toàn phiên) như trước.
+ */
+export async function pausePlayer(
+  input: PausePlayerInput,
+  deps: Repositories = repositories
+): Promise<Result<PausePlayerResult>> {
+  const { sessionId, playerId, staffId, now = new Date() } = input
+
+  const session = await deps.session.findByIdWithPlayers(sessionId)
+  if (!session) return err('SESSION_NOT_FOUND')
+  if (session.status !== 'ACTIVE') return err('SESSION_NOT_ACTIVE')
+
+  // Chỉ phiên nhiều người mới hỗ trợ pause theo người
+  if (session.playerCount <= 1) return err('PLAYER_PAUSE_NOT_SUPPORTED')
+
+  const player = findPlayerInSession(session, playerId)
+  if (!player) return err('PLAYER_NOT_FOUND')
+  if (player.pausedAt) return err('PLAYER_ALREADY_PAUSED')
+
+  const result = await runInTransaction(async (tx) => {
+    await tx.session.pausePlayer(playerId, now)
+    await tx.audit.append({
+      userId: staffId,
+      action: 'PLAYER_PAUSE',
+      entityType: 'SessionPlayer',
+      entityId: playerId,
+      details: { sessionId, pausedAt: now.toISOString() },
+    })
+    return { sessionId, playerId, pausedAt: now }
+  })
+
+  return result
+}
+
+/**
+ * Tiếp tục 1 người chơi sau tạm dừng — cộng dồn thời gian pause vào
+ * totalPausedSeconds của player, set pausedAt = null.
+ */
+export async function resumePlayer(
+  input: ResumePlayerInput,
+  deps: Repositories = repositories
+): Promise<Result<ResumePlayerResult>> {
+  const { sessionId, playerId, staffId, now = new Date() } = input
+
+  const session = await deps.session.findByIdWithPlayers(sessionId)
+  if (!session) return err('SESSION_NOT_FOUND')
+  if (session.status !== 'ACTIVE') return err('SESSION_NOT_ACTIVE')
+
+  if (session.playerCount <= 1) return err('PLAYER_PAUSE_NOT_SUPPORTED')
+
+  const player = findPlayerInSession(session, playerId)
+  if (!player) return err('PLAYER_NOT_FOUND')
+  if (!player.pausedAt) return err('PLAYER_NOT_PAUSED')
+
+  // Chỉ tính elapsed của lần pause này (giống resumeSession session-level) —
+  // totalPausedSeconds cũ đã được increment trong các lần resume trước.
+  const pausedSeconds = Math.round(Math.max(0, (now.getTime() - new Date(player.pausedAt).getTime()) / 1000))
+
+  const result = await runInTransaction(async (tx) => {
+    await tx.session.resumePlayer(playerId, pausedSeconds)
+    await tx.audit.append({
+      userId: staffId,
+      action: 'PLAYER_RESUME',
+      entityType: 'SessionPlayer',
+      entityId: playerId,
+      details: { sessionId, pausedSeconds, resumedAt: now.toISOString() },
+    })
+    return { sessionId, playerId, pausedSeconds }
+  })
+
+  return result
+}
+
+export function mapPausePlayerError(error: DomainError): HttpErrorInfo {
+  switch (error.code) {
+    case 'SESSION_NOT_FOUND':
+      return { code: 'SESSION_NOT_FOUND', message: 'Không tìm thấy phiên', status: 404 }
+    case 'SESSION_NOT_ACTIVE':
+      return { code: 'SESSION_NOT_ACTIVE', message: 'Chỉ tạm dừng được phiên đang chơi', status: 400 }
+    case 'PLAYER_NOT_FOUND':
+      return { code: 'PLAYER_NOT_FOUND', message: 'Không tìm thấy người chơi trong phiên', status: 404 }
+    case 'PLAYER_ALREADY_PAUSED':
+      return { code: 'PLAYER_ALREADY_PAUSED', message: 'Người chơi đã tạm dừng rồi', status: 400 }
+    case 'PLAYER_PAUSE_NOT_SUPPORTED':
+      return { code: 'PLAYER_PAUSE_NOT_SUPPORTED', message: 'Phiên 1 người dùng tạm dừng toàn phiên', status: 400 }
+    default:
+      return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
+  }
+}
+
+export function mapResumePlayerError(error: DomainError): HttpErrorInfo {
+  switch (error.code) {
+    case 'SESSION_NOT_FOUND':
+      return { code: 'SESSION_NOT_FOUND', message: 'Không tìm thấy phiên', status: 404 }
+    case 'SESSION_NOT_ACTIVE':
+      return { code: 'SESSION_NOT_ACTIVE', message: 'Chỉ tiếp tục được phiên đang chơi', status: 400 }
+    case 'PLAYER_NOT_FOUND':
+      return { code: 'PLAYER_NOT_FOUND', message: 'Không tìm thấy người chơi trong phiên', status: 404 }
+    case 'PLAYER_NOT_PAUSED':
+      return { code: 'PLAYER_NOT_PAUSED', message: 'Người chơi chưa tạm dừng', status: 400 }
+    case 'PLAYER_PAUSE_NOT_SUPPORTED':
+      return { code: 'PLAYER_PAUSE_NOT_SUPPORTED', message: 'Phiên 1 người dùng tạm dừng toàn phiên', status: 400 }
+    default:
+      return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
+  }
+}
+
 export function mapPauseSessionError(error: DomainError): HttpErrorInfo {
   switch (error.code) {
     case 'SESSION_NOT_FOUND':

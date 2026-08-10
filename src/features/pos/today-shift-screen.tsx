@@ -158,8 +158,11 @@ export function TodayShiftScreen() {
         notifyError(data.error || 'Không tạm dừng được')
         return
       }
+      // Cập nhật cục bộ — không reload toàn bộ
+      setSessions((current) => current.map((s) => (
+        s.id === session.id ? { ...s, pausedAt: new Date().toISOString() } : s
+      )))
       notifySuccess('Đã tạm dừng phiên')
-      await loadData()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -170,13 +173,76 @@ export function TodayShiftScreen() {
   const handleResume = async (session: SessionRow) => {
     setSubmitting(true)
     try {
-      const data = await apiJson(`/api/sessions/${session.id}/resume`, jsonRequest({}))
+      const data = await apiJson<{ pausedSeconds?: number }>(`/api/sessions/${session.id}/resume`, jsonRequest({}))
       if (!data.success) {
         notifyError(data.error || 'Không tiếp tục được')
         return
       }
+      // Cập nhật cục bộ: clear pausedAt + cộng dồn pausedSeconds lần này
+      const resumedSeconds = data.data?.pausedSeconds ?? 0
+      setSessions((current) => current.map((s) => (
+        s.id === session.id
+          ? { ...s, pausedAt: null, totalPausedSeconds: (s.totalPausedSeconds ?? 0) + resumedSeconds }
+          : s
+      )))
       notifySuccess('Đã tiếp tục phiên')
-      await loadData()
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── Pause/resume theo từng người chơi (phiên nhiều người) ──
+  // Không reload toàn bộ — chỉ cập nhật state cục bộ cho đúng player để
+  // tab đó dừng/tiếp tục ngay, các tab khác giữ nguyên.
+  const updatePlayerInSession = (sessionId: string, playerId: string, updater: (p: NonNullable<NonNullable<SessionRow['pricingGroups']>[number]['players']>[number]) => NonNullable<NonNullable<SessionRow['pricingGroups']>[number]['players']>[number]) => {
+    setSessions((current) => current.map((s) => {
+      if (s.id !== sessionId) return s
+      return {
+        ...s,
+        pricingGroups: s.pricingGroups?.map((g) => ({
+          ...g,
+          players: g.players?.map((p) => (p.id === playerId ? updater(p) : p)),
+        })),
+      }
+    }))
+  }
+
+  const handlePausePlayer = async (session: SessionRow, playerId: string) => {
+    setSubmitting(true)
+    try {
+      const data = await apiJson(`/api/sessions/${session.id}/players/${playerId}/pause`, jsonRequest({}))
+      if (!data.success) {
+        notifyError(data.error || 'Không tạm dừng được người chơi')
+        return
+      }
+      // Cập nhật cục bộ: set pausedAt = now → tab đóng băng ngay, không reload
+      updatePlayerInSession(session.id, playerId, (p) => ({ ...p, pausedAt: new Date().toISOString() }))
+      notifySuccess('Đã tạm dừng người chơi')
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleResumePlayer = async (session: SessionRow, playerId: string) => {
+    setSubmitting(true)
+    try {
+      const data = await apiJson<{ pausedSeconds?: number }>(`/api/sessions/${session.id}/players/${playerId}/resume`, jsonRequest({}))
+      if (!data.success) {
+        notifyError(data.error || 'Không tiếp tục được người chơi')
+        return
+      }
+      // Cập nhật cục bộ: clear pausedAt + cộng dồn pausedSeconds lần này
+      const resumedSeconds = data.data?.pausedSeconds ?? 0
+      updatePlayerInSession(session.id, playerId, (p) => ({
+        ...p,
+        pausedAt: null,
+        totalPausedSeconds: (p.totalPausedSeconds ?? 0) + resumedSeconds,
+      }))
+      notifySuccess('Đã tiếp tục người chơi')
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -314,6 +380,8 @@ export function TodayShiftScreen() {
                   onCheckout={() => { setCheckoutFrozenAt(new Date().toISOString()); setCheckoutSession(session) }}
                   onPause={() => void handlePause(session)}
                   onResume={() => void handleResume(session)}
+                  onPausePlayer={(playerId) => void handlePausePlayer(session, playerId)}
+                  onResumePlayer={(playerId) => void handleResumePlayer(session, playerId)}
                 />
               ))}
             </div>

@@ -55,6 +55,8 @@ export interface PlayTimeQuote {
   pricingGroupId?: string
   pricingGroups?: SessionPricingGroupDTO[]
   parkingFeeUnitPrice?: number
+  /** Tổng giây đã tạm dừng (theo group được chọn, fallback session-level) */
+  pausedSeconds?: number
 }
 
 export interface PendingSellItem {
@@ -73,6 +75,15 @@ export interface PricingTier {
   ratePerHour: number | string
 }
 
+export interface SessionPlayerDTO {
+  id: string
+  name: string | null
+  pausedAt: string | null
+  totalPausedSeconds: number
+  /** Thời điểm đã được tính tiền (checkout từng phần) — null nếu chưa thu */
+  checkedOutAt?: string | null
+}
+
 export interface SessionPricingGroupDTO {
   id: string
   sessionId: string
@@ -82,6 +93,9 @@ export interface SessionPricingGroupDTO {
   hourlyRate: number
   pricingRuleId: string | null
   pricingSnapshot: PricingRuleSnapshot | null
+  /** Tổng giây đã tạm dừng của group (tính tại thời điểm quote) */
+  pausedSeconds?: number
+  players?: SessionPlayerDTO[]
 }
 
 export interface PricingRuleTierSnapshot {

@@ -184,12 +184,18 @@ body {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
+/* Toast xuất hiện từ top: scale nhỏ (0.9) → đúng kích thước */
+@keyframes toast-pop {
+  from { opacity: 0; transform: translateY(-8px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 .animate-fade-in { animation: fade-in 0.2s ease-out; }
 .animate-slide-up { animation: slide-up 0.25s ease-out; }
 .animate-slide-down { animation: slide-down 0.2s ease-out; }
 .animate-scale-in { animation: scale-in 0.2s ease-out; }
 .animate-slide-in-right { animation: slide-in-right 0.3s ease-out; }
+.animate-toast-pop { animation: toast-pop 0.25s ease-out; }
 
 /* ── Reduced motion ─────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {

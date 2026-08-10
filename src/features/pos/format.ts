@@ -42,6 +42,30 @@ export function calcElapsedHMS(startTime: string, endTime?: string | Date, pause
   return [h, m, s].map((v) => v.toString().padStart(2, '0')).join(':')
 }
 
+/** Format số giây → HH:MM:SS (dùng cho thời gian đã tạm dừng) */
+export function formatPausedHMS(pausedSeconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(pausedSeconds))
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  return [h, m, s].map((v) => v.toString().padStart(2, '0')).join(':')
+}
+
+/**
+ * Tổng số giây đã tạm dừng: tích lũy + phần đang paused (nếu đang dừng).
+ * `now` cho phép chốt theo thời điểm cố định (vd frozenAt khi checkout) —
+ * mặc định tính tới hiện tại để thẻ tick live mỗi giây.
+ */
+export function pausedSecondsUntil(
+  pausedAt?: string | Date | null,
+  totalPausedSeconds = 0,
+  now?: number
+): number {
+  const base = Math.max(0, totalPausedSeconds)
+  if (!pausedAt) return base
+  return base + Math.max(0, Math.round(((now ?? Date.now()) - new Date(pausedAt).getTime()) / 1000))
+}
+
 export function calcCurrentPlayCost(
   startTime: string,
   hourlyRate: number | string,

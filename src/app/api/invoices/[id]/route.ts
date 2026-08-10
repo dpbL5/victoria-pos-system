@@ -69,6 +69,7 @@ export async function GET(
               startTime: invoice.session.startTime.toISOString(),
               endTime: invoice.session.endTime?.toISOString() ?? null,
               status: invoice.session.status,
+              totalPausedSeconds: invoice.session.totalPausedSeconds ?? 0,
             }
           : null,
         shift: invoice.shift

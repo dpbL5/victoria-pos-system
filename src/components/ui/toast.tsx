@@ -58,8 +58,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast: addToast, success, error }}>
       {children}
-      {/* Toast container */}
-      <div className="fixed bottom-20 md:bottom-6 right-4 z-[100] flex flex-col-reverse gap-2 pointer-events-none">
+      {/* Toast container — top, đẩy nội dung xuống */}
+      <div className="fixed inset-x-0 top-0 z-[100] flex flex-col gap-2 px-4 pt-4 pointer-events-none">
         {toasts.map((t) => (
           <ToastItem key={t.id} toast={t} onDismiss={() => {
             setToasts((prev) => prev.map((x) => (x.id === t.id ? { ...x, exiting: true } : x)));
@@ -79,18 +79,19 @@ const iconMap: Record<ToastType, typeof CheckCircle> = {
   warning: AlertCircle,
 };
 
+// Nền màu đậm theo loại — toast nổi bật rõ trên mọi nền (light + dark)
 const colorMap: Record<ToastType, string> = {
-  success: "border-green-400/40 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white",
-  error: "border-red-400/40 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white",
-  info: "border-blue-400/40 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white",
-  warning: "border-yellow-400/40 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white",
+  success: "border-green-600 bg-green-600 text-white",
+  error: "border-red-600 bg-red-600 text-white",
+  info: "border-blue-600 bg-blue-600 text-white",
+  warning: "border-amber-500 bg-amber-500 text-white",
 };
 
 const iconColorMap: Record<ToastType, string> = {
-  success: "text-green-500",
-  error: "text-red-500",
-  info: "text-blue-500",
-  warning: "text-yellow-500",
+  success: "text-white",
+  error: "text-white",
+  info: "text-white",
+  warning: "text-white",
 };
 
 function ToastItem({ toast: t, onDismiss }: { toast: Toast; onDismiss: () => void }) {
@@ -98,8 +99,10 @@ function ToastItem({ toast: t, onDismiss }: { toast: Toast; onDismiss: () => voi
 
   return (
     <div
-      className={`pointer-events-auto flex items-center gap-3 rounded-xl border px-4 py-3 shadow-lg backdrop-blur-sm min-w-[280px] max-w-[380px] transition-all duration-300 ${
-        t.exiting ? "opacity-0 translate-x-4 scale-95" : "opacity-100 animate-slide-up"
+      className={`pointer-events-auto mx-auto flex w-full max-w-md items-center gap-3 rounded-xl border px-4 py-3 shadow-lg backdrop-blur-sm transition-all duration-300 origin-top ${
+        t.exiting
+          ? "opacity-0 -translate-y-2 scale-90"
+          : "animate-toast-pop"
       } ${colorMap[t.type]}`}
     >
       <Icon size={18} className={`shrink-0 ${iconColorMap[t.type]}`} />

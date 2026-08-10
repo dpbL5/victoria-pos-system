@@ -79,6 +79,10 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
                 hourlyRate: true,
                 pricingRuleId: true,
                 pricingSnapshot: true,
+                players: {
+                  select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true },
+                  orderBy: { createdAt: 'asc' },
+                },
               },
               orderBy: { createdAt: 'asc' },
             },
@@ -108,6 +112,10 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
               hourlyRate: true,
               pricingRuleId: true,
               pricingSnapshot: true,
+              players: {
+                select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true },
+                orderBy: { createdAt: 'asc' },
+              },
             },
             orderBy: { createdAt: 'asc' },
           },
@@ -160,7 +168,7 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
     },
 
     async createPricingGroup(data) {
-      await store.sessionPricingGroup.create({
+      const group = await store.sessionPricingGroup.create({
         data: {
           sessionId: data.sessionId,
           label: data.label,
@@ -170,6 +178,21 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
           pricingRuleId: data.pricingRuleId ?? null,
           pricingSnapshot: (data.pricingSnapshot ?? Prisma.JsonNull) as unknown as Prisma.InputJsonValue,
         },
+        select: { id: true },
+      })
+      return { id: group.id }
+    },
+
+    async createPlayersForGroup(sessionId, groupId, count) {
+      if (count <= 0) return
+      await store.sessionPlayer.createMany({
+        data: Array.from({ length: count }, () => ({
+          sessionId,
+          groupId,
+          name: null,
+          pausedAt: null,
+          totalPausedSeconds: 0,
+        })),
       })
     },
 
@@ -205,6 +228,42 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
         select: { remainingCount: true },
       })
       return groups.reduce((sum, g) => sum + g.remainingCount, 0)
+    },
+
+    async findByIdWithPlayers(id) {
+      return store.session.findUnique({
+        where: { id },
+        include: {
+          customer: true,
+          membership: true,
+          pricingGroups: {
+            orderBy: { createdAt: 'asc' },
+            include: { players: true },
+          },
+        },
+      })
+    },
+
+    async pausePlayer(playerId, pausedAt) {
+      await store.sessionPlayer.update({
+        where: { id: playerId },
+        data: { pausedAt },
+      })
+    },
+
+    async resumePlayer(playerId, pausedSeconds) {
+      await store.sessionPlayer.update({
+        where: { id: playerId },
+        data: { pausedAt: null, totalPausedSeconds: { increment: pausedSeconds } },
+      })
+    },
+
+    async markPlayersCheckedOut(playerIds, checkedOutAt) {
+      if (playerIds.length === 0) return
+      await store.sessionPlayer.updateMany({
+        where: { id: { in: playerIds } },
+        data: { checkedOutAt },
+      })
     },
   }
 }

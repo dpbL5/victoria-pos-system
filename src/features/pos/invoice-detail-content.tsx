@@ -16,6 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { formatVND } from '@/lib/shared/utils'
+import { formatPausedHMS } from './format'
 
 interface InvoiceItem {
   id: string
@@ -67,6 +68,7 @@ export interface InvoiceDetail {
     startTime: string
     endTime: string | null
     status: string
+    totalPausedSeconds?: number | null
   } | null
   shift: {
     id: string
@@ -201,6 +203,33 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
               {invoice.session.status === 'COMPLETED' ? 'Đã xong' : invoice.session.status === 'ACTIVE' ? 'Đang chơi' : 'Đã huỷ'}
             </Badge>
           </div>
+          {/* Thời gian đã tạm dừng — từ PLAY_TIME metadata (fallback session.totalPausedSeconds) */}
+          {(() => {
+            const playItem = invoice.items.find((item) => item.type === 'PLAY_TIME')
+            const meta = (playItem?.metadata ?? {}) as { pausedSeconds?: number; playerPauses?: Array<{ id: string; name: string; pausedSeconds: number }> }
+            const pausedSeconds = meta.pausedSeconds ?? invoice.session?.totalPausedSeconds ?? 0
+            if (pausedSeconds <= 0) return null
+            return (
+              <div className="mt-2 space-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                <p>
+                  Đã tạm dừng:{' '}
+                  <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">
+                    {formatPausedHMS(pausedSeconds)}
+                  </span>
+                </p>
+                {(meta.playerPauses?.length ?? 0) > 0 && (
+                  <div className="ml-2 space-y-0.5">
+                    {meta.playerPauses!.map((p) => (
+                      <p key={p.id}>
+                        {p.name?.trim() || 'Người chơi'}:{' '}
+                        <span className="tabular-nums">{formatPausedHMS(p.pausedSeconds)}</span>
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </section>
       )}
 

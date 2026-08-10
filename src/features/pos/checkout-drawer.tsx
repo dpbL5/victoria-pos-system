@@ -1,18 +1,51 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Minus, Plus } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { ChevronDown, ChevronUp, Minus, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label, Select } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
 import { apiJson, jsonRequest } from '@/lib/api'
-import { calcElapsedHMS, money, paymentMethodLabel, toNumber } from './format'
+import { calcElapsedHMS, formatPausedHMS, money, pausedSecondsUntil, paymentMethodLabel, toNumber } from './format'
 import { formatPromotionOption } from './promotion-option'
 import { InvoiceRow } from './invoice-row'
 import { GroupBuilder } from './group-builder'
 import type { PlayTimeQuote, PromotionSnapshot } from '@/types'
 import type { PaymentMethod, Product, SessionRow } from './types'
+
+/** Section có thể thu gọn — mặc định đóng, bấm header để mở */
+function SectionCard({
+  title,
+  summary,
+  defaultOpen = false,
+  children,
+}: {
+  title: string
+  summary?: string
+  defaultOpen?: boolean
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+      >
+        <span className="text-sm font-semibold text-zinc-950 dark:text-white">{title}</span>
+        <span className="flex items-center gap-2">
+          {summary ? (
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">{summary}</span>
+          ) : null}
+          {open ? <ChevronUp size={16} className="text-zinc-400" /> : <ChevronDown size={16} className="text-zinc-400" />}
+        </span>
+      </button>
+      {open && <div className="space-y-3 px-4 pb-4">{children}</div>}
+    </div>
+  )
+}
 
 interface CheckoutResponse {
   grandTotal: number
@@ -144,6 +177,8 @@ export function CheckoutDrawer({  session,
           params.set('pricingRuleId', checkoutPricingRuleId)
         }
       }
+      // Số người thu lần này — preview tính per-player đúng N người
+      if (checkoutPlayerCount > 0) params.set('playerCount', String(checkoutPlayerCount))
       const qs = params.toString()
       const data = await apiJson<PlayTimeQuote>(`/api/sessions/${session.id}/checkout-preview${qs ? `?${qs}` : ''}`)
         if (!data.success || !data.data) {
@@ -189,12 +224,12 @@ export function CheckoutDrawer({  session,
     return () => { cancelled = true }
   }, [session])
 
-  const perPersonSubtotal = playQuote?.subtotal ?? 0
-  const perPersonDiscount = playQuote?.discountAmount ?? 0
-  const perPersonTotal = playQuote?.grandTotal ?? 0
-  const playSubtotal = perPersonSubtotal * checkoutPlayerCount
-  const playDiscount = perPersonDiscount * checkoutPlayerCount
-  const playTotal = perPersonTotal * checkoutPlayerCount
+  // Preview đã trả tổng per-player (N người được thu) — không nhân count nữa
+  const playSubtotal = playQuote?.subtotal ?? 0
+  const playDiscount = playQuote?.discountAmount ?? 0
+  const playTotal = playQuote?.grandTotal ?? 0
+  // Giá bình quân mỗi người (hiển thị cho nhóm) — tránh chia 0 khi chưa có quote
+  const perPlayerSubtotal = checkoutPlayerCount > 0 ? playSubtotal / checkoutPlayerCount : 0
   const pendingSellTotal = playQuote?.pendingSellTotal ?? 0
   const pendingSellItems = playQuote?.pendingSellItems ?? []
   const parkingFeeUnitPrice = playQuote?.parkingFeeUnitPrice ?? 0
@@ -313,15 +348,9 @@ export function CheckoutDrawer({  session,
                 {isGroupSession ? (
                   <>
                     <InvoiceRow
-                      label={`Giờ chơi (${checkoutPlayerCount} người × ${money(perPersonSubtotal)}/người)`}
+                      label={`Giờ chơi (${checkoutPlayerCount} người · bình quân ${money(perPlayerSubtotal)}/người)`}
                       value={money(playSubtotal)}
                     />
-                    {perPersonDiscount > 0 && (
-                      <div className="mt-2 flex justify-between gap-3 text-sm text-zinc-500 dark:text-zinc-400">
-                        <span className="truncate">Giá mỗi người</span>
-                        <span className="shrink-0 tabular-nums">{money(perPersonSubtotal)}</span>
-                      </div>
-                    )}
                   </>
                 ) : (
                   <InvoiceRow
@@ -329,6 +358,33 @@ export function CheckoutDrawer({  session,
                     value={money(playSubtotal)}
                   />
                 )}
+                {/* ── Thời gian chơi + đã tạm dừng (mọi phiên) ── */}
+                {session && (() => {
+                  const selectedGroup = selectedGroupId ? session.pricingGroups?.find(g => g.id === selectedGroupId) : undefined
+                  // Group có player rows → thời gian tạm dừng tính theo từng người trong group (từ quote)
+                  const groupHasPlayers = (selectedGroup?.players?.length ?? 0) > 0
+                  let pausedSeconds = groupHasPlayers
+                    ? (playQuote?.pricingGroups?.find(g => g.id === selectedGroupId)?.pausedSeconds ?? 0)
+                    : (playQuote?.pausedSeconds ?? 0)
+                  // Fallback khi chưa có quote: tính tại chỗ theo session-level (chốt theo frozenAt)
+                  if (pausedSeconds === 0 && !groupHasPlayers) {
+                    const pausedAtRef = frozenAt ? new Date(frozenAt).getTime() : undefined
+                    pausedSeconds = pausedSecondsUntil(session.pausedAt, session.totalPausedSeconds ?? 0, pausedAtRef)
+                  }
+                  const playTime = calcElapsedHMS(session.startTime, frozenAt ?? undefined, pausedSeconds)
+                  return (
+                    <div className="mt-2 space-y-1 border-t border-dashed border-zinc-200 pt-2 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                      <div className="flex justify-between gap-3">
+                        <span className="truncate">Thời gian chơi{groupHasPlayers && selectedGroup ? ` (${selectedGroup.label})` : ''}</span>
+                        <span className="shrink-0 font-semibold tabular-nums text-zinc-950 dark:text-white">{playTime}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="truncate">Đã tạm dừng</span>
+                        <span className="shrink-0 tabular-nums">{formatPausedHMS(pausedSeconds)}</span>
+                      </div>
+                    </div>
+                  )
+                })()}
                 {playQuote?.promotion && playDiscount > 0 && (
                   <div className="mt-2 flex justify-between gap-3 text-sm text-emerald-700 dark:text-emerald-300">
                     <span className="truncate">Khuyến mại · {playQuote.promotion.name}</span>
@@ -399,146 +455,150 @@ export function CheckoutDrawer({  session,
         <div className="space-y-4">
           {/* ── Chọn bảng giá tại checkout — session mới chưa gán giá ── */}
           {needsPricing && (
-            <div className="space-y-3">
-              <div>
-                <Label>Bảng giá áp dụng</Label>
-                {pricingBlocked ? (
-                  <p className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-                    Chưa có bảng giá hiệu lực — không thể thu tiền giờ chơi.
-                  </p>
-                ) : (
-                  <>
-                    {isGroupSession && (
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setPricingMode('single')}
-                          className={`rounded-xl border p-3 text-left text-sm font-medium ${
-                            pricingMode === 'single'
-                              ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
-                              : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
-                          }`}
-                        >
-                          Cùng một bảng giá
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPricingMode('group')}
-                          className={`rounded-xl border p-3 text-left text-sm font-medium ${
-                            pricingMode === 'group'
-                              ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
-                              : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
-                          }`}
-                        >
-                          Chia nhóm
-                        </button>
-                      </div>
-                    )}
-
-                    {pricingMode === 'single' ? (
-                      <Select
-                        id="checkout-pricing-rule"
-                        value={checkoutPricingRuleId}
-                        onChange={(event) => setCheckoutPricingRuleId(event.target.value)}
-                        className="mt-2"
+            <SectionCard
+              title="Bảng giá"
+              summary={checkoutPricingRuleId ? applicablePricingRules.find(r => r.id === checkoutPricingRuleId)?.name : undefined}
+            >
+              {pricingBlocked ? (
+                <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                  Chưa có bảng giá hiệu lực — không thể thu tiền giờ chơi.
+                </p>
+              ) : (
+                <>
+                  {/* Toggle Cùng một bảng giá / Chia nhóm — chỉ phiên nhiều người */}
+                  {isGroupSession && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPricingMode('single')}
+                        className={`rounded-xl border p-3 text-left text-sm font-medium ${
+                          pricingMode === 'single'
+                            ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
+                            : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
+                        }`}
                       >
-                        {applicablePricingRules.map((rule) => (
-                          <option key={rule.id} value={rule.id}>
-                            {rule.name} — {money(rule.ratePerHour)}/giờ
-                            {rule.tiers.length > 0 ? ` (${rule.tiers.length} bậc luỹ tiến)` : ''}
-                          </option>
-                        ))}
-                      </Select>
-                    ) : (
-                      <GroupBuilder
-                        totalPlayers={session.playerCount}
-                        groups={checkoutGroups}
-                        onChange={setCheckoutGroups}
-                        applicablePricingRules={applicablePricingRules}
-                      />
-                    )}
+                        Cùng một bảng giá
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPricingMode('group')}
+                        className={`rounded-xl border p-3 text-left text-sm font-medium ${
+                          pricingMode === 'group'
+                            ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
+                            : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
+                        }`}
+                      >
+                        Chia nhóm
+                      </button>
+                    </div>
+                  )}
 
-                    {pricingMode === 'group' && checkoutGroups.length > 0 && (
-                      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
-                        <Label htmlFor="checkout-first-group-count">Số người thu của nhóm 1</Label>
-                        <div className="mt-2 flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setCheckoutPlayerCount((c) => Math.max(1, c - 1))}
-                            disabled={checkoutPlayerCount <= 1}
-                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
-                          >
-                            <Minus size={14} />
-                          </button>
-                          <span className="text-lg font-bold tabular-nums text-zinc-950 dark:text-white">
-                            {checkoutPlayerCount}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setCheckoutPlayerCount((c) => Math.min(checkoutGroups[0].playerCount, c + 1))}
-                            disabled={checkoutPlayerCount >= checkoutGroups[0].playerCount}
-                            className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-950 text-white disabled:opacity-40 dark:bg-white dark:text-zinc-950"
-                          >
-                            <Plus size={14} />
-                          </button>
-                          <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                            / {checkoutGroups[0].playerCount} người trong nhóm 1
-                          </span>
-                        </div>
-                        {checkoutPlayerCount < checkoutGroups[0].playerCount && (
-                          <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
-                            Thu {checkoutPlayerCount} người — nhóm còn {checkoutGroups[0].playerCount - checkoutPlayerCount} người, thu tiếp sau.
-                          </p>
-                        )}
+                  {pricingMode === 'single' ? (
+                    <Select
+                      id="checkout-pricing-rule"
+                      value={checkoutPricingRuleId}
+                      onChange={(event) => setCheckoutPricingRuleId(event.target.value)}
+                    >
+                      {applicablePricingRules.map((rule) => (
+                        <option key={rule.id} value={rule.id}>
+                          {rule.name} — {money(rule.ratePerHour)}/giờ
+                          {rule.tiers.length > 0 ? ` (${rule.tiers.length} bậc luỹ tiến)` : ''}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <GroupBuilder
+                      totalPlayers={session.playerCount}
+                      groups={checkoutGroups}
+                      onChange={setCheckoutGroups}
+                      applicablePricingRules={applicablePricingRules}
+                    />
+                  )}
+
+                  {pricingMode === 'group' && checkoutGroups.length > 0 && (
+                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
+                      <Label htmlFor="checkout-first-group-count">Số người thu của nhóm 1</Label>
+                      <div className="mt-2 flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setCheckoutPlayerCount((c) => Math.max(1, c - 1))}
+                          disabled={checkoutPlayerCount <= 1}
+                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="text-lg font-bold tabular-nums text-zinc-950 dark:text-white">
+                          {checkoutPlayerCount}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setCheckoutPlayerCount((c) => Math.min(checkoutGroups[0].playerCount, c + 1))}
+                          disabled={checkoutPlayerCount >= checkoutGroups[0].playerCount}
+                          className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-950 text-white disabled:opacity-40 dark:bg-white dark:text-zinc-950"
+                        >
+                          <Plus size={14} />
+                        </button>
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          / {checkoutGroups[0].playerCount} người trong nhóm 1
+                        </span>
                       </div>
-                    )}
-                  </>
-                )}
-              </div>
+                      {checkoutPlayerCount < checkoutGroups[0].playerCount && (
+                        <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
+                          Thu {checkoutPlayerCount} người — nhóm còn {checkoutGroups[0].playerCount - checkoutPlayerCount} người, thu tiếp sau.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 Bảng giá được chọn theo thời điểm thu tiền và ghi lại vào phiên.
               </p>
-            </div>
+            </SectionCard>
           )}
 
           {/* Group selection — chỉ khách vãng lai đã có giá (session cũ) */}
           {!needsPricing && !isMember && (session.pricingGroups?.length ?? 0) > 0 ? (
-            <div className="space-y-2">
-              <Label>Nhóm giá</Label>
-              {session.pricingGroups!.filter(g => g.remainingCount > 0).map((g) => {
-                const isSelected = selectedGroupId === g.id
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedGroupId(g.id)
-                      setCheckoutPlayerCount(g.remainingCount)
-                    }}
-                    className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition-colors ${
-                      isSelected
-                        ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
-                        : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
-                    }`}
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-zinc-950 dark:text-white">{g.label}</p>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {g.pricingSnapshot?.name ?? 'Bảng giá'} · {money(g.hourlyRate)}/giờ
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
-                        {g.remainingCount} người
-                      </p>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        Còn {g.remainingCount}/{g.playerCount}
-                      </p>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
+            <SectionCard
+              title="Nhóm giá"
+              summary={selectedGroupId ? session.pricingGroups!.find(g => g.id === selectedGroupId)?.label : undefined}
+            >
+              <div className="space-y-2">
+                {session.pricingGroups!.filter(g => g.remainingCount > 0).map((g) => {
+                  const isSelected = selectedGroupId === g.id
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedGroupId(g.id)
+                        setCheckoutPlayerCount(g.remainingCount)
+                      }}
+                      className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition-colors ${
+                        isSelected
+                          ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
+                          : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
+                      }`}
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-950 dark:text-white">{g.label}</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {g.pricingSnapshot?.name ?? 'Bảng giá'} · {money(g.hourlyRate)}/giờ
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
+                          {g.remainingCount} người
+                        </p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Còn {g.remainingCount}/{g.playerCount}
+                        </p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </SectionCard>
           ) : null}
 
           {/* Per-group checkout count stepper — chỉ khách vãng lai đã có giá */}
@@ -547,9 +607,11 @@ export function CheckoutDrawer({  session,
             if (!selectedGroup) return null
             const groupMax = selectedGroup.remainingCount
             return (
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
-                <Label htmlFor="checkout-group-count">Số người checkout từ nhóm này</Label>
-                <div className="mt-2 flex items-center gap-3">
+              <SectionCard
+                title="Số người thu"
+                summary={`${checkoutPlayerCount} người`}
+              >
+                <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => setCheckoutPlayerCount((c) => Math.max(1, c - 1))}
@@ -574,18 +636,20 @@ export function CheckoutDrawer({  session,
                   </span>
                 </div>
                 {checkoutPlayerCount < groupMax && (
-                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
-                    Checkout {checkoutPlayerCount} người — nhóm còn {groupMax - checkoutPlayerCount} người tiếp tục chơi
+                  <p className="text-xs text-amber-600 dark:text-amber-300">
+                    Thu {checkoutPlayerCount} người — nhóm còn {groupMax - checkoutPlayerCount} người, thu tiếp sau.
                   </p>
                 )}
-              </div>
+              </SectionCard>
             )
           })()}
 
           {!needsPricing && !isMember && isGroupSession && !selectedGroupId && (
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
-              <Label htmlFor="checkout-player-count">Số người checkout</Label>
-              <div className="mt-2 flex items-center gap-3">
+            <SectionCard
+              title="Số người thu"
+              summary={`${checkoutPlayerCount} người`}
+            >
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => setCheckoutPlayerCount((c) => Math.max(1, c - 1))}
@@ -610,16 +674,18 @@ export function CheckoutDrawer({  session,
                 </span>
               </div>
               {checkoutPlayerCount < sessionPlayerCount && (
-                <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
-                  Checkout {checkoutPlayerCount} người — phiên còn {sessionPlayerCount - checkoutPlayerCount} người tiếp tục chơi
+                <p className="text-xs text-amber-600 dark:text-amber-300">
+                  Thu {checkoutPlayerCount} người — phiên còn {sessionPlayerCount - checkoutPlayerCount} người, thu tiếp sau.
                 </p>
               )}
-            </div>
+            </SectionCard>
           )}
 
           {!isMember && (
-            <div>
-              <Label htmlFor="checkout-promotion">Khuyến mại giờ chơi</Label>
+            <SectionCard
+              title="Khuyến mại giờ chơi"
+              summary={promotionRuleId ? promotions.find(p => p.ruleId === promotionRuleId)?.name : undefined}
+            >
               <Select
                 id="checkout-promotion"
                 value={promotionRuleId}
@@ -640,19 +706,21 @@ export function CheckoutDrawer({  session,
                   Chọn một khuyến mại còn hiệu lực tại thời điểm thu tiền.
                 </p>
               )}
-            </div>
+            </SectionCard>
           )}
 
           {/* Phí gửi xe (trừ vào tổng thanh toán) — chỉ khách vãng lai */}
           {!isMember && parkingFeeUnitPrice > 0 && (
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
+            <SectionCard
+              title="Phí gửi xe"
+              summary={parkingVehicleCount > 0 ? `${parkingVehicleCount} xe` : undefined}
+            >
               <div className="flex items-center justify-between">
-                <Label>Phí gửi xe</Label>
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">
                   {money(parkingFeeUnitPrice)}/xe
                 </span>
               </div>
-              <div className="mt-2 flex items-center gap-3">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => setParkingVehicleCount((c) => Math.max(0, c - 1))}
@@ -674,23 +742,20 @@ export function CheckoutDrawer({  session,
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">xe</span>
               </div>
               {parkingVehicleCount > 0 && (
-                <div className="mt-2 flex justify-between text-sm">
+                <div className="flex justify-between text-sm">
                   <span className="text-red-500 dark:text-red-300">Tạm tính trừ</span>
                   <span className="font-semibold text-red-600 dark:text-red-300 tabular-nums">
                     -{money(parkingFeeTotal)}
                   </span>
                 </div>
               )}
-            </div>
+            </SectionCard>
           )}
 
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <Label>Đồ uống / dịch vụ</Label>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                {cartLines.length} món
-              </span>
-            </div>
+          <SectionCard
+            title="Đồ uống / dịch vụ"
+            summary={cartLines.length > 0 ? `${cartLines.length} món` : undefined}
+          >
             <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
               {products.length === 0 ? (
                 <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
@@ -740,7 +805,7 @@ export function CheckoutDrawer({  session,
                 })
               )}
             </div>
-          </div>
+          </SectionCard>
 
           <div>
             <Label htmlFor="payment-method">Phương thức thanh toán</Label>

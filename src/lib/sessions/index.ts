@@ -4,13 +4,17 @@ export { checkOut, mapCheckoutError } from './use-cases/check-out'
 export { sellItems, mapSellItemsError } from './use-cases/sell-items'
 export { updateSession, mapUpdateSessionError } from './use-cases/update-session'
 export { pauseSession, resumeSession, mapPauseSessionError, mapResumeSessionError } from './use-cases/pause-session'
+export { pausePlayer, resumePlayer, mapPausePlayerError, mapResumePlayerError } from './use-cases/pause-session'
 export { createProduct, mapCreateProductError, applyStockMovement, mapApplyStockMovementError } from './use-cases/product-crud'
 export {
   calculateSessionPrice,
   calculateSessionPriceFromLoaded,
+  calculatePlayerPrice,
   type PricingResult,
   type PricingEngineDeps,
   type PendingGroupPricing,
+  type PlayerPricingParams,
+  type PlayerPricingResult,
 } from './pricing-engine'
 export type {
   CheckInInput,
@@ -31,6 +35,10 @@ export type {
   PauseSessionResult,
   ResumeSessionInput,
   ResumeSessionResult,
+  PausePlayerInput,
+  PausePlayerResult,
+  ResumePlayerInput,
+  ResumePlayerResult,
 } from './use-cases/pause-session'
 export type {
   UpdateSessionInput,
@@ -46,6 +54,7 @@ export type {
   SessionRepository,
   ProductRepository,
   SessionWithDetails,
+  SessionWithPlayers,
   SessionWithCustomer,
   SessionRefs,
   SessionListRow,
@@ -58,5 +67,6 @@ export type {
   ProductAdminRow,
   ProductAdminDetail,
 } from './ports'
+export { playerPausedSeconds, groupPausedSeconds } from './ports'
 export * from './session-validations'
 export * from './product-validations'

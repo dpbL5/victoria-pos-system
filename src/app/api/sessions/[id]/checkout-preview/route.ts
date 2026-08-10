@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/shared/auth'
 import { SETTING_KEYS } from '@/lib/settings'
-import { calculateSessionPrice, calculateSessionPriceFromLoaded } from '@/lib/sessions'
+import { calculatePlayerPrice, calculateSessionPrice, calculateSessionPriceFromLoaded, groupPausedSeconds, playerPausedSeconds } from '@/lib/sessions'
 import type { PendingGroupPricing } from '@/lib/sessions'
 import { repositories } from '@/lib/infrastructure/repositories'
 import type { PlayTimeQuote, PricingRuleSnapshot } from '@/types'
@@ -14,7 +14,7 @@ export async function GET(
   try {
     await requireAuth()
     const { id } = await params
-    const session = await repositories.session.findByIdForCheckout(id)
+    const session = await repositories.session.findByIdWithPlayers(id)
 
     if (!session) {
       return NextResponse.json(
@@ -35,6 +35,8 @@ export async function GET(
     const pricingRuleIdParam = _request.nextUrl.searchParams.get('pricingRuleId')
     const groupsParam = _request.nextUrl.searchParams.get('groups')
     const pendingIndexParam = _request.nextUrl.searchParams.get('pendingIndex')
+    // Số người sẽ thu lần này — preview tính per-player đúng N người (mặc định: toàn bộ người chưa thu)
+    const playerCountParam = _request.nextUrl.searchParams.get('playerCount')
 
     const promotion = promotionRuleId
       ? await repositories.promotions.findAvailableById(promotionRuleId, new Date())
@@ -132,6 +134,20 @@ export async function GET(
       pendingIndex = Number.isFinite(parsedIndex) ? parsedIndex : 0
     }
 
+    // ── Tính pausedSeconds theo group được xem trước (fallback session-level) ──
+    const pausedAtRef = endTime
+    const hasPlayers = session.pricingGroups.some(g => g.players.length > 0)
+    let pausedSeconds: number
+    if (hasPlayers && pricingGroupId) {
+      const group = session.pricingGroups.find(g => g.id === pricingGroupId)
+      pausedSeconds = group ? groupPausedSeconds(group, pausedAtRef) : (session.totalPausedSeconds ?? 0)
+    } else {
+      pausedSeconds = session.totalPausedSeconds ?? 0
+      if (session.pausedAt) {
+        pausedSeconds += Math.round(Math.max(0, (pausedAtRef.getTime() - new Date(session.pausedAt).getTime())) / 1000)
+      }
+    }
+
     const pricingResult = needsPricing && pendingGroups
       ? await calculateSessionPriceFromLoaded(
           repositories,
@@ -140,9 +156,10 @@ export async function GET(
           promotion,
           pricingGroupId ?? undefined,
           pendingGroups,
-          pendingIndex
+          pendingIndex,
+          pausedSeconds
         )
-      : await calculateSessionPrice(repositories, id, endTime, promotion, pricingGroupId ?? undefined)
+      : await calculateSessionPrice(repositories, id, endTime, promotion, pricingGroupId ?? undefined, undefined, 0, pausedSeconds)
 
     if (!pricingResult.ok) {
       return pricingResult.error.code === 'PRICING_RULE_NOT_FOUND'
@@ -153,6 +170,41 @@ export async function GET(
         : NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
     }
     const pricing = pricingResult.value
+
+    // ── Tính tiền per-player (khớp logic checkout): mỗi người chưa thu của group
+    // được tính played time riêng + tiered + khuyến mại, rồi cộng tổng.
+    // Group không có player rows (legacy) → giữ kết quả pricing hiện tại.
+    let perPlayerPricing = pricing
+    if (hasPlayers && pricingGroupId) {
+      const group = session.pricingGroups.find(g => g.id === pricingGroupId)
+      const uncheckedPlayers = group ? group.players.filter(p => !p.checkedOutAt) : []
+      // Thu N người đầu tiên theo thứ tự tạo (khớp use-case: slice(0, checkoutCount))
+      const parsedPlayerCount = Number.parseInt(playerCountParam || '0', 10)
+      const billCount = Number.isFinite(parsedPlayerCount) && parsedPlayerCount > 0
+        ? Math.min(parsedPlayerCount, uncheckedPlayers.length)
+        : uncheckedPlayers.length
+      const playersToQuote = uncheckedPlayers.slice(0, billCount)
+      if (playersToQuote.length > 0) {
+        const totals = playersToQuote.reduce((acc, p) => {
+          const r = calculatePlayerPrice({
+            startTime: session.startTime,
+            endTime,
+            pausedSeconds: playerPausedSeconds(p, pausedAtRef),
+            hourlyRate: pricing.hourlyRate,
+            tiers: pricing.tiers,
+            promotion,
+          })
+          return {
+            totalHours: acc.totalHours + r.totalHours,
+            subtotal: acc.subtotal + r.subtotal,
+            promotionDiscount: acc.promotionDiscount + r.promotionDiscount,
+            grandTotal: acc.grandTotal + r.grandTotal,
+            pausedSeconds: acc.pausedSeconds + r.pausedSeconds,
+          }
+        }, { totalHours: 0, subtotal: 0, promotionDiscount: 0, grandTotal: 0, pausedSeconds: 0 })
+        perPlayerPricing = { ...pricing, ...totals }
+      }
+    }
 
     // ── Lấy danh sách bán kèm chưa thanh toán (DRAFT invoices) ──
     const draftInvoices = await repositories.billing.findDraftSellPreview(id)
@@ -175,17 +227,18 @@ export async function GET(
 
     const quote: PlayTimeQuote = {
       sessionId: id,
-      totalHours: pricing.totalHours,
-      hourlyRate: pricing.hourlyRate,
-      subtotal: pricing.subtotal,
-      discountAmount: pricing.promotionDiscount,
-      grandTotal: pricing.grandTotal,
-      isMemberSession: pricing.isMemberSession,
-      promotion: pricing.promotion,
+      totalHours: perPlayerPricing.totalHours,
+      hourlyRate: perPlayerPricing.hourlyRate,
+      subtotal: perPlayerPricing.subtotal,
+      discountAmount: perPlayerPricing.promotionDiscount,
+      grandTotal: perPlayerPricing.grandTotal,
+      isMemberSession: perPlayerPricing.isMemberSession,
+      promotion: perPlayerPricing.promotion,
       pendingSellTotal,
       pendingSellItems,
       playerCount: session.playerCount,
       pricingGroupId: pricingGroupId ?? undefined,
+      pausedSeconds,
       pricingGroups: session.pricingGroups.map(g => ({
         id: g.id,
         sessionId: id,
@@ -195,6 +248,14 @@ export async function GET(
         hourlyRate: Number(g.hourlyRate),
         pricingRuleId: g.pricingRuleId,
         pricingSnapshot: g.pricingSnapshot as unknown as PricingRuleSnapshot | null,
+        pausedSeconds: g.players.length > 0 ? groupPausedSeconds(g, pausedAtRef) : undefined,
+        players: g.players.length > 0 ? g.players.map(p => ({
+          id: p.id,
+          name: p.name,
+          pausedAt: p.pausedAt ? p.pausedAt.toISOString() : null,
+          totalPausedSeconds: p.totalPausedSeconds,
+          checkedOutAt: p.checkedOutAt ? p.checkedOutAt.toISOString() : null,
+        })) : undefined,
       })),
       parkingFeeUnitPrice: (await repositories.settings.getNumeric(SETTING_KEYS.PARKING_FEE_UNIT_PRICE, 0)) || undefined,
     }

@@ -10,6 +10,18 @@ export type SessionWithDetails = Prisma.SessionGetPayload<{
   }
 }>
 
+/** Session + pricingGroups kèm players — cho pause theo người + checkout group-aware */
+export type SessionWithPlayers = Prisma.SessionGetPayload<{
+  include: {
+    customer: true
+    membership: true
+    pricingGroups: {
+      orderBy: { createdAt: 'asc' }
+      include: { players: true }
+    }
+  }
+}>
+
 export type SessionWithCustomer = Prisma.SessionGetPayload<{
   include: { customer: true }
 }> & { customerName: string | null }
@@ -57,6 +69,10 @@ export type SessionListRow = Prisma.SessionGetPayload<{
         hourlyRate: true
         pricingRuleId: true
         pricingSnapshot: true
+        players: {
+          select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true, checkedOutAt: true }
+          orderBy: { createdAt: 'asc' }
+        }
       }
       orderBy: { createdAt: 'asc' }
     }
@@ -86,6 +102,10 @@ export type SessionPreviewRow = Prisma.SessionGetPayload<{
         hourlyRate: true
         pricingRuleId: true
         pricingSnapshot: true
+        players: {
+          select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true, checkedOutAt: true }
+          orderBy: { createdAt: 'asc' }
+        }
       }
       orderBy: { createdAt: 'asc' }
     }
@@ -109,7 +129,7 @@ export interface SessionRepository {
   countCreatedBetween(from: Date, to: Date): Promise<number>
   /** Tạo session kèm customer/membership/shift refs */
   createWithRefs(data: CreateSessionData): Promise<SessionRefs>
-  createPricingGroup(data: CreatePricingGroupData): Promise<void>
+  createPricingGroup(data: CreatePricingGroupData): Promise<{ id: string }>
   /** Gán bảng giá (snapshot) cho pricing group — dùng khi chọn bảng giá tại checkout */
   updatePricingGroup(groupId: string, data: UpdatePricingGroupData): Promise<void>
   /** Unchecked update — cho phép set trực tiếp shiftId, playerCount, promotion fields... */
@@ -118,6 +138,36 @@ export interface SessionRepository {
   decrementGroupRemaining(groupId: string, count: number): Promise<{ remainingCount: number }>
   /** Tổng remainingCount của tất cả groups trong session */
   sumRemainingPlayers(sessionId: string): Promise<number>
+  /** Session + pricingGroups kèm players — cho pause theo người + checkout group-aware */
+  findByIdWithPlayers(id: string): Promise<SessionWithPlayers | null>
+  /** Đặt pausedAt cho 1 người chơi (theo group) */
+  pausePlayer(playerId: string, pausedAt: Date): Promise<void>
+  /** Resume 1 người chơi: clear pausedAt + increment totalPausedSeconds */
+  resumePlayer(playerId: string, pausedSeconds: number): Promise<void>
+  /** Tạo N SessionPlayer (tên trống, pause 0) cho 1 group — gọi khi check-in */
+  createPlayersForGroup(sessionId: string, groupId: string, count: number): Promise<void>
+  /** Đánh dấu các player đã được tính tiền (checkout từng phần) */
+  markPlayersCheckedOut(playerIds: string[], checkedOutAt: Date): Promise<void>
+}
+
+/** Pause giây đã tích lũy của 1 player tại thời điểm now (gồm cả đang tạm dừng) */
+export function playerPausedSeconds(
+  player: { pausedAt: Date | null; totalPausedSeconds: number },
+  now: Date
+): number {
+  let seconds = player.totalPausedSeconds
+  if (player.pausedAt) {
+    seconds += Math.round(Math.max(0, (now.getTime() - new Date(player.pausedAt).getTime()) / 1000))
+  }
+  return seconds
+}
+
+/** Pause giây của 1 group = tổng các player + phần đang tạm dừng */
+export function groupPausedSeconds(
+  group: { players: Array<{ pausedAt: Date | null; totalPausedSeconds: number }> },
+  now: Date
+): number {
+  return group.players.reduce((sum, player) => sum + playerPausedSeconds(player, now), 0)
 }
 
 export interface CreateSessionData {

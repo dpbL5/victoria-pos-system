@@ -132,7 +132,7 @@ export async function runCheckInTx(
   })
 
   // Luôn tạo 1 pricing group trống giá (bảng giá sẽ gán khi checkout)
-  await tx.session.createPricingGroup({
+  const group = await tx.session.createPricingGroup({
     sessionId: session.id,
     label: 'Nhóm 1',
     playerCount: totalPlayers,
@@ -141,6 +141,10 @@ export async function runCheckInTx(
     pricingRuleId: null,
     pricingSnapshot: null,
   })
+
+  // Tạo SessionPlayer cho từng người chơi (tên trống → UI đánh số "Người N",
+  // pause riêng từng người). Phiên 1 người cũng tạo 1 row (nguồn dữ liệu đồng nhất).
+  await tx.session.createPlayersForGroup(session.id, group.id, totalPlayers)
 
   await tx.audit.append({
     userId: staffId,
