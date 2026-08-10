@@ -88,7 +88,7 @@ export function ActiveSessionCard({
             </p>
             <p className="flex items-center gap-1.5">
               <LogIn size={12} className="shrink-0" />
-              Check-in {formatClock(session.startTime)}
+              {formatClock(session.startTime)}
             </p>
           </div>
         </div>
