@@ -64,7 +64,7 @@ export interface RevenueRow {
   discountTotal: unknown
   staff: { fullName: string } | null
   invoice: { id: string; invoiceNo: string; customer: { fullName: string } | null } | null
-  session: { customer: { fullName: string } | null } | null
+  session: { customerName: string | null; customer: { fullName: string } | null } | null
 }
 
 export interface RevenueInput {
@@ -88,6 +88,7 @@ export interface SessionExportRow {
   endTime: Date | null
   totalHours: unknown
   totalAmount: unknown
+  customerName: string | null
   customer: { fullName: string; type: string } | null
   staff: { fullName: string } | null
 }

@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
         paidAt: payment.paidAt,
         customerName:
           payment.invoice?.customer?.fullName
+          ?? payment.session?.customerName
           ?? payment.session?.customer?.fullName
           ?? 'Khách lẻ',
         invoiceId: payment.invoice?.id ?? null,

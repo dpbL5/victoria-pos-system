@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   BarChart3,
+  FlaskConical,
   MoreHorizontal,
   Package,
   ShieldCheck,
@@ -22,13 +23,14 @@ const navItems: NavItem[] = [
   { href: '/customers', label: 'Hội viên', Icon: ShieldCheck },
   { href: '/inventory', label: 'Kho', Icon: Package },
   { href: '/reports', label: 'Báo cáo', Icon: BarChart3 },
+  { href: '/testing', label: 'Testing', Icon: FlaskConical },
   { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
 ]
 
 export function BottomNav() {
   const pathname = usePathname()
   const visibleItems = navItems
-  const gridCols = 'grid-cols-5'
+  const gridCols = 'grid-cols-6'
 
   const isActive = (href: string) =>
     href === '/sessions'

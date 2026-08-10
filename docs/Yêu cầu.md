@@ -13,15 +13,11 @@ Bán kèm thêm nếu sửa UI
 Cuối cùng.
 
 
-
 Nên sắp xếp theo thời gian gần nhất.
 
 Khi ấn chuyển khoản thì Hiện mã QR
 
-
-
 Doanh thu
-
 
 
 Giờ chơi

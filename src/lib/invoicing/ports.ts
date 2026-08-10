@@ -16,7 +16,8 @@ export interface CreateInvoiceLineInput {
 
 export interface CreatePaidInvoiceInput {
   invoiceNo: string
-  customerId: string
+  /** Null với khách vãng lai (không tạo Customer) */
+  customerId: string | null
   shiftId: string
   staffId: string
   paidAt: Date
@@ -90,7 +91,8 @@ export interface UpdateInvoiceFinancialsInput {
 
 export interface CreateDraftInvoiceInput {
   invoiceNo: string
-  customerId: string
+  /** Null với khách vãng lai (không tạo Customer) */
+  customerId: string | null
   sessionId: string
   shiftId: string
   staffId: string
@@ -171,7 +173,7 @@ export interface ReverseStockInput {
 export type InvoiceDetail = Prisma.InvoiceGetPayload<{
   include: {
     customer: { select: { id: true; fullName: true; phone: true; type: true } }
-    session: { select: { id: true; startTime: true; endTime: true; status: true } }
+    session: { select: { id: true; startTime: true; endTime: true; status: true; customerName: true } }
     shift: { select: { id: true; openedAt: true; closedAt: true } }
     staff: { select: { id: true; fullName: true } }
     items: {

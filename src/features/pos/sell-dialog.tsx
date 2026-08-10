@@ -100,7 +100,7 @@ export function SellDialog({
     <Modal
       open={!!session}
       onClose={onClose}
-      title={session ? `Bán kèm - ${session.customer.fullName}` : 'Bán kèm'}
+      title={session ? `Bán kèm - ${session.customerName ?? session.customer?.fullName ?? 'Khách lẻ'}` : 'Bán kèm'}
       description="Thêm đồ uống / dịch vụ vào phiên. Tiền sẽ được tính khi thu."
       size="lg"
       footer={

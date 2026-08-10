@@ -10,6 +10,10 @@ export const shiftWithParticipantsInclude = {
     include: { staff: { select: { id: true, fullName: true } } },
     orderBy: { joinedAt: 'asc' },
   },
+  toolCounts: {
+    include: { tool: { select: { id: true, name: true, quantity: true, isRequired: true } } },
+    orderBy: { createdAt: 'asc' },
+  },
 } satisfies Prisma.ShiftInclude
 
 export const shiftWithAllParticipantsInclude = {
@@ -129,6 +133,7 @@ const paymentInclude = {
   },
   session: {
     select: {
+      customerName: true,
       customer: { select: { fullName: true, type: true } },
     },
   },
@@ -181,6 +186,7 @@ export async function getShiftTransactions(
     paidAt: p.paidAt instanceof Date ? p.paidAt.toISOString() : String(p.paidAt),
     customerName:
       p.invoice?.customer?.fullName ??
+      p.session?.customerName ??
       p.session?.customer?.fullName ??
       'Khách lẻ',
     customerType: (p.invoice?.customer?.type ?? p.session?.customer?.type) ?? null,

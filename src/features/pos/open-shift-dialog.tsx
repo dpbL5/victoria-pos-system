@@ -6,27 +6,23 @@ import { Button } from '@/components/ui/button'
 import { Input, Label, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { formatClock, money } from './format'
-import { ToolCountFields } from './tool-count-fields'
 import type { Shift } from './types'
 
 export function OpenShiftDialog({
   open,
   existingShift,
-  tools,
   submitting,
   onClose,
   onSubmit,
 }: {
   open: boolean
   existingShift: Shift | null
-  tools: { id: string; name: string; quantity: number; isRequired: boolean }[]
   submitting: boolean
   onClose: () => void
-  onSubmit: (openingCash?: number, notes?: string, toolCounts?: { toolId: string; openCount: number }[]) => void
+  onSubmit: (openingCash?: number, notes?: string) => void
 }) {
   const [openingCash, setOpeningCash] = useState('0')
   const [notes, setNotes] = useState('')
-  const [toolCounts, setToolCounts] = useState<Record<string, string>>({})
   const isJoiningExistingShift = !!existingShift
 
   useEffect(() => {
@@ -34,7 +30,6 @@ export function OpenShiftDialog({
     /* eslint-disable react-hooks/set-state-in-effect */
     setOpeningCash('0')
     setNotes('')
-    setToolCounts({})
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [open, existingShift?.id])
 
@@ -44,15 +39,7 @@ export function OpenShiftDialog({
       return
     }
 
-    const tc = tools
-      .map((t) => {
-        const val = toolCounts[t.id]
-        if (val === undefined || val === '') return null
-        return { toolId: t.id, openCount: Number(val) || 0 }
-      })
-      .filter(Boolean) as { toolId: string; openCount: number }[]
-
-    onSubmit(Number(openingCash || 0), notes.trim() || undefined, tc.length > 0 ? tc : undefined)
+    onSubmit(Number(openingCash || 0), notes.trim() || undefined)
   }
 
   return (
@@ -117,11 +104,6 @@ export function OpenShiftDialog({
                 onChange={(event) => setNotes(event.target.value)}
               />
             </div>
-            <ToolCountFields
-              tools={tools}
-              values={toolCounts}
-              onChange={setToolCounts}
-            />
           </>
         )}
       </div>

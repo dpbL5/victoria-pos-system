@@ -59,6 +59,20 @@ export function createShiftRepository(store: ShiftAdapterStore): ShiftRepository
       })
     },
 
+    async upsertToolOpenCount(shiftId, toolId, openCount) {
+      await store.shiftTool.upsert({
+        where: {
+          shiftId_toolId: { shiftId, toolId },
+        },
+        update: { openCount },
+        create: {
+          shiftId,
+          toolId,
+          openCount,
+        },
+      })
+    },
+
     async close(shiftId, data) {
       return store.shift.update({
         where: { id: shiftId },

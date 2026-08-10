@@ -55,7 +55,14 @@ export async function GET(
               phone: invoice.customer.phone,
               type: invoice.customer.type,
             }
-          : null,
+          : invoice.session?.customerName
+            ? {
+                id: null,
+                fullName: invoice.session.customerName,
+                phone: null,
+                type: 'WALK_IN' as const,
+              }
+            : null,
         session: invoice.session
           ? {
               id: invoice.session.id,

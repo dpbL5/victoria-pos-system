@@ -57,7 +57,7 @@ export interface InvoiceDetail {
   notes: string | null
   createdAt: string
   customer: {
-    id: string
+    id: string | null
     fullName: string
     phone: string | null
     type: string
@@ -152,6 +152,11 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
               <Badge variant={invoice.customer.type === 'MEMBER' ? 'purple' : 'default'} size="sm">
                 {invoice.customer.type === 'MEMBER' ? 'Hội viên' : 'Vãng lai'}
               </Badge>
+              {invoice.customer.id === null && (
+                <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                  Khách vãng lai — không lưu hồ sơ
+                </p>
+              )}
             </div>
           </section>
         )}

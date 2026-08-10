@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { CheckCircle2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input, Label, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
@@ -36,6 +37,7 @@ export function CloseShiftDialog({
 
   useEffect(() => {
     if (!open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setToolCounts({})
     }
   }, [open])
@@ -51,6 +53,13 @@ export function CloseShiftDialog({
 
     onSubmit(Number(closingCash), notes.trim() || undefined, tc.length > 0 ? tc : undefined)
   }
+
+  // ── Đối soát dụng cụ: so sánh số đếm đầu ca (ShiftTool.openCount) với số nhập khi đóng ca ──
+  const countedTools = (shift?.toolCounts ?? []).filter((tc) => tc.openCount > 0)
+  const closedToolIds = new Set(tools.map((t) => t.id).filter((id) => toolCounts[id] !== undefined && toolCounts[id] !== ''))
+  const matches = countedTools.filter((tc) => closedToolIds.has(tc.toolId) && (Number(toolCounts[tc.toolId]) || 0) === tc.openCount)
+  const mismatches = countedTools.filter((tc) => !closedToolIds.has(tc.toolId) || (Number(toolCounts[tc.toolId]) || 0) !== tc.openCount)
+  const toolsCounted = countedTools.length > 0
 
   return (
     <Modal
@@ -96,6 +105,47 @@ export function CloseShiftDialog({
             onChange={(event) => setNotes(event.target.value)}
           />
         </div>
+        {toolsCounted && (
+          <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
+            <p className="text-sm font-medium text-zinc-950 dark:text-white">
+              Đối soát dụng cụ
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Số đếm đầu ca: nhập lại số đếm cuối ca bên dưới để so sánh.
+            </p>
+            <div className="space-y-1">
+              {countedTools.map((tc) => {
+                const closedVal = toolCounts[tc.toolId]
+                const closed = closedVal !== undefined && closedVal !== ''
+                const equal = closed && (Number(closedVal) || 0) === tc.openCount
+                return (
+                  <div key={tc.toolId} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-zinc-600 dark:text-zinc-300">{tc.tool.name}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="tabular-nums text-zinc-500 dark:text-zinc-400">Đầu ca: {tc.openCount}</span>
+                      {closed ? (
+                        equal ? (
+                          <span className="flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 size={13} /> Khớp
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 font-medium text-red-600 dark:text-red-400">
+                            <XCircle size={13} /> Lệch
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-zinc-400 dark:text-zinc-500">Chưa nhập</span>
+                      )}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className={`text-xs font-medium ${mismatches.length === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+              {matches.length}/{countedTools.length} dụng cụ khớp với đầu ca
+            </p>
+          </div>
+        )}
         <ToolCountFields
           tools={tools}
           values={toolCounts}

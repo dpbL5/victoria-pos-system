@@ -81,6 +81,7 @@ export async function sellItems(
     // Khi checkout (thu tiền) mới tạo invoice PAID, trừ kho và thu tiền.
     const invoice = await tx.billing.createDraftInvoice({
       invoiceNo: generateInvoiceNo('SEL'),
+      // Khách vãng lai không có Customer → customerId null (tên hiển thị lấy từ session)
       customerId: session.customerId,
       sessionId,
       shiftId,

@@ -182,7 +182,10 @@ async function getRevenueData(store: ReportingStore, input: RevenueInput): Promi
           },
         },
         session: {
-          select: { customer: { select: { fullName: true } } },
+          select: {
+            customerName: true,
+            customer: { select: { fullName: true } },
+          },
         },
         staff: { select: { fullName: true } },
       },
@@ -200,7 +203,12 @@ async function getRevenueExportRows(store: ReportingStore, from: Date, to: Date)
   const rows = await payment(store).findMany({
     where: { paidAt: { gte: from, lte: to }, invoice: { status: { not: 'CANCELLED' as const } } },
     include: {
-      session: { select: { customer: { select: { fullName: true } } } },
+      session: {
+        select: {
+          customerName: true,
+          customer: { select: { fullName: true } },
+        },
+      },
       invoice: {
         select: {
           invoiceNo: true,
@@ -217,7 +225,15 @@ async function getRevenueExportRows(store: ReportingStore, from: Date, to: Date)
 async function getSessionExportRows(store: ReportingStore, from: Date, to: Date): Promise<SessionExportRow[]> {
   const rows = await session(store).findMany({
     where: { createdAt: { gte: from, lte: to } },
-    include: {
+    select: {
+      id: true,
+      createdAt: true,
+      status: true,
+      startTime: true,
+      endTime: true,
+      totalHours: true,
+      totalAmount: true,
+      customerName: true,
       customer: { select: { fullName: true, type: true } },
       staff: { select: { fullName: true } },
     },
