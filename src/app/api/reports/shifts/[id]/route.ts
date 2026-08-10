@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { requireAdmin, requireMutationAuth } from '@/lib/shared/auth'
 import { getShiftTransactions, getShiftRevenueData, adjustShiftCashDifference, mapAdjustShiftCashDifferenceError } from '@/lib/shifts'
 import { repositories } from '@/lib/infrastructure/repositories'
+import { prisma } from '@/lib/infrastructure/prisma'
 import { adjustCashDifferenceSchema } from '@/lib/shifts'
 import type { ShiftReportDetail } from '@/types'
 import {
@@ -34,9 +35,9 @@ export async function GET(
     }
 
     const [revenue, txResult, itemTypeRows] = await Promise.all([
-      getShiftRevenueData(repositories as never, id),
-      getShiftTransactions(repositories as never, id),
-      (repositories as never as { invoiceItem: import('@/generated/prisma/client').Prisma.InvoiceItemDelegate }).invoiceItem.groupBy({
+      getShiftRevenueData(prisma, id),
+      getShiftTransactions(prisma, id),
+      prisma.invoiceItem.groupBy({
         by: ['type'],
         where: { invoice: { shiftId: id, status: { not: 'CANCELLED' } } },
         _sum: { total: true },

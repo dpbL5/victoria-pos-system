@@ -2,7 +2,6 @@ import { NextRequest } from 'next/server'
 import { requireAdmin } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { applyStockMovement, mapApplyStockMovementError } from '@/lib/sessions'
-import { findOpenShiftForStaff } from '@/lib/shifts'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { stockMovementSchema } from '@/lib/sessions'
 import { apiError, resultToResponse, ERR_UNAUTHORIZED, ERR_FORBIDDEN, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
@@ -27,7 +26,7 @@ export async function POST(
       return apiError({ code: 'VALIDATION', message: 'Nhập kho phải có số lượng lớn hơn 0', status: 400 })
     }
 
-    const openShift = await findOpenShiftForStaff(repositories as never, auth.userId)
+    const openShift = await repositories.shift.findOpenForStaff(auth.userId)
 
     const result = await applyStockMovement({
       productId: id,

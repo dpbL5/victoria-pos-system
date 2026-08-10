@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/shared/auth'
 import { getShiftTransactions } from '@/lib/shifts'
 import { repositories } from '@/lib/infrastructure/repositories'
+import { prisma } from '@/lib/infrastructure/prisma'
 import { toCsv } from '@/lib/shared/csv'
 
 const paymentMethodLabel: Record<string, string> = {
@@ -29,7 +30,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Không tìm thấy ca làm' }, { status: 404 })
     }
 
-    const { transactions } = await getShiftTransactions(repositories as never, id)
+    const { transactions } = await getShiftTransactions(prisma, id)
 
     const headers = [
       'Thời gian',
