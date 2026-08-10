@@ -62,38 +62,49 @@ export function TodayShiftScreen() {
     return () => window.clearInterval(id)
   }, [])
 
+  // ── Tải dữ liệu phụ (products/tools) không chặn màn hình ──
+  // Màn hình chính chỉ cần shift + sessions + auth. Products/tools chỉ dùng
+  // khi mở dialog (checkout/sell/close-shift) → tải sau, không kéo dài thời gian load.
+  const loadAuxData = useCallback(async () => {
+    try {
+      const [productData, toolsData] = await Promise.all([
+        apiJson<Product[]>('/api/products?isActive=true'),
+        apiJson<{ id: string; name: string; quantity: number; isRequired: boolean }[]>('/api/tools'),
+      ])
+      if (productData.success) setProducts(productData.data ?? [])
+      if (toolsData.success) setTools(toolsData.data ?? [])
+    } catch {
+      // Không chặn màn hình — khi mở dialog sẽ tự thử lại
+    }
+  }, [])
+
   const loadData = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const [shiftData, openShiftData, sessionData, productData, authData, toolsData] = await Promise.all([
-        apiJson<Shift | null>('/api/shifts?current=true'),
-        apiJson<Shift | null>('/api/shifts?openOperational=true'),
+      const [shiftData, sessionData, authData] = await Promise.all([
+        apiJson<{ myShift: Shift | null; openShift: Shift | null }>('/api/shifts?current=true&openOperational=true'),
         apiJson<SessionRow[]>('/api/sessions?status=ACTIVE&limit=50'),
-        apiJson<Product[]>('/api/products?isActive=true'),
         apiJson<{ userId: string; role: string }>('/api/auth/me'),
-        apiJson<{ id: string; name: string; quantity: number; isRequired: boolean }[]>('/api/tools'),
       ])
 
       if (!shiftData.success) throw new Error(shiftData.error || 'Không tải được ca làm')
-      if (!openShiftData.success) throw new Error(openShiftData.error || 'Không tải được ca đang mở')
       if (!sessionData.success) throw new Error(sessionData.error || 'Không tải được phiên chơi')
-      if (!productData.success) throw new Error(productData.error || 'Không tải được hàng hóa')
       if (!authData.success) throw new Error(authData.error || 'Không tải được thông tin đăng nhập')
 
-      setShift(shiftData.data ?? null)
-      setOpenOperationalShift(openShiftData.data ?? null)
+      setShift(shiftData.data?.myShift ?? null)
+      setOpenOperationalShift(shiftData.data?.openShift ?? null)
       setSessions(sessionData.data ?? [])
-      setProducts(productData.data ?? [])
       setAuthUserId(authData.data?.userId ?? null)
       setAuthRole(authData.data?.role ?? null)
-      setTools(toolsData.data ?? [])
+      // Tải products/tools sau — không chờ
+      void loadAuxData()
     } catch (err) {
       setError((err as Error).message || 'Lỗi kết nối máy chủ')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [loadAuxData])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadData() }, [loadData])

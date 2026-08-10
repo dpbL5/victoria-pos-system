@@ -39,6 +39,22 @@ export async function GET(request: NextRequest) {
         ? statusParam
         : undefined
 
+    // ── Bootstrap: 1 request lấy cả shift của staff + shift OPEN bất kỳ ──
+    // Giảm 2 round-trip → 1 cho màn POS (TodayShiftScreen gọi cả 2).
+    if (current && openOperational) {
+      const [myShift, openShift] = await Promise.all([
+        repositories.shift.findOpenForStaff(auth.userId),
+        repositories.shift.findOpenOperational(),
+      ])
+      return NextResponse.json({
+        success: true,
+        data: {
+          myShift,
+          openShift,
+        },
+      })
+    }
+
     if (current) {
       let shift = await repositories.shift.findOpenForStaff(auth.userId)
       if (!shift && auth.role === 'ADMIN') {

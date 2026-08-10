@@ -52,7 +52,7 @@ function createPrismaClient(): PrismaClient {
   const adapter = new PrismaPg(
     {
       connectionString: dbUrl,
-      max: 3,                         // Tối đa 3 connection — an toàn cho Supabase free tier
+      max: 5,
       idleTimeoutMillis: 30_000,      // Đóng connection idle sau 30s
       connectionTimeoutMillis: 10_000, // Timeout chờ connection sau 10s
       // ── PgBouncer transaction-mode compatibility ──

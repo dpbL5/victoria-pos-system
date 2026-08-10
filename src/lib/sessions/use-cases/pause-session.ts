@@ -145,7 +145,7 @@ export async function pausePlayer(
 ): Promise<Result<PausePlayerResult>> {
   const { sessionId, playerId, staffId, now = new Date() } = input
 
-  const session = await deps.session.findByIdWithPlayers(sessionId)
+  const session = await deps.session.findPlayersForPause(sessionId)
   if (!session) return err('SESSION_NOT_FOUND')
   if (session.status !== 'ACTIVE') return err('SESSION_NOT_ACTIVE')
 
@@ -181,7 +181,7 @@ export async function resumePlayer(
 ): Promise<Result<ResumePlayerResult>> {
   const { sessionId, playerId, staffId, now = new Date() } = input
 
-  const session = await deps.session.findByIdWithPlayers(sessionId)
+  const session = await deps.session.findPlayersForPause(sessionId)
   if (!session) return err('SESSION_NOT_FOUND')
   if (session.status !== 'ACTIVE') return err('SESSION_NOT_ACTIVE')
 

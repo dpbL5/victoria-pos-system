@@ -186,6 +186,7 @@ model Session {
   @@index([pricingRuleId])
   @@index([promotionRuleId])
   @@index([createdAt])
+  @@index([status, createdAt])
   @@map("sessions")
 }
 
@@ -411,6 +412,7 @@ model Invoice {
 
   @@index([customerId])
   @@index([sessionId])
+  @@index([sessionId, status])
   @@index([shiftId])
   @@index([paidAt])
   @@map("invoices")
