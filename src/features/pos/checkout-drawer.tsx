@@ -10,39 +10,54 @@ import { apiJson, jsonRequest } from '@/lib/api'
 import { calcElapsedHMS, formatPausedHMS, money, pausedSecondsUntil, paymentMethodLabel, toNumber } from './format'
 import { formatPromotionOption } from './promotion-option'
 import { InvoiceRow } from './invoice-row'
-import { GroupBuilder } from './group-builder'
+import { GroupBuilder, type CheckoutGroup } from './group-builder'
 import type { PlayTimeQuote, PromotionSnapshot } from '@/types'
 import type { PaymentMethod, Product, SessionRow } from './types'
 
-/** Section có thể thu gọn — mặc định đóng, bấm header để mở */
+/** Section có thể thu gọn — mặc định đóng, bấm header để mở.
+ *  Truyền `collapsible={false}` để luôn hiển thị nội dung (không có nút thu gọn). */
 function SectionCard({
   title,
   summary,
   defaultOpen = false,
+  collapsible = true,
   children,
 }: {
   title: string
   summary?: string
   defaultOpen?: boolean
+  collapsible?: boolean
   children: ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
+  const showContent = !collapsible || open
+  const headerContent = (
+    <>
+      <span className="text-sm font-semibold text-zinc-950 dark:text-white">{title}</span>
+      <span className="flex items-center gap-2">
+        {summary ? (
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">{summary}</span>
+        ) : null}
+        {collapsible && (open ? <ChevronUp size={16} className="text-zinc-400" /> : <ChevronDown size={16} className="text-zinc-400" />)}
+      </span>
+    </>
+  )
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
-      >
-        <span className="text-sm font-semibold text-zinc-950 dark:text-white">{title}</span>
-        <span className="flex items-center gap-2">
-          {summary ? (
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">{summary}</span>
-          ) : null}
-          {open ? <ChevronUp size={16} className="text-zinc-400" /> : <ChevronDown size={16} className="text-zinc-400" />}
-        </span>
-      </button>
-      {open && <div className="space-y-3 px-4 pb-4">{children}</div>}
+      {collapsible ? (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+        >
+          {headerContent}
+        </button>
+      ) : (
+        <div className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left">
+          {headerContent}
+        </div>
+      )}
+      {showContent && <div className="space-y-3 px-4 pb-4">{children}</div>}
     </div>
   )
 }
@@ -91,13 +106,16 @@ export function CheckoutDrawer({  session,
   const [parkingVehicleCount, setParkingVehicleCount] = useState(0)
   // Bảng giá chọn tại checkout — session khách vãng lai chưa gán giá lúc check-in
   const [applicablePricingRules, setApplicablePricingRules] = useState<PricingRuleOption[]>([])
-  const [pricingMode, setPricingMode] = useState<'single' | 'group'>('single')
-  const [checkoutPricingRuleId, setCheckoutPricingRuleId] = useState('')
-  const [checkoutGroups, setCheckoutGroups] = useState<Array<{ playerCount: number; pricingRuleId: string }>>([])
+  const [checkoutGroups, setCheckoutGroups] = useState<CheckoutGroup[]>([])
 
   const isMember = session?.customer?.type === 'MEMBER' || !!session?.membership
   const sessionPlayerCount = session?.playerCount ?? 1
   const isGroupSession = sessionPlayerCount > 1
+
+  // Danh sách người chơi (chọn tay vào nhóm bảng giá)
+  const sessionPlayers = (session?.pricingGroups ?? []).flatMap((g) =>
+    (g.players ?? []).map((p) => ({ id: p.id, name: p.name ?? null }))
+  )
 
   // Session check-in mới (để trống giá) — cần chọn bảng giá khi thu tiền
   const needsPricing = !!session && !isMember
@@ -118,8 +136,6 @@ export function CheckoutDrawer({  session,
       setCheckoutPlayerCount(firstActive?.remainingCount ?? session.playerCount ?? 1)
       setParkingVehicleCount(0)
       // Reset bảng giá checkout
-      setPricingMode('single')
-      setCheckoutPricingRuleId('')
       setCheckoutGroups([])
       setApplicablePricingRules([])
       /* eslint-enable react-hooks/set-state-in-effect */
@@ -130,16 +146,16 @@ export function CheckoutDrawer({  session,
   useEffect(() => {
     if (!session || !needsPricing) return
     let cancelled = false
+    const allPlayerIds = (session.pricingGroups ?? []).flatMap((g) => (g.players ?? []).map((p) => p.id))
     const loadRules = async () => {
       try {
         const data = await apiJson<PricingRuleOption[]>('/api/pricing/applicable')
         if (data.success && !cancelled) {
           const rules = data.data ?? []
           setApplicablePricingRules(rules)
-          setCheckoutPricingRuleId((current) => current || (rules[0]?.id ?? ''))
-          // Mặc định chia 1 nhóm bằng tổng số người
+          // Mặc định 1 nhóm gồm toàn bộ người chơi, bảng giá đầu tiên
           setCheckoutGroups((current) => current.length > 0 ? current : [{
-            playerCount: session.playerCount,
+            playerIds: allPlayerIds,
             pricingRuleId: rules[0]?.id ?? '',
           }])
         }
@@ -165,20 +181,21 @@ export function CheckoutDrawer({  session,
       try {
       const params = new URLSearchParams()
       if (promotionRuleId) params.set('promotionRuleId', promotionRuleId)
-      if (selectedGroupId) params.set('pricingGroupId', selectedGroupId)
       if (frozenAt) params.set('endTime', frozenAt)
-      // Session cần gán giá → truyền bảng giá chọn tại checkout
+      // Session cần gán giá → luôn gửi groups (mặc định 1 nhóm = toàn bộ người + 1 bảng giá)
       if (needsPricing) {
-        if (pricingMode === 'group' && checkoutGroups.length > 0) {
-          // URLSearchParams tự encode — không encode thủ công trước
-          params.set('groups', JSON.stringify(checkoutGroups))
-          params.set('pendingIndex', '0')
-        } else if (checkoutPricingRuleId) {
-          params.set('pricingRuleId', checkoutPricingRuleId)
+        if (checkoutGroups.length > 0) {
+          params.set('groups', JSON.stringify(checkoutGroups.map((g) => ({
+            playerCount: g.playerIds.length,
+            pricingRuleId: g.pricingRuleId,
+            playerIds: g.playerIds,
+          }))))
         }
+      } else {
+        if (selectedGroupId) params.set('pricingGroupId', selectedGroupId)
+        // Số người thu lần này — preview tính per-player đúng N người
+        if (checkoutPlayerCount > 0) params.set('playerCount', String(checkoutPlayerCount))
       }
-      // Số người thu lần này — preview tính per-player đúng N người
-      if (checkoutPlayerCount > 0) params.set('playerCount', String(checkoutPlayerCount))
       const qs = params.toString()
       const data = await apiJson<PlayTimeQuote>(`/api/sessions/${session.id}/checkout-preview${qs ? `?${qs}` : ''}`)
         if (!data.success || !data.data) {
@@ -195,7 +212,7 @@ export function CheckoutDrawer({  session,
     void loadQuote()
     return () => { cancelled = true }
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [session, promotionRuleId, needsPricing, pricingMode, checkoutPricingRuleId, checkoutGroups, selectedGroupId, frozenAt])
+  }, [session, promotionRuleId, needsPricing, checkoutGroups, selectedGroupId, frozenAt, checkoutPlayerCount])
 
   useEffect(() => {
     if (!session || session.customer?.type === 'MEMBER' || !!session.membership) return
@@ -228,8 +245,6 @@ export function CheckoutDrawer({  session,
   const playSubtotal = playQuote?.subtotal ?? 0
   const playDiscount = playQuote?.discountAmount ?? 0
   const playTotal = playQuote?.grandTotal ?? 0
-  // Giá bình quân mỗi người (hiển thị cho nhóm) — tránh chia 0 khi chưa có quote
-  const perPlayerSubtotal = checkoutPlayerCount > 0 ? playSubtotal / checkoutPlayerCount : 0
   const pendingSellTotal = playQuote?.pendingSellTotal ?? 0
   const pendingSellItems = playQuote?.pendingSellItems ?? []
   const parkingFeeUnitPrice = playQuote?.parkingFeeUnitPrice ?? 0
@@ -247,6 +262,12 @@ export function CheckoutDrawer({  session,
   const grandTotal = Math.max(0, playTotal + pendingSellTotal + productSubtotal - parkingFeeTotal)
 
   const pricingBlocked = needsPricing && applicablePricingRules.length === 0
+
+  // Chọn bảng giá tại checkout: mặc định 1 nhóm (1 bảng giá); thêm nhóm để nhiều bảng giá
+  const groupMode = needsPricing && checkoutGroups.length > 0
+  const allPlayersAssigned = groupMode
+    ? new Set(checkoutGroups.flatMap((g) => g.playerIds)).size === sessionPlayerCount
+    : true
 
   const changeCart = (product: Product, delta: number) => {
     setCart((current) => {
@@ -272,6 +293,10 @@ export function CheckoutDrawer({  session,
       notifyError('Chưa có bảng giá hiệu lực — không thể thu tiền giờ chơi')
       return
     }
+    if (groupMode && !allPlayersAssigned) {
+      notifyError('Phải phân hết người chơi vào nhóm bảng giá trước khi thu tiền')
+      return
+    }
 
     setSubmitting(true)
     try {
@@ -284,19 +309,15 @@ export function CheckoutDrawer({  session,
         })),
       }
       if (frozenAt) body.endTime = frozenAt
-      // Session cần gán bảng giá → gửi bảng giá chọn tại checkout
+      // Session cần gán bảng giá → luôn gửi groups (mặc định 1 nhóm = 1 bảng giá)
       if (needsPricing) {
-        if (pricingMode === 'group' && checkoutGroups.length > 0) {
-          body.groups = checkoutGroups
-        } else if (checkoutPricingRuleId) {
-          body.pricingRuleId = checkoutPricingRuleId
+        if (checkoutGroups.length > 0) {
+          body.groups = checkoutGroups.map((g) => ({
+            playerCount: g.playerIds.length,
+            pricingRuleId: g.pricingRuleId,
+            playerIds: g.playerIds,
+          }))
         }
-        body.pricingGroupId = session.pricingGroups?.[0]?.id
-        // Số người thu của nhóm 1 (mặc định thu hết)
-        const firstGroupCount = pricingMode === 'group' && checkoutGroups.length > 0
-          ? checkoutGroups[0].playerCount
-          : session.playerCount
-        body.playerCount = Math.min(checkoutPlayerCount, firstGroupCount)
       } else {
         // Nếu có pricing groups, gửi pricingGroupId
         const groups = session.pricingGroups ?? []
@@ -337,26 +358,41 @@ export function CheckoutDrawer({  session,
       size="lg"
       footer={
         <div className="space-y-3">
-          {/* ── Bảng tổng kết ── */}
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
-            {quoteLoading ? (
+          {/* ── Thông tin hoá đơn (collapsible, mặc định mở) ── */}
+          <SectionCard title="Thông tin hoá đơn" defaultOpen>
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
+              {quoteLoading ? (
               <p className="text-sm text-zinc-500 dark:text-zinc-400">Đang tính tiền giờ chơi...</p>
             ) : quoteError ? (
               <p className="text-sm text-red-600 dark:text-red-300">{quoteError}</p>
             ) : (
               <>
                 {isGroupSession ? (
-                  <>
-                    <InvoiceRow
-                      label={`Giờ chơi (${checkoutPlayerCount} người · bình quân ${money(perPlayerSubtotal)}/người)`}
-                      value={money(playSubtotal)}
-                    />
-                  </>
+                  <InvoiceRow
+                    label="Giờ chơi"
+                    value={money(playSubtotal)}
+                  />
                 ) : (
                   <InvoiceRow
                     label={isMember ? 'Giờ chơi hội viên' : 'Giờ chơi vãng lai'}
                     value={money(playSubtotal)}
                   />
+                )}
+                {/* ── Chi tiết giá từng người chơi được thu ── */}
+                {playQuote?.playerPricing && playQuote.playerPricing.length > 0 && (
+                  <div className="mt-2 space-y-1 border-t border-dashed border-zinc-200 pt-2 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                    {playQuote.playerPricing.map((p, index) => (
+                      <div key={p.id} className="flex items-baseline justify-between gap-3">
+                        <span className="truncate">
+                          Ng. {index + 1}: {formatHours(p.totalHours)}h{' '}
+                          {p.pricingRuleName ? `(${p.pricingRuleName})` : ''}
+                        </span>
+                        <span className="shrink-0 font-semibold tabular-nums text-zinc-950 dark:text-white">
+                          = {money(p.total)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
                 {/* ── Thời gian chơi + đã tạm dừng (mọi phiên) ── */}
                 {session && (() => {
@@ -422,7 +458,8 @@ export function CheckoutDrawer({  session,
                 warning
               />
             )}
-          </div>
+            </div>
+          </SectionCard>
           <div className="flex items-center justify-between rounded-xl bg-zinc-100 px-4 py-3 dark:bg-zinc-800">
             <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Tổng thu</span>
             <span className="text-lg font-bold tabular-nums text-zinc-950 dark:text-white">
@@ -433,20 +470,22 @@ export function CheckoutDrawer({  session,
             variant="inverse"
             size="lg"
             fullWidth
-            disabled={submitting || !shiftReady || quoteLoading || !!quoteError || !playQuote || pricingBlocked}
+            disabled={submitting || !shiftReady || quoteLoading || !!quoteError || !playQuote || pricingBlocked || (groupMode && !allPlayersAssigned)}
             onClick={handleCheckout}
           >
             {submitting
               ? 'Đang thu tiền...'
-              : needsPricing
-                ? `Thu tiền ${checkoutPlayerCount} người`
-                : selectedGroupId && checkoutPlayerCount < (session?.pricingGroups?.find(g => g.id === selectedGroupId)?.remainingCount ?? sessionPlayerCount)
+              : groupMode
+                ? `Thu tiền ${session.playerCount} người`
+                : needsPricing
                   ? `Thu tiền ${checkoutPlayerCount} người`
-                  : (selectedGroupId && (session?.pricingGroups?.length ?? 0) > 0)
-                    ? `Thu tiền (${session?.pricingGroups?.find(g => g.id === selectedGroupId)?.label ?? ''})`
-                    : isGroupSession && checkoutPlayerCount < sessionPlayerCount
-                      ? `Thu tiền ${checkoutPlayerCount} người`
-                      : 'Thu tiền & kết thúc'}
+                  : selectedGroupId && checkoutPlayerCount < (session?.pricingGroups?.find(g => g.id === selectedGroupId)?.remainingCount ?? sessionPlayerCount)
+                    ? `Thu tiền ${checkoutPlayerCount} người`
+                    : (selectedGroupId && (session?.pricingGroups?.length ?? 0) > 0)
+                      ? `Thu tiền (${session?.pricingGroups?.find(g => g.id === selectedGroupId)?.label ?? ''})`
+                      : isGroupSession && checkoutPlayerCount < sessionPlayerCount
+                        ? `Thu tiền ${checkoutPlayerCount} người`
+                        : 'Thu tiền & kết thúc'}
           </Button>
         </div>
       }
@@ -457,7 +496,7 @@ export function CheckoutDrawer({  session,
           {needsPricing && (
             <SectionCard
               title="Bảng giá"
-              summary={checkoutPricingRuleId ? applicablePricingRules.find(r => r.id === checkoutPricingRuleId)?.name : undefined}
+              collapsible={false}
             >
               {pricingBlocked ? (
                 <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
@@ -465,95 +504,22 @@ export function CheckoutDrawer({  session,
                 </p>
               ) : (
                 <>
-                  {/* Toggle Cùng một bảng giá / Chia nhóm — chỉ phiên nhiều người */}
-                  {isGroupSession && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPricingMode('single')}
-                        className={`rounded-xl border p-3 text-left text-sm font-medium ${
-                          pricingMode === 'single'
-                            ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
-                            : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
-                        }`}
-                      >
-                        Cùng một bảng giá
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPricingMode('group')}
-                        className={`rounded-xl border p-3 text-left text-sm font-medium ${
-                          pricingMode === 'group'
-                            ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
-                            : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
-                        }`}
-                      >
-                        Chia nhóm
-                      </button>
-                    </div>
-                  )}
+                  <GroupBuilder
+                    players={sessionPlayers}
+                    groups={checkoutGroups}
+                    onChange={setCheckoutGroups}
+                    applicablePricingRules={applicablePricingRules}
+                  />
 
-                  {pricingMode === 'single' ? (
-                    <Select
-                      id="checkout-pricing-rule"
-                      value={checkoutPricingRuleId}
-                      onChange={(event) => setCheckoutPricingRuleId(event.target.value)}
-                    >
-                      {applicablePricingRules.map((rule) => (
-                        <option key={rule.id} value={rule.id}>
-                          {rule.name} — {money(rule.ratePerHour)}/giờ
-                          {rule.tiers.length > 0 ? ` (${rule.tiers.length} bậc luỹ tiến)` : ''}
-                        </option>
-                      ))}
-                    </Select>
-                  ) : (
-                    <GroupBuilder
-                      totalPlayers={session.playerCount}
-                      groups={checkoutGroups}
-                      onChange={setCheckoutGroups}
-                      applicablePricingRules={applicablePricingRules}
-                    />
-                  )}
-
-                  {pricingMode === 'group' && checkoutGroups.length > 0 && (
+                  {checkoutGroups.length > 0 && (
                     <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
-                      <Label htmlFor="checkout-first-group-count">Số người thu của nhóm 1</Label>
-                      <div className="mt-2 flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setCheckoutPlayerCount((c) => Math.max(1, c - 1))}
-                          disabled={checkoutPlayerCount <= 1}
-                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span className="text-lg font-bold tabular-nums text-zinc-950 dark:text-white">
-                          {checkoutPlayerCount}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setCheckoutPlayerCount((c) => Math.min(checkoutGroups[0].playerCount, c + 1))}
-                          disabled={checkoutPlayerCount >= checkoutGroups[0].playerCount}
-                          className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-950 text-white disabled:opacity-40 dark:bg-white dark:text-zinc-950"
-                        >
-                          <Plus size={14} />
-                        </button>
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                          / {checkoutGroups[0].playerCount} người trong nhóm 1
-                        </span>
-                      </div>
-                      {checkoutPlayerCount < checkoutGroups[0].playerCount && (
-                        <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
-                          Thu {checkoutPlayerCount} người — nhóm còn {checkoutGroups[0].playerCount - checkoutPlayerCount} người, thu tiếp sau.
-                        </p>
-                      )}
+                      <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                        Thu hết <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">{session.playerCount}</span> người — mỗi nhóm tính theo bảng giá riêng.
+                      </p>
                     </div>
                   )}
                 </>
               )}
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Bảng giá được chọn theo thời điểm thu tiền và ghi lại vào phiên.
-              </p>
             </SectionCard>
           )}
 
@@ -684,6 +650,7 @@ export function CheckoutDrawer({  session,
           {!isMember && (
             <SectionCard
               title="Khuyến mại giờ chơi"
+              collapsible={false}
               summary={promotionRuleId ? promotions.find(p => p.ruleId === promotionRuleId)?.name : undefined}
             >
               <Select
@@ -701,11 +668,7 @@ export function CheckoutDrawer({  session,
               </Select>
               {promotionsError ? (
                 <p className="mt-1 text-xs text-red-600 dark:text-red-300">{promotionsError}</p>
-              ) : (
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Chọn một khuyến mại còn hiệu lực tại thời điểm thu tiền.
-                </p>
-              )}
+              ) : null}
             </SectionCard>
           )}
 
@@ -713,6 +676,7 @@ export function CheckoutDrawer({  session,
           {!isMember && parkingFeeUnitPrice > 0 && (
             <SectionCard
               title="Phí gửi xe"
+              collapsible={false}
               summary={parkingVehicleCount > 0 ? `${parkingVehicleCount} xe` : undefined}
             >
               <div className="flex items-center justify-between">
@@ -823,4 +787,9 @@ export function CheckoutDrawer({  session,
       )}
     </Modal>
   )
+}
+
+/** Định dạng số giờ 1 chữ số thập phân, bỏ số 0 thừa (1.4, 2.3) */
+function formatHours(hours: number): string {
+  return (Math.round(hours * 10) / 10).toString()
 }

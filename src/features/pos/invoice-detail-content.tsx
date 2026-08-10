@@ -30,7 +30,6 @@ interface InvoiceItem {
   product: { id: string; name: string; sku: string | null; type: string } | null
   metadata: unknown
 }
-
 interface InvoicePayment {
   id: string
   paymentMethod: string
@@ -257,13 +256,17 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
                         {item.description}
                       </p>
                     </div>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                       <Badge size="sm" variant="outline">
                         {itemTypeLabels[item.type] ?? item.type}
                       </Badge>
-                      <span>
-                        {item.quantity} × {formatVND(item.unitPrice)}
-                      </span>
+                      {item.type === 'PLAY_TIME' ? (
+                        <PlayTimePricing item={item} />
+                      ) : (
+                        <span>
+                          {item.quantity} × {formatVND(item.unitPrice)}
+                        </span>
+                      )}
                       {item.discountAmount > 0 && (
                         <span className="text-red-500">
                           -{formatVND(item.discountAmount)}
@@ -411,6 +414,59 @@ function getPromotionName(metadata: unknown): string | null {
   return typeof record.promotionName === 'string' && record.promotionName.trim()
     ? record.promotionName
     : null
+}
+
+/** Hiển thị giá giờ chơi chi tiết theo từng người chơi (metadata playerPricing) */
+function PlayTimePricing({ item }: { item: InvoiceItem }) {
+  const metadata = (item.metadata ?? {}) as Record<string, unknown>
+  const playerPricing = Array.isArray(metadata.playerPricing)
+    ? (metadata.playerPricing as Array<{
+        name?: string
+        totalHours?: number
+        subtotal?: number
+        discountAmount?: number
+        total?: number
+        pricingRuleName?: string
+      }>)
+    : null
+
+  // Hóa đơn cũ không có playerPricing → fallback "X người × đơn giá/người"
+  if (!playerPricing || playerPricing.length === 0) {
+    const checkoutCount = typeof metadata.checkoutCount === 'number' && metadata.checkoutCount > 0
+      ? metadata.checkoutCount
+      : null
+    const perPersonSubtotal = typeof metadata.perPersonSubtotal === 'number'
+      ? metadata.perPersonSubtotal
+      : null
+    return (
+      <span className="tabular-nums">
+        {perPersonSubtotal !== null && perPersonSubtotal >= 0
+          ? `${formatVND(perPersonSubtotal)}/người${checkoutCount ? ` × ${checkoutCount} người` : ''}`
+          : `${item.quantity} × ${formatVND(item.unitPrice)}`}
+      </span>
+    )
+  }
+
+  return (
+    <div className="w-full space-y-1 tabular-nums">
+      {playerPricing.map((p, index) => (
+        <div key={index} className="flex items-baseline justify-between gap-2">
+          <span className="truncate">
+            Ng. {index + 1}: {formatHours(p.totalHours ?? 0)}h{' '}
+            {p.pricingRuleName ? `(${p.pricingRuleName})` : ''}
+          </span>
+          <span className="shrink-0 font-semibold text-zinc-950 dark:text-white">
+            = {formatVND(p.total ?? 0)}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Định dạng số giờ 1 chữ số thập phân, bỏ số 0 thừa (1.4, 2.3) */
+function formatHours(hours: number): string {
+  return (Math.round(hours * 10) / 10).toString()
 }
 
 function paymentMethodLabel(method: string): string {

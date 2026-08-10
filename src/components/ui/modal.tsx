@@ -57,17 +57,17 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-20 md:pb-4 animate-fade-in"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-8 md:pb-4 animate-fade-in"
       style={{ background: "var(--color-surface-overlay)" }}
       onClick={onClose}
     >
       <div
-        className={`w-full ${sizeClasses[size]} max-h-[calc(100dvh-7rem)] md:max-h-[90vh] flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-xl animate-slide-up border border-zinc-200 dark:border-zinc-800 ${className}`}
+        className={`w-full ${sizeClasses[size]} max-h-[calc(100dvh-4rem)] md:max-h-[95vh] flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-xl animate-slide-up border border-zinc-200 dark:border-zinc-800 ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         {(title || description) && (
-          <div className="shrink-0 border-b border-zinc-200 dark:border-zinc-800 px-5 py-4">
+          <div className="shrink-0 border-b border-zinc-200 bg-zinc-100/70 dark:border-zinc-800 dark:bg-zinc-950/60 px-5 py-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 {title && (
@@ -93,7 +93,7 @@ export function Modal({
 
         {/* Footer */}
         {footer && (
-          <div className="shrink-0 border-t border-zinc-200 dark:border-zinc-800 px-5 py-4">
+          <div className="shrink-0 border-t border-zinc-200 bg-zinc-100/70 dark:border-zinc-800 dark:bg-zinc-950/60 px-5 py-4">
             {footer}
           </div>
         )}
