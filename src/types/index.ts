@@ -57,6 +57,16 @@ export interface PlayTimeQuote {
   parkingFeeUnitPrice?: number
   /** Tổng giây đã tạm dừng (theo group được chọn, fallback session-level) */
   pausedSeconds?: number
+  /** Chi tiết giá theo từng người chơi được thu (per-player checkout) */
+  playerPricing?: Array<{
+    id: string
+    name: string
+    totalHours: number
+    subtotal: number
+    discountAmount: number
+    total: number
+    pricingRuleName?: string
+  }>
 }
 
 export interface PendingSellItem {

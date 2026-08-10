@@ -11,6 +11,7 @@ export const createSessionSchema = z.object({
 const checkoutPricingGroupSchema = z.object({
   playerCount: z.number().int().min(1, "Mỗi nhóm tối thiểu 1 người"),
   pricingRuleId: z.string().uuid("ID bảng giá không hợp lệ"),
+  playerIds: z.array(z.string().uuid("ID người chơi không hợp lệ")).min(1, "Mỗi nhóm phải chọn ít nhất 1 người chơi"),
 });
 
 export const checkoutSessionSchema = z.object({

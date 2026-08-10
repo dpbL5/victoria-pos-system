@@ -60,6 +60,8 @@ export async function GET(
 
     let pendingGroups: PendingGroupPricing[] | undefined
     let pendingIndex = 0
+    const resolved: Array<{ playerCount: number; pricingRuleId: string; playerIds: string[]; snapshot: PricingRuleSnapshot }> = []
+    let rawGroups: Array<{ playerCount: number; pricingRuleId: string; playerIds: string[] }> | null = null
     if (needsPricing) {
       const snapshotOf = (rule: NonNullable<Awaited<ReturnType<typeof repositories.pricing.findByIdWithTiers>>>): PricingRuleSnapshot => ({
         ruleId: rule.id,
@@ -75,15 +77,15 @@ export async function GET(
         return dayMatches && effectiveFromOk && effectiveToOk
       }
 
-      let rawGroups: Array<{ playerCount: number; pricingRuleId: string }> | null = null
       if (groupsParam) {
         try {
-          const parsedGroups = JSON.parse(groupsParam) as Array<{ playerCount: number; pricingRuleId: string }>
-          if (Array.isArray(parsedGroups) && parsedGroups.length > 0) rawGroups = parsedGroups
+          const parsedGroups = JSON.parse(groupsParam) as Array<{ playerCount: number; pricingRuleId: string; playerIds?: string[] }>
+          if (Array.isArray(parsedGroups) && parsedGroups.length > 0) {
+            rawGroups = parsedGroups.map((g) => ({ ...g, playerIds: g.playerIds ?? [] }))
+          }
         } catch { /* groups không hợp lệ → để null, fallback theo pricingRuleId/auto */ }
       }
 
-      const resolved: Array<{ playerCount: number; pricingRuleId: string; snapshot: PricingRuleSnapshot }> = []
       if (rawGroups) {
         const totalPlayers = rawGroups.reduce((sum, g) => sum + g.playerCount, 0)
         if (totalPlayers !== session.playerCount) {
@@ -100,7 +102,7 @@ export async function GET(
           if (!isEffective(rule)) {
             return NextResponse.json({ success: false, error: 'Bảng giá đã chọn không còn hiệu lực. Vui lòng chọn bảng giá khác.' }, { status: 409 })
           }
-          resolved.push({ playerCount: g.playerCount, pricingRuleId: rule.id, snapshot: snapshotOf(rule) })
+          resolved.push({ playerCount: g.playerCount, pricingRuleId: rule.id, playerIds: g.playerIds, snapshot: snapshotOf(rule) })
         }
       } else if (pricingRuleIdParam) {
         const rule = await repositories.pricing.findByIdWithTiers(pricingRuleIdParam)
@@ -110,7 +112,7 @@ export async function GET(
         if (!isEffective(rule)) {
           return NextResponse.json({ success: false, error: 'Bảng giá đã chọn không còn hiệu lực. Vui lòng chọn bảng giá khác.' }, { status: 409 })
         }
-        resolved.push({ playerCount: session.playerCount, pricingRuleId: rule.id, snapshot: snapshotOf(rule) })
+        resolved.push({ playerCount: session.playerCount, pricingRuleId: rule.id, playerIds: [], snapshot: snapshotOf(rule) })
       } else {
         // Auto-resolve theo giờ checkout
         const currentHour = getVnHour(at)
@@ -122,7 +124,7 @@ export async function GET(
             { status: 409 }
           )
         }
-        resolved.push({ playerCount: session.playerCount, pricingRuleId: rule.id, snapshot: snapshotOf(rule) })
+        resolved.push({ playerCount: session.playerCount, pricingRuleId: rule.id, playerIds: [], snapshot: snapshotOf(rule) })
       }
 
       pendingGroups = resolved.map((r, i) => ({
@@ -170,39 +172,139 @@ export async function GET(
         : NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
     }
     const pricing = pricingResult.value
+    if (pricing.membershipExpired) {
+      return NextResponse.json(
+        { success: false, error: 'Gói hội viên đã hết hạn. Vui lòng gia hạn trước khi thu tiền.' },
+        { status: 409 }
+      )
+    }
 
-    // ── Tính tiền per-player (khớp logic checkout): mỗi người chưa thu của group
-    // được tính played time riêng + tiered + khuyến mại, rồi cộng tổng.
-    // Group không có player rows (legacy) → giữ kết quả pricing hiện tại.
+    // ── Tính tiền per-player (khớp logic checkout): mỗi người chưa thu được tính
+    // played time riêng + tiered + khuyến mại riêng, rồi cộng tổng.
+    // - Nhiều bảng giá (groups): tất cả player chưa checkout, mỗi người rule của group nó.
+    // - 1 group (pricingGroupId): player chưa checkout của group đó.
+    // - Group không có player rows (legacy) → giữ kết quả pricing hiện tại.
     let perPlayerPricing = pricing
-    if (hasPlayers && pricingGroupId) {
-      const group = session.pricingGroups.find(g => g.id === pricingGroupId)
-      const uncheckedPlayers = group ? group.players.filter(p => !p.checkedOutAt) : []
-      // Thu N người đầu tiên theo thứ tự tạo (khớp use-case: slice(0, checkoutCount))
-      const parsedPlayerCount = Number.parseInt(playerCountParam || '0', 10)
-      const billCount = Number.isFinite(parsedPlayerCount) && parsedPlayerCount > 0
-        ? Math.min(parsedPlayerCount, uncheckedPlayers.length)
-        : uncheckedPlayers.length
-      const playersToQuote = uncheckedPlayers.slice(0, billCount)
+    let playerPricingDetail: PlayTimeQuote['playerPricing'] = undefined
+
+    const groupRuleByName = (group: (typeof session.pricingGroups)[number]): { hourlyRate: number; tiers: { minHours: number; ratePerHour: number }[]; ruleName: string } => {
+      // Ưu tiên snapshot đã persist; còn pendingGroups (bảng giá chọn tại checkout) theo groupId
+      const snapshot = group.pricingSnapshot as unknown as PricingRuleSnapshot | null
+      if (snapshot) {
+        return {
+          hourlyRate: snapshot.ratePerHour,
+          tiers: snapshot.tiers.map((t) => ({ minHours: t.minHours, ratePerHour: t.ratePerHour })),
+          ruleName: snapshot.name,
+        }
+      }
+      const pending = pendingGroups?.find((pg) => pg.groupId === group.id)
+      const pendingSnapshot = pending?.snapshot
+      if (pendingSnapshot) {
+        return {
+          hourlyRate: pendingSnapshot.ratePerHour,
+          tiers: pendingSnapshot.tiers.map((t) => ({ minHours: t.minHours, ratePerHour: t.ratePerHour })),
+          ruleName: pendingSnapshot.name,
+        }
+      }
+      return {
+        hourlyRate: pricing.hourlyRate,
+        tiers: pricing.tiers,
+        ruleName: pricing.ruleName ?? '',
+      }
+    }
+
+    if (hasPlayers) {
+      // Nhiều bảng giá: player chọn tay theo playerIds (giữ thứ tự nhóm)
+      let playersToQuote: Array<{ id: string; name: string | null; groupId: string; pausedAt: Date | null; totalPausedSeconds: number; checkedOutAt: Date | null }> = []
+      // playerId → index nhóm (nhiều bảng giá)
+      const playerToGroupIndex = new Map<string, number>()
+      if (groupsParam && pendingGroups && rawGroups && rawGroups.length > 0) {
+        const allPlayers = session.pricingGroups.flatMap((g) => g.players)
+        rawGroups.forEach((g, index) => {
+          for (const pid of g.playerIds) playerToGroupIndex.set(pid, index)
+        })
+        const ids = rawGroups.flatMap((g) => g.playerIds)
+        playersToQuote = ids
+          .map((pid) => allPlayers.find((p) => p.id === pid))
+          .filter((p): p is NonNullable<typeof p> => !!p)
+      } else if (pricingGroupId) {
+        const group = session.pricingGroups.find((g) => g.id === pricingGroupId)
+        const uncheckedPlayers = group ? group.players.filter((p) => !p.checkedOutAt) : []
+        // Thu N người đầu tiên theo thứ tự tạo (khớp use-case: slice(0, checkoutCount))
+        const parsedPlayerCount = Number.parseInt(playerCountParam || '0', 10)
+        const billCount = Number.isFinite(parsedPlayerCount) && parsedPlayerCount > 0
+          ? Math.min(parsedPlayerCount, uncheckedPlayers.length)
+          : uncheckedPlayers.length
+        playersToQuote = uncheckedPlayers.slice(0, billCount)
+      }
+
       if (playersToQuote.length > 0) {
-        const totals = playersToQuote.reduce((acc, p) => {
-          const r = calculatePlayerPrice({
-            startTime: session.startTime,
-            endTime,
-            pausedSeconds: playerPausedSeconds(p, pausedAtRef),
-            hourlyRate: pricing.hourlyRate,
-            tiers: pricing.tiers,
-            promotion,
-          })
+        const quoteFor = (p: typeof playersToQuote[number]) => {
+          const groupIndex = playerToGroupIndex.get(p.id)
+          const snapshot = groupIndex !== undefined
+            ? resolved[groupIndex].snapshot
+            : undefined
+          const rule = snapshot
+            ? {
+                hourlyRate: snapshot.ratePerHour,
+                tiers: snapshot.tiers.map((t) => ({ minHours: t.minHours, ratePerHour: t.ratePerHour })),
+                ruleName: snapshot.name,
+              }
+            : groupRuleByName(session.pricingGroups.find((g) => g.id === p.groupId) ?? session.pricingGroups[0])
           return {
-            totalHours: acc.totalHours + r.totalHours,
-            subtotal: acc.subtotal + r.subtotal,
-            promotionDiscount: acc.promotionDiscount + r.promotionDiscount,
-            grandTotal: acc.grandTotal + r.grandTotal,
-            pausedSeconds: acc.pausedSeconds + r.pausedSeconds,
+            result: calculatePlayerPrice({
+              startTime: session.startTime,
+              endTime,
+              pausedSeconds: playerPausedSeconds(p, pausedAtRef),
+              hourlyRate: rule.hourlyRate,
+              tiers: rule.tiers,
+              promotion,
+            }),
+            ruleName: rule.ruleName,
+          }
+        }
+        const totals = playersToQuote.reduce((acc, p) => {
+          const { result } = quoteFor(p)
+          return {
+            totalHours: acc.totalHours + result.totalHours,
+            subtotal: acc.subtotal + result.subtotal,
+            promotionDiscount: acc.promotionDiscount + result.promotionDiscount,
+            grandTotal: acc.grandTotal + result.grandTotal,
+            pausedSeconds: acc.pausedSeconds + result.pausedSeconds,
           }
         }, { totalHours: 0, subtotal: 0, promotionDiscount: 0, grandTotal: 0, pausedSeconds: 0 })
         perPlayerPricing = { ...pricing, ...totals }
+
+        // Chi tiết từng người — hiển thị tại checkout ("Người 1: 1.4h (Bảng giá) = 324.000đ")
+        playerPricingDetail = playersToQuote.map((p) => {
+          const { result, ruleName } = quoteFor(p)
+          return {
+            id: p.id,
+            name: p.name ?? '',
+            totalHours: result.totalHours,
+            subtotal: result.subtotal,
+            discountAmount: result.promotionDiscount,
+            total: result.grandTotal,
+            pricingRuleName: ruleName,
+          }
+        })
+      }
+    } else {
+      // ── Legacy: session không có player rows → checkout nhân theo số người (khớp runCheckOutTx) ──
+      const parsedPlayerCount = Number.parseInt(playerCountParam || '0', 10)
+      const legacyCount = Number.isFinite(parsedPlayerCount) && parsedPlayerCount > 0
+        ? parsedPlayerCount
+        : pricingGroupId
+          ? (session.pricingGroups.find((g) => g.id === pricingGroupId)?.remainingCount ?? session.playerCount)
+          : (session.pricingGroups.find((g) => g.remainingCount > 0)?.remainingCount ?? session.playerCount)
+      if (legacyCount > 0) {
+        perPlayerPricing = {
+          ...pricing,
+          subtotal: pricing.subtotal * legacyCount,
+          promotionDiscount: pricing.promotionDiscount * legacyCount,
+          grandTotal: pricing.grandTotal * legacyCount,
+          totalHours: pricing.totalHours * legacyCount,
+        }
       }
     }
 
@@ -239,6 +341,7 @@ export async function GET(
       playerCount: session.playerCount,
       pricingGroupId: pricingGroupId ?? undefined,
       pausedSeconds,
+      playerPricing: playerPricingDetail,
       pricingGroups: session.pricingGroups.map(g => ({
         id: g.id,
         sessionId: id,

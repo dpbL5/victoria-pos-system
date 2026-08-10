@@ -28,6 +28,10 @@ export interface PricingResult {
   grandTotal: number
   isMemberSession: boolean
   promotion: PromotionSnapshot | null
+  /** Tên bảng giá đã resolve (snapshot) — hiển thị trên hoá đơn */
+  ruleName?: string
+  /** Hội viên nhưng gói đã hết hạn tại thời điểm tính (endTime) — cần renew trước khi thu tiền */
+  membershipExpired?: boolean
 }
 
 /**
@@ -79,12 +83,31 @@ export async function calculateSessionPriceFromLoaded(
 ): Promise<Result<PricingResult>> {
   const totalHours = calcHours(session.startTime, endTime, pausedSeconds)
 
-  const activeMembership = session.membership
-    ?? (session.customer?.type === 'MEMBER' && session.customerId
-      ? await deps.membership.findActive(session.customerId, session.startTime)
-      : null)
+  // ── Membership: ưu tiên relation (kèm sẵn), fallback findActive.
+  // Quan trọng: kiểm tra hạn tại endTime (thời điểm thu tiền), KHÔNG phải session.startTime —
+  // nếu gói hết hạn giữa phiên phải báo để renew, không tính 0đ.
+  let activeMembership = session.membership && session.membership.expiresAt >= endTime
+    ? session.membership
+    : null
+  if (!activeMembership && session.customer?.type === 'MEMBER' && session.customerId) {
+    activeMembership = await deps.membership.findActive(session.customerId, endTime)
+  }
 
-  if (session.customer?.type === 'MEMBER' && activeMembership) {
+  if (session.customer?.type === 'MEMBER') {
+    if (activeMembership) {
+      return ok({
+        hourlyRate: 0,
+        tiers: [],
+        totalHours,
+        subtotal: 0,
+        promotionDiscount: 0,
+        grandTotal: 0,
+        isMemberSession: true,
+        promotion: null,
+        ruleName: '',
+      })
+    }
+    // Hội viên hết hạn tại thời điểm thu tiền — trả cờ để preview/checkout báo renew
     return ok({
       hourlyRate: 0,
       tiers: [],
@@ -92,13 +115,16 @@ export async function calculateSessionPriceFromLoaded(
       subtotal: 0,
       promotionDiscount: 0,
       grandTotal: 0,
-      isMemberSession: true,
+      isMemberSession: false,
       promotion: null,
+      ruleName: '',
+      membershipExpired: true,
     })
   }
 
   let hourlyRate: number
   let tiers: { minHours: number; ratePerHour: number }[] = []
+  let ruleName = ''
 
   // ── Nếu có pendingGroups (bảng giá chọn tại checkout) — ưu tiên cao nhất ──
   const pending = pendingGroups?.[pendingIndex]
@@ -108,6 +134,7 @@ export async function calculateSessionPriceFromLoaded(
       minHours: t.minHours,
       ratePerHour: t.ratePerHour,
     }))
+    ruleName = pending.snapshot.name
   } else if (pricingGroupId) {
     // ── Nếu có pricingGroupId, dùng snapshot của group đó ──
     const group = session.pricingGroups.find(g => g.id === pricingGroupId)
@@ -119,6 +146,7 @@ export async function calculateSessionPriceFromLoaded(
         minHours: t.minHours,
         ratePerHour: t.ratePerHour,
       }))
+      ruleName = snapshot.name
     } else {
       hourlyRate = Number(group.hourlyRate)
     }
@@ -131,6 +159,7 @@ export async function calculateSessionPriceFromLoaded(
         minHours: t.minHours,
         ratePerHour: t.ratePerHour,
       }))
+      ruleName = snapshot.name
     } else {
       // ── Fallback: resolve lại bảng giá từ DB (tương thích session cũ) ──
       const currentHour = getVnHour(session.startTime)
@@ -143,6 +172,7 @@ export async function calculateSessionPriceFromLoaded(
           minHours: t.minHours,
           ratePerHour: Number(t.ratePerHour),
         }))
+        ruleName = applicableRule.name
       } else {
         hourlyRate = Number(session.hourlyRate)
         if (!hourlyRate) {
@@ -171,6 +201,7 @@ export async function calculateSessionPriceFromLoaded(
     grandTotal,
     isMemberSession: false,
     promotion,
+    ruleName,
   })
 }
 

@@ -26,6 +26,25 @@ export type SessionWithCustomer = Prisma.SessionGetPayload<{
   include: { customer: true }
 }> & { customerName: string | null }
 
+/** Chỉ đủ dữ liệu cho pause/resume theo người chơi — không tải customer/membership nặng */
+export type SessionPlayersForPause = Prisma.SessionGetPayload<{
+  select: {
+    id: true
+    status: true
+    playerCount: true
+    totalPausedSeconds: true
+    pausedAt: true
+    pricingGroups: {
+      select: {
+        id: true
+        players: {
+          select: { id: true, pausedAt: true, totalPausedSeconds: true }
+        }
+      }
+    }
+  }
+}>
+
 export type SessionRefs = Prisma.SessionGetPayload<{
   include: {
     customer: { select: { id: true; fullName: true; type: true } }
@@ -138,14 +157,18 @@ export interface SessionRepository {
   decrementGroupRemaining(groupId: string, count: number): Promise<{ remainingCount: number }>
   /** Tổng remainingCount của tất cả groups trong session */
   sumRemainingPlayers(sessionId: string): Promise<number>
-  /** Session + pricingGroups kèm players — cho pause theo người + checkout group-aware */
+  /** Session + pricingGroups kèm players — cho checkout-preview + checkout group-aware */
   findByIdWithPlayers(id: string): Promise<SessionWithPlayers | null>
+  /** Session nhẹ (chỉ status + players) — cho pause/resume theo người chơi, giảm payload */
+  findPlayersForPause(id: string): Promise<SessionPlayersForPause | null>
   /** Đặt pausedAt cho 1 người chơi (theo group) */
   pausePlayer(playerId: string, pausedAt: Date): Promise<void>
   /** Resume 1 người chơi: clear pausedAt + increment totalPausedSeconds */
   resumePlayer(playerId: string, pausedSeconds: number): Promise<void>
   /** Tạo N SessionPlayer (tên trống, pause 0) cho 1 group — gọi khi check-in */
   createPlayersForGroup(sessionId: string, groupId: string, count: number): Promise<void>
+  /** Chuyển danh sách player sang group khác (chia nhiều bảng giá tại checkout) */
+  movePlayersToGroup(playerIds: string[], groupId: string): Promise<void>
   /** Đánh dấu các player đã được tính tiền (checkout từng phần) */
   markPlayersCheckedOut(playerIds: string[], checkedOutAt: Date): Promise<void>
 }

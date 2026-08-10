@@ -26,6 +26,8 @@ export interface CheckoutLineInput {
 export interface CheckoutPricingGroupInput {
   playerCount: number
   pricingRuleId: string
+  /** Danh sách người chơi chọn tay vào nhóm này (đúng playerCount) */
+  playerIds: string[]
 }
 
 export interface CheckoutInput {
@@ -81,6 +83,8 @@ export interface PendingAssignment {
   playerCount: number
   pricingRuleId: string
   snapshot: import('@/types').PricingRuleSnapshot
+  /** Người chơi chọn tay vào nhóm này — chuyển player sang group sau khi persist */
+  playerIds: string[]
 }
 
 /** Context đã tính trước transaction — truyền vào runCheckOutTx để test được */
@@ -111,6 +115,18 @@ export interface CheckoutContext {
    * Rỗng với session cũ không có player rows (legacy) → tính như cũ.
    */
   playersToBill: SessionWithPlayers['pricingGroups'][number]['players']
+  /**
+   * Bảng giá riêng theo từng nhóm (index nhóm → rule) khi chia nhiều bảng giá.
+   * Có khi checkout tất cả nhóm trong 1 lần — mỗi player tính theo rule của nhóm chứa nó.
+   */
+  groupRuleMap?: Map<number, { hourlyRate: number; tiers: { minHours: number; ratePerHour: number }[]; ruleName: string }>
+  /** Nhiều bảng giá: playerIds theo từng nhóm (index) — xác định nhóm của từng player + chuyển player */
+  playersToBillByGroup?: string[][]
+  /**
+   * Mốc tính pause: min(endTime, checkoutAt) — không trừ pause sau thời điểm phiên kết thúc.
+   * Đồng bộ với preview (dùng endTime làm mốc).
+   */
+  pauseRef: Date
 }
 
 export async function checkOut(
@@ -149,12 +165,19 @@ export async function checkOut(
     && session.pricingGroups.every(g => !g.pricingSnapshot && Number(g.hourlyRate) === 0)
 
   const checkoutAt = new Date()
+  // Mốc tính pause: không trừ pause sau thời điểm phiên kết thúc (đồng bộ với preview dùng endTime)
+  const pauseRef = new Date(Math.min(endTime.getTime(), checkoutAt.getTime()))
 
   // ── Xác định group và số người checkout ──
   let checkoutCount: number
   let targetGroupId: string | undefined
   let pendingAssignments: PendingAssignment[] | undefined
   let pendingGroups: PendingGroupPricing[] | undefined
+  let groupRuleMap: CheckoutContext['groupRuleMap']
+  /** Nhiều bảng giá: playerIds theo từng nhóm (index) — chuyển player sau khi persist */
+  let playersToBillByGroup: string[][] | undefined
+  /** Nhiều bảng giá: danh sách player thực tế được thu (theo playerIds) */
+  let playersToBillInput: SessionWithPlayers['pricingGroups'][number]['players'] | undefined
 
   if (needsPricingAssignment) {
     const resolved = await resolveCheckoutPricing(deps, session, { pricingRuleId, groups }, checkoutAt)
@@ -162,15 +185,50 @@ export async function checkOut(
     pendingAssignments = resolved.value.pendingAssignments
     pendingGroups = resolved.value.pendingGroups
 
-    // Luôn thu từ nhóm đầu tiên (Nhóm 1) khi mới gán giá — UI thu tuần tự từng nhóm
-    const firstGroup = session.pricingGroups[0]
-    targetGroupId = firstGroup.id
-    const firstGroupCount = pendingGroups[0].playerCount
-    checkoutCount = Math.min(
-      playerCount ?? firstGroupCount,
-      firstGroupCount
-    )
-    if (checkoutCount <= 0) return err('NO_PLAYERS_TO_CHECKOUT')
+    if (groups && groups.length > 0) {
+      // ── Nhiều bảng giá: thu hết tất cả nhóm trong 1 lần ──
+      // Mỗi player chọn tay vào nhóm (playerIds) — tính theo rule của nhóm chứa nó.
+      const allPlayers = session.pricingGroups.flatMap((g) => g.players)
+      const playerById = new Map(allPlayers.map((p) => [p.id, p]))
+      // Chỉ giữ player tồn tại + chưa checkout — tránh thu lại người đã thu (double bill)
+      const validGroups = groups.map((g) => ({
+        ...g,
+        playerIds: g.playerIds.filter((pid) => {
+          const player = playerById.get(pid)
+          return !!player && !player.checkedOutAt
+        }),
+      }))
+      const allPlayerIds = validGroups.flatMap((g) => g.playerIds)
+      checkoutCount = allPlayerIds.length
+      if (checkoutCount <= 0) return err('NO_PLAYERS_TO_CHECKOUT')
+      targetGroupId = undefined
+      groupRuleMap = new Map()
+      validGroups.forEach((g, index) => {
+        const snapshot = pendingGroups?.[index]?.snapshot
+        if (snapshot) {
+          groupRuleMap!.set(index, {
+            hourlyRate: snapshot.ratePerHour,
+            tiers: snapshot.tiers.map((t) => ({ minHours: t.minHours, ratePerHour: t.ratePerHour })),
+            ruleName: snapshot.name,
+          })
+        }
+      })
+      // playersToBill được xác định dưới (theo playerIds, giữ thứ tự nhóm)
+      playersToBillByGroup = validGroups.map((g) => g.playerIds)
+      playersToBillInput = allPlayerIds
+        .map((pid) => playerById.get(pid))
+        .filter((p): p is NonNullable<typeof p> => !!p)
+    } else {
+      // ── 1 bảng giá cho cả phiên: thu nhóm đầu tiên (Nhóm 1) ──
+      const firstGroup = session.pricingGroups[0]
+      targetGroupId = firstGroup.id
+      const firstGroupCount = pendingGroups[0].playerCount
+      checkoutCount = Math.min(
+        playerCount ?? firstGroupCount,
+        firstGroupCount
+      )
+      if (checkoutCount <= 0) return err('NO_PLAYERS_TO_CHECKOUT')
+    }
   } else if (pricingGroupId) {
     const group = session.pricingGroups.find(g => g.id === pricingGroupId)
     if (!group) return err('PRICING_GROUP_NOT_FOUND')
@@ -217,9 +275,12 @@ export async function checkOut(
   const targetGroup = targetGroupId
     ? session.pricingGroups.find((g) => g.id === targetGroupId)
     : null
-  const playersToBill = targetGroup
-    ? targetGroup.players.filter((p) => !p.checkedOutAt).slice(0, checkoutCount)
-    : []
+  // Nhiều bảng giá: player chọn tay theo playerIds (giữ thứ tự nhóm)
+  const playersToBill = groupRuleMap
+    ? playersToBillInput ?? []
+    : targetGroup
+      ? targetGroup.players.filter((p) => !p.checkedOutAt).slice(0, checkoutCount)
+      : []
 
   // ── Tính pausedSeconds cho pricing engine (fallback, khi không có players) ──
   // Có players → tổng pause chỉ tính cho các player được thu (per-player sau này);
@@ -227,9 +288,9 @@ export async function checkOut(
   const hasPlayers = session.pricingGroups.some((g) => g.players.length > 0)
   let pausedSeconds: number
   if (playersToBill.length > 0) {
-    pausedSeconds = playersToBill.reduce((sum, p) => sum + playerPausedSeconds(p, checkoutAt), 0)
+    pausedSeconds = playersToBill.reduce((sum, p) => sum + playerPausedSeconds(p, pauseRef), 0)
   } else if (hasPlayers && targetGroup) {
-    pausedSeconds = groupPausedSeconds(targetGroup, checkoutAt)
+    pausedSeconds = groupPausedSeconds(targetGroup, pauseRef)
   } else {
     pausedSeconds = session.totalPausedSeconds ?? 0
     if (session.pausedAt) {
@@ -251,6 +312,9 @@ export async function checkOut(
     : await calculateSessionPrice(deps, sessionId, endTime, selectedPromotion, targetGroupId, undefined, 0, pausedSeconds)
   if (!pricingResult.ok) return pricingResult
   const pricing = pricingResult.value
+  if (pricing.membershipExpired) {
+    return err('MEMBERSHIP_EXPIRED_DURING_CHECKOUT')
+  }
   if (pricing.isMemberSession && promotionRuleId) {
     return err('PROMOTION_NOT_APPLICABLE')
   }
@@ -341,6 +405,9 @@ export async function checkOut(
     customerName: session.customerName ?? null,
     pendingAssignments,
     playersToBill,
+    groupRuleMap,
+    playersToBillByGroup,
+    pauseRef,
   }
 
   const result = await runInTransaction((tx) =>
@@ -427,6 +494,13 @@ async function resolveCheckoutPricing(
       return err('GROUP_PLAYER_COUNT_MISMATCH')
     }
 
+    // Mỗi nhóm phải khớp số người chọn
+    for (const g of input.groups) {
+      if (!Array.isArray(g.playerIds) || g.playerIds.length !== g.playerCount) {
+        return err('GROUP_PLAYER_COUNT_MISMATCH')
+      }
+    }
+
     const pendingAssignments: PendingAssignment[] = []
     const pendingGroups: PendingGroupPricing[] = []
     for (let i = 0; i < input.groups.length; i += 1) {
@@ -442,6 +516,7 @@ async function resolveCheckoutPricing(
         playerCount: groupInput.playerCount,
         pricingRuleId: rule.id,
         snapshot,
+        playerIds: groupInput.playerIds,
       })
       pendingGroups.push({
         groupId: i === 0 ? existingGroup?.id : undefined,
@@ -466,6 +541,7 @@ async function resolveCheckoutPricing(
         playerCount: totalPlayers,
         pricingRuleId: rule.id,
         snapshot,
+        playerIds: [],
       }],
       pendingGroups: [{ groupId: existingGroup?.id, playerCount: totalPlayers, snapshot }],
     })
@@ -486,6 +562,7 @@ async function resolveCheckoutPricing(
       playerCount: totalPlayers,
       pricingRuleId: rule.id,
       snapshot,
+      playerIds: [],
     }],
     pendingGroups: [{ groupId: existingGroup?.id, playerCount: totalPlayers, snapshot }],
   })
@@ -544,6 +621,9 @@ export async function runCheckOutTx(
     customerName,
     pendingAssignments,
     playersToBill,
+    groupRuleMap,
+    playersToBillByGroup,
+    pauseRef,
   } = ctx
   const { paidAt, promotionRuleId } = state
   let {
@@ -561,7 +641,9 @@ export async function runCheckOutTx(
 
   // ── Gán bảng giá cho pricing groups (session mới, chọn giá tại checkout) ──
   if (pendingAssignments && pendingAssignments.length > 0) {
-    for (const assignment of pendingAssignments) {
+    for (let i = 0; i < pendingAssignments.length; i += 1) {
+      const assignment = pendingAssignments[i]
+      let groupId = assignment.groupId
       if (assignment.groupId) {
         await tx.session.updatePricingGroup(assignment.groupId, {
           label: assignment.label,
@@ -572,7 +654,7 @@ export async function runCheckOutTx(
           pricingSnapshot: assignment.snapshot,
         })
       } else {
-        await tx.session.createPricingGroup({
+        const created = await tx.session.createPricingGroup({
           sessionId,
           label: assignment.label,
           playerCount: assignment.playerCount,
@@ -581,6 +663,14 @@ export async function runCheckOutTx(
           pricingRuleId: assignment.pricingRuleId,
           pricingSnapshot: assignment.snapshot,
         })
+        groupId = created.id
+        // Ghi lại id thật để phần decrement dùng đúng group
+        assignment.groupId = created.id
+      }
+      // Chuyển player chọn tay vào đúng nhóm (nhiều bảng giá)
+      const playerIds = assignment.playerIds
+      if (groupId && playerIds.length > 0) {
+        await tx.session.movePlayersToGroup(playerIds, groupId)
       }
     }
   }
@@ -605,19 +695,31 @@ export async function runCheckOutTx(
   // ── Tính tiền giờ chơi per-player ──
   // Mỗi người chơi tính theo played time riêng (elapsed − pause), tiered + khuyến mại
   // riêng, rồi cộng tổng. Khuyến mại áp dụng cho tất cả người chơi được thu.
+  // Nhiều bảng giá (groupRuleMap): mỗi player dùng rule của nhóm chứa nó (theo index).
   const totalPlayerCount = playersToBill.length
   const pausedSecondsPerPlayer = totalPlayerCount > 0
-    ? playersToBill.map((p) => playerPausedSeconds(p, checkoutAt))
+    ? playersToBill.map((p) => playerPausedSeconds(p, pauseRef))
     : []
+  // playerId → index nhóm (nhiều bảng giá, chọn tay)
+  const playerGroupIndex = new Map<string, number>()
+  if (playersToBillByGroup) {
+    playersToBillByGroup.forEach((ids, index) => {
+      for (const id of ids) playerGroupIndex.set(id, index)
+    })
+  }
   const playerPriceResults = totalPlayerCount > 0
-    ? playersToBill.map((player, i) => calculatePlayerPrice({
-        startTime: session.startTime,
-        endTime,
-        pausedSeconds: pausedSecondsPerPlayer[i],
-        hourlyRate: pricing.hourlyRate,
-        tiers: pricing.tiers,
-        promotion,
-      }))
+    ? playersToBill.map((player, i) => {
+        const groupIndex = playerGroupIndex.get(player.id)
+        const groupRule = groupIndex !== undefined ? groupRuleMap?.get(groupIndex) : undefined
+        return calculatePlayerPrice({
+          startTime: session.startTime,
+          endTime,
+          pausedSeconds: pausedSecondsPerPlayer[i],
+          hourlyRate: groupRule?.hourlyRate ?? pricing.hourlyRate,
+          tiers: groupRule?.tiers ?? pricing.tiers,
+          promotion,
+        })
+      })
     : []
 
   // Played time tổng (giờ) — dùng cho PLAY_TIME quantity
@@ -667,13 +769,30 @@ export async function runCheckOutTx(
   // ── Pause theo player được thu: tổng giây paused chỉ tính cho người được checkout ──
   // (fallback session-level cho session cũ không có player rows)
   const playPausedSeconds = playersToBill.length > 0
-    ? playersToBill.reduce((sum, p) => sum + playerPausedSeconds(p, checkoutAt), 0)
+    ? playersToBill.reduce((sum, p) => sum + playerPausedSeconds(p, pauseRef), 0)
     : (session.totalPausedSeconds ?? 0)
   const playerPauses = playersToBill.map(p => ({
     id: p.id,
     name: p.name ?? '',
-    pausedSeconds: playerPausedSeconds(p, checkoutAt),
+    pausedSeconds: playerPausedSeconds(p, pauseRef),
   }))
+
+  // Chi tiết từng người chơi được thu — hiển thị trên hoá đơn:
+  // "Người 1: 1.4h (Bảng giá) = 324.000đ"
+  const playerPricing = playersToBill.map((player, i) => {
+    const result = playerPriceResults[i]
+    const groupIndex = playerGroupIndex.get(player.id)
+    const groupRule = groupIndex !== undefined ? groupRuleMap?.get(groupIndex) : undefined
+    return {
+      id: player.id,
+      name: player.name ?? '',
+      totalHours: result?.totalHours ?? 0,
+      subtotal: result?.subtotal ?? 0,
+      discountAmount: result?.promotionDiscount ?? 0,
+      total: result?.grandTotal ?? 0,
+      pricingRuleName: groupRule?.ruleName ?? finalPricing.ruleName,
+    }
+  })
 
   const invoice = await tx.billing.createPaidInvoice({
     invoiceNo: generateInvoiceNo(),
@@ -682,9 +801,11 @@ export async function runCheckOutTx(
     staffId,
     paidAt,
     notes: notes || (
-      targetGroupId
-        ? `Checkout ${checkoutCount} người (${groupLabel})`
-        : (checkoutCount < session.playerCount ? `Checkout ${checkoutCount}/${session.playerCount} người` : undefined)
+      groupRuleMap
+        ? `Checkout ${checkoutCount} người (nhiều bảng giá)`
+        : targetGroupId
+          ? `Checkout ${checkoutCount} người (${groupLabel})`
+          : (checkoutCount < session.playerCount ? `Checkout ${checkoutCount}/${session.playerCount} người` : undefined)
     ),
     subtotal: invoiceSubtotal,
     discountTotal: playDiscountTotal,
@@ -728,6 +849,8 @@ export async function runCheckOutTx(
       groupLabel: groupLabel || null,
       pausedSeconds: playPausedSeconds,
       playerPauses,
+      // Chi tiết giá từng người chơi — hiển thị trên hoá đơn
+      playerPricing,
       // Số người được thu lần này (per-player)
       checkedOutPlayers: playersToBill.length > 0 ? checkoutCount : undefined,
     },
@@ -816,7 +939,23 @@ export async function runCheckOutTx(
   // ── Cập nhật group, kiểm tra còn người không ──
   let totalRemaining = 0
 
-  if (targetGroupId) {
+  if (groupRuleMap) {
+    // Nhiều bảng giá: decrement từng group theo số người đã chọn cho nhóm đó (playersToBillByGroup)
+    if (playersToBillByGroup && pendingAssignments) {
+      for (let i = 0; i < pendingAssignments.length; i += 1) {
+        const assignment = pendingAssignments[i]
+        const groupId = assignment.groupId
+        const count = playersToBillByGroup[i]?.length ?? 0
+        if (groupId && count > 0) {
+          const updatedGroup = await tx.session.decrementGroupRemaining(groupId, count)
+          if (updatedGroup.remainingCount < 0) {
+            fail('PRICING_GROUP_UNDERFLOW')
+          }
+        }
+      }
+    }
+    totalRemaining = await tx.session.sumRemainingPlayers(sessionId)
+  } else if (targetGroupId) {
     const updatedGroup = await tx.session.decrementGroupRemaining(targetGroupId, checkoutCount)
     if (updatedGroup.remainingCount < 0) {
       fail('PRICING_GROUP_UNDERFLOW')

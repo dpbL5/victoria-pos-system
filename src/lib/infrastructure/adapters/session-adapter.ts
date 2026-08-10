@@ -196,6 +196,14 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
       })
     },
 
+    async movePlayersToGroup(playerIds, groupId) {
+      if (playerIds.length === 0) return
+      await store.sessionPlayer.updateMany({
+        where: { id: { in: playerIds } },
+        data: { groupId },
+      })
+    },
+
     async updatePricingGroup(groupId, data) {
       await store.sessionPricingGroup.update({
         where: { id: groupId },
@@ -239,6 +247,28 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
           pricingGroups: {
             orderBy: { createdAt: 'asc' },
             include: { players: true },
+          },
+        },
+      })
+    },
+
+    // Chỉ đọc status + players — tránh tải customer/membership nặng cho pause/resume
+    async findPlayersForPause(id) {
+      return store.session.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          status: true,
+          playerCount: true,
+          totalPausedSeconds: true,
+          pausedAt: true,
+          pricingGroups: {
+            select: {
+              id: true,
+              players: {
+                select: { id: true, pausedAt: true, totalPausedSeconds: true },
+              },
+            },
           },
         },
       })
