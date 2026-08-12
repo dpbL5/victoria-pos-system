@@ -21,6 +21,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useApi } from '@/hooks/use-api'
 import { Input, Label, Select } from '@/components/ui/input'
@@ -76,6 +77,7 @@ const actionLabels: Record<string, string> = {
   SESSION_SELL: 'bán kèm',
   SESSION_CANCEL: 'huỷ phiên',
   SESSION_UPDATE: 'sửa phiên',
+  PLAYER_RENAME: 'đổi tên người chơi',
   SHIFT_OPEN: 'mở ca',
   SHIFT_JOIN: 'vào ca',
   SHIFT_CLOSE: 'đóng ca',
@@ -445,6 +447,73 @@ function AccountsTab({
     },
   ], [submitting, handleToggleActive])
 
+  // ── Cột cho mobile card list (title + details + actions) ──
+  const userCardColumns: CardColumn<UserRow>[] = useMemo(() => [
+    {
+      key: 'fullName',
+      label: 'Họ tên',
+      render: (item) => (
+        <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
+          {item.fullName}
+          <Badge variant={item.role === 'ADMIN' ? 'purple' : 'default'} size="sm">
+            {item.role === 'ADMIN' ? 'Admin' : 'Nhân viên'}
+          </Badge>
+        </span>
+      ),
+    },
+    {
+      key: 'username',
+      label: 'Tên đăng nhập',
+      render: (item) => <span className="font-mono text-zinc-500 dark:text-zinc-400">{item.username}</span>,
+    },
+    {
+      key: 'isActive',
+      label: 'Trạng thái',
+      render: (item) => (
+        <Badge variant={item.isActive ? 'success' : 'danger'} size="sm">
+          {item.isActive ? 'Đang hoạt động' : 'Đã khoá'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'createdAt',
+      label: 'Ngày tạo',
+      render: (item) => formatDate(item.createdAt),
+    },
+    {
+      label: '',
+      render: (item) => (
+        <div className="flex gap-1.5">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Edit2}
+            title="Sửa vai trò"
+            onClick={() => {
+              setRoleEditTarget(item)
+              setSelectedRole(item.role)
+            }}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Key}
+            onClick={() => setResetTarget(item)}
+            title="Đổi mật khẩu"
+          />
+          <Button
+            variant={item.isActive ? 'outline-danger' : 'secondary'}
+            size="sm"
+            icon={item.isActive ? UserX : UserCheck}
+            disabled={submitting}
+            onClick={() => void handleToggleActive(item)}
+            title={item.isActive ? 'Vô hiệu hoá' : 'Kích hoạt'}
+          />
+        </div>
+      ),
+    },
+  ], [submitting, handleToggleActive])
+
   if (loading) {
     return <StaffSkeleton compact />
   }
@@ -566,16 +635,33 @@ function AccountsTab({
         )}
       </section>
 
-      <SortableTable
-        columns={userColumns}
-        data={users}
-        keyExtractor={(u) => u.id}
-        sortableKeys={['fullName', 'username', 'role', 'isActive', 'createdAt']}
-        defaultSortKey="createdAt"
-        emptyIcon={UserPlus}
-        emptyMessage="Chưa có nhân viên nào"
-        emptyDescription="Tạo tài khoản nội bộ đầu tiên để nhân viên đăng nhập POS."
-      />
+      {/* Mobile: card list */}
+      <div className="md:hidden">
+        <SortableCardList
+          columns={userCardColumns}
+          data={users}
+          keyExtractor={(u) => u.id}
+          sortableKeys={['fullName', 'username', 'isActive', 'createdAt']}
+          defaultSortKey="createdAt"
+          emptyIcon={UserPlus}
+          emptyMessage="Chưa có nhân viên nào"
+          emptyDescription="Tạo tài khoản nội bộ đầu tiên để nhân viên đăng nhập POS."
+        />
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden md:block">
+        <SortableTable
+          columns={userColumns}
+          data={users}
+          keyExtractor={(u) => u.id}
+          sortableKeys={['fullName', 'username', 'role', 'isActive', 'createdAt']}
+          defaultSortKey="createdAt"
+          emptyIcon={UserPlus}
+          emptyMessage="Chưa có nhân viên nào"
+          emptyDescription="Tạo tài khoản nội bộ đầu tiên để nhân viên đăng nhập POS."
+        />
+      </div>
 
       <Modal
         open={!!resetTarget}
@@ -827,7 +913,7 @@ function ActivityLogItem({ log }: { log: ActivityLogRow }) {
 }
 
 function getLogColor(action: string) {
-  if (action.startsWith('SESSION')) return { bg: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' }
+  if (action.startsWith('SESSION') || action.startsWith('PLAYER')) return { bg: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' }
   if (action.startsWith('SHIFT')) return { bg: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' }
   if (action.startsWith('MEMBERSHIP')) return { bg: 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400' }
   if (action.startsWith('PRICING') || action.startsWith('PRODUCT') || action.startsWith('STOCK')) return { bg: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' }
@@ -838,6 +924,7 @@ function getLogIcon(action: string) {
   if (action === 'SESSION_CHECK_IN') return <LogIn size={16} />
   if (action === 'SESSION_CHECK_OUT') return <LogOut size={16} />
   if (action === 'SESSION_SELL') return <ShoppingBag size={16} />
+  if (action === 'PLAYER_RENAME') return <Edit2 size={16} />
   if (action.startsWith('SHIFT')) return <Timer size={16} />
   if (action.startsWith('MEMBERSHIP')) return <UserCheck size={16} />
   if (action.startsWith('USER')) return <UserCog size={16} />

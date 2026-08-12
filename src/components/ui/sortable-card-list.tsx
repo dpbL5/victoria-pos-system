@@ -152,26 +152,14 @@ export function SortableCardList<T>({
                   interactive ? 'cursor-pointer' : ''
                 }`}
               >
-                {/* ── Lưới 2×2: title | actions / details | footer ── */}
+                {/* ── Lưới: title (full top) | details (dưới trái) | actions + footer (dưới phải) ── */}
                 <div className="grid grid-cols-2 items-start gap-x-3 gap-y-2">
-                  {/* Title (trên trái) */}
+                  {/* Title (trên, full width — gộp 2 ô top) */}
                   {titleCol && (
-                    <TitleTag className={`min-w-0 ${titleClassName}`}>
-                      {titleCol.render(item)}
-                    </TitleTag>
-                  )}
-
-                  {/* Actions (trên phải) */}
-                  {actionCols.length > 0 && (
-                    <div
-                      className="flex flex-col items-end gap-2"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      role="presentation"
-                    >
-                      {actionCols.map((col, i) => (
-                        <div key={i}>{col.render(item)}</div>
-                      ))}
+                    <div className="col-span-2 min-w-0">
+                      <TitleTag className={titleClassName}>
+                        {titleCol.render(item)}
+                      </TitleTag>
                     </div>
                   )}
 
@@ -191,15 +179,18 @@ export function SortableCardList<T>({
                     </div>
                   )}
 
-                  {/* Footer (dưới phải) */}
-                  {renderActionFooter && (
+                  {/* Actions + Footer (dưới phải) */}
+                  {(actionCols.length > 0 || renderActionFooter) && (
                     <div
                       className="flex flex-col items-end gap-2"
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
                       role="presentation"
                     >
-                      {renderActionFooter(item)}
+                      {actionCols.map((col, i) => (
+                        <div key={i}>{col.render(item)}</div>
+                      ))}
+                      {renderActionFooter?.(item)}
                     </div>
                   )}
                 </div>

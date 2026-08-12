@@ -5,14 +5,13 @@ import Link from 'next/link'
 import {
   RefreshCw,
   Search,
+  Settings,
   Ticket,
-  Trash2,
   UserPlus,
   Users,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
@@ -52,7 +51,6 @@ export function MemberScreen() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [registerOpen, setRegisterOpen] = useState(false)
   const [renewMember, setRenewMember] = useState<MemberCustomer | null>(null)
-  const [memberToDelete, setMemberToDelete] = useState<MemberCustomer | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
@@ -122,37 +120,16 @@ export function MemberScreen() {
     <div className="flex items-center gap-2">
       {renderRenewButton(item)}
       {isAdmin && (
-        <Button
-          variant="outline-danger"
-          size="sm"
-          icon={Trash2}
-          onClick={() => setMemberToDelete(item)}
-          title="Xoá hội viên"
+        <Link
+          href={`/customers/${item.id}`}
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
         >
-          Xoá
-        </Button>
+          <Settings size={16} />
+          <span>Cài đặt</span>
+        </Link>
       )}
     </div>
   ), [renderRenewButton, isAdmin])
-
-  const confirmDelete = async () => {
-    if (!memberToDelete) return
-    setSubmitting(true)
-    try {
-      const data = await apiJson(`/api/customers/${memberToDelete.id}`, { method: 'DELETE' })
-      if (!data.success) {
-        notifyError(data.error || 'Không xoá được hội viên')
-        return
-      }
-      notifySuccess(`Đã xoá hội viên ${memberToDelete.fullName}`)
-      setMemberToDelete(null)
-      await mutate()
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setSubmitting(false)
-    }
-  }
 
   const renderMembershipStatus = useCallback((item: MemberCustomer) => {
     if (item.membershipStatus === 'ACTIVE' && item.currentMembership) {
@@ -407,21 +384,6 @@ export function MemberScreen() {
             setRenewMember(selectedMember)
           }
         }}
-      />
-
-      <ConfirmDialog
-        open={!!memberToDelete}
-        onClose={() => setMemberToDelete(null)}
-        title="Xoá hội viên"
-        description={memberToDelete ? `Xoá ${memberToDelete.fullName}?` : undefined}
-        body={
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Hội viên sẽ bị ẩn khỏi danh sách và không thể check-in. Lịch sử thanh toán được giữ nguyên.
-          </p>
-        }
-        confirmLabel="Xoá"
-        submitting={submitting}
-        onConfirm={() => void confirmDelete()}
       />
     </div>
   )

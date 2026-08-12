@@ -15,6 +15,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
@@ -177,6 +178,39 @@ export function ToolsScreen() {
     },
   ], [submitting, openEdit])
 
+  // ── Cột cho mobile card list (title + details + actions) ──
+  const toolCardColumns: CardColumn<Tool>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Tên dụng cụ',
+      render: (item) => (
+        <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
+          {item.name}
+          {item.isRequired && <Badge variant="purple" size="sm">Bắt buộc</Badge>}
+        </span>
+      ),
+    },
+    {
+      key: 'description',
+      label: 'Mô tả',
+      render: (item) => item.description || '—',
+    },
+    {
+      key: 'quantity',
+      label: 'SL chuẩn',
+      render: (item) => <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">{item.quantity}</span>,
+    },
+    {
+      label: '',
+      render: (item) => (
+        <div className="flex gap-1.5">
+          <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa" />
+          <Button variant="outline-danger" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteTool(item)} title="Xoá" />
+        </div>
+      ),
+    },
+  ], [submitting, openEdit])
+
   if (loading) {
     return (
       <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
@@ -227,16 +261,33 @@ export function ToolsScreen() {
           />
         )}
 
-        <SortableTable
-          columns={toolColumns}
-          data={tools}
-          keyExtractor={(t) => t.id}
-          sortableKeys={['name', 'quantity']}
-          defaultSortKey="name"
-          emptyIcon={Wrench}
-          emptyMessage="Chưa có dụng cụ"
-          emptyDescription="Thêm dụng cụ để nhân viên kiểm đếm khi mở và đóng ca."
-        />
+        {/* Mobile: card list */}
+        <div className="md:hidden">
+          <SortableCardList
+            columns={toolCardColumns}
+            data={tools}
+            keyExtractor={(t) => t.id}
+            sortableKeys={['name', 'quantity']}
+            defaultSortKey="name"
+            emptyIcon={Wrench}
+            emptyMessage="Chưa có dụng cụ"
+            emptyDescription="Thêm dụng cụ để nhân viên kiểm đếm khi mở và đóng ca."
+          />
+        </div>
+
+        {/* Desktop: table */}
+        <div className="hidden md:block">
+          <SortableTable
+            columns={toolColumns}
+            data={tools}
+            keyExtractor={(t) => t.id}
+            sortableKeys={['name', 'quantity']}
+            defaultSortKey="name"
+            emptyIcon={Wrench}
+            emptyMessage="Chưa có dụng cụ"
+            emptyDescription="Thêm dụng cụ để nhân viên kiểm đếm khi mở và đóng ca."
+          />
+        </div>
 
         <ToolFormModal
           open={isFormOpen}

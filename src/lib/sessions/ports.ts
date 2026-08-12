@@ -165,6 +165,8 @@ export interface SessionRepository {
   pausePlayer(playerId: string, pausedAt: Date): Promise<void>
   /** Resume 1 người chơi: clear pausedAt + increment totalPausedSeconds */
   resumePlayer(playerId: string, pausedSeconds: number): Promise<void>
+  /** Đổi tên 1 người chơi — chỉ update name, giữ nguyên id (định danh timer/pause/pricing) */
+  renamePlayer(playerId: string, name: string | null): Promise<void>
   /** Tạo N SessionPlayer (tên trống, pause 0) cho 1 group — gọi khi check-in */
   createPlayersForGroup(sessionId: string, groupId: string, count: number): Promise<void>
   /** Chuyển danh sách player sang group khác (chia nhiều bảng giá tại checkout) */

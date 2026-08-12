@@ -362,6 +362,42 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
       })
     },
 
+    async findInvoicesByCustomer(customerId) {
+      return store.invoice.findMany({
+        where: { customerId },
+        include: {
+          session: { select: { id: true, startTime: true, endTime: true, status: true, customerName: true, totalHours: true, totalAmount: true } },
+          shift: { select: { id: true, openedAt: true, status: true } },
+          staff: { select: { id: true, fullName: true } },
+          items: {
+            select: {
+              id: true,
+              type: true,
+              description: true,
+              quantity: true,
+              unitPrice: true,
+              subtotal: true,
+              discountAmount: true,
+              total: true,
+              product: { select: { id: true, name: true, type: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+          payments: { select: { id: true, paymentMethod: true, grandTotal: true, paidAt: true } },
+          membershipPayments: {
+            select: {
+              id: true,
+              amount: true,
+              paymentMethod: true,
+              paidAt: true,
+              plan: { select: { id: true, name: true } },
+            },
+          },
+        },
+        orderBy: { paidAt: 'desc' },
+      })
+    },
+
     async findByIdForDelete(invoiceId) {
       const invoice = await store.invoice.findUnique({
         where: { id: invoiceId },

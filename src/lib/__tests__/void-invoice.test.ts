@@ -57,6 +57,7 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
       countLinkedTransactions: vi.fn(async () => ({ payments: 0, membershipPayments: 0, stockMovements: 0 })),
       deleteInvoiceWithItems: vi.fn(async () => {}),
       findDraftSellPreview: vi.fn(),
+      findInvoicesByCustomer: vi.fn(),
       ...overrides,
     },
     audit: {
@@ -135,6 +136,7 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
       findPlayersForPause: vi.fn(),
       pausePlayer: vi.fn(),
       resumePlayer: vi.fn(),
+      renamePlayer: vi.fn(),
       markPlayersCheckedOut: vi.fn(),
       movePlayersToGroup: vi.fn(async () => {}),
     },

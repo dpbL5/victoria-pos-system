@@ -261,6 +261,31 @@ export function TodayShiftScreen() {
     }
   }
 
+  // ── Đổi tên 1 người chơi — PATCH theo đúng playerId (giữ định danh timer/pause/pricing) ──
+  // Trả true khi thành công để PlayerPauseCard thoát editing.
+  const handleRenamePlayer = async (session: SessionRow, playerId: string, name: string) => {
+    setSubmitting(true)
+    try {
+      const data = await apiJson(`/api/sessions/${session.id}/players/${playerId}`, {
+        ...jsonRequest({ name }),
+        method: 'PATCH',
+      })
+      if (!data.success) {
+        notifyError(data.error || 'Không đổi được tên người chơi')
+        return false
+      }
+      // Cập nhật cục bộ theo đúng player — tên rỗng → null (fallback "Người N")
+      updatePlayerInSession(session.id, playerId, (p) => ({ ...p, name: name.trim() || null }))
+      notifySuccess('Đã đổi tên người chơi')
+      return true
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+      return false
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   if (loading) {
     return <TodayShiftSkeleton />
   }
@@ -393,6 +418,7 @@ export function TodayShiftScreen() {
                   onResume={() => void handleResume(session)}
                   onPausePlayer={(playerId) => void handlePausePlayer(session, playerId)}
                   onResumePlayer={(playerId) => void handleResumePlayer(session, playerId)}
+                  onRenamePlayer={(playerId, name) => handleRenamePlayer(session, playerId, name)}
                 />
               ))}
             </div>

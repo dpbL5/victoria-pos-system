@@ -38,6 +38,11 @@ export const updateSessionSchema = z.object({
   notes: z.string().max(500).optional(),
 });
 
+// Đổi tên 1 người chơi — name rỗng cho phép xoá tên (UI fallback "Người N")
+export const renamePlayerSchema = z.object({
+  name: z.string().trim().max(100, "Tên người chơi tối đa 100 ký tự").optional(),
+});
+
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 export type CheckoutSessionInput = z.infer<typeof checkoutSessionSchema>;
 export type UpdateSessionInput = z.infer<typeof updateSessionSchema>;

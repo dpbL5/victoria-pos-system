@@ -187,6 +187,39 @@ export type InvoiceDetail = Prisma.InvoiceGetPayload<{
   }
 }>
 
+/** Invoice trong lịch sử thanh toán của khách — deep include, dùng cho GET /api/customers/[id]/history */
+export type CustomerInvoiceHistory = Prisma.InvoiceGetPayload<{
+  include: {
+    session: { select: { id: true; startTime: true; endTime: true; status: true; customerName: true; totalHours: true; totalAmount: true } }
+    shift: { select: { id: true; openedAt: true; status: true } }
+    staff: { select: { id: true; fullName: true } }
+    items: {
+      select: {
+        id: true
+        type: true
+        description: true
+        quantity: true
+        unitPrice: true
+        subtotal: true
+        discountAmount: true
+        total: true
+        product: { select: { id: true; name: true; type: true } }
+      }
+      orderBy: { createdAt: 'asc' }
+    }
+    payments: { select: { id: true; paymentMethod: true; grandTotal: true; paidAt: true } }
+    membershipPayments: {
+      select: {
+        id: true
+        amount: true
+        paymentMethod: true
+        paidAt: true
+        plan: { select: { id: true; name: true } }
+      }
+    }
+  }
+}>
+
 /** Invoice tối giản — cho DELETE guard (INVOICE_LINKED) */
 export interface InvoiceDeleteTarget {
   id: string
@@ -244,6 +277,8 @@ export interface BillingRepository {
   updateInvoiceFinancials(invoiceId: string, input: UpdateInvoiceFinancialsInput): Promise<void>
   /** Invoice chi tiết (deep include) — GET /api/invoices/[id] */
   findByIdWithDetails(invoiceId: string): Promise<InvoiceDetail | null>
+  /** Các hoá đơn của khách hàng (deep include) — GET /api/customers/[id]/history */
+  findInvoicesByCustomer(customerId: string): Promise<CustomerInvoiceHistory[]>
   /** Invoice tối giản — cho DELETE guard */
   findByIdForDelete(invoiceId: string): Promise<InvoiceDeleteTarget | null>
   /** Đếm payment/membershipPayment/stockMovement gắn invoice — INVOICE_LINKED guard */

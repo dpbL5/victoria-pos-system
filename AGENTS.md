@@ -32,7 +32,8 @@
 ## Target Domain Model
 
 - `Customer`: person profile, `type` is `WALK_IN` or `MEMBER`.
-- `Session`: one customer's play session, start/end time, status, staff, `playerCount`, pricing/promotion snapshots, and optional notes.
+- `Session`: one customer's play session, start/end time, status, staff, `playerCount`, pricing/promotion metadata, and optional notes.
+- `SessionPlayer`: one player inside a session, tied to a `SessionPricingGroup`; tracks per-player `pausedAt`/`totalPausedSeconds` and `checkedOutAt` for per-player pause/resume and group settlement.
 - `SessionPricingGroup`: pricing group inside one session — `playerCount`/`remainingCount` per pricing rule, with rule + tier snapshot; checkout decrements `remainingCount`.
 - `PricingRule`: hourly play pricing for `WALK_IN` customers, keyed by `daysOfWeek`/`dayType`, exclusive `hourTo`, and effective dates.
 - `PricingTier`: progressive hourly tiers per rule (`minHours` → `ratePerHour`); play price is computed tier-by-tier.
@@ -78,15 +79,16 @@
 - Check-in:
   1. Staff should have an open shift; current backend attaches it when present, and the UI should make opening shift mandatory before POS operations.
   2. Select or create one customer.
-  3. Optionally set `playerCount` (multiple players under one customer). If players pay different rates, split them into `groups` (each `{ playerCount, pricingRuleId }`) — every group becomes a `SessionPricingGroup` with its own rule + tier snapshot.
-  4. If customer is `WALK_IN`, require an applicable active `PricingRule` and snapshot the rule + tiers into the session (no default-rate fallback).
+  3. Optionally set `playerCount` (multiple players under one customer). If players pay different rates, split them into `groups` (each `{ playerCount, pricingRuleId }`) — every group becomes a `SessionPricingGroup` (empty pricing at check-in, rule assigned at checkout) with `SessionPlayer` per player.
+  4. If customer is `WALK_IN`, do NOT require a pricing rule at check-in: the session/group is created with `hourlyRate: 0` and a null rule. The rule (with its tiers) is resolved and snapshotted at checkout via `resolveCheckoutPricing` (no default-rate fallback — a rule must be applicable at billing time).
   5. If customer is `MEMBER`, verify active membership.
   6. If membership is expired, require renewal flow before session creation unless the user explicitly changes the business rule.
 
 - Checkout:
   1. Validate the session is active and end time is not before start time.
-  2. Build an invoice.
-  3. For `WALK_IN`, add `PLAY_TIME` item from elapsed hours, tiered pricing, and the selected promotion (all from snapshots; discount goes into the item's `discountAmount`/metadata — no separate `DISCOUNT` line). Checkout can settle one pricing group via `pricingGroupId`, decrementing its `remainingCount`.
+  2. Resolve pricing at checkout: `input.groups` (per-group rules) or `input.pricingRuleId` (one rule for the whole session), else auto-resolve the rule applicable at checkout time; snapshot rule + tiers into each `SessionPricingGroup.pricingSnapshot`.
+  3. Build an invoice.
+  4. For `WALK_IN`, add `PLAY_TIME` item from elapsed hours, tiered pricing, and the selected promotion (all from the resolved snapshot; discount goes into the item's `discountAmount`/metadata — no separate `DISCOUNT` line). Checkout can settle one pricing group via `pricingGroupId`, decrementing its `remainingCount`.
   4. For active `MEMBER`, play time item should be `0đ` or omitted, but products/services still apply.
   5. Optionally add a parking fee as a `SURCHARGE` line (`metadata.surchargeType: 'PARKING'`) priced from `AppSetting(PARKING_FEE_UNIT_PRICE)` — it reduces the invoice total.
   6. Deduct inventory for stock-tracked products through `StockMovement`.
@@ -101,12 +103,12 @@
 
 - Pricing:
   1. Pricing changes are admin-only and must write `ActivityLog`.
-  2. Do not use a default hourly rate when no active pricing rule matches. Walk-in check-in should fail with a clear Vietnamese message.
+  2. Do not use a default hourly rate when no active pricing rule matches. Checkout of play time should fail with a clear Vietnamese message when no rule is applicable at billing time.
   3. `hourTo` is exclusive: a `17-21` rule applies from 17:00 up to before 21:00.
   4. Validate `hourTo > hourFrom`, `ratePerHour > 0`, and `effectiveTo >= effectiveFrom`.
   5. `/api/pricing/status` should expose `activeCount`; POS readiness should use this, not just total pricing-rule count.
   6. Rules may define `PricingTier`s (`minHours` → `ratePerHour`); play price is computed progressively per tier (`calculateTieredSubtotal`).
-  7. Snapshot rule + tiers at check-in and recompute from the snapshot at checkout; do not silently re-resolve pricing when recording payment.
+  7. Resolve and snapshot rule + tiers at checkout (`resolveCheckoutPricing` writes each `SessionPricingGroup.pricingSnapshot`); recompute from the snapshot when recording payment. Do not silently re-resolve pricing when recording payment.
 
 - Reports:
   1. Revenue reports must be based on `Payment` and `InvoiceItem`, not only `Session.totalAmount`.

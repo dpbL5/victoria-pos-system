@@ -52,7 +52,7 @@ Hệ thống **POS (Point of Sale)** fullstack dùng Next.js 16, phục vụ v�
 
 ## Quyết định nghiệp vụ đã chốt
 
-Nguồn sự thật: **`AGENTS.md` → Business Invariants** (1 khách 1 session, hội viên không tính tiền giờ, gia hạn nối kỳ, invoice-first, tồn kho bắt buộc, ca quầy chung + participants, không group bill, khuyến mãi chỉ cho tiền giờ vãng lai + snapshot, tiered pricing + snapshot, void hoá đơn, phí gửi xe SURCHARGE). Thiết kế chi tiết từng đợt: `docs/pricing-solution.md`, `docs/promotions-solution.md`, `docs/refactor-plan.md`.
+Nguồn sự thật: **`AGENTS.md` → Business Invariants** (1 khách 1 session, hội viên không tính tiền giờ, gia hạn nối kỳ, invoice-first, tồn kho bắt buộc, ca quầy chung + participants, không group bill, khuyến mãi chỉ cho tiền giờ vãng lai + snapshot, tiered pricing + snapshot, void hoá đơn, phí gửi xe SURCHARGE). Thiết kế chi tiết từng đợt: `docs/pricing-solution.md`, `docs/promotions-solution.md`, `docs/refactor-plan.md`. Chi tiết nghiệp vụ hiện tại đã kiểm chứng với code: `docs/business-flow-checkin-playing-checkout.md`.
 
 ## Cấu trúc thư mục
 
@@ -274,6 +274,7 @@ export type CreateThingInput = z.infer<typeof createThingSchema>;
 - `/` redirect về `/sessions`; page chỉ render `TodayShiftScreen` (trong `src/features/pos/`).
 - Chưa có ca mở → disable check-in/checkout + hiển thị hành động `Mở ca`.
 - Check-in hội viên hiển thị trạng thái membership; hết hạn hoặc hội viên mới → gia hạn trước rồi mới tạo session.
+- **Bảng giá không chọn lúc check-in**: check-in tạo session với `hourlyRate: 0`, `pricingRuleId/snapshot: null`; bảng giá (rule + tiers, từng pricing group) được resolve tại checkout qua `resolveCheckoutPricing` (xem `docs/business-flow-checkin-playing-checkout.md`).
 - Checkout dùng drawer hoá đơn: `PLAY_TIME` + sản phẩm/dịch vụ + phương thức thanh toán. `PRODUCT` tôn trọng tồn kho, không cho chọn vượt tồn.
 
 **Mobile-first shift management screen:**
@@ -294,6 +295,7 @@ export type CreateThingInput = z.infer<typeof createThingSchema>;
 - Trạng thái hội viên từ server: `ACTIVE` / `EXPIRED` / `NONE`.
 - Đăng ký mới dùng `POST /api/memberships/register` (transaction customer + membership + invoice/payment); gia hạn dùng `POST /api/memberships/renew` (yêu cầu `Shift` đang mở vì là giao dịch thu tiền).
 - UI không tạo hồ sơ `MEMBER` trống nếu chưa thu phí.
+- Chi tiết hội viên: `/customers/[id]` render `CustomerDetailScreen` (trong `src/features/memberships/`), đọc lịch sử đóng phí + giao dịch từ `GET /api/customers/[id]/history`.
 
 **Mobile-first reports screen:**
 - `/reports` là màn `Báo cáo`; page chỉ render `ReportsScreen` (trong `src/features/reports/`).
@@ -370,10 +372,10 @@ npx vitest run src/lib/__tests__/pricing.test.ts  # Chạy 1 file
 ```
 Mở ca (nhập tiền mặt đầu ca)
 → Check-in 1 khách duy nhất
-    - Vãng lai: tạo session ACTIVE + snapshot bảng giá (rule + tiers)
+    - Vãng lai: tạo session ACTIVE (bảng giá để trống, resolve lúc checkout) + SessionPlayer từng người
     - Hội viên: kiểm tra membership còn hạn; hết hạn → gia hạn trước; session tiền giờ = 0đ
-→ Trong lúc chơi: đồng hồ realtime (vãng lai), có thể gọi đồ uống/dịch vụ
-→ Checkout: tạo invoice (vãng lai: PLAY_TIME + items; hội viên: items, tiền giờ 0đ),
+→ Trong lúc chơi: đồng hồ realtime (vãng lai), pause/resume từng người, có thể gọi đồ uống/dịch vụ
+→ Checkout: resolve bảng giá theo nhóm/1 rule/auto → tạo invoice (vãng lai: PLAY_TIME + items; hội viên: items, tiền giờ 0đ),
   trừ kho sản phẩm có tồn, thu tiền + ghi payment, đóng session
 → Cuối ca: đối soát theo Shift; vào chi tiết ca xem hoá đơn/đơn hàng phát sinh
 ```
@@ -389,7 +391,7 @@ Mở ca (nhập tiền mặt đầu ca)
 
 **Step 1 — Chọn loại khách:** Vãng lai: nhập tên → Tiếp tục. Hội viên: tìm theo tên/SĐT → kiểm tra membership còn hạn; hết hạn → hiển thị lựa chọn "Gia hạn hội viên" trước khi check-in.
 
-**Step 1b — Số người chơi (tuỳ chọn, khách vãng lai):** nhập `playerCount` (mặc định 1); nếu > 1 có thể chia thành nhiều nhóm (`SessionPricingGroup`), mỗi nhóm chọn bảng giá riêng — dùng cho nhóm người chơi chung 1 khách, mỗi người/nhóm có bảng giá khác nhau.
+**Step 1b — Số người chơi (tuỳ chọn, khách vãng lai):** nhập `playerCount` (mặc định 1); nếu > 1 có thể chia thành nhiều nhóm (`SessionPricingGroup`), mỗi nhóm chọn bảng giá riêng — dùng cho nhóm người chơi chung 1 khách, mỗi người/nhóm có bảng giá khác nhau. Lúc check-in chỉ tạo group trống giá + `SessionPlayer` cho từng người; việc gán bảng giá cho từng nhóm diễn ra tại checkout.
 
 **Step 2 — Xác nhận:** hiển thị summary (tên, loại KH, số người chơi, trạng thái hội viên, trạng thái ca làm) → "Xác nhận Check-in" tạo session trong transaction/use-case. Bắt buộc nhân viên đang tham gia ca mở; session phải gắn `shiftId` của ca đó. Không tạo session hội viên nếu membership hết hạn mà chưa gia hạn.
 
@@ -402,8 +404,9 @@ Mở ca (nhập tiền mặt đầu ca)
 5. **Đồ uống/dịch vụ là invoice item riêng**: `PRODUCT`/`SERVICE`; sản phẩm có tồn kho phải trừ kho qua `StockMovement`.
 6. **Checkout tạo invoice**: tổng tiền = tiền chơi vãng lai (đã trừ khuyến mãi) + sản phẩm/dịch vụ + phí hội viên nếu có - phí gửi xe (SURCHARGE).
 7. **Thành tiền realtime**: chỉ hiển thị tiền giờ realtime cho khách vãng lai. Với hội viên, hiển thị trạng thái "Hội viên còn hạn" và tiền giờ `0đ`.
-8. **Snapshot-first**: lúc check-in snapshot `PricingRule` + `PricingTier` vào `Session.pricingRuleSnapshot`; lúc checkout `calculateSessionPrice()` tính từ snapshot, chỉ fallback resolve lại DB cho session cũ. Khuyến mãi cũng được snapshot (id, tên, loại, giá trị) vào session + metadata dòng PLAY_TIME.
-9. **Rule matching**: `PricingRule.daysOfWeek` (ưu tiên) hoặc `dayType` fallback; `hourFrom ≤ giờ < hourTo` (hourTo độc quyền); `effectiveFrom ≤ now ≤ effectiveTo`; tiebreaker `effectiveFrom desc, createdAt desc`. Không có rule phù hợp → chặn check-in vãng lai (không fallback giá mặc định).
+8. **Pricing resolve tại checkout** (không còn snapshot lúc check-in): `runCheckInTx` tạo session/group với `hourlyRate: 0`, `pricingRuleId/snapshot: null`; lúc checkout `resolveCheckoutPricing()` resolve rule theo `input.groups` (từng nhóm), `input.pricingRuleId` (1 rule cả phiên) hoặc auto-resolve rule hiệu lực tại giờ checkout, rồi snapshot rule + tiers vào `SessionPricingGroup.pricingSnapshot` và tính `calculateSessionPrice()` từ snapshot đó. Khuyến mãi vẫn được snapshot vào session + metadata dòng PLAY_TIME.
+9. **Rule matching**: `PricingRule.daysOfWeek` (ưu tiên) hoặc `dayType` fallback; `hourFrom ≤ giờ < hourTo` (hourTo độc quyền); `effectiveFrom ≤ now ≤ effectiveTo`; tiebreaker `effectiveFrom desc, createdAt desc`. Không có rule phù hợp → chặn thanh toán tiền giờ (không fallback giá mặc định).
+10. **Pause theo từng người chơi**: mỗi `SessionPlayer` có `pausedAt`/`totalPausedSeconds`; pause/resume từng người qua `pausePlayer`/`resumePlayer`, elapsed giờ tính trừ `totalPausedSeconds`.
 
 ### Luồng gia hạn hội viên
 
@@ -415,7 +418,7 @@ Mở ca (nhập tiền mặt đầu ca)
 
 ### Database Schema
 
-Models đầy đủ (User, Customer, Session, SessionPricingGroup, PricingRule, PricingTier, PromotionRule, MembershipPlan, Membership, MembershipPayment, Invoice, InvoiceItem, Payment, Shift, ShiftParticipant, Product, StockMovement, Tool, ShiftTool, AppSetting, ActivityLog): **`prisma/schema.prisma`** là nguồn sự thật; mô tả ngắn từng model: **`AGENTS.md` → Target Domain Model**. Chi tiết field trạng thái, snapshot, quan hệ: **`src/generated/prisma`** hoặc schema. Các API nghiệp vụ đã triển khai: **`docs/api-routes.md`**.
+Models đầy đủ (User, Customer, Session, SessionPlayer, SessionPricingGroup, PricingRule, PricingTier, PromotionRule, MembershipPlan, Membership, MembershipPayment, Invoice, InvoiceItem, Payment, Shift, ShiftParticipant, Product, StockMovement, Tool, ShiftTool, AppSetting, ActivityLog): **`prisma/schema.prisma`** là nguồn sự thật; mô tả ngắn từng model: **`AGENTS.md` → Target Domain Model**. Chi tiết field trạng thái, snapshot, quan hệ: **`src/generated/prisma`** hoặc schema. Các API nghiệp vụ đã triển khai: **`docs/api-routes.md`**.
 
 ### Ràng buộc giữa các Data Model
 
@@ -473,6 +476,8 @@ Một số model phụ thuộc vào sự tồn tại của model khác. Khi thi�
 | `src/lib/cashflow/` | CashFlow records (admin-only thu/chi ngoài vận hành) |
 | `src/lib/audit/` | ActivityLog |
 | `src/lib/settings/` | AppSetting key-value (có cache TTL 60s) |
+| `src/lib/users/` | User CRUD (create, update, reset password) |
+| `src/lib/tools/` | Tool + ShiftTool (dụng cụ theo ca) |
 
 **Import Prisma:**
 - `import { prisma }` CHỈ được dùng trong 3 file: `infrastructure/prisma.ts`, `infrastructure/repositories.ts`, `infrastructure/db-helpers.ts`

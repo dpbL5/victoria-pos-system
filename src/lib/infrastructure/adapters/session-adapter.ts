@@ -288,6 +288,13 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
       })
     },
 
+    async renamePlayer(playerId, name) {
+      await store.sessionPlayer.update({
+        where: { id: playerId },
+        data: { name },
+      })
+    },
+
     async markPlayersCheckedOut(playerIds, checkedOutAt) {
       if (playerIds.length === 0) return
       await store.sessionPlayer.updateMany({

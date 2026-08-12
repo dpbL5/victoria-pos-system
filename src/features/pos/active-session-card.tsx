@@ -16,6 +16,7 @@ export function ActiveSessionCard({
   onResume,
   onPausePlayer,
   onResumePlayer,
+  onRenamePlayer,
 }: {
   session: SessionRow
   checkoutDisabled: boolean
@@ -26,6 +27,8 @@ export function ActiveSessionCard({
   /** Pause theo từng người chơi (phiên nhiều người) */
   onPausePlayer?: (playerId: string) => void
   onResumePlayer?: (playerId: string) => void
+  /** Đổi tên 1 người chơi — trả true nếu thành công */
+  onRenamePlayer?: (playerId: string, name: string) => Promise<boolean>
 }) {
   const isMember = session.customer?.type === 'MEMBER' || !!session.membership
   const playerCount = session.playerCount ?? 1
@@ -39,6 +42,9 @@ export function ActiveSessionCard({
   // Thu gọn bảng người chơi (chỉ phiên nhóm) — collapse mặc định khi có nhiều người
   const [collapsed, setCollapsed] = useState(isGroup)
   const toggleCollapsed = () => setCollapsed((value) => !value)
+
+  // Đang đổi tên 1 người chơi — disable để tránh bấm nhầm / submit lồng nhau
+  const [renaming, setRenaming] = useState(false)
 
   const elapsed = isPaused
     ? calcElapsedHMS(session.startTime, session.pausedAt ?? undefined, session.totalPausedSeconds ?? 0)
@@ -139,8 +145,18 @@ export function ActiveSessionCard({
                   index={index}
                   startTime={session.startTime}
                   pauseDisabled={pauseDisabled}
+                  renaming={renaming}
                   onPause={() => onPausePlayer?.(player.id)}
                   onResume={() => onResumePlayer?.(player.id)}
+                  onRename={async (name) => {
+                    if (!onRenamePlayer) return false
+                    setRenaming(true)
+                    try {
+                      return await onRenamePlayer(player.id, name)
+                    } finally {
+                      setRenaming(false)
+                    }
+                  }}
                 />
               ))
             })}
