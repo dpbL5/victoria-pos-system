@@ -31,6 +31,17 @@ export const checkoutSessionSchema = z.object({
   // Bảng giá chọn tại checkout cho khách vãng lai (session chưa gán giá lúc check-in)
   pricingRuleId: z.string().uuid("ID bảng giá không hợp lệ").optional(),
   groups: z.array(checkoutPricingGroupSchema).min(1).optional(),
+  // Thu trước: chọn người chơi cụ thể (ở bất kỳ nhóm nào) để checkout — loại trừ với groups/pricingGroupId
+  playerIds: z.array(z.string().uuid("ID người chơi không hợp lệ")).min(1, "Chọn ít nhất 1 người chơi").optional(),
+}).superRefine((data, ctx) => {
+  const chosen = [data.playerIds, data.groups, data.pricingGroupId].filter(v => v !== undefined).length
+  if (chosen > 1) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['playerIds'],
+      message: 'Chỉ chọn 1 cách thu: theo người chơi, theo nhóm giá, hoặc theo số lượng',
+    })
+  }
 });
 
 export const updateSessionSchema = z.object({

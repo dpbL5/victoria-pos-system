@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp, Minus, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label, Select } from '@/components/ui/input'
@@ -107,6 +107,9 @@ export function CheckoutDrawer({  session,
   // Bảng giá chọn tại checkout — session khách vãng lai chưa gán giá lúc check-in
   const [applicablePricingRules, setApplicablePricingRules] = useState<PricingRuleOption[]>([])
   const [checkoutGroups, setCheckoutGroups] = useState<CheckoutGroup[]>([])
+  // Thu trước: người chơi cụ thể được chọn để thu trong group đã chọn (session đã gán giá).
+  // Mặc định chọn tất cả người chưa thu; bỏ chọn bớt → thu trước (chỉ thu những người được chọn).
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([])
 
   const isMember = session?.customer?.type === 'MEMBER' || !!session?.membership
   const sessionPlayerCount = session?.playerCount ?? 1
@@ -116,6 +119,32 @@ export function CheckoutDrawer({  session,
   const sessionPlayers = (session?.pricingGroups ?? []).flatMap((g) =>
     (g.players ?? []).map((p) => ({ id: p.id, name: p.name ?? null }))
   )
+
+  // ── Thu trước (session đã gán giá): người chưa thu của group đang chọn ──
+  const selectedGroup = useMemo(
+    () => (selectedGroupId
+      ? (session?.pricingGroups ?? []).find((g) => g.id === selectedGroupId)
+      : undefined),
+    [session, selectedGroupId]
+  )
+  const uncheckedPlayersInGroup = useMemo(
+    () => (selectedGroup?.players ?? []).filter((p) => !p.checkedOutAt),
+    [selectedGroup]
+  )
+  const uncheckedCountInGroup = uncheckedPlayersInGroup.length
+  // Người được chọn để thu lần này — mặc định tất cả (thu hết); bỏ chọn bớt → thu trước
+  const activeSelectedPlayerIds = useMemo(
+    () => (uncheckedPlayersInGroup.length > 0
+      ? selectedPlayerIds.filter((pid) => uncheckedPlayersInGroup.some((p) => p.id === pid))
+      : []),
+    [uncheckedPlayersInGroup, selectedPlayerIds]
+  )
+  // Số người thu thực tế cho group đã chọn: theo người được chọn (nếu có player rows), ngược lại theo count stepper
+  const effectiveCheckoutCount = uncheckedCountInGroup > 0
+    ? activeSelectedPlayerIds.length
+    : checkoutPlayerCount
+  // Đang thu trước (bỏ chọn bớt người) — chỉ khi có player rows và số chọn < tổng người chưa thu
+  const isPartialByPlayers = uncheckedCountInGroup > 0 && activeSelectedPlayerIds.length < uncheckedCountInGroup
 
   // Session check-in mới (để trống giá) — cần chọn bảng giá khi thu tiền
   const needsPricing = !!session && !isMember
@@ -138,6 +167,9 @@ export function CheckoutDrawer({  session,
       // Reset bảng giá checkout
       setCheckoutGroups([])
       setApplicablePricingRules([])
+      // Mặc định chọn tất cả người chưa thu của group đầu tiên (thu hết = không phải thu trước)
+      const firstUnchecked = (firstActive?.players ?? []).filter((p) => !p.checkedOutAt).map((p) => p.id)
+      setSelectedPlayerIds(firstUnchecked)
       /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [session])
@@ -192,9 +224,14 @@ export function CheckoutDrawer({  session,
           }))))
         }
       } else {
-        if (selectedGroupId) params.set('pricingGroupId', selectedGroupId)
-        // Số người thu lần này — preview tính per-player đúng N người
-        if (checkoutPlayerCount > 0) params.set('playerCount', String(checkoutPlayerCount))
+        // Thu trước: chọn người cụ thể (bất kỳ nhóm nào) — gửi playerIds cho quote per-player
+        if (isPartialByPlayers && activeSelectedPlayerIds.length > 0) {
+          params.set('playerIds', JSON.stringify(activeSelectedPlayerIds))
+        } else {
+          if (selectedGroupId) params.set('pricingGroupId', selectedGroupId)
+          // Số người thu lần này — preview tính per-player đúng N người
+          if (checkoutPlayerCount > 0) params.set('playerCount', String(checkoutPlayerCount))
+        }
       }
       const qs = params.toString()
       const data = await apiJson<PlayTimeQuote>(`/api/sessions/${session.id}/checkout-preview${qs ? `?${qs}` : ''}`)
@@ -212,7 +249,7 @@ export function CheckoutDrawer({  session,
     void loadQuote()
     return () => { cancelled = true }
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [session, promotionRuleId, needsPricing, checkoutGroups, selectedGroupId, frozenAt, checkoutPlayerCount])
+  }, [session, promotionRuleId, needsPricing, checkoutGroups, selectedGroupId, frozenAt, checkoutPlayerCount, isPartialByPlayers, activeSelectedPlayerIds])
 
   useEffect(() => {
     if (!session || session.customer?.type === 'MEMBER' || !!session.membership) return
@@ -265,9 +302,12 @@ export function CheckoutDrawer({  session,
 
   // Chọn bảng giá tại checkout: mặc định 1 nhóm (1 bảng giá); thêm nhóm để nhiều bảng giá
   const groupMode = needsPricing && checkoutGroups.length > 0
-  const allPlayersAssigned = groupMode
-    ? new Set(checkoutGroups.flatMap((g) => g.playerIds)).size === sessionPlayerCount
+  // Có ít nhất 1 người được phân vào nhóm — thu trước cho phép bỏ chọn bớt người (subset)
+  const hasAssignedPlayers = groupMode
+    ? new Set(checkoutGroups.flatMap((g) => g.playerIds)).size > 0
     : true
+  // Thu trước (fresh session, GroupBuilder subset) — không phân hết người cũng được
+  const assignedCount = groupMode ? new Set(checkoutGroups.flatMap((g) => g.playerIds)).size : sessionPlayerCount
 
   const changeCart = (product: Product, delta: number) => {
     setCart((current) => {
@@ -293,8 +333,8 @@ export function CheckoutDrawer({  session,
       notifyError('Chưa có bảng giá hiệu lực — không thể thu tiền giờ chơi')
       return
     }
-    if (groupMode && !allPlayersAssigned) {
-      notifyError('Phải phân hết người chơi vào nhóm bảng giá trước khi thu tiền')
+    if (groupMode && !hasAssignedPlayers) {
+      notifyError('Chọn ít nhất 1 người chơi trước khi thu tiền')
       return
     }
 
@@ -319,13 +359,18 @@ export function CheckoutDrawer({  session,
           }))
         }
       } else {
-        // Nếu có pricing groups, gửi pricingGroupId
-        const groups = session.pricingGroups ?? []
-        if (selectedGroupId && groups.some(g => g.id === selectedGroupId)) {
-          body.pricingGroupId = selectedGroupId
-          body.playerCount = checkoutPlayerCount
-        } else if (isGroupSession && checkoutPlayerCount < sessionPlayerCount) {
-          body.playerCount = checkoutPlayerCount
+        // Thu trước: chọn người cụ thể → gửi playerIds (backend tự detect thu trước theo số người)
+        if (isPartialByPlayers && activeSelectedPlayerIds.length > 0) {
+          body.playerIds = activeSelectedPlayerIds
+        } else {
+          // Nếu có pricing groups, gửi pricingGroupId
+          const groups = session.pricingGroups ?? []
+          if (selectedGroupId && groups.some(g => g.id === selectedGroupId)) {
+            body.pricingGroupId = selectedGroupId
+            body.playerCount = effectiveCheckoutCount
+          } else if (isGroupSession && checkoutPlayerCount < sessionPlayerCount) {
+            body.playerCount = checkoutPlayerCount
+          }
         }
       }
       if (parkingVehicleCount > 0) {
@@ -470,22 +515,26 @@ export function CheckoutDrawer({  session,
             variant="inverse"
             size="lg"
             fullWidth
-            disabled={submitting || !shiftReady || quoteLoading || !!quoteError || !playQuote || pricingBlocked || (groupMode && !allPlayersAssigned)}
+            disabled={submitting || !shiftReady || quoteLoading || !!quoteError || !playQuote || pricingBlocked || (groupMode && !hasAssignedPlayers)}
             onClick={handleCheckout}
           >
             {submitting
               ? 'Đang thu tiền...'
-              : groupMode
-                ? `Thu tiền ${session.playerCount} người`
-                : needsPricing
-                  ? `Thu tiền ${checkoutPlayerCount} người`
-                  : selectedGroupId && checkoutPlayerCount < (session?.pricingGroups?.find(g => g.id === selectedGroupId)?.remainingCount ?? sessionPlayerCount)
-                    ? `Thu tiền ${checkoutPlayerCount} người`
-                    : (selectedGroupId && (session?.pricingGroups?.length ?? 0) > 0)
-                      ? `Thu tiền (${session?.pricingGroups?.find(g => g.id === selectedGroupId)?.label ?? ''})`
-                      : isGroupSession && checkoutPlayerCount < sessionPlayerCount
-                        ? `Thu tiền ${checkoutPlayerCount} người`
-                        : 'Thu tiền & kết thúc'}
+              : isPartialByPlayers
+                ? `Thu trước ${activeSelectedPlayerIds.length} người`
+                : groupMode
+                  ? (assignedCount < sessionPlayerCount
+                      ? `Thu trước ${assignedCount} người`
+                      : `Thu tiền ${assignedCount} người`)
+                  : needsPricing
+                    ? `Thu tiền ${effectiveCheckoutCount} người`
+                    : selectedGroupId && effectiveCheckoutCount < (session?.pricingGroups?.find(g => g.id === selectedGroupId)?.remainingCount ?? sessionPlayerCount)
+                      ? `Thu tiền ${effectiveCheckoutCount} người`
+                      : (selectedGroupId && (session?.pricingGroups?.length ?? 0) > 0)
+                        ? `Thu tiền (${session?.pricingGroups?.find(g => g.id === selectedGroupId)?.label ?? ''})`
+                        : isGroupSession && effectiveCheckoutCount < sessionPlayerCount
+                          ? `Thu tiền ${effectiveCheckoutCount} người`
+                          : 'Thu tiền & kết thúc'}
           </Button>
         </div>
       }
@@ -513,9 +562,15 @@ export function CheckoutDrawer({  session,
 
                   {checkoutGroups.length > 0 && (
                     <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
-                      <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                        Thu hết <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">{session.playerCount}</span> người — mỗi nhóm tính theo bảng giá riêng.
-                      </p>
+                      {assignedCount < sessionPlayerCount ? (
+                        <p className="text-sm text-amber-600 dark:text-amber-300">
+                          Thu trước <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">{assignedCount}</span>/{sessionPlayerCount} người — người chưa chọn tiếp tục chơi.
+                        </p>
+                      ) : (
+                        <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                          Thu hết <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">{assignedCount}</span> người — mỗi nhóm tính theo bảng giá riêng.
+                        </p>
+                      )}
                     </div>
                   )}
                 </>
@@ -539,6 +594,8 @@ export function CheckoutDrawer({  session,
                       onClick={() => {
                         setSelectedGroupId(g.id)
                         setCheckoutPlayerCount(g.remainingCount)
+                        // Chọn mặc định tất cả người chưa thu của group này
+                        setSelectedPlayerIds((g.players ?? []).filter((p) => !p.checkedOutAt).map((p) => p.id))
                       }}
                       className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition-colors ${
                         isSelected
@@ -642,6 +699,55 @@ export function CheckoutDrawer({  session,
               {checkoutPlayerCount < sessionPlayerCount && (
                 <p className="text-xs text-amber-600 dark:text-amber-300">
                   Thu {checkoutPlayerCount} người — phiên còn {sessionPlayerCount - checkoutPlayerCount} người, thu tiếp sau.
+                </p>
+              )}
+            </SectionCard>
+          )}
+
+          {/* ── Người chơi sẽ thu — bỏ chọn bớt người để thu trước (session đã gán giá) ── */}
+          {!needsPricing && !isMember && uncheckedPlayersInGroup.length > 0 && (
+            <SectionCard
+              title="Người chơi sẽ thu"
+              collapsible={false}
+              summary={`${activeSelectedPlayerIds.length}/${uncheckedCountInGroup} người`}
+            >
+              <div className="space-y-2">
+                {uncheckedPlayersInGroup.map((p) => {
+                  const isSelected = activeSelectedPlayerIds.includes(p.id)
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPlayerIds((current) =>
+                          isSelected
+                            ? current.filter((pid) => pid !== p.id)
+                            : [...current, p.id]
+                        )
+                      }}
+                      className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition-colors ${
+                        isSelected
+                          ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
+                          : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
+                      }`}
+                    >
+                      <span className="min-w-0 truncate text-sm font-medium text-zinc-950 dark:text-white">
+                        {p.name?.trim() || 'Người chơi'}
+                      </span>
+                      <span className="shrink-0">
+                        {isSelected ? (
+                          <span className="rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-medium text-white">Chọn</span>
+                        ) : (
+                          <span className="rounded-md bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">Bỏ chọn</span>
+                        )}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              {isPartialByPlayers && (
+                <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
+                  Thu trước {activeSelectedPlayerIds.length}/{uncheckedCountInGroup} người — người chưa thu tiếp tục chơi.
                 </p>
               )}
             </SectionCard>

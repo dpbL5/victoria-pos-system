@@ -137,7 +137,8 @@ export function ActiveSessionCard({
           {session.pricingGroups!
             .filter((g) => g.remainingCount > 0)
             .map((group) => {
-              const players = group.players ?? []
+              // Lọc người đã được thu trước (checkedOutAt) — không hiển thị thẻ pause nữa
+              const players = (group.players ?? []).filter((p) => !p.checkedOutAt)
               return players.map((player, index) => (
                 <PlayerPauseCard
                   key={player.id}

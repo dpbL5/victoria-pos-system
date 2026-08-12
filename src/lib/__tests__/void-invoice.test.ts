@@ -58,6 +58,7 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
       deleteInvoiceWithItems: vi.fn(async () => {}),
       findDraftSellPreview: vi.fn(),
       findInvoicesByCustomer: vi.fn(),
+      countPaidBySession: vi.fn(async () => 0),
       ...overrides,
     },
     audit: {

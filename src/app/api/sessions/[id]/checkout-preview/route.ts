@@ -37,6 +37,8 @@ export async function GET(
     const pendingIndexParam = _request.nextUrl.searchParams.get('pendingIndex')
     // Số người sẽ thu lần này — preview tính per-player đúng N người (mặc định: toàn bộ người chưa thu)
     const playerCountParam = _request.nextUrl.searchParams.get('playerCount')
+    // Thu trước: chọn người chơi cụ thể (bất kỳ nhóm nào) — JSON array playerIds
+    const playerIdsParam = _request.nextUrl.searchParams.get('playerIds')
 
     const promotion = promotionRuleId
       ? await repositories.promotions.findAvailableById(promotionRuleId, new Date())
@@ -88,9 +90,10 @@ export async function GET(
 
       if (rawGroups) {
         const totalPlayers = rawGroups.reduce((sum, g) => sum + g.playerCount, 0)
-        if (totalPlayers !== session.playerCount) {
+        // Thu trước (subset) cho phép totalPlayers < session.playerCount — chỉ chặn khi vượt quá
+        if (totalPlayers > session.playerCount) {
           return NextResponse.json(
-            { success: false, error: 'Tổng số người trong các nhóm không khớp số người chơi của phiên' },
+            { success: false, error: 'Tổng số người trong các nhóm vượt quá số người chơi của phiên' },
             { status: 400 }
           )
         }
@@ -218,7 +221,29 @@ export async function GET(
       let playersToQuote: Array<{ id: string; name: string | null; groupId: string; pausedAt: Date | null; totalPausedSeconds: number; checkedOutAt: Date | null }> = []
       // playerId → index nhóm (nhiều bảng giá)
       const playerToGroupIndex = new Map<string, number>()
-      if (groupsParam && pendingGroups && rawGroups && rawGroups.length > 0) {
+      // Thu trước: chọn người chơi cụ thể ở bất kỳ nhóm nào
+      let playerIds: string[] | null = null
+      if (playerIdsParam) {
+        try {
+          const parsed = JSON.parse(playerIdsParam) as unknown
+          if (Array.isArray(parsed)) playerIds = parsed.filter((x): x is string => typeof x === 'string')
+        } catch { playerIds = null }
+      }
+      if (playerIds && playerIds.length > 0) {
+        const allPlayers = session.pricingGroups.flatMap((g) => g.players)
+        const selected = playerIds
+          .map((pid) => allPlayers.find((p) => p.id === pid))
+          .filter((p): p is NonNullable<typeof p> => !!p && !p.checkedOutAt)
+        // playerToGroupIndex: owning-group index (dùng snapshot đã persist)
+        session.pricingGroups.forEach((g, index) => {
+          for (const p of g.players) {
+            if (!p.checkedOutAt && selected.some((s) => s.id === p.id)) {
+              playerToGroupIndex.set(p.id, index)
+            }
+          }
+        })
+        playersToQuote = selected
+      } else if (groupsParam && pendingGroups && rawGroups && rawGroups.length > 0) {
         const allPlayers = session.pricingGroups.flatMap((g) => g.players)
         rawGroups.forEach((g, index) => {
           for (const pid of g.playerIds) playerToGroupIndex.set(pid, index)
