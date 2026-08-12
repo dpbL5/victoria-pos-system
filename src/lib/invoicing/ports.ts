@@ -287,4 +287,6 @@ export interface BillingRepository {
   deleteInvoiceWithItems(invoiceId: string): Promise<void>
   /** Draft invoices + items bán kèm phiên — cho checkout-preview */
   findDraftSellPreview(sessionId: string): Promise<DraftSellPreview[]>
+  /** Đếm hoá đơn PAID đã thanh toán của 1 session — xác định số lần thu trước ("lần n") */
+  countPaidBySession(sessionId: string): Promise<number>
 }

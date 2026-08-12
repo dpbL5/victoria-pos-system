@@ -108,6 +108,10 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
   const parkingFeeTotal = invoice.items
     .filter((item) => item.type === 'SURCHARGE')
     .reduce((sum, item) => sum + Math.abs(item.total), 0)
+  // Thu trước: tìm earlyCollection trong metadata của dòng PLAY_TIME
+  const playItem = invoice.items.find((item) => item.type === 'PLAY_TIME')
+  const playMeta = (playItem?.metadata ?? {}) as { earlyCollection?: { sequence?: number } }
+  const earlyCollectionSequence = playMeta.earlyCollection?.sequence
 
   return (
     <div className="space-y-4">
@@ -117,6 +121,11 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
             <h1 className="flex items-center gap-2 text-xl font-bold text-zinc-950 dark:text-white">
               <ReceiptText size={22} className="text-blue-500" />
               {invoice.invoiceNo}
+              {earlyCollectionSequence !== undefined && (
+                <Badge variant="warning" size="sm">
+                  Thu trước lần {earlyCollectionSequence}
+                </Badge>
+              )}
             </h1>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
               {formatDateTime(invoice.createdAt)}

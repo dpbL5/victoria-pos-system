@@ -80,7 +80,7 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
                 pricingRuleId: true,
                 pricingSnapshot: true,
                 players: {
-                  select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true },
+                  select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true, checkedOutAt: true },
                   orderBy: { createdAt: 'asc' },
                 },
               },
@@ -113,7 +113,7 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
               pricingRuleId: true,
               pricingSnapshot: true,
               players: {
-                select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true },
+                select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true, checkedOutAt: true },
                 orderBy: { createdAt: 'asc' },
               },
             },

@@ -33,6 +33,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       deleteInvoiceWithItems: vi.fn(),
       findDraftSellPreview: vi.fn(),
       findInvoicesByCustomer: vi.fn(),
+      countPaidBySession: vi.fn(async () => 0),
     },
     audit: { append: vi.fn(async () => {}), findMany: vi.fn() },
     membership: { findLatest: vi.fn(), findActive: vi.fn(), create: vi.fn(), findManyByCustomer: vi.fn() },

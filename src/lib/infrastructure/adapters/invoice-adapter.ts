@@ -459,5 +459,9 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
         })),
       }))
     },
+
+    async countPaidBySession(sessionId) {
+      return store.invoice.count({ where: { sessionId, status: 'PAID' } })
+    },
   }
 }
