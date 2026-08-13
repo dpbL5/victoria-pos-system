@@ -288,13 +288,14 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
                       )}
                     </div>
                   </div>
-                  <p className={`self-center text-sm font-bold tabular-nums ${
+                  <hr />
+                  {/* <p className={`self-center text-sm font-bold tabular-nums ${
                     item.total < 0
                       ? 'text-red-600 dark:text-red-300'
                       : 'text-zinc-950 dark:text-white'
                   }`}>
                     {formatVND(item.total)}
-                  </p>
+                  </p> */}
                 </div>
               )
             })
