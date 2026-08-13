@@ -1210,6 +1210,20 @@ export function CheckoutDrawer({
               <option value="TRANSFER">{paymentMethodLabel("TRANSFER")}</option>
               <option value="CARD">{paymentMethodLabel("CARD")}</option>
             </Select>
+            {paymentMethod === "TRANSFER" && (
+              <div className="mt-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+                <p className="mb-2 text-center text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  Quét mã QR để chuyển khoản
+                </p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/images/transfer.png"
+                  alt="Mã QR chuyển khoản"
+                  loading="lazy"
+                  className="mx-auto w-48 max-w-full"
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
