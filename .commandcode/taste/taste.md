@@ -43,6 +43,7 @@ See [architecture/taste.md](architecture/taste.md)
 - Extract shared UI content into standalone components and wrap them in modal shells for reuse across page and modal contexts. Confidence: 0.85
 - Prefer opening nested modals (on top of current modal) over `router.push` page navigation for detail drill-downs inside modal contexts, to preserve user context and allow returning to the original modal when closed. Confidence: 0.75
 - When introducing a UI pattern or applying a refactor, apply it consistently across all relevant modules and user types rather than just the obvious ones — when the agent implemented a prominent elapsed-time clock only for walk-in sessions without pricing, the user immediately requested uniform application to members too ("Áp dụng chung cho cả hội viên"). Confidence: 0.82
+- Remove unnecessary JSX nesting: flatten redundant wrapper `<div>`s and fragments that add no layout/semantic value, especially when the inner element already provides the needed spacing (e.g., a `Label` that already carries `mb-1`, or a section whose content fits without a wrapper div around a single line) — the user explicitly asked to "Loại bỏ nesting không cần thiết" in the checkout drawer/picker, and the agent flattened the wrappers (Label merged into its flex parent, extra div around Select replaced with a fragment, single-line `flex justify-between` wrapper removed) while keeping behavior identical and re-verifying with typecheck + lint. Confidence: 0.65
 
 # workflow
 See [workflow/taste.md](workflow/taste.md)
