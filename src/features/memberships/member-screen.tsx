@@ -1,9 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
-  RefreshCw,
   Search,
   Settings,
   Ticket,
@@ -21,6 +20,7 @@ import { SortableCardList, type Column as CardColumn } from '@/components/ui/sor
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { apiJson, jsonRequest } from '@/lib/api'
+import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { formatDay, money, paymentMethodLabel } from '@/features/pos/format'
 import type { Customer, Membership, MembershipPlan, PaymentMethod, Shift, UserSession } from '@/features/pos/types'
 
@@ -64,6 +64,12 @@ export function MemberScreen() {
   const { data: memberData, isLoading: memberLoading, mutate } = useApi<MemberCustomer[]>(membersUrl, { dedupingInterval: 120_000 })
   const { data: planData } = useApi<MembershipPlan[]>('/api/membership-plans', { dedupingInterval: 300_000 })
   const { data: shiftData } = useApi<Shift | null>('/api/shifts?current=true', { dedupingInterval: 30_000 })
+
+  const { registerRefresh } = usePageRefresh()
+
+  useEffect(() => {
+    return registerRefresh(() => void mutate())
+  }, [registerRefresh, mutate])
 
   const members: MemberCustomer[] = memberData?.data ?? []
   const plans: MembershipPlan[] = (planData?.data ?? []).filter((plan: MembershipPlan) => plan.isActive)
@@ -221,32 +227,11 @@ export function MemberScreen() {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-5xl space-y-4">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Quản lý chơi tháng
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-zinc-950 dark:text-white">
+        <header className="hidden items-center justify-between gap-3 md:flex">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
               Hội viên
             </h1>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {isAdmin && (
-              <Link
-                href="/membership-plans"
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-              >
-                <Ticket size={16} />
-                <span>Gói hội viên</span>
-              </Link>
-            )}
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={RefreshCw}
-              onClick={() => void mutate()}
-              title="Làm mới"
-            />
           </div>
         </header>
 
@@ -296,6 +281,15 @@ export function MemberScreen() {
             <Button variant="secondary" size="sm" onClick={() => setSearchQuery(searchInput)}>
               Tìm
             </Button>
+            {isAdmin && (
+              <Link
+                href="/membership-plans"
+                className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+              >
+                <Ticket size={16} />
+                <span>Gói hội viên</span>
+              </Link>
+            )}
           </div>
         </section>
 
@@ -456,6 +450,8 @@ function RegisterMemberDialog({
   onDone: () => Promise<void>
 }) {
   const { error: notifyError } = useToast()
+  // Guard đồng bộ chống double-submit — setSubmitting là async, click nhanh có thể gửi 2 POST trước khi re-render
+  const submittingRef = useRef(false)
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [planId, setPlanId] = useState('')
@@ -476,6 +472,8 @@ function RegisterMemberDialog({
   const selectedPlan = plans.find((plan) => plan.id === planId)
 
   const submit = async () => {
+    // Guard đồng bộ — chặn click trùng ngay lập tức (không chờ setState re-render)
+    if (submittingRef.current) return
     if (!fullName.trim()) {
       notifyError('Nhập tên hội viên')
       return
@@ -485,6 +483,7 @@ function RegisterMemberDialog({
       return
     }
 
+    submittingRef.current = true
     setSubmitting(true)
     try {
       const data = await apiJson('/api/memberships/register', jsonRequest({
@@ -502,6 +501,7 @@ function RegisterMemberDialog({
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }

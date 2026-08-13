@@ -117,10 +117,7 @@ export default function TestingPage() {
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-2xl space-y-4">
         <header>
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Giao diện thử nghiệm
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-zinc-950 dark:text-white">
+          <h1 className="hidden text-2xl font-bold text-zinc-950 dark:text-white md:block">
             Testing
           </h1>
         </header>

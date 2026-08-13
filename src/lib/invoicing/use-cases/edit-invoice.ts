@@ -43,7 +43,7 @@ export async function runEditInvoice(
   if (!invoice) fail('INVOICE_NOT_FOUND')
   if (invoice.status !== 'PAID') fail('INVOICE_NOT_EDITABLE')
   if (!invoice.shiftId) fail('SHIFT_CLOSED')
-  if (invoice.membershipPayments.length > 0) fail('INVOICE_HAS_MEMBERSHIP')
+  if (invoice.payments.some((p) => p.kind === 'MEMBERSHIP')) fail('INVOICE_HAS_MEMBERSHIP')
 
   const actorName = invoice.staff?.fullName ?? staffId
   const timestamp = new Date().toISOString()
@@ -193,6 +193,8 @@ export async function runEditInvoice(
       description: line.description,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
+      // Snapshot giá vốn (weighted average cost) tại thời điểm sửa hoá đơn
+      unitCost: (await tx.product.findByIdForSale(line.productId))?.costPrice ?? null,
       subtotal: line.subtotal,
       discountAmount: 0,
       total: line.subtotal,

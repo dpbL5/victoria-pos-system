@@ -67,7 +67,7 @@ async function main() {
         (await tx.session.count({ where: { customerId: customer.id } })) +
         (await tx.invoice.count({ where: { customerId: customer.id } })) +
         (await tx.membership.count({ where: { customerId: customer.id } })) +
-        (await tx.membershipPayment.count({ where: { customerId: customer.id } }))
+        (await tx.payment.count({ where: { customerId: customer.id, kind: 'MEMBERSHIP' } }))
 
       if (stillLinked === 0) {
         await tx.customer.delete({ where: { id: customer.id } })

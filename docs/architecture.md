@@ -6,7 +6,7 @@
 
 **Context:** Single-tenant POS cho 1 trường bắn cung, 1 team nhỏ. Không cần microservices, nhưng cần tách business logic khỏi UI và API handlers.
 
-**Decision:** Business logic nằm trong `src/lib/business/use-cases/`. Mỗi use-case là pure function: nhận input → trả result hoặc throw error code string. Route handler chỉ validate + authorize + delegate. UI component chỉ render và gọi API.
+**Decision:** Business logic nằm trong `src/lib/<domain>/use-cases/`. Mỗi use-case là function nhận input + `deps` → trả `Result<T>` (ok/err, `fail()` trong transaction). Route handler chỉ validate + authorize + delegate. UI component chỉ render và gọi API.
 
 **Consequences:**
 - ✅ Use-case test được độc lập (mock input/output)
@@ -30,18 +30,19 @@
 
 ---
 
-## ADR-003: Snapshot Pricing at Check-in
+## ADR-003: Snapshot Pricing tại Checkout (cập nhật 2026-08)
 
-**Status:** Accepted (2025)
+**Status:** Accepted (đã đổi thời điểm snapshot từ check-in → checkout)
 
-**Context:** Admin có thể sửa bảng giá bất kỳ lúc nào. Nếu re-resolve giá lúc checkout, khách đang chơi có thể bị tính sai giá.
+**Context:** Admin có thể sửa bảng giá bất kỳ lúc nào. Bảng giá ban đầu được chọn lúc check-in; sau đó đổi thành resolve tại checkout để nhân viên chọn nhóm giá/phân nhóm người chơi linh hoạt hơn.
 
-**Decision:** Chụp PricingRule + PricingTier vào Session lúc check-in (`pricingRuleSnapshot`). Checkout tính từ snapshot, không re-resolve.
+**Decision (hiện tại):** Check-in tạo session/group với `hourlyRate: 0`, `pricingRuleId/snapshot: null`. Lúc checkout, `resolveCheckoutPricing()` resolve rule (theo `input.groups`, `input.pricingRuleId`, hoặc auto-resolve rule hiệu lực tại giờ checkout) rồi snapshot rule + tiers vào `SessionPricingGroup.pricingSnapshot`. Checkout tính từ snapshot — không re-resolve khi ghi payment.
 
 **Consequences:**
-- ✅ Chống race condition khi admin sửa giá giữa phiên
-- ✅ Audit rõ ràng: giá nào được áp dụng
-- ❌ Fallback resolve cho session cũ không có snapshot (legacy compat)
+- ✅ Nhân viên gán bảng giá/nhóm giá tại thời điểm thu tiền, đúng giá đang hiệu lực
+- ✅ Snapshot giữ giá cố định khi ghi payment (chống race khi admin sửa giá giữa chừng)
+- ✅ Audit rõ ràng: giá nào được áp dụng cho nhóm nào
+- ❌ Session chưa gán giá tại check-in — nếu không có rule hiệu lực lúc checkout thì chặn thu tiền (không fallback giá mặc định)
 
 ---
 
@@ -145,3 +146,25 @@ nhưng use-case thì chưa. ADR-001 đã nhận ra điều này: *"Thiếu inter
 **Implementation plan:** `docs/architecture-refactor-plan.md`
 
 **Supersedes:** ADR-001 (phần "Thiếu interface port cho Prisma → khó mock DB trong test")
+
+---
+
+## ADR-008: Gộp MembershipPayment vào Payment (Single-Table Inheritance)
+
+**Status:** Accepted (2026-08)
+
+**Context:**
+Trước đây phí hội viên ghi ở bảng `MembershipPayment` riêng, song song với `Payment` — 2 bảng cùng kiểu giao dịch tiền, gây trùng lặp ở màn Giao dịch, báo cáo ca, `getShiftTransactions` (phải join 2 nguồn), và `editInvoice`/`countLinkedTransactions` (phải xử lý 2 loại payment).
+
+**Decision:**
+Bỏ model `MembershipPayment`, gộp vào `Payment` với trường `kind` (`PaymentKind` enum):
+- `OPERATIONAL` — checkout/bán kèm (có `sessionId`/`invoiceId` vận hành).
+- `MEMBERSHIP` — phí hội viên (đính `customerId`/`membershipId`/`planId`, `subtotal = grandTotal = amount` phí).
+- `Invoice.membershipPayments` relation thay bằng `payments`. Adapter `createMembershipPayment()` giờ ghi `store.payment.create({ kind: 'MEMBERSHIP', ... })` (giữ tên method cho use-case không đổi).
+
+**Consequences:**
+- ✅ Một bảng payment duy nhất — màn Giao dịch (`getShiftTransactions`), báo cáo ca, export, đối soát đọc 1 nguồn
+- ✅ `countLinkedTransactions`/`deletePayments` đơn giản hơn (lọc theo `kind`)
+- ✅ API contract của use-case không đổi (`createMembershipPayment` giữ tên)
+- ❌ Phải migrate dữ liệu `membership_payments` cũ sang `payments` (thủ công / script)
+- ❌ `Payment` giờ mang thêm field nullable dành riêng cho membership (`customerId`, `membershipId`, `planId`)

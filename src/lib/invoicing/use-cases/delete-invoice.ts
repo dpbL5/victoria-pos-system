@@ -27,7 +27,7 @@ export async function deleteInvoice(
 
   const result = await runInTransaction(async (tx) => {
     const linked = await tx.billing.countLinkedTransactions(input.invoiceId)
-    if (linked.payments > 0 || linked.membershipPayments > 0 || linked.stockMovements > 0) {
+    if (linked.payments > 0 || linked.stockMovements > 0) {
       fail('INVOICE_LINKED')
     }
 

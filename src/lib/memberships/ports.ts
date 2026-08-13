@@ -64,6 +64,8 @@ export interface CustomerRepository {
   findByIdIncludingDeleted(id: string): Promise<CustomerRecord | null>
   /** Chi tiết khách + _count.sessions — GET /api/customers/[id] */
   findByIdWithCount(id: string): Promise<(CustomerRecord & { _count: { sessions: number } }) | null>
+  /** Tìm khách theo SĐT (chưa bị xoá) — dùng chống đăng ký hội viên trùng (idempotency) */
+  findByPhone(phone: string): Promise<CustomerRecord | null>
   create(data: {
     fullName: string
     phone?: string | null

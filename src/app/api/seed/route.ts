@@ -60,7 +60,6 @@ export async function POST() {
 
     await prisma.activityLog.deleteMany()
     await prisma.stockMovement.deleteMany()
-    await prisma.membershipPayment.deleteMany()
     await prisma.payment.deleteMany()
     await prisma.invoiceItem.deleteMany()
     await prisma.invoice.deleteMany()

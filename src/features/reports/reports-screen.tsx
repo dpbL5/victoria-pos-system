@@ -1,17 +1,22 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { BarChart3, CalendarClock, RefreshCw } from 'lucide-react'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { useCallback, useEffect, useState } from 'react'
+import { BarChart3, Package } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
 import type { UserSession } from '@/features/pos/types'
-import { ReportsOverview } from './reports-overview'
+import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { ReportsOverview, type ReportsOverviewHandle } from './reports-overview'
+import { ReportsInventory } from './reports-inventory'
+
+type ActiveTab = 'overview' | 'inventory'
 
 export function ReportsScreen() {
   const [user, setUser] = useState<UserSession | null>(null)
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<ActiveTab>('overview')
+  const [overviewHandle, setOverviewHandle] = useState<ReportsOverviewHandle | null>(null)
+  const { registerRefresh } = usePageRefresh()
 
   useEffect(() => {
     async function load() {
@@ -26,6 +31,15 @@ export function ReportsScreen() {
     }
     void load()
   }, [])
+
+  const refresh = useCallback(() => {
+    overviewHandle?.refresh()
+  }, [overviewHandle])
+
+  useEffect(() => {
+    const unregister = registerRefresh(refresh)
+    return unregister
+  }, [registerRefresh, refresh])
 
   if (loading) {
     return (
@@ -48,39 +62,50 @@ export function ReportsScreen() {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-5xl space-y-4">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Đối soát vận hành
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-zinc-950 dark:text-white">
+        <header className="hidden items-center justify-between gap-3 md:flex">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
               Báo cáo
             </h1>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={RefreshCw}
-            onClick={() => window.location.reload()}
-            title="Làm mới"
-          />
         </header>
 
-        <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
-          <span className="flex flex-1 items-center justify-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-zinc-950 shadow-sm dark:bg-zinc-700 dark:text-white">
+        <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'overview'}
+            onClick={() => setActiveTab('overview')}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'overview'
+                ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-700 dark:text-white'
+                : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+            }`}
+          >
             <BarChart3 size={16} />
             Tổng quan
-          </span>
-          <Link
-            href="/shifts"
-            className="flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'inventory'}
+            onClick={() => setActiveTab('inventory')}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'inventory'
+                ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-700 dark:text-white'
+                : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+            }`}
           >
-            <CalendarClock size={16} />
-            Theo ca
-          </Link>
+            <Package size={16} />
+            Kho
+          </button>
         </div>
 
-        <ReportsOverview user={user} />
+        {activeTab === 'overview' ? (
+          <ReportsOverview user={user} ref={setOverviewHandle} />
+        ) : (
+          <ReportsInventory />
+        )}
       </div>
     </div>
   )

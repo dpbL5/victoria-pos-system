@@ -7,7 +7,6 @@ import {
   Clock3,
   Edit3,
   Plus,
-  RefreshCw,
   Repeat2,
   Trash2,
   type LucideIcon,
@@ -24,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/lib/api'
+import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { formatDay, money } from '@/features/pos/format'
 import type { UserSession } from '@/features/pos/types'
 import { toInputDate } from '@/lib/shared/utils'
@@ -98,6 +98,12 @@ export function PricingScreen() {
 
   const { data: pricingData, isLoading: pricingLoading, mutate } = useApi<PricingRule[]>('/api/pricing', { dedupingInterval: 300_000 })
   const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
+
+  const { registerRefresh } = usePageRefresh()
+
+  useEffect(() => {
+    return registerRefresh(() => void mutate())
+  }, [registerRefresh, mutate])
 
   const rules: PricingRule[] = pricingData?.data ?? []
   const error = !pricingData?.success ? (pricingData?.error as string ?? '') : ''
@@ -174,22 +180,12 @@ export function PricingScreen() {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-5xl space-y-4">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Thiết lập vận hành
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-zinc-950 dark:text-white">
+        <header className="hidden items-center justify-between gap-3 md:flex">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
               Bảng giá
             </h1>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={RefreshCw}
-            onClick={() => void mutate()}
-            title="Làm mới"
-          />
         </header>
 
         {error && (

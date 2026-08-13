@@ -2,10 +2,10 @@
 import type { Prisma } from '@/generated/prisma/client'
 
 export type ShiftStore = Pick<Prisma.TransactionClient, 'shift' | 'shiftParticipant' | 'shiftTool'>
-export type PaymentStore = Pick<Prisma.TransactionClient, 'payment' | 'membershipPayment'>
+export type PaymentStore = Pick<Prisma.TransactionClient, 'payment'>
 export type MembershipStore = Pick<Prisma.TransactionClient, 'membership' | 'membershipPlan'>
 export type CustomerStore = Pick<Prisma.TransactionClient, 'customer'>
-export type BillingStore = Pick<Prisma.TransactionClient, 'invoice' | 'invoiceItem' | 'payment' | 'membershipPayment' | 'stockMovement'>
+export type BillingStore = Pick<Prisma.TransactionClient, 'invoice' | 'invoiceItem' | 'payment' | 'stockMovement'>
 export type SessionStore = Pick<Prisma.TransactionClient, 'session' | 'sessionPricingGroup' | 'sessionPlayer' | 'invoice'>
 export type ProductStore = Pick<Prisma.TransactionClient, 'product' | 'stockMovement'>
 export type PricingStore = Pick<Prisma.TransactionClient, 'pricingRule' | 'pricingTier'>

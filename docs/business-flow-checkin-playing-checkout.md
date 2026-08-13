@@ -48,7 +48,7 @@
    ┌─ Gia hạn hội viên (khi cần) ────────────────┐
    │ chọn gói + phương thức → Membership mới (nối│
    │ kỳ hoặc từ ngày đóng phí) + Invoice         │
-   │ MEMBERSHIP_FEE + Payment + MembershipPayment│
+   │ MEMBERSHIP_FEE + Payment(kind=MEMBERSHIP)   │
    └─────────────────────────────────────────────┘
 ```
 
@@ -120,16 +120,17 @@
 4. Tính tiền per-player: `calculatePlayerPrice` (elapsed − pause, tiered + KM riêng từng người) → tổng; legacy không có player rows → tính 1 người × `checkoutCount`.
 5. `createPaidInvoice` (`generateInvoiceNo()`) + dòng `PLAY_TIME`:
    - `quantity` = tổng played hours, `discountAmount` = tiền KM, `total` = đã trừ KM — **không có dòng `DISCOUNT` riêng**; metadata chứa `promotion` snapshot (`toPromotionMetadata`), `pricingGroupId`, `groupLabel`, `pausedSeconds`, `playerPricing`, `checkedOutPlayers`.
+   - Thu trước (thu số người < tổng người chưa thu): metadata thêm `earlyCollection.sequence` (số lần thu trước = `countPaidBySession + 1`) + notes `Thu trước lần N — M người`.
    - Hội viên: `subtotal 0`, description `Giờ chơi hội viên × N người`.
 6. Phí gửi xe: `parkingVehicleCount > 0` → dòng `SURCHARGE` (metadata `surchargeType: 'PARKING'`), giá từ `AppSetting(PARKING_FEE_UNIT_PRICE)`, **trừ vào tổng**; `updateInvoiceTotals`.
 7. Dòng sản phẩm: re-fetch `findByIdForSale` (TOCTOU) → `decrementStockIfAvailable` (không âm) + `recordSaleMovement` (SALE, gắn `invoiceItemId`/`shiftId`) — chỉ cho lượng mới thêm tại checkout (`newQuantityByProductId`), phần DRAFT đã trừ kho lúc bán kèm.
 8. `createPayment` (sessionId, invoiceId, shiftId, staffId, `paymentMethod` CASH/TRANSFER/CARD, grandTotal).
-9. Thanh toán theo nhóm: `decrementGroupRemaining(pricingGroupId, checkoutCount)` + `markPlayersCheckedOut(playerIds)` (`checkedOutAt`) — cho checkout từng phần 1 nhóm người (`remainingCount`).
-10. Checkout hết người (`totalRemaining <= 0`): `Session` → `COMPLETED` (endTime, status, totalHours, subtotal, discountAmount, totalAmount, promotion fields) + `customer.recordPlay(hours, spent)` + hủy các DRAFT còn lại (`cancelDraftInvoices`). Checkout một phần: session vẫn ACTIVE.
+9. Thanh toán theo nhóm: `decrementGroupRemaining(pricingGroupId, checkoutCount)` + `markPlayersCheckedOut(playerIds)` (`checkedOutAt`) — cho checkout từng phần 1 nhóm người (`remainingCount`). Nếu `playerIds` chọn người từ nhiều nhóm, decrement từng nhóm theo số người đã thu (`playersToBillByGroup`).
+10. Checkout hết người (`totalRemaining <= 0`): `Session` → `COMPLETED` (endTime, status, totalHours, subtotal, discountAmount, totalAmount, promotion fields) + `customer.recordPlay(hours, spent)` + hủy các DRAFT còn lại (`cancelDraftInvoices`). Checkout một phần (`thu trước`): session vẫn `ACTIVE`, `playerCount` = số người còn lại.
 11. Audit `SESSION_CHECK_OUT` (kèm invoiceId, paymentId, mergedDraftInvoices, assignedPricingRuleIds...).
 
 - Models: `Invoice`, `InvoiceItem` (PLAY_TIME/PRODUCT/SERVICE/SURCHARGE), `Payment`, `Session`, `SessionPricingGroup`, `SessionPlayer`, `Product`, `StockMovement`, `AppSetting`, `ActivityLog`.
-- Feature: `checkout-drawer.tsx` — gọi `checkout-preview` (groups/pricingGroupId/playerCount, `promotionRuleId`, `parkingVehicleCount`), hiển thị quote rồi POST checkout; `active-session-card.tsx` (nút mở drawer), `invoice-detail-content.tsx` (xem hoá đơn đã tạo). Hoá đơn đã thanh toán chỉ hủy qua `voidInvoice` (`src/lib/invoicing/use-cases/void-invoice.ts`, ADR-004) — không xoá cứng.
+- Feature: `checkout-drawer.tsx` — gọi `checkout-preview` (groups/pricingGroupId/playerCount hoặc `playerIds`, `promotionRuleId`, `parkingVehicleCount`), hiển thị quote + breakdown giá từng người chơi (`playerPricing`) rồi POST checkout. UI hỗ trợ thu trước: chọn nhóm giá (hiện `remainingCount`/`playerCount`), stepper số người thu, hoặc checkbox chọn từng người chơi (bỏ chọn 1 người → thu trước phần còn lại); `active-session-card.tsx` (nút mở drawer), `invoice-detail-content.tsx` (xem hoá đơn đã tạo). Hoá đơn đã thanh toán chỉ hủy qua `voidInvoice` (`src/lib/invoicing/use-cases/void-invoice.ts`, ADR-004) — không xoá cứng.
 
 ## 7. Bước 5: Gia hạn hội viên (khi cần)
 
@@ -139,8 +140,8 @@
   - Còn hạn (`expiresAt > paidAt`) → `startsAt = expiresAt` cũ, **nối kỳ**.
   - Hết hạn → `startsAt = paidAt`, **kỳ mới từ ngày đóng phí**.
   - `expiresAt = addMonthsKeepingDay(startsAt, durationMonths)` (giữ nguyên ngày, clamp cuối tháng).
-- Transaction: tạo `Membership` ACTIVE → `createPaidInvoice` (prefix `MEM`, dòng `MEMBERSHIP_FEE`, metadata membershipId/planId/startsAt/expiresAt) → `createPayment` → `createMembershipPayment` → `customer.addSpend(price, true)` (đổi khách thành MEMBER) → audit `MEMBERSHIP_RENEW`.
-- Models: `MembershipPlan`, `Membership`, `MembershipPayment`, `Invoice`, `InvoiceItem` (MEMBERSHIP_FEE), `Payment`, `Shift`, `ActivityLog`.
+- Transaction: tạo `Membership` ACTIVE → `createPaidInvoice` (prefix `MEM`, dòng `MEMBERSHIP_FEE`, metadata membershipId/planId/startsAt/expiresAt) → `createPayment(kind=MEMBERSHIP)` (gộp từ `MembershipPayment` cũ — STI) → `customer.addSpend(price, true)` (đổi khách thành MEMBER) → audit `MEMBERSHIP_RENEW`.
+- Models: `MembershipPlan`, `Membership`, `Invoice`, `InvoiceItem` (MEMBERSHIP_FEE), `Payment` (kind=MEMBERSHIP), `Shift`, `ActivityLog`.
 - Feature: `member-screen.tsx` (màn `Hội viên`), `check-in-dialog.tsx` hiển thị hướng dẫn gia hạn khi hết hạn; sau khi gia hạn mới cho check-in.
 
 ## 8. Bảng tóm tắt models + use-cases theo bước
@@ -152,11 +153,11 @@
 | Chơi (ticker/pause) | `Session` (pausedAt, totalPausedSeconds), `SessionPlayer`, `ActivityLog` | `pauseSession`/`resumeSession`, `pausePlayer`/`resumePlayer` — `src/lib/sessions/use-cases/pause-session.ts` | `session-timer.tsx`, `active-session-card.tsx`, `player-pause-card.tsx` |
 | Bán kèm | `Invoice` (DRAFT), `InvoiceItem`, `Product`, `StockMovement` (SALE), `ActivityLog` | `sellItems` — `src/lib/sessions/use-cases/sell-items.ts` | `sell-dialog.tsx`, `sell-pick-dialog.tsx` |
 | Check-out | `Invoice` (PAID), `InvoiceItem` (PLAY_TIME/SURCHARGE/PRODUCT/SERVICE), `Payment`, `Session`, `SessionPricingGroup`, `SessionPlayer`, `Product`, `StockMovement`, `AppSetting`, `ActivityLog` | `checkOut` / `runCheckOutTx` — `src/lib/sessions/use-cases/check-out.ts`; `calculateSessionPrice`/`calculatePlayerPrice` — `src/lib/sessions/pricing-engine.ts` | `checkout-drawer.tsx` (preview → POST) |
-| Gia hạn / đăng ký | `MembershipPlan`, `Membership`, `MembershipPayment`, `Invoice`, `InvoiceItem` (MEMBERSHIP_FEE), `Payment`, `Shift`, `ActivityLog` | `renewMembership` — `src/lib/memberships/use-cases/renew-membership.ts`; `registerMember` — `register-member.ts`; `calculateRenewalPeriod` — `src/lib/memberships/helpers.ts` | `member-screen.tsx` |
+| Gia hạn / đăng ký | `MembershipPlan`, `Membership`, `Invoice`, `InvoiceItem` (MEMBERSHIP_FEE), `Payment` (kind=MEMBERSHIP), `Shift`, `ActivityLog` | `renewMembership` — `src/lib/memberships/use-cases/renew-membership.ts`; `registerMember` — `register-member.ts`; `calculateRenewalPeriod` — `src/lib/memberships/helpers.ts` | `member-screen.tsx` |
 | Đóng ca (cuối luồng) | `Shift` (expectedCash/closingCash/cashDifference), `ShiftParticipant` (leftAt), `ShiftTool`, `ActivityLog` | `closeShift` — `src/lib/shifts/use-cases/close-shift.ts` | `close-shift-dialog.tsx` |
 
 ## Ghi chú kiến trúc
 
 - Toàn bộ mutation nhiều bảng qua `runInTransaction()` (`src/lib/infrastructure/db-helpers.ts`); use-case trả `Result<T>` (`ok`/`err`/`fail`), map lỗi qua `mapCheckInError`/`mapCheckoutError`/`mapSellItemsError`/`mapOpenOrJoinShiftError`/`mapRenewMembershipError`.
 - Route handlers chỉ: validate (Zod) → gọi use-case → `resultToResponse`/`apiSuccess` — xem `docs/api-routes.md`.
-- Hoá đơn DRAFT bán kèm chỉ bị hủy (CANCELLED, đánh dấu `Đã gộp vào hóa đơn ...`) khi checkout toàn bộ phiên; hoá đơn PAID chỉ hủy qua `voidInvoice` (hoàn kho + Payment âm) — `src/lib/invoicing/use-cases/void-invoice.ts`.
+- Hoá đơn DRAFT bán kèm chỉ bị hủy (CANCELLED, đánh dấu `Đã gộp vào hóa đơn ...`) khi checkout toàn bộ phiên; hoá đơn PAID chỉ hủy qua `voidInvoice` (hoàn kho VOID, không tạo refund payment — payment gốc giữ nguyên, báo cáo lọc qua `invoice.status`) — `src/lib/invoicing/use-cases/void-invoice.ts`.

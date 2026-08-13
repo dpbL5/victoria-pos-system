@@ -12,7 +12,6 @@ const fakeStore = vi.hoisted(() => ({
   invoice: { create: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
   invoiceItem: { create: vi.fn(), findMany: vi.fn() },
   payment: { create: vi.fn(), findMany: vi.fn() },
-  membershipPayment: { create: vi.fn() },
   membership: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
   membershipPlan: { findUnique: vi.fn(), findMany: vi.fn() },
   customer: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), findMany: vi.fn() },

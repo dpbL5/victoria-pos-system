@@ -57,6 +57,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       softDelete: vi.fn(async () => {}),
       addSpend: vi.fn(),
       recordPlay: vi.fn(),
+      findByPhone: vi.fn(),
       countWalkInsBetween: vi.fn(),
     },
     shift: {
@@ -146,6 +147,8 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       getShiftDayGroups: vi.fn(),
       getShiftRevenue: vi.fn(),
       getShiftRevenues: vi.fn(),
+      getTrends: vi.fn(),
+      getTopProducts: vi.fn(),
     },
   }
   return { ...base, ...overrides }

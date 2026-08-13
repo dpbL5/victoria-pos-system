@@ -31,6 +31,8 @@ import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { apiJson } from '@/lib/api'
+import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { toInputDate } from '@/lib/shared/utils'
 import type { UserSession } from '@/features/pos/types'
 import type { UserRole } from '@/types'
 
@@ -132,12 +134,9 @@ export default function StaffPage() {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-6xl space-y-4">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Quản trị nội bộ
-            </p>
-            <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
+        <header className="hidden items-center justify-between gap-3 md:flex">
+          <div className="min-w-0">
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
               <UserCog size={24} className="text-blue-500" />
               Nhân viên
             </h1>
@@ -175,6 +174,12 @@ function StaffAdminPanel() {
   const [activeTab, setActiveTab] = useState<StaffTabId>('accounts')
 
   const { data: usersData, isLoading: usersLoading, mutate: reloadUsers } = useApi<UserRow[]>('/api/users', { dedupingInterval: 300_000 })
+
+  const { registerRefresh } = usePageRefresh()
+
+  useEffect(() => {
+    return registerRefresh(() => void reloadUsers())
+  }, [registerRefresh, reloadUsers])
 
   const users: UserRow[] = usersData?.data ?? []
   const usersError = !usersData?.success ? (usersData?.error as string ?? '') : ''
@@ -1022,7 +1027,7 @@ function formatDateLabel(dateStr: string): string {
 function groupLogsByDate(logs: ActivityLogRow[]) {
   const groups = new Map<string, ActivityLogRow[]>()
   for (const log of logs) {
-    const date = new Date(log.createdAt).toDateString()
+    const date = toInputDate(new Date(log.createdAt))
     if (!groups.has(date)) groups.set(date, [])
     groups.get(date)!.push(log)
   }

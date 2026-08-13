@@ -1,3 +1,5 @@
+> **⚠️ ARCHIVED (2026-08-13)** — File ghi chú scratch từ quá trình phát triển, không còn là danh sách việc theo dõi. Giữ lại để tham khảo ý tưởng (SSE, chỉnh sửa hoá đơn, lịch học viên, tách tiền bán nước...). Danh sách việc hiện tại nằm ở git issues / quyết định trong `AGENTS.md` + `docs/`.
+
 SSE- để sau.
 
 

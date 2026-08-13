@@ -14,7 +14,7 @@ import { repositories } from '@/lib/infrastructure/repositories'
 
 const stripeShiftInclude = {
   staff: { select: { id: true, fullName: true } },
-  _count: { select: { sessions: true, payments: true, membershipPayments: true } },
+  _count: { select: { sessions: true, payments: true } },
   toolCounts: {
     include: { tool: { select: { id: true, name: true, quantity: true, isRequired: true } } },
   },

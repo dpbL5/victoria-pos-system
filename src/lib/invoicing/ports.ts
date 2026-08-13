@@ -8,6 +8,8 @@ export interface CreateInvoiceLineInput {
   description: string
   quantity: number
   unitPrice: number
+  /** Giá vốn đơn vị (weighted average cost) tại thời điểm bán — snapshot để truy vết lợi nhuận */
+  unitCost?: number | null
   subtotal: number
   discountAmount: number
   total: number
@@ -78,8 +80,7 @@ export interface EditInvoiceTarget {
   grandTotal: number
   staff: { fullName: string } | null
   items: EditInvoiceItemRef[]
-  payments: Array<{ id: string; totalHours: number | null; paymentMethod: string | null }>
-  membershipPayments: Array<{ id: string }>
+  payments: Array<{ id: string; totalHours: number | null; paymentMethod: string | null; kind: string }>
 }
 
 export interface UpdateInvoiceFinancialsInput {
@@ -109,6 +110,8 @@ export interface CreateInvoiceItemInput {
   description: string
   quantity: number
   unitPrice: number
+  /** Giá vốn đơn vị (weighted average cost) tại thời điểm bán — snapshot để truy vết lợi nhuận */
+  unitCost?: number | null
   subtotal: number
   discountAmount: number
   total: number
@@ -180,9 +183,12 @@ export type InvoiceDetail = Prisma.InvoiceGetPayload<{
       include: { product: { select: { id: true; name: true; sku: true; type: true } } }
       orderBy: { createdAt: 'asc' }
     }
-    payments: { include: { staff: { select: { id: true; fullName: true } } } }
-    membershipPayments: {
-      include: { membership: { include: { plan: { select: { name: true } } } } }
+    payments: {
+      include: {
+        staff: { select: { id: true; fullName: true } }
+        membership: { include: { plan: { select: { name: true } } } }
+        plan: { select: { id: true; name: true } }
+      }
     }
   }
 }>
@@ -207,12 +213,12 @@ export type CustomerInvoiceHistory = Prisma.InvoiceGetPayload<{
       }
       orderBy: { createdAt: 'asc' }
     }
-    payments: { select: { id: true; paymentMethod: true; grandTotal: true; paidAt: true } }
-    membershipPayments: {
+    payments: {
       select: {
         id: true
-        amount: true
+        kind: true
         paymentMethod: true
+        grandTotal: true
         paidAt: true
         plan: { select: { id: true; name: true } }
       }
@@ -281,8 +287,8 @@ export interface BillingRepository {
   findInvoicesByCustomer(customerId: string): Promise<CustomerInvoiceHistory[]>
   /** Invoice tối giản — cho DELETE guard */
   findByIdForDelete(invoiceId: string): Promise<InvoiceDeleteTarget | null>
-  /** Đếm payment/membershipPayment/stockMovement gắn invoice — INVOICE_LINKED guard */
-  countLinkedTransactions(invoiceId: string): Promise<{ payments: number; membershipPayments: number; stockMovements: number }>
+  /** Đếm payment/stockMovement gắn invoice — INVOICE_LINKED guard */
+  countLinkedTransactions(invoiceId: string): Promise<{ payments: number; stockMovements: number }>
   /** Xoá items + invoice (chỉ gọi khi không có giao dịch liên quan) */
   deleteInvoiceWithItems(invoiceId: string): Promise<void>
   /** Draft invoices + items bán kèm phiên — cho checkout-preview */
