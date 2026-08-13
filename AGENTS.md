@@ -10,14 +10,14 @@
 - Use shared types from `@/types` when available. Do not duplicate core entity interfaces in pages unless the type is an include/projection shape specific to that file.
 - Use `lucide-react` icons. Do not use emoji in UI.
 - Use `Input`, `Select`, `Label`, `Modal`, `Badge`, `EmptyState`, `Skeleton`, and toast primitives from `src/components/ui/` when applicable.
-- All mutations touching multiple tables must use `prisma.$transaction()`.
+- All mutations touching multiple tables must go through `runInTransaction()` from `@/lib/infrastructure/db-helpers` (which wraps `prisma.$transaction` internally), never raw `prisma.$transaction()` inside use-cases.
 
 ## Business Invariants
 
 - One check-in session represents exactly one customer. Do not introduce group sessions, participant lists, or shared bills. A single customer session may still track multiple players (`Session.playerCount`) split into pricing groups (`SessionPricingGroup`, each with its own pricing-rule snapshot), and checkout can settle one pricing group at a time (`pricingGroupId`) — but the session always belongs to exactly one customer.
 - `WALK_IN` customers pay for play time from check-in to checkout. Price can use pricing rules and promotions.
 - `MEMBER` customers do not pay hourly play fees while their membership is active. Do not implement member play time as a fixed percentage discount.
-- Membership must be modeled separately from `Customer.type`: use `MembershipPlan`, `Membership`, and `MembershipPayment`.
+- Membership must be modeled separately from `Customer.type`: use `MembershipPlan` and `Membership`. Membership fees are paid through the same `Payment` table with `kind = MEMBERSHIP` (single-table inheritance — there is no separate `MembershipPayment` model anymore).
 - If a member is expired at check-in, the UI/API should offer renewal before play. After successful renewal, allow check-in.
 - Membership renewal rule:
   - Active member renewing early: new period starts after current `expiresAt`.
@@ -40,12 +40,11 @@
 - `PromotionRule`: optional discounts for walk-in play time or invoice items.
 - `MembershipPlan`: monthly membership package and fee.
 - `Membership`: a customer's active/expired/cancelled membership period.
-- `MembershipPayment`: membership fee payment history.
 - `Product`: sellable product or service. `PRODUCT` tracks stock; `SERVICE` does not.
 - `StockMovement`: inventory import, sale, adjustment, or void.
 - `Invoice`: payable document for a customer/session/shift.
 - `InvoiceItem`: line items such as `PLAY_TIME`, `PRODUCT`, `SERVICE`, `MEMBERSHIP_FEE`, `DISCOUNT`.
-- `Payment`: payment against an invoice.
+- `Payment`: payment against an invoice. `kind` is `OPERATIONAL` (checkout / in-shift sale) or `MEMBERSHIP` (membership fee — was the old `MembershipPayment` table, merged via single-table inheritance).
 - `Shift`: shared counter shift with opening cash, expected cash, actual cash, difference, notes, and the staff member who opened it.
 - `ShiftParticipant`: staff member participating in a shared shift, with join/leave timestamps and role.
 - `Tool`: equipment item (bows, etc.) with quantity, `isRequired`, display order.
@@ -63,12 +62,12 @@
   5. Member check-in must show membership status and require renewal before session creation when expired.
   6. `/customers` is the staff membership screen, not a generic customer CRUD table.
   7. Keep membership UI in `src/features/memberships/`.
-  8. New member registration must create customer, membership, invoice, payment, and membership payment in one backend transaction.
+  8. New member registration must create customer, membership, invoice, and payment (`kind = MEMBERSHIP`) in one backend transaction.
   9. `/inventory` is the staff `Kho quầy` screen. Keep it mobile-first and keep UI logic in `src/features/inventory/`.
   10. Staff can view/search/filter inventory; only admin can create products/services or post stock movements.
   11. Inventory UI must distinguish `PRODUCT` stock states (`Hết`, `Sắp hết`, `Đủ`) from `SERVICE` items that do not track stock.
-  12. `/reports` is the mobile operational report screen. Keep UI logic in `src/features/reports/`.
-  13. Staff reports should show the current staff account/shift scope; admin reports can show all-system scope and CSV export.
+  12. `/reports` is the mobile operational report screen. Keep UI logic in `src/features/reports/`. It has two tabs: `Tổng quan` (ReportsOverview — dashboard stats, revenue trend charts, recent payments) and `Kho` (ReportsInventory — top products sold via `/api/reports/top-products`).
+  13. Staff reports should show the current staff account/shift scope (`invoice.staffId` filter); admin reports can show all-system scope and CSV export.
   14. `/settings` is the mobile `Thêm` tab, not a plain settings page. Keep UI logic in `src/features/more/`.
   15. The `Thêm` tab should show account, current shift status, admin shortcuts first (các tab ẩn trên mobile: Bảng giá, Khuyến mại, Dụng cụ, Nhân viên, Gói hội viên), then operational shortcuts, theme controls, system status, and logout.
   16. Admin-only shortcuts such as pricing and staff management must be hidden from staff users in the `Thêm` tab.
@@ -89,10 +88,11 @@
   2. Resolve pricing at checkout: `input.groups` (per-group rules) or `input.pricingRuleId` (one rule for the whole session), else auto-resolve the rule applicable at checkout time; snapshot rule + tiers into each `SessionPricingGroup.pricingSnapshot`.
   3. Build an invoice.
   4. For `WALK_IN`, add `PLAY_TIME` item from elapsed hours, tiered pricing, and the selected promotion (all from the resolved snapshot; discount goes into the item's `discountAmount`/metadata — no separate `DISCOUNT` line). Checkout can settle one pricing group via `pricingGroupId`, decrementing its `remainingCount`.
-  4. For active `MEMBER`, play time item should be `0đ` or omitted, but products/services still apply.
-  5. Optionally add a parking fee as a `SURCHARGE` line (`metadata.surchargeType: 'PARKING'`) priced from `AppSetting(PARKING_FEE_UNIT_PRICE)` — it reduces the invoice total.
-  6. Deduct inventory for stock-tracked products through `StockMovement`.
-  7. Record payment, close session, update customer totals, and write audit logs in one transaction.
+  5. Partial checkout (`thu trước`): checkout can bill a subset of players — pass `pricingGroupId` + `playerCount`, or `playerIds` to settle specific players across any group. `remainingCount` is decremented, billed players get `checkedOutAt`, and the session stays `ACTIVE` until the last group is settled (only then is it marked `COMPLETED`). A `metadata.earlyCollection` sequence marker and note `Thu trước lần N — M người` are written on the `PLAY_TIME` line when billing fewer players than remain.
+  6. For active `MEMBER`, play time item should be `0đ` or omitted, but products/services still apply.
+  7. Optionally add a parking fee as a `SURCHARGE` line (`metadata.surchargeType: 'PARKING'`) priced from `AppSetting(PARKING_FEE_UNIT_PRICE)` — it reduces the invoice total.
+  8. Deduct inventory for stock-tracked products through `StockMovement`.
+  9. Record payment, close session (or keep it ACTIVE on partial checkout), update customer totals, and write audit logs in one transaction.
 
 - Inventory:
   1. `GET /api/products` is available to authenticated staff for the mobile inventory and checkout flows.
@@ -117,6 +117,7 @@
   4. Show item type breakdown for `PLAY_TIME`, `MEMBERSHIP_FEE`, `PRODUCT`, and `SERVICE`.
   5. Use the UI label `giao dịch` for payment counts because membership fees can be payments without a play session.
   6. CSV export is admin-only.
+  7. The `/reports` screen has two tabs: `Tổng quan` (dashboard overview + revenue trends) and `Kho` (top products sold — `getTopProducts`, quantity sold + revenue + profit from `InvoiceItem.unitCost`). Both are visible to STAFF and ADMIN; STAFF scope filters via `invoice.staffId`.
 
 - More/settings:
   1. `/settings` should render `MoreScreen`; do not put large client state directly in the route page.
@@ -127,7 +128,7 @@
 - Membership renewal:
   1. Select plan and payment method.
   2. Determine period start/end using the renewal rule above.
-  3. Create membership payment, update membership, create invoice/payment records, and attach to current shift.
+  3. Create a `Payment` with `kind = MEMBERSHIP`, update membership, create invoice/payment records, and attach to current shift.
 
 - Shift close:
   1. Summarize payments by method.
@@ -141,7 +142,7 @@
 - Keep this as a modular monolith. Do not split into microservices.
 - Prefer use-case style functions for business flows such as check-in, checkout, membership renewal, stock adjustment, and shift close.
 - Avoid putting business rules directly in React pages or route handlers. Route handlers should validate, authorize, call use-case logic, and return API responses.
-- Financial records must be append-friendly and auditable. Prefer void/correction flows over destructive edits: invoice voids go through the `voidInvoice` use-case (mark `CANCELLED`, negative refund `Payment`, `VOID` stock movements, `INVOICE_VOID` activity log) — never hard-delete a paid invoice.
+- Financial records must be append-friendly and auditable. Prefer void/correction flows over destructive edits: invoice voids go through the `voidInvoice` use-case (mark `CANCELLED`, `VOID` stock movements, `INVOICE_VOID` activity log) — never hard-delete a paid invoice. The original `Payment` is kept unchanged; reports exclude it by filtering on `invoice.status != 'CANCELLED'`. No refund `Payment` is created on void.
 - Report dates must use Vietnam business timezone semantics, not accidental UTC grouping.
 
 ## Architecture Constraints (Port/Adapter + Domain Modules)

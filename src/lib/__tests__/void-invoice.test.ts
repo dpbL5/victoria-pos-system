@@ -54,7 +54,7 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
       updateInvoiceFinancials: vi.fn(async () => {}),
       findByIdWithDetails: vi.fn(),
       findByIdForDelete: vi.fn(),
-      countLinkedTransactions: vi.fn(async () => ({ payments: 0, membershipPayments: 0, stockMovements: 0 })),
+      countLinkedTransactions: vi.fn(async () => ({ payments: 0, stockMovements: 0 })),
       deleteInvoiceWithItems: vi.fn(async () => {}),
       findDraftSellPreview: vi.fn(),
       findInvoicesByCustomer: vi.fn(),
@@ -72,7 +72,7 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
       findManyByCustomer: vi.fn(),
     },
     membershipPlan: { findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), countUsage: vi.fn(), delete: vi.fn() },
-    customer: { findById: vi.fn(), findByIdIncludingDeleted: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), softDelete: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), countWalkInsBetween: vi.fn() },
+    customer: { findById: vi.fn(), findByIdIncludingDeleted: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), softDelete: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), findByPhone: vi.fn(), countWalkInsBetween: vi.fn() },
     shift: {
       findOpenForStaff: vi.fn(),
       findOpenOperational: vi.fn(),
@@ -169,6 +169,8 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
       getShiftDayGroups: vi.fn(),
       getShiftRevenue: vi.fn(),
       getShiftRevenues: vi.fn(),
+      getTrends: vi.fn(),
+      getTopProducts: vi.fn(),
     },
   }
 }

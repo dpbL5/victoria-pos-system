@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Edit3,
   Plus,
-  RefreshCw,
   Trash2,
   Wrench,
 } from 'lucide-react'
@@ -20,6 +19,7 @@ import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
+import { usePageRefresh } from '@/components/layout/page-refresh-context'
 
 interface Tool {
   id: string
@@ -54,6 +54,12 @@ export function ToolsScreen() {
   const [editTool, setEditTool] = useState<Tool | null>(null)
   const [deleteTool, setDeleteTool] = useState<Tool | null>(null)
   const [form, setForm] = useState<ToolForm>(emptyForm)
+
+  const { registerRefresh } = usePageRefresh()
+
+  useEffect(() => {
+    return registerRefresh(() => void mutate())
+  }, [registerRefresh, mutate])
 
   const tools = toolsData?.data ?? []
   const error = !toolsData?.success ? (toolsData?.error ?? '') : ''
@@ -229,24 +235,14 @@ export function ToolsScreen() {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-3xl space-y-4">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Quản lý dụng cụ
-            </p>
-            <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
+        <header className="hidden items-center justify-between gap-3 md:flex">
+          <div className="min-w-0">
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
               <Wrench size={24} className="text-amber-500" />
               Dụng cụ quầy
             </h1>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={RefreshCw}
-              onClick={() => void mutate()}
-              title="Làm mới"
-            />
             <Button variant="primary" size="sm" icon={Plus} onClick={openCreate}>
               Thêm
             </Button>

@@ -23,7 +23,6 @@ export interface RegisterMemberResult {
   customer: { id: string; fullName: string; phone: string | null; type: 'MEMBER' }
   membership: { id: string; startsAt: Date; expiresAt: Date; status: 'ACTIVE' | 'CANCELLED' }
   invoiceId: string
-  paymentId: string
   membershipPaymentId: string
 }
 
@@ -40,6 +39,15 @@ export async function registerMember(
   ])
   if (!openShift) return err('SHIFT_REQUIRED')
   if (!plan || !plan.isActive) return err('PLAN_NOT_FOUND')
+
+  // ── Idempotency: chặn đăng ký trùng theo SĐT (chống double-submit) ──
+  // Hội viên đăng ký bắt buộc có SĐT — nếu SĐT đã tồn tại cho khách chưa bị xoá, từ chối.
+  if (phone?.trim()) {
+    const existingByPhone = await deps.customer.findByPhone(phone.trim())
+    if (existingByPhone) {
+      return err('CUSTOMER_ALREADY_EXISTS')
+    }
+  }
 
   const { startsAt, expiresAt } = calculateRenewalPeriod(null, plan.durationMonths, paidAt)
 
@@ -87,19 +95,6 @@ export async function registerMember(
       ],
     })
 
-    const payment = await tx.billing.createPayment({
-      invoiceId: invoice.id,
-      shiftId: openShift.id,
-      staffId,
-      totalHours: 0,
-      subtotal: Number(plan.price),
-      discountTotal: 0,
-      grandTotal: Number(plan.price),
-      paymentMethod,
-      paidAt,
-      notes,
-    })
-
     const membershipPayment = await tx.billing.createMembershipPayment({
       customerId: customer.id,
       membershipId: membership.id,
@@ -123,7 +118,6 @@ export async function registerMember(
       details: {
         customerId: customer.id,
         invoiceId: invoice.id,
-        paymentId: payment.id,
         membershipPaymentId: membershipPayment.id,
         planId: plan.id,
         startsAt: startsAt.toISOString(),
@@ -131,7 +125,7 @@ export async function registerMember(
       },
     })
 
-    return { customer, membership, invoiceId: invoice.id, paymentId: payment.id, membershipPaymentId: membershipPayment.id }
+    return { customer, membership, invoiceId: invoice.id, membershipPaymentId: membershipPayment.id }
   })
 
   if (!result.ok) return result
@@ -145,7 +139,6 @@ export async function registerMember(
     },
     membership: value.membership,
     invoiceId: value.invoiceId,
-    paymentId: value.paymentId,
     membershipPaymentId: value.membershipPaymentId,
   })
 }
@@ -156,6 +149,8 @@ export function mapRegisterMemberError(error: DomainError): HttpErrorInfo {
       return { code: 'SHIFT_REQUIRED', message: 'Cần mở ca trước khi đăng ký hội viên', status: 409 }
     case 'PLAN_NOT_FOUND':
       return { code: 'PLAN_NOT_FOUND', message: 'Gói hội viên không tồn tại hoặc đã ngừng dùng', status: 404 }
+    case 'CUSTOMER_ALREADY_EXISTS':
+      return { code: 'CUSTOMER_ALREADY_EXISTS', message: 'Số điện thoại này đã được đăng ký hội viên', status: 409 }
     default:
       return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
   }

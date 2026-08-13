@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/layout/theme-provider'
 import { Sidebar } from '@/components/layout/sidebar'
 import { BottomNav } from '@/components/layout/bottom-nav'
 import { Header } from '@/components/layout/header'
+import { PageRefreshProvider } from '@/components/layout/page-refresh-context'
 import { ToastProvider } from '@/components/ui/toast'
 
 interface User {
@@ -52,11 +53,13 @@ export function DashboardClientLayout({ user, children }: { user: User; children
           <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} userRole={user.role} />
 
           <div className={`flex min-w-0 flex-1 flex-col pb-16 transition-all duration-200 md:pb-0 ${sidebarOffset}`}>
-            <Header
-              userFullName={user.fullName}
-              userRole={user.role}
-            />
-            <main className="flex-1">{children}</main>
+            <PageRefreshProvider>
+              <Header
+                userFullName={user.fullName}
+                userRole={user.role}
+              />
+              <main className="flex-1">{children}</main>
+            </PageRefreshProvider>
           </div>
 
           <BottomNav />

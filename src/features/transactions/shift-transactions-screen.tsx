@@ -201,7 +201,7 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
             <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.back()}>
               Quay lại
             </Button>
-            <h1 className="text-lg font-bold text-zinc-950 dark:text-white">
+            <h1 className="hidden text-lg font-bold text-zinc-950 dark:text-white md:block">
               Giao dịch trong ca
             </h1>
           </div>

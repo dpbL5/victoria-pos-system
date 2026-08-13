@@ -57,6 +57,11 @@ export function createCustomerRepository(store: CustomerStore): CustomerReposito
   return {
     findById: (id) => store.customer.findUnique({ where: { id, deletedAt: null } }),
     findByIdIncludingDeleted: (id) => store.customer.findUnique({ where: { id } }),
+    findByPhone: (phone) =>
+      store.customer.findFirst({
+        where: { phone, deletedAt: null },
+        orderBy: { createdAt: 'asc' },
+      }),
     async findByIdWithCount(id) {
       return store.customer.findUnique({
         where: { id },

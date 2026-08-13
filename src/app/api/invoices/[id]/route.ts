@@ -96,18 +96,22 @@ export async function GET(
         })),
         payments: invoice.payments.map((payment) => ({
           id: payment.id,
+          kind: payment.kind,
           paymentMethod: payment.paymentMethod,
           grandTotal: Number(payment.grandTotal),
           paidAt: payment.paidAt.toISOString(),
           notes: payment.notes,
           staff: { id: payment.staff.id, fullName: payment.staff.fullName },
         })),
-        membershipPayments: invoice.membershipPayments.map((mp) => ({
-          id: mp.id,
-          amount: Number(mp.amount),
-          paidAt: mp.paidAt.toISOString(),
-          planName: mp.membership?.plan?.name ?? null,
-        })),
+        // STI: phí hội viên là Payment kind=MEMBERSHIP — giữ shape cũ cho frontend
+        membershipPayments: invoice.payments
+          .filter((p) => p.kind === 'MEMBERSHIP')
+          .map((mp) => ({
+            id: mp.id,
+            amount: Number(mp.grandTotal),
+            paidAt: mp.paidAt.toISOString(),
+            planName: mp.membership?.plan?.name ?? mp.plan?.name ?? null,
+          })),
       })
   } catch (error) {
     if ((error as Error).message === 'UNAUTHORIZED') {

@@ -38,7 +38,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     audit: { append: vi.fn(async () => {}), findMany: vi.fn() },
     membership: { findLatest: vi.fn(), findActive: vi.fn(), create: vi.fn(), findManyByCustomer: vi.fn() },
     membershipPlan: { findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), countUsage: vi.fn(), delete: vi.fn() },
-    customer: { findById: vi.fn(), findByIdIncludingDeleted: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), softDelete: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), countWalkInsBetween: vi.fn() },
+    customer: { findById: vi.fn(), findByIdIncludingDeleted: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), softDelete: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), findByPhone: vi.fn(), countWalkInsBetween: vi.fn() },
     shift: {
       findOpenForStaff: vi.fn(async () => ({ id: 'shift-1' }) as never),
       findOpenOperational: vi.fn(),
@@ -141,6 +141,8 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       getShiftDayGroups: vi.fn(),
       getShiftRevenue: vi.fn(),
       getShiftRevenues: vi.fn(),
+      getTrends: vi.fn(),
+      getTopProducts: vi.fn(),
     },
   }
   return { ...base, ...overrides }

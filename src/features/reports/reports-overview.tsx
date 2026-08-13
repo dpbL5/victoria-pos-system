@@ -1,19 +1,17 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { LucideIcon } from 'lucide-react'
 import {
-  Banknote,
   BarChart3,
-  CreditCard,
+  Clock,
   Download,
-  RefreshCw,
   ReceiptText,
   Target,
   Timer,
   TrendingUp,
   Users,
+  Wallet,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,13 +19,16 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label, Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { StatCard } from '@/components/ui/stat-card'
 import { apiJson } from '@/lib/api'
-import { formatClock, money } from '@/features/pos/format'
+import { formatClock, money, paymentMethodLabel } from '@/features/pos/format'
 import type { PaymentMethod, UserSession } from '@/features/pos/types'
 import { toInputDate } from '@/lib/shared/utils'
+import { AreaChart, DonutChart, HourlyBarChart, DailyVolumeChart } from './reports-charts'
 
 type ItemType = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT' | 'SURCHARGE'
 type Scope = 'STAFF' | 'ALL'
+type Range = 'today' | '7d' | '30d'
 
 interface PaymentBreakdown {
   CASH: { total: number; count: number }
@@ -105,15 +106,54 @@ interface RevenueResponse {
   error?: string
 }
 
+interface TrendData {
+  byItemType: ItemBreakdown
+  byPaymentMethod: Array<{ paymentMethod: string | null; _sum: { grandTotal: number | null } | null; _count: { _all: number } | null }>
+  byHour: Array<{ hour: number; revenue: number; count: number }>
+  byDay: Array<{ date: string; sessions: number; players: number; revenue: number }>
+  comparison: {
+    previousRevenue: number
+    currentRevenue: number
+    previousSessions: number
+    currentSessions: number
+  }
+  totals: {
+    revenue: number
+    sessions: number
+    players: number
+    avgHours: number
+    revenuePerSession: number
+  }
+}
+
+interface TrendResponse {
+  success: boolean
+  data?: TrendData
+  error?: string
+}
+
 interface ReportsOverviewProps {
   user: UserSession | null
 }
 
-export function ReportsOverview({ user }: ReportsOverviewProps) {
+export interface ReportsOverviewHandle {
+  refresh: () => void
+}
+
+const RANGES: Array<{ key: Range; label: string; days: number }> = [
+  { key: 'today', label: 'Hôm nay', days: 1 },
+  { key: '7d', label: '7 ngày', days: 7 },
+  { key: '30d', label: '30 ngày', days: 30 },
+]
+
+export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverviewProps>(
+  function ReportsOverview({ user }, ref) {
   const [dashboard, setDashboard] = useState<ReportDashboard | null>(null)
+  const [range, setRange] = useState<Range>('today')
   const [revenue, setRevenue] = useState<RevenueData[]>([])
   const [revenueSummary, setRevenueSummary] = useState<RevenueSummary | null>(null)
   const [recentPayments, setRecentPayments] = useState<RevenuePayment[]>([])
+  const [trends, setTrends] = useState<TrendData | null>(null)
   const [from, setFrom] = useState(() => toInputDate(new Date()))
   const [to, setTo] = useState(() => toInputDate(new Date()))
   const [exportType, setExportType] = useState('revenue')
@@ -158,21 +198,53 @@ export function ReportsOverview({ user }: ReportsOverviewProps) {
     }
   }, [])
 
+  const loadTrends = useCallback(async (nextFrom: string, nextTo: string) => {
+    try {
+      const response = await fetch(`/api/reports/trends?from=${nextFrom}&to=${nextTo}`)
+      const data = await response.json() as TrendResponse
+
+      if (!data.success) return
+      setTrends(data.data ?? null)
+    } catch {
+      // Trends là bổ trợ — không chặn toàn màn nếu lỗi
+    }
+  }, [])
+
+  useImperativeHandle(ref, () => ({
+    refresh: () => {
+      void loadDashboard()
+      void loadRevenue(from, to)
+      void loadTrends(from, to)
+    },
+  }), [loadDashboard, loadRevenue, loadTrends, from, to])
+
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     void loadDashboard()
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [loadDashboard])
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     void loadRevenue(from, to)
-  }, [from, to, loadRevenue])
+    void loadTrends(from, to)
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [from, to, loadRevenue, loadTrends])
 
   const canExport = user?.role === 'ADMIN'
+  const isAdmin = user?.role === 'ADMIN'
   const currentShift = dashboard?.currentShift ?? null
   const today = dashboard?.today
-  const maxRevenue = useMemo(
-    () => Math.max(...revenue.map((item) => item.revenue), 1),
-    [revenue]
-  )
+
+  const applyRange = (nextRange: Range) => {
+    setRange(nextRange)
+    const active = RANGES.find((r) => r.key === nextRange)!
+    const end = new Date()
+    const start = new Date()
+    start.setDate(end.getDate() - active.days + 1)
+    setFrom(toInputDate(start))
+    setTo(toInputDate(end))
+  }
 
   const applyQuickRange = (days: number) => {
     const end = new Date()
@@ -193,19 +265,6 @@ export function ReportsOverview({ user }: ReportsOverviewProps) {
           tone="danger"
           title="Không tải được dữ liệu"
           description={error}
-          action={
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={RefreshCw}
-              onClick={() => {
-                void loadDashboard()
-                void loadRevenue(from, to)
-              }}
-            >
-              Thử lại
-            </Button>
-          }
         />
       )}
 
@@ -219,49 +278,12 @@ export function ReportsOverview({ user }: ReportsOverviewProps) {
         }
       />
 
-      <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <ReportStat
-          label="Doanh thu"
-          value={money(today?.revenue)}
-          Icon={Banknote}
-          tone="emerald"
-        />
-        <ReportStat
-          label="Giao dịch"
-          value={String(today?.paymentCount ?? 0)}
-          Icon={ReceiptText}
-          tone="blue"
-        />
-        <ReportStat
-          label="Đang chơi"
-          value={String(today?.activeSessions ?? 0)}
-          Icon={Timer}
-          tone="amber"
-        />
-        <ReportStat
-          label="Khách mới"
-          value={String(today?.newCustomers ?? 0)}
-          Icon={Users}
-          tone="purple"
-        />
-      </section>
+      <RangeTabs range={range} onChange={applyRange} />
+
+      {today && <Scoreboard today={today} trends={trends} />}
 
       {currentShift && (
         <ShiftReportPanel shift={currentShift} />
-      )}
-
-      {today && (
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <BreakdownPanel
-            title="Nguồn doanh thu hôm nay"
-            items={buildItemRows(today.byItemType)}
-            total={today.revenue}
-          />
-          <PaymentPanel
-            title="Phương thức thanh toán"
-            breakdown={today.byPaymentMethod}
-          />
-        </section>
       )}
 
       <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -323,14 +345,11 @@ export function ReportsOverview({ user }: ReportsOverviewProps) {
               description="Thử đổi khoảng ngày hoặc kiểm tra các giao dịch đã thu."
             />
           ) : (
-            <div className="space-y-3">
-              {revenue.map((item) => (
-                <RevenueRow
-                  key={item.period}
-                  item={item}
-                  maxRevenue={maxRevenue}
-                />
-              ))}
+            <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+              <AreaChart
+                data={revenue.map((item) => ({ label: item.period, value: item.revenue }))}
+                axisLabels={[formatReportDate(revenue[0].period), formatReportDate(revenue[revenue.length - 1].period)]}
+              />
             </div>
           )}
         </div>
@@ -348,6 +367,58 @@ export function ReportsOverview({ user }: ReportsOverviewProps) {
           </div>
         )}
       </section>
+
+      {trends && (
+        <div className="space-y-4">
+          <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Phương thức thanh toán</h2>
+              <div className="mt-4">
+                <DonutChart
+                  data={buildPaymentSlices(trends.byPaymentMethod)}
+                  centerValue={money(trends.totals.revenue, false)}
+                />
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Nguồn doanh thu</h2>
+              <div className="mt-4">
+                <DonutChart
+                  data={buildItemSlices(trends.byItemType)}
+                  centerValue={money(trends.totals.revenue, false)}
+                />
+              </div>
+            </section>
+          </section>
+
+          {isAdmin && trends.byHour.length > 0 && (
+            <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="flex items-center gap-2">
+                <Clock size={17} className="text-blue-500" />
+                <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Doanh thu theo khung giờ</h2>
+              </div>
+              <div className="mt-4">
+                <HourlyBarChart data={trends.byHour} />
+              </div>
+            </section>
+          )}
+
+          <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Lưu lượng khách theo ngày</h2>
+            <div className="mt-4">
+              <DailyVolumeChart
+                data={trends.byDay.map((d) => ({
+                  label: formatReportDate(d.date),
+                  sessions: d.sessions,
+                  players: d.players,
+                  revenue: d.revenue,
+                }))}
+              />
+            </div>
+          </section>
+        </div>
+      )}
 
       <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex items-start justify-between gap-3">
@@ -403,7 +474,8 @@ export function ReportsOverview({ user }: ReportsOverviewProps) {
       )}
     </div>
   )
-}
+  }
+)
 
 function ReportsOverviewSkeleton() {
   return (
@@ -420,34 +492,76 @@ function ReportsOverviewSkeleton() {
   )
 }
 
-function ReportStat({
-  label,
-  value,
-  Icon,
-  tone,
+// ── Tabs chọn khoảng thời gian ──
+function RangeTabs({ range, onChange }: { range: Range; onChange: (range: Range) => void }) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {RANGES.map((r) => (
+        <button
+          key={r.key}
+          type="button"
+          onClick={() => onChange(r.key)}
+          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            range === r.key
+              ? 'bg-blue-600 text-white'
+              : 'bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:bg-zinc-800'
+          }`}
+        >
+          {r.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ── Scorecard 4 ô — thay thế DailyScoreboard tự vẽ bằng StatCard có sẵn ──
+function Scoreboard({
+  today,
+  trends,
 }: {
-  label: string
-  value: string
-  Icon: LucideIcon
-  tone: 'emerald' | 'blue' | 'amber' | 'purple'
+  today: NonNullable<ReportDashboard['today']>
+  trends: TrendData | null
 }) {
-  const toneClasses = {
-    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300',
-    blue: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300',
-    amber: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300',
-    purple: 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-500/20 dark:bg-purple-500/10 dark:text-purple-300',
-  }[tone]
+  // Ưu tiên số liệu kỳ (trends) nếu có; fallback hôm nay (dashboard)
+  const revenue = trends?.totals.revenue ?? today.revenue
+  const sessions = trends?.totals.sessions ?? today.sessionsCreated
+  const players = trends?.totals.players ?? today.sessionsCreated
+  const revPerSession = trends?.totals.revenuePerSession ?? today.averagePayment
+
+  // % tăng trưởng so với kỳ trước
+  const revenueGrowth = trends && trends.comparison.previousRevenue > 0
+    ? Math.round(((trends.comparison.currentRevenue - trends.comparison.previousRevenue) / trends.comparison.previousRevenue) * 100)
+    : null
 
   return (
-    <div className={`rounded-xl border p-3 shadow-sm ${toneClasses}`}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-medium opacity-80">{label}</p>
-        <Icon size={16} className="shrink-0 opacity-80" />
-      </div>
-      <p className="mt-2 text-xl font-bold tabular-nums">
-        {value}
-      </p>
-    </div>
+    <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <StatCard
+        label="Doanh thu"
+        value={money(revenue)}
+        color="green"
+        icon={Wallet}
+        trend={revenueGrowth != null ? { value: revenueGrowth, label: 'so kỳ trước' } : undefined}
+      />
+      <StatCard
+        label="Phiên chơi"
+        value={String(sessions)}
+        color="blue"
+        icon={Timer}
+        subtitle={today.completedSessions > 0 ? `${today.completedSessions} đã checkout` : undefined}
+      />
+      <StatCard
+        label="Người chơi"
+        value={String(players)}
+        color="yellow"
+        icon={Users}
+      />
+      <StatCard
+        label="TB / phiên"
+        value={money(revPerSession)}
+        color="purple"
+        icon={BarChart3}
+      />
+    </section>
   )
 }
 
@@ -513,129 +627,6 @@ function MiniMetric({
   )
 }
 
-function BreakdownPanel({
-  title,
-  items,
-  total,
-}: {
-  title: string
-  items: Array<{ label: string; value: number; color: string }>
-  total: number
-}) {
-  const max = Math.max(...items.map((item) => item.value), 1)
-
-  return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">{title}</h2>
-        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{money(total)}</span>
-      </div>
-      <div className="mt-4 space-y-3">
-        {items.map((item) => (
-          <MetricBar
-            key={item.label}
-            label={item.label}
-            value={money(item.value)}
-            width={`${Math.round((item.value / max) * 100)}%`}
-            color={item.color}
-          />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function PaymentPanel({
-  title,
-  breakdown,
-}: {
-  title: string
-  breakdown: PaymentBreakdown
-}) {
-  return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">{title}</h2>
-      <div className="mt-4 space-y-3">
-        {paymentMethods.map((method) => (
-          <div key={method} className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                {method === 'CASH' ? <Banknote size={15} /> : method === 'MEMBER' ? <Users size={15} /> : <CreditCard size={15} />}
-              </div>
-              <div>
-                <p className="text-sm font-medium text-zinc-950 dark:text-white">
-                  {paymentMethodLabel(method)}
-                </p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {breakdown[method].count} giao dịch
-                </p>
-              </div>
-            </div>
-            <p className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
-              {money(breakdown[method].total)}
-            </p>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function MetricBar({
-  label,
-  value,
-  width,
-  color,
-}: {
-  label: string
-  value: string
-  width: string
-  color: string
-}) {
-  return (
-    <div>
-      <div className="flex items-center justify-between gap-3 text-xs">
-        <span className="text-zinc-500 dark:text-zinc-400">{label}</span>
-        <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">{value}</span>
-      </div>
-      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-        <div className={`h-full rounded-full ${color}`} style={{ width }} />
-      </div>
-    </div>
-  )
-}
-
-function RevenueRow({
-  item,
-  maxRevenue,
-}: {
-  item: RevenueData
-  maxRevenue: number
-}) {
-  const width = `${Math.max(4, Math.round((item.revenue / maxRevenue) * 100))}%`
-
-  return (
-    <div>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-zinc-950 dark:text-white">
-            {formatReportDate(item.period)}
-          </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {item.sessionCount} giao dịch · TB {money(item.avgRevenuePerSession)}
-          </p>
-        </div>
-        <p className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-300">
-          {money(item.revenue)}
-        </p>
-      </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-        <div className="h-full rounded-full bg-emerald-500" style={{ width }} />
-      </div>
-    </div>
-  )
-}
-
 function RecentPaymentRow({
   payment,
 }: {
@@ -672,22 +663,47 @@ function RecentPaymentRow({
 
 const paymentMethods: PaymentMethod[] = ['CASH', 'TRANSFER', 'CARD', 'MEMBER']
 
-function paymentMethodLabel(method: PaymentMethod): string {
-  if (method === 'CASH') return 'Tiền mặt'
-  if (method === 'TRANSFER') return 'Chuyển khoản'
-  if (method === 'CARD') return 'Thẻ'
-  return 'Hội viên'
+function paymentMethodLabelFor(method: PaymentMethod): string {
+  return paymentMethodLabel(method)
 }
 
-function buildItemRows(items: ItemBreakdown) {
-  return [
-    { label: 'Giờ chơi', value: items.PLAY_TIME, color: 'bg-blue-500' },
-    { label: 'Phí hội viên', value: items.MEMBERSHIP_FEE, color: 'bg-purple-500' },
-    { label: 'Hàng hóa', value: items.PRODUCT, color: 'bg-emerald-500' },
-    { label: 'Dịch vụ', value: items.SERVICE, color: 'bg-amber-500' },
-    { label: 'Giảm giá', value: items.DISCOUNT, color: 'bg-red-500' },
-    { label: 'Phí gửi xe', value: items.SURCHARGE, color: 'bg-rose-500' },
-  ]
+const itemColors: Record<ItemType, string> = {
+  PLAY_TIME: '#3b82f6', // blue-500
+  MEMBERSHIP_FEE: '#a855f7', // purple-500
+  PRODUCT: '#10b981', // emerald-500
+  SERVICE: '#f59e0b', // amber-500
+  DISCOUNT: '#ef4444', // red-500
+  SURCHARGE: '#f43f5e', // rose-500
+}
+
+function buildPaymentSlices(rows: TrendData['byPaymentMethod']): Array<{ label: string; value: number; color: string }> {
+  const methodColors: Record<PaymentMethod, string> = {
+    CASH: '#10b981',
+    TRANSFER: '#3b82f6',
+    CARD: '#a855f7',
+    MEMBER: '#f59e0b',
+  }
+  const map = new Map<string, number>()
+  for (const row of rows) {
+    if (row.paymentMethod) map.set(row.paymentMethod, Number(row._sum?.grandTotal ?? 0))
+  }
+  return paymentMethods
+    .map((method) => ({ label: paymentMethodLabelFor(method), value: map.get(method) ?? 0, color: methodColors[method] }))
+    .filter((d) => d.value > 0)
+}
+
+function buildItemSlices(items: ItemBreakdown): Array<{ label: string; value: number; color: string }> {
+  const labels: Record<ItemType, string> = {
+    PLAY_TIME: 'Giờ chơi',
+    MEMBERSHIP_FEE: 'Phí hội viên',
+    PRODUCT: 'Hàng hóa',
+    SERVICE: 'Dịch vụ',
+    DISCOUNT: 'Giảm giá',
+    SURCHARGE: 'Phí gửi xe',
+  }
+  return (Object.keys(labels) as ItemType[])
+    .map((type) => ({ label: labels[type], value: items[type], color: itemColors[type] }))
+    .filter((d) => d.value > 0)
 }
 
 function formatReportDate(value: string): string {

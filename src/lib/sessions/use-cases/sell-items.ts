@@ -105,6 +105,8 @@ export async function sellItems(
         description: latestProduct.name,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
+        // Snapshot giá vốn (weighted average cost) tại thời điểm bán — để truy vết lợi nhuận
+        unitCost: latestProduct.costPrice,
         subtotal: line.subtotal,
         discountAmount: 0,
         total: line.subtotal,

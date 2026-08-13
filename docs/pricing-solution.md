@@ -29,13 +29,13 @@
 2. PromotionDiscountType: xem promotions-solution.md
 ```
 
-### Validation (`src/lib/validations/pricing.ts`)
+### Validation (`src/lib/pricing/validations.ts`)
 
 ```
 1. dayType:          z.enum(['WEEKDAY', 'WEEKEND'])
 ```
 
-### Pricing engine (`src/lib/pricing.ts`)
+### Pricing engine (`src/lib/sessions/pricing-engine.ts` + `src/lib/promotion-calculation.ts`)
 
 ```
 1. findFirst:        orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }]

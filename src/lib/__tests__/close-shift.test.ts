@@ -13,7 +13,6 @@ const fakeStore = vi.hoisted(() => ({
   shiftParticipant: { updateMany: vi.fn(), upsert: vi.fn() },
   shiftTool: { upsert: vi.fn() },
   payment: { aggregate: vi.fn(), findMany: vi.fn(), groupBy: vi.fn() },
-  membershipPayment: { findMany: vi.fn(), groupBy: vi.fn() },
   activityLog: { create: vi.fn() },
 }))
 

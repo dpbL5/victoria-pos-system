@@ -68,7 +68,7 @@ export function GroupBuilder({
         {assignedIds.size}/{players.length} người đã phân — còn {remaining.length} người chưa chọn
       </p>
       {groups.map((group, i) => (
-        <div key={i} className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+        <div key={i} className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-medium text-zinc-950 dark:text-white">Nhóm {i + 1}</span>
             {groups.length > 1 && (
@@ -108,7 +108,7 @@ export function GroupBuilder({
                         : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
                     }`}
                   >
-                    <input type="checkbox" readOnly checked={checked} className="h-3.5 w-3.5 accent-emerald-600" />
+                    <input type="checkbox" disabled checked={checked} className="h-3.5 w-3.5 accent-emerald-600" />
                     <User size={13} className="shrink-0 text-zinc-400" />
                     <span className="truncate text-zinc-950 dark:text-white">
                       {p.name?.trim() || `Người ${players.findIndex((x) => x.id === p.id) + 1}`}

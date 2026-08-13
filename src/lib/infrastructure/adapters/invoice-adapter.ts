@@ -131,6 +131,7 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
               description: line.description,
               quantity: line.quantity,
               unitPrice: line.unitPrice,
+              unitCost: line.unitCost ?? null,
               subtotal: line.subtotal,
               discountAmount: line.discountAmount,
               total: line.total,
@@ -145,6 +146,7 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
     async createPayment(input) {
       const payment = await store.payment.create({
         data: {
+          kind: 'OPERATIONAL',
           invoiceId: input.invoiceId,
           sessionId: input.sessionId ?? null,
           shiftId: input.shiftId,
@@ -162,21 +164,26 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
     },
 
     async createMembershipPayment(input) {
-      const membershipPayment = await store.membershipPayment.create({
+      // STI: phí hội viên là Payment kind=MEMBERSHIP (gộp từ MembershipPayment cũ)
+      const payment = await store.payment.create({
         data: {
+          kind: 'MEMBERSHIP',
           customerId: input.customerId,
           membershipId: input.membershipId,
           planId: input.planId,
           invoiceId: input.invoiceId,
           shiftId: input.shiftId,
           staffId: input.staffId,
-          amount: input.amount,
+          totalHours: 0,
+          subtotal: input.amount,
+          discountTotal: 0,
+          grandTotal: input.amount,
           paymentMethod: input.paymentMethod,
           paidAt: input.paidAt,
           notes: input.notes,
         },
       })
-      return { id: membershipPayment.id }
+      return { id: payment.id }
     },
 
     async createDraftInvoice(input) {
@@ -206,6 +213,7 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
           description: input.description,
           quantity: input.quantity,
           unitPrice: input.unitPrice,
+          unitCost: input.unitCost ?? null,
           subtotal: input.subtotal,
           discountAmount: input.discountAmount,
           total: input.total,
@@ -289,9 +297,8 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
             },
           },
           payments: {
-            select: { id: true, totalHours: true, paymentMethod: true },
+            select: { id: true, totalHours: true, paymentMethod: true, kind: true },
           },
-          membershipPayments: { select: { id: true } },
         },
       })
       if (!invoice) return null
@@ -327,7 +334,8 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
     },
 
     async deletePayments(invoiceId) {
-      await store.payment.deleteMany({ where: { invoiceId } })
+      // Chỉ xóa payment vận hành — phí hội viên (kind=MEMBERSHIP) không bị ảnh hưởng bởi edit-invoice
+      await store.payment.deleteMany({ where: { invoiceId, kind: 'OPERATIONAL' } })
     },
 
     async updateInvoiceFinancials(invoiceId, input) {
@@ -354,9 +362,12 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
             include: { product: { select: { id: true, name: true, sku: true, type: true } } },
             orderBy: { createdAt: 'asc' },
           },
-          payments: { include: { staff: { select: { id: true, fullName: true } } } },
-          membershipPayments: {
-            include: { membership: { include: { plan: { select: { name: true } } } } },
+          payments: {
+            include: {
+              staff: { select: { id: true, fullName: true } },
+              membership: { include: { plan: { select: { name: true } } } },
+              plan: { select: { id: true, name: true } },
+            },
           },
         },
       })
@@ -383,12 +394,12 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
             },
             orderBy: { createdAt: 'asc' },
           },
-          payments: { select: { id: true, paymentMethod: true, grandTotal: true, paidAt: true } },
-          membershipPayments: {
+          payments: {
             select: {
               id: true,
-              amount: true,
+              kind: true,
               paymentMethod: true,
+              grandTotal: true,
               paidAt: true,
               plan: { select: { id: true, name: true } },
             },
@@ -416,12 +427,11 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
     },
 
     async countLinkedTransactions(invoiceId) {
-      const [payments, membershipPayments, stockMovements] = await Promise.all([
+      const [payments, stockMovements] = await Promise.all([
         store.payment.count({ where: { invoiceId } }),
-        store.membershipPayment.count({ where: { invoiceId } }),
         store.stockMovement.count({ where: { invoiceItem: { invoiceId } } }),
       ])
-      return { payments, membershipPayments, stockMovements }
+      return { payments, stockMovements }
     },
 
     async deleteInvoiceWithItems(invoiceId) {

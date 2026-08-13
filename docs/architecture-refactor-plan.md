@@ -1,8 +1,8 @@
 # Kế hoạch Refactor Kiến trúc — QLTruongCung POS
 
-> **Status:** Draft — chờ review
-> **Ngày:** 2026-08-07
-> **Mục tiêu:** Tạo kiến trúc dễ test, dễ mở rộng, dễ điều hướng — giữ nguyên API contract với UI, không thay đổi business logic, làm từng bước một.
+> **Status:** ✅ ĐÃ HOÀN THÀNH (2026-08) — migration port/adapter + domain modules đã thực hiện xong. Tài liệu này giữ lại làm lịch sử thiết kế + tham chiếu pattern (`Result<T>`, `runInTransaction`, `fail()`, barrel, adapter). Kiến trúc hiện tại mô tả trong `CLAUDE.md` §10b + §14 và `docs/directory-structure.md`.
+> **Ngày (gốc):** 2026-08-07
+> **Mục tiêu (gốc):** Tạo kiến trúc dễ test, dễ mở rộng, dễ điều hướng — giữ nguyên API contract với UI, không thay đổi business logic, làm từng bước một.
 
 ---
 

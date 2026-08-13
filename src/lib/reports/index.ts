@@ -14,4 +14,13 @@ export type {
   ShiftDayGroupInput,
   ShiftDayGroup,
   ShiftDayShift,
+  TrendData,
+  TrendItemType,
+  TrendHourRow,
+  TrendDayRow,
+  TrendComparison,
+  TrendTotals,
+  TopProductsInput,
+  TopProductRow,
+  TopProductsResult,
 } from './ports'

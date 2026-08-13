@@ -10,7 +10,6 @@ const fakeStore = vi.hoisted(() => ({
   invoice: { create: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
   invoiceItem: { create: vi.fn(), findMany: vi.fn() },
   payment: { create: vi.fn(), findMany: vi.fn() },
-  membershipPayment: { create: vi.fn() },
   membership: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
   membershipPlan: { findUnique: vi.fn(), findMany: vi.fn() },
   customer: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), findMany: vi.fn() },
@@ -57,8 +56,8 @@ function resetMocks() {
   })
   fakeStore.invoice.create.mockResolvedValue({ id: 'inv-1' })
   fakeStore.invoiceItem.create.mockResolvedValue({ id: 'item-1' })
-  fakeStore.payment.create.mockResolvedValue({ id: 'pay-1' })
-  fakeStore.membershipPayment.create.mockResolvedValue({ id: 'mp-1' })
+  // createMembershipPayment giờ ghi vào store.payment (STI) — trả id cho membershipPaymentId
+  fakeStore.payment.create.mockResolvedValue({ id: 'mp-1' })
   fakeStore.customer.update.mockResolvedValue({})
 }
 
@@ -103,10 +102,11 @@ describe('renewMembership', () => {
     expect(membershipCall.data.startsAt.toISOString().slice(0, 10)).toBe('2026-09-07')
     expect(membershipCall.data.expiresAt.toISOString().slice(0, 10)).toBe('2026-10-07')
 
-    // Invoice MEMBERSHIP_FEE 300k + Payment + MembershipPayment + audit
+    // Invoice MEMBERSHIP_FEE 300k + Payment (kind=MEMBERSHIP) + audit
     expect(fakeStore.invoice.create).toHaveBeenCalled()
-    expect(fakeStore.payment.create).toHaveBeenCalled()
-    expect(fakeStore.membershipPayment.create).toHaveBeenCalled()
+    expect(fakeStore.payment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'MEMBERSHIP' }),
+    }))
     expect(fakeStore.activityLog.create).toHaveBeenCalled()
   })
 
