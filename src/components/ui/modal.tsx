@@ -15,6 +15,8 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   size?: "sm" | "md" | "lg" | "full";
+  /** center = modal giữa màn hình (mặc định); sheet = bottom-sheet trên mobile, center trên desktop */
+  variant?: "center" | "sheet";
   className?: string;
 }
 
@@ -33,6 +35,7 @@ export function Modal({
   children,
   footer,
   size = "md",
+  variant = "center",
   className = "",
 }: ModalProps) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -92,13 +95,19 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-8 md:pb-4 animate-fade-in"
+      className={`fixed inset-0 z-[60] flex p-4 pb-8 md:pb-4 animate-fade-in ${
+        variant === "sheet" ? "items-end justify-center md:items-center" : "items-center justify-center"
+      }`}
       style={{ background: "var(--color-surface-overlay)" }}
       onClick={onClose}
     >
       <div
         ref={contentRef}
-        className={`w-full ${sizeClasses[size]} max-h-[calc(100dvh-4rem)] md:max-h-[95vh] flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-xl animate-slide-up border border-zinc-200 dark:border-zinc-800 ${className}`}
+        className={`w-full ${sizeClasses[size]} max-h-[calc(100dvh-4rem)] md:max-h-[95vh] flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-xl animate-slide-up border border-zinc-200 dark:border-zinc-800 ${
+          variant === "sheet"
+            ? "max-h-[92dvh] rounded-b-none rounded-t-2xl self-end md:max-h-[95vh] md:rounded-2xl"
+            : ""
+        } ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
