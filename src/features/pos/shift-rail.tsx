@@ -33,10 +33,9 @@ export function ShiftRail({
   onJoin: () => void
   submitting: boolean
 }) {
-  // Collapse mặc định khi đã mở ca — tối đa không gian cho bảng phiên đang chơi
-  const [collapsed, setCollapsed] = useState(!!shift)
+  const [collapsed, setCollapsed] = useState(false);
 
-  const participantNames = shift?.participants?.map((participant) => participant.staff.fullName) ?? []
+  const participantNames = shift?.participants?.map((participant) => participant.staff.fullName) ?? [];
   const participantLabel = participantNames.length > 0
     ? `${participantNames.length} nhân viên: ${participantNames.join(', ')}`
     : shift?.staff
