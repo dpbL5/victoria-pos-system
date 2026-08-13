@@ -266,7 +266,9 @@ export async function GET(
       if (playersToQuote.length > 0) {
         const quoteFor = (p: typeof playersToQuote[number]) => {
           const groupIndex = playerToGroupIndex.get(p.id)
-          const snapshot = groupIndex !== undefined
+          // resolved chỉ được populate khi needsPricing (bảng giá chọn tại checkout).
+          // Session đã gán giá + playerIds (thu trước) → resolved rỗng → fallback snapshot persist của group.
+          const snapshot = groupIndex !== undefined && resolved[groupIndex]
             ? resolved[groupIndex].snapshot
             : undefined
           const rule = snapshot
