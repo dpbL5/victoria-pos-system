@@ -14,6 +14,8 @@
     "db:reset": "prisma db push --accept-data-loss --force-reset",
     "seed:admin": "tsx prisma/seed-admin.ts",
     "seed:expired": "tsx prisma/seed-expired-customer.ts",
+    "migrate:walkin-customer-name": "tsx prisma/migrate-walkin-customer-name.ts",
+    "migrate:session-players": "tsx prisma/migrate-session-players.ts",
     "check:db": "tsx scripts/check-db.ts"
   },
   "dependencies": {

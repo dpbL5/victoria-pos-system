@@ -38,11 +38,18 @@ export interface SessionRow {
   discountAmount?: number | string | null
   totalAmount?: number | string | null
   playerCount: number
+  /** Tên khách vãng lai lưu trên phiên (không tạo Customer) */
+  customerName?: string | null
+  /** null = đang chạy, khác null = đang tạm dừng tại thời điểm này */
+  pausedAt?: string | null
+  /** Tổng số giây đã tạm dừng (đã chốt qua các lần pause/resume) */
+  totalPausedSeconds?: number
   promotionRuleId?: string | null
   promotionName?: string | null
   promotionDiscountType?: PromotionDiscountType | null
   promotionDiscountValue?: number | string | null
-  customer: Customer
+  /** Null với khách vãng lai không tạo Customer */
+  customer: Customer | null
   staff: { id: string; fullName: string }
   membership?: { id: string; startsAt: string; expiresAt: string } | null
   shift?: { id: string; openedAt: string; status: 'OPEN' | 'CLOSED' } | null
@@ -68,6 +75,13 @@ export interface Shift {
     joinedAt: string
     leftAt?: string | null
     staff: { id: string; fullName: string }
+  }>
+  toolCounts?: Array<{
+    id: string
+    toolId: string
+    openCount: number
+    closeCount?: number | null
+    tool: { id: string; name: string; quantity: number; isRequired: boolean }
   }>
 }
 

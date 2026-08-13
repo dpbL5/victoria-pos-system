@@ -34,7 +34,7 @@ import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
-import { apiJson } from '@/features/pos/api'
+import { apiJson } from '@/lib/api'
 import { formatClock, money } from '@/features/pos/format'
 import type { Product, Shift, UserSession } from '@/features/pos/types'
 import { useTheme, type Theme } from '@/hooks/use-theme'
@@ -109,8 +109,7 @@ export function MoreScreen() {
   const handleLogout = async () => {
     setLoggingOut(true)
     try {
-      const response = await fetch('/api/auth/logout', { method: 'POST' })
-      const data = await response.json() as { success: boolean; error?: string }
+      const data = await apiJson<{ success: boolean; error?: string }>('/api/auth/logout', { method: 'POST' })
       if (!data.success) {
         notifyError(data.error || 'Không đăng xuất được')
         return
@@ -158,12 +157,9 @@ export function MoreScreen() {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-5xl space-y-4">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Điều hướng phụ
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-zinc-950 dark:text-white">
+        <header className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="hidden text-2xl font-bold text-zinc-950 dark:text-white md:block">
               Thêm
             </h1>
           </div>

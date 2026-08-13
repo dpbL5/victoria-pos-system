@@ -7,12 +7,13 @@ vi.mock('@/lib/infrastructure/prisma', () => ({ prisma: {} }))
 import { runCheckOutTx, mapCheckoutError, type CheckoutContext, type CheckoutTxState } from '@/lib/sessions/use-cases/check-out'
 import { RollbackSignal } from '@/lib/infrastructure/db-helpers'
 import type { Repositories } from '@/lib/infrastructure/repositories'
-import type { SessionWithDetails } from '@/lib/sessions/ports'
+import type { SessionWithPlayers } from '@/lib/sessions/ports'
 
-function makeSession(): SessionWithDetails {
+function makeSession(): SessionWithPlayers {
   return {
     id: 'session-1',
     customerId: 'cust-1',
+    customerName: null,
     membershipId: null,
     staffId: 'staff-1',
     shiftId: 'shift-1',
@@ -32,13 +33,15 @@ function makeSession(): SessionWithDetails {
         hourlyRate: 50000,
         pricingRuleId: 'rule-1',
         pricingSnapshot: null,
+        players: [],
       },
     ],
-  } as unknown as SessionWithDetails
+  } as unknown as SessionWithPlayers
 }
 
 const pricing = {
   hourlyRate: 50000,
+  tiers: [],
   totalHours: 2,
   subtotal: 100000,
   promotionDiscount: 0,
@@ -68,14 +71,16 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       updateInvoiceFinancials: vi.fn(),
       findByIdWithDetails: vi.fn(),
       findByIdForDelete: vi.fn(),
-      countLinkedTransactions: vi.fn(async () => ({ payments: 0, membershipPayments: 0, stockMovements: 0 })),
+      countLinkedTransactions: vi.fn(async () => ({ payments: 0, stockMovements: 0 })),
       deleteInvoiceWithItems: vi.fn(),
       findDraftSellPreview: vi.fn(),
+      findInvoicesByCustomer: vi.fn(),
+      countPaidBySession: vi.fn(async () => 0),
     },
     audit: { append: vi.fn(async () => {}), findMany: vi.fn() },
     membership: { findLatest: vi.fn(), findActive: vi.fn(), create: vi.fn(), findManyByCustomer: vi.fn() },
     membershipPlan: { findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), countUsage: vi.fn(), delete: vi.fn() },
-    customer: { findById: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), countWalkInsBetween: vi.fn() },
+    customer: { findById: vi.fn(), findByIdIncludingDeleted: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), softDelete: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), findByPhone: vi.fn(), countWalkInsBetween: vi.fn() },
     shift: {
       findOpenForStaff: vi.fn(async () => ({ id: 'shift-1' }) as never),
       findOpenOperational: vi.fn(),
@@ -83,6 +88,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       calculateExpectedCash: vi.fn(),
       markParticipantsLeft: vi.fn(),
       upsertToolCloseCount: vi.fn(),
+      upsertToolOpenCount: vi.fn(),
       close: vi.fn(),
       upsertParticipant: vi.fn(),
       findByIdOrThrow: vi.fn(),
@@ -118,11 +124,21 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findMany: vi.fn(),
       findByIdForPreview: vi.fn(),
       findDraftSellTotals: vi.fn(),
+      countCreatedBetween: vi.fn(async () => 0),
       createWithRefs: vi.fn(),
-      createPricingGroup: vi.fn(),
+      createPricingGroup: vi.fn(async () => ({ id: 'group-1' })),
+      createPlayersForGroup: vi.fn(async () => {}),
+      updatePricingGroup: vi.fn(),
       update: vi.fn(async () => {}),
       decrementGroupRemaining: vi.fn(async () => ({ remainingCount: 0 })),
       sumRemainingPlayers: vi.fn(async () => 0),
+      findByIdWithPlayers: vi.fn(),
+      findPlayersForPause: vi.fn(),
+      pausePlayer: vi.fn(async () => {}),
+      resumePlayer: vi.fn(async () => {}),
+      renamePlayer: vi.fn(),
+      movePlayersToGroup: vi.fn(async () => {}),
+      markPlayersCheckedOut: vi.fn(async () => {}),
     },
     product: {
       findManyByIds: vi.fn(),
@@ -159,6 +175,9 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       getSessionExportRows: vi.fn(),
       getShiftDayGroups: vi.fn(),
       getShiftRevenue: vi.fn(),
+      getShiftRevenues: vi.fn(),
+      getTrends: vi.fn(),
+      getTopProducts: vi.fn(),
     },
   }
   return { ...base, ...overrides }
@@ -183,7 +202,10 @@ function makeCtx(): CheckoutContext {
     newQuantityByProductId: new Map([['prod-1', 2]]),
     parkingVehicleCount: 0,
     checkoutAt: new Date('2026-08-07T12:00:00Z'),
+    pauseRef: new Date('2026-08-07T12:00:00Z'),
     customerId: 'cust-1',
+    customerName: null,
+    playersToBill: [],
   }
 }
 
@@ -313,6 +335,29 @@ describe('runCheckOutTx', () => {
     expect(result.invoiceNo).toBe('INV-1')
   })
 
+  it('checkout khách vãng lai (không Customer): không gọi recordPlay, invoice customerId null', async () => {
+    const repos = makeRepositories()
+    const session = makeSession()
+    session.customerId = null
+    session.customerName = 'Nguyễn Văn A'
+    session.customer = null as never
+    const ctx = makeCtx()
+    ctx.session = session
+    ctx.customerId = null
+    ctx.customerName = 'Nguyễn Văn A'
+    const result = await runCheckOutTx(repos, ctx, makeState())
+
+    expect(repos.billing.createPaidInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: null })
+    )
+    expect(repos.customer.recordPlay).not.toHaveBeenCalled()
+    // metadata PLAY_TIME có tên khách vãng lai
+    const items = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls
+    const playTimeCall = items.find((c) => c[0].type === 'PLAY_TIME')
+    expect(playTimeCall![0].metadata).toMatchObject({ customerType: 'WALK_IN', customerName: 'Nguyễn Văn A' })
+    expect(result.remainingPlayers).toBe(0)
+  })
+
   it('không đóng phiên khi còn người chơi (partial checkout)', async () => {
     const repos = makeRepositories({
       session: {
@@ -414,7 +459,7 @@ describe('runCheckOutTx', () => {
       },
     })
     const session = makeSession()
-    session.customer.type = 'MEMBER'
+    session.customer!.type = 'MEMBER'
     session.hourlyRate = 0 as never
     session.membership = {
       id: 'mem-1',
@@ -463,5 +508,626 @@ describe('runCheckOutTx', () => {
       'Đã gộp vào hóa đơn INV-1'
     )
     expect(result.remainingPlayers).toBe(0)
+  })
+
+  it('WALK_IN session chưa có giá: persist bảng giá vào group 1 trước khi tạo invoice', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    ctx.session = {
+      ...makeSession(),
+      hourlyRate: 0 as never,
+      pricingGroups: [{
+        id: 'group-1',
+        label: 'Nhóm 1',
+        playerCount: 2,
+        remainingCount: 2,
+        hourlyRate: 0,
+        pricingRuleId: null,
+        pricingSnapshot: null,
+        players: [],
+      }],
+    } as unknown as SessionWithPlayers
+    ctx.pendingAssignments = [{
+      groupId: 'group-1',
+      label: 'Nhóm 1',
+      playerCount: 2,
+      pricingRuleId: 'rule-1',
+      snapshot: { ruleId: 'rule-1', name: 'Giờ vàng', ratePerHour: 50000, tiers: [] },
+      playerIds: [],
+    }]
+    ctx.pricing = { ...pricing, hourlyRate: 50000 }
+    const state = makeState()
+    state.finalPricing = { ...pricing, hourlyRate: 50000 }
+    const result = await runCheckOutTx(repos, ctx, state)
+
+    expect(repos.session.updatePricingGroup).toHaveBeenCalledWith('group-1', expect.objectContaining({
+      label: 'Nhóm 1',
+      playerCount: 2,
+      remainingCount: 2,
+      hourlyRate: 50000,
+      pricingRuleId: 'rule-1',
+      pricingSnapshot: { ruleId: 'rule-1', name: 'Giờ vàng', ratePerHour: 50000, tiers: [] },
+    }))
+    expect(repos.session.createPricingGroup).not.toHaveBeenCalled()
+    // Audit đánh dấu gán giá tại checkout
+    const auditCall = (repos.audit.append as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(auditCall.details.pricingAssignedAtCheckout).toBe(true)
+    expect(auditCall.details.assignedPricingRuleIds).toEqual(['rule-1'])
+    expect(result.finalPricing.hourlyRate).toBe(50000)
+  })
+
+  it('WALK_IN chia nhóm tại checkout: update group 1 + create group 2..N', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    ctx.session = {
+      ...makeSession(),
+      hourlyRate: 0 as never,
+      playerCount: 3,
+      pricingGroups: [{
+        id: 'group-1',
+        label: 'Nhóm 1',
+        playerCount: 3,
+        remainingCount: 3,
+        hourlyRate: 0,
+        pricingRuleId: null,
+        pricingSnapshot: null,
+        players: [],
+      }],
+    } as unknown as SessionWithPlayers
+    ctx.pendingAssignments = [
+      { groupId: 'group-1', label: 'Nhóm 1', playerCount: 2, pricingRuleId: 'rule-1', snapshot: { ruleId: 'rule-1', name: 'Giờ vàng', ratePerHour: 50000, tiers: [] }, playerIds: [] },
+      { groupId: null, label: 'Nhóm 2', playerCount: 1, pricingRuleId: 'rule-2', snapshot: { ruleId: 'rule-2', name: 'Giờ tối', ratePerHour: 40000, tiers: [] }, playerIds: [] },
+    ]
+    const state = makeState()
+    state.finalPricing = { ...pricing, hourlyRate: 50000 }
+    await runCheckOutTx(repos, ctx, state)
+
+    expect(repos.session.updatePricingGroup).toHaveBeenCalledTimes(1)
+    expect(repos.session.updatePricingGroup).toHaveBeenCalledWith('group-1', expect.objectContaining({
+      playerCount: 2,
+      remainingCount: 2,
+      hourlyRate: 50000,
+      pricingRuleId: 'rule-1',
+    }))
+    expect(repos.session.createPricingGroup).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'session-1',
+      label: 'Nhóm 2',
+      playerCount: 1,
+      remainingCount: 1,
+      hourlyRate: 40000,
+      pricingRuleId: 'rule-2',
+    }))
+  })
+
+  it('không persist bảng giá khi group đã có snapshot (session cũ)', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    ctx.pendingAssignments = undefined
+    const result = await runCheckOutTx(repos, ctx, makeState())
+
+    expect(repos.session.updatePricingGroup).not.toHaveBeenCalled()
+    expect(repos.session.createPricingGroup).not.toHaveBeenCalled()
+    const auditCall = (repos.audit.append as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(auditCall.details.pricingAssignedAtCheckout).toBe(false)
+    expect(result.remainingPlayers).toBe(0)
+  })
+
+  it('mapCheckoutError: PRICING_RULE_NOT_FOUND + GROUP_PLAYER_COUNT_MISMATCH mapping', async () => {
+    expect(mapCheckoutError({ code: 'PRICING_RULE_NOT_FOUND' } as never)).toMatchObject({ status: 400, message: expect.stringContaining('bảng giá') })
+    expect(mapCheckoutError({ code: 'GROUP_PLAYER_COUNT_MISMATCH' } as never)).toMatchObject({ status: 400, message: expect.stringContaining('nhóm') })
+    expect(mapCheckoutError({ code: 'PRICING_RULE_NOT_EFFECTIVE' } as never)).toMatchObject({ status: 400 })
+  })
+
+  it('PLAY_TIME metadata ghi pausedSeconds theo group khi có player paused', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    // Player 1 paused từ 11:30 (checkoutAt = 12:00 → 1800s), player 2 chạy
+    ctx.session = {
+      ...makeSession(),
+      pricingGroups: [{
+        ...makeSession().pricingGroups[0],
+        players: [
+          { id: 'player-1', name: null, pausedAt: new Date('2026-08-07T11:30:00Z'), totalPausedSeconds: 300, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date(), updatedAt: new Date() },
+          { id: 'player-2', name: 'Minh', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date(), updatedAt: new Date() },
+        ],
+      }],
+    } as unknown as SessionWithPlayers
+    ctx.targetGroupId = 'group-1'
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    // Thu cả 2 player (checkoutCount mặc định 1 → set 2 để thu hết)
+    ctx.checkoutCount = 2
+    ctx.playersToBill = [
+      { id: 'player-1', name: null, pausedAt: new Date('2026-08-07T11:30:00Z'), totalPausedSeconds: 300, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date(), updatedAt: new Date() },
+      { id: 'player-2', name: 'Minh', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date(), updatedAt: new Date() },
+    ] as unknown as CheckoutContext['playersToBill']
+    const state = makeState()
+    state.finalPricing = { ...pricing, totalHours: 1.5 }
+
+    await runCheckOutTx(repos, ctx, state)
+
+    const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0].type === 'PLAY_TIME'
+    )
+    if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
+    // pausedSeconds = 300 (tích lũy) + 1800 (đang paused từ 11:30 → 12:00) = 2100
+    expect(playItemCall[0].metadata.pausedSeconds).toBe(2100)
+    expect(playItemCall[0].metadata.playerPauses).toEqual([
+      { id: 'player-1', name: '', pausedSeconds: 2100 },
+      { id: 'player-2', name: 'Minh', pausedSeconds: 0 },
+    ])
+  })
+
+  it('PLAY_TIME metadata fallback session.totalPausedSeconds khi không có player rows (legacy)', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    // Không có players (legacy) — ctx.session qua makeSession() mặc định players: []
+    ctx.session = { ...makeSession(), totalPausedSeconds: 900, pausedAt: null } as unknown as SessionWithPlayers
+    ctx.targetGroupId = 'group-1'
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    const state = makeState()
+    state.finalPricing = { ...pricing, totalHours: 1.5 }
+
+    await runCheckOutTx(repos, ctx, state)
+
+    const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0].type === 'PLAY_TIME'
+    )
+    if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
+    expect(playItemCall[0].metadata.pausedSeconds).toBe(900)
+  })
+
+  it('per-player: 2 người pause khác nhau → played time riêng, PLAY_TIME quantity = tổng played', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    // Player 1 paused 11:30→12:00 (1800s) + 300s tích lũy = 2100s paused
+    // Player 2 chạy liên tục — checkout lúc 12:00, session bắt đầu 11:00 → 3600s elapsed
+    const players = [
+      { id: 'player-1', name: null, pausedAt: new Date('2026-08-07T11:30:00Z'), totalPausedSeconds: 300, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:00Z'), updatedAt: new Date() },
+      { id: 'player-2', name: 'Minh', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:10Z'), updatedAt: new Date() },
+    ] as unknown as SessionWithPlayers['pricingGroups'][number]['players']
+    ctx.session = {
+      ...makeSession(),
+      startTime: new Date('2026-08-07T11:00:00Z'),
+      pricingGroups: [{ ...makeSession().pricingGroups[0], players }],
+    } as unknown as SessionWithPlayers
+    ctx.targetGroupId = 'group-1'
+    ctx.checkoutCount = 2
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    ctx.playersToBill = players
+    const state = makeState()
+    state.finalPricing = { ...pricing, hourlyRate: 50000, tiers: [], totalHours: 0.5, subtotal: 25000, promotionDiscount: 0, grandTotal: 25000 }
+
+    await runCheckOutTx(repos, ctx, state)
+
+    const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0].type === 'PLAY_TIME'
+    )
+    if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
+    // Player 1: played = 1h (3600 − 2100 pause) → 0.5h actually (start 11:00, checkout 12:00, paused 2100s = 0.583h → 0.417h)
+    // Player 2: played = 1h
+    // Tổng played = 1h + 0.417h ≈ 1.42h — assert bằng tổng pause chính xác hơn
+    expect(playItemCall[0].quantity).toBeCloseTo(1.42, 1)
+    // Pause metadata chỉ 2 player được thu, tổng = 2100
+    expect(playItemCall[0].metadata.pausedSeconds).toBe(2100)
+    expect(playItemCall[0].metadata.playerPauses).toHaveLength(2)
+    // Cả 2 player được đánh dấu đã thu
+    expect(repos.session.markPlayersCheckedOut).toHaveBeenCalledWith(
+      ['player-1', 'player-2'],
+      ctx.checkoutAt
+    )
+  })
+
+  it('per-player thu từng phần: 3 người thu 2 → chỉ 2 player đầu được mark', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    const players = [
+      { id: 'player-1', name: null, pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:00Z'), updatedAt: new Date() },
+      { id: 'player-2', name: 'Minh', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:10Z'), updatedAt: new Date() },
+      { id: 'player-3', name: 'Lan', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:20Z'), updatedAt: new Date() },
+    ] as unknown as SessionWithPlayers['pricingGroups'][number]['players']
+    ctx.session = {
+      ...makeSession(),
+      startTime: new Date('2026-08-07T11:00:00Z'),
+      pricingGroups: [{ ...makeSession().pricingGroups[0], players }],
+    } as unknown as SessionWithPlayers
+    ctx.targetGroupId = 'group-1'
+    ctx.checkoutCount = 2
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    ctx.playersToBill = players.slice(0, 2)
+    const state = makeState()
+    state.finalPricing = { ...pricing, tiers: [], totalHours: 1, subtotal: 50000, grandTotal: 50000 }
+
+    await runCheckOutTx(repos, ctx, state)
+
+    // Chỉ 2 player đầu được đánh dấu
+    expect(repos.session.markPlayersCheckedOut).toHaveBeenCalledWith(
+      ['player-1', 'player-2'],
+      ctx.checkoutAt
+    )
+    const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0].type === 'PLAY_TIME'
+    )
+    if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
+    // 2 người × 1h = 2h, pause 0
+    expect(playItemCall[0].quantity).toBe(2)
+    expect(playItemCall[0].metadata.playerPauses).toHaveLength(2)
+    expect(playItemCall[0].metadata.checkedOutPlayers).toBe(2)
+  })
+
+  // ── Thu trước: gộp logic auto-detect (thu ít hơn người đang chơi = thu trước) ──
+
+  it('thu trước: thu 2/3 người → metadata earlyCollection.sequence=1, session còn ACTIVE', async () => {
+    const repos = makeRepositories({
+      billing: {
+        ...makeRepositories().billing,
+        countPaidBySession: vi.fn(async () => 0),
+      },
+      session: {
+        ...makeRepositories().session,
+        decrementGroupRemaining: vi.fn(async () => ({ remainingCount: 1 })),
+        sumRemainingPlayers: vi.fn(async () => 1),
+      },
+    })
+    const ctx = makeCtx()
+    const players = [
+      { id: 'player-1', name: 'An', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:00Z'), updatedAt: new Date() },
+      { id: 'player-2', name: 'Bình', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:10Z'), updatedAt: new Date() },
+      { id: 'player-3', name: 'Châu', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:20Z'), updatedAt: new Date() },
+    ] as unknown as SessionWithPlayers['pricingGroups'][number]['players']
+    ctx.session = {
+      ...makeSession(),
+      startTime: new Date('2026-08-07T11:00:00Z'),
+      playerCount: 3,
+      pricingGroups: [{
+        ...makeSession().pricingGroups[0],
+        playerCount: 3,
+        remainingCount: 3,
+        players,
+      }],
+    } as unknown as SessionWithPlayers
+    // Thu 2 người đầu (player-1, player-2) — còn 1 người chưa thu → thu trước
+    ctx.targetGroupId = undefined
+    ctx.checkoutCount = 2
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    ctx.pauseRef = new Date('2026-08-07T12:00:00Z')
+    ctx.playersToBill = players.slice(0, 2)
+    ctx.groupRuleMap = new Map()
+    ctx.playersToBillByGroup = [['player-1', 'player-2']]
+    ctx.earlyCollectionGroupIds = ['group-1']
+    const state = makeState()
+    state.finalPricing = { ...pricing, tiers: [], totalHours: 2, subtotal: 100000, grandTotal: 100000 }
+
+    const result = await runCheckOutTx(repos, ctx, state)
+
+    // Chỉ 2 người được mark checked out
+    expect(repos.session.markPlayersCheckedOut).toHaveBeenCalledWith(['player-1', 'player-2'], ctx.checkoutAt)
+    // Decrement theo earlyCollectionGroupIds
+    expect(repos.session.decrementGroupRemaining).toHaveBeenCalledWith('group-1', 2)
+    // Session còn ACTIVE (remaining 1) — playerCount cập nhật còn 1, không COMPLETED
+    expect(repos.session.update).toHaveBeenCalledWith('session-1', expect.objectContaining({ playerCount: 1 }))
+    expect(repos.session.update).not.toHaveBeenCalledWith('session-1', expect.objectContaining({ status: 'COMPLETED' }))
+    expect(result.remainingPlayers).toBe(1)
+    // PLAY_TIME metadata có earlyCollection.sequence = 1 (countPaidBySession 0 + 1)
+    const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0].type === 'PLAY_TIME'
+    )
+    if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
+    expect(playItemCall[0].metadata.earlyCollection).toEqual({ sequence: 1 })
+    // Notes chứa "Thu trước lần 1"
+    expect(repos.billing.createPaidInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({ notes: 'Thu trước lần 1 — 2 người' })
+    )
+    // Audit có earlyCollection
+    const auditCall = (repos.audit.append as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(auditCall.details.earlyCollection).toEqual({ sequence: 1 })
+  })
+
+  it('thu trước tăng dần: countPaidBySession 1 → lần 2', async () => {
+    const repos = makeRepositories({
+      billing: {
+        ...makeRepositories().billing,
+        countPaidBySession: vi.fn(async () => 1),
+      },
+      session: {
+        ...makeRepositories().session,
+        decrementGroupRemaining: vi.fn(async () => ({ remainingCount: 1 })),
+        sumRemainingPlayers: vi.fn(async () => 1),
+      },
+    })
+    const ctx = makeCtx()
+    const players = [
+      { id: 'player-1', name: 'An', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:00Z'), updatedAt: new Date() },
+      { id: 'player-2', name: 'Bình', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:10Z'), updatedAt: new Date() },
+      { id: 'player-3', name: 'Châu', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:20Z'), updatedAt: new Date() },
+    ] as unknown as SessionWithPlayers['pricingGroups'][number]['players']
+    ctx.session = {
+      ...makeSession(),
+      startTime: new Date('2026-08-07T11:00:00Z'),
+      playerCount: 3,
+      pricingGroups: [{ ...makeSession().pricingGroups[0], playerCount: 3, remainingCount: 3, players }],
+    } as unknown as SessionWithPlayers
+    ctx.targetGroupId = undefined
+    ctx.checkoutCount = 1
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    ctx.pauseRef = new Date('2026-08-07T12:00:00Z')
+    ctx.playersToBill = [players[0]]
+    ctx.groupRuleMap = new Map()
+    ctx.playersToBillByGroup = [['player-1']]
+    ctx.earlyCollectionGroupIds = ['group-1']
+    const state = makeState()
+    state.finalPricing = { ...pricing, tiers: [], totalHours: 1, subtotal: 50000, grandTotal: 50000 }
+
+    await runCheckOutTx(repos, ctx, state)
+
+    const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0].type === 'PLAY_TIME'
+    )
+    if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
+    expect(playItemCall[0].metadata.earlyCollection).toEqual({ sequence: 2 })
+  })
+
+  it('checkout cuối (thu hết người) → KHÔNG ghi nhãn earlyCollection', async () => {
+    const repos = makeRepositories({
+      session: {
+        ...makeRepositories().session,
+        decrementGroupRemaining: vi.fn(async () => ({ remainingCount: 0 })),
+        sumRemainingPlayers: vi.fn(async () => 0),
+      },
+    })
+    const ctx = makeCtx()
+    const players = [
+      { id: 'player-1', name: 'An', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:00Z'), updatedAt: new Date() },
+      { id: 'player-2', name: 'Bình', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:10Z'), updatedAt: new Date() },
+    ] as unknown as SessionWithPlayers['pricingGroups'][number]['players']
+    ctx.session = {
+      ...makeSession(),
+      startTime: new Date('2026-08-07T11:00:00Z'),
+      playerCount: 2,
+      pricingGroups: [{ ...makeSession().pricingGroups[0], playerCount: 2, remainingCount: 2, players }],
+    } as unknown as SessionWithPlayers
+    ctx.targetGroupId = undefined
+    ctx.checkoutCount = 2
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    ctx.pauseRef = new Date('2026-08-07T12:00:00Z')
+    ctx.playersToBill = players
+    ctx.groupRuleMap = new Map()
+    ctx.playersToBillByGroup = [['player-1', 'player-2']]
+    ctx.earlyCollectionGroupIds = ['group-1']
+    const state = makeState()
+    state.finalPricing = { ...pricing, tiers: [], totalHours: 2, subtotal: 100000, grandTotal: 100000 }
+
+    await runCheckOutTx(repos, ctx, state)
+
+    const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0].type === 'PLAY_TIME'
+    )
+    if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
+    // Thu hết 2/2 → không phải thu trước → metadata không có earlyCollection
+    expect(playItemCall[0].metadata.earlyCollection).toBeUndefined()
+    expect(repos.session.update).toHaveBeenCalledWith('session-1', expect.objectContaining({ status: 'COMPLETED' }))
+  })
+
+  it('thu trước trên session mới (chưa gán giá): preserveCounts giữ playerCount/remainingCount', async () => {
+    const repos = makeRepositories({
+      billing: {
+        ...makeRepositories().billing,
+        countPaidBySession: vi.fn(async () => 0),
+      },
+      session: {
+        ...makeRepositories().session,
+        decrementGroupRemaining: vi.fn(async () => ({ remainingCount: 2 })),
+        sumRemainingPlayers: vi.fn(async () => 2),
+      },
+    })
+    const ctx = makeCtx()
+    const players = [
+      { id: 'player-1', name: 'An', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:00Z'), updatedAt: new Date() },
+      { id: 'player-2', name: 'Bình', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:10Z'), updatedAt: new Date() },
+      { id: 'player-3', name: 'Châu', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:20Z'), updatedAt: new Date() },
+      { id: 'player-4', name: 'Dương', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:30Z'), updatedAt: new Date() },
+    ] as unknown as SessionWithPlayers['pricingGroups'][number]['players']
+    ctx.session = {
+      ...makeSession(),
+      startTime: new Date('2026-08-07T11:00:00Z'),
+      playerCount: 4,
+      hourlyRate: 0 as never,
+      pricingGroups: [{
+        id: 'group-1',
+        label: 'Nhóm 1',
+        playerCount: 4,
+        remainingCount: 4,
+        hourlyRate: 0,
+        pricingRuleId: null,
+        pricingSnapshot: null,
+        players,
+      }],
+    } as unknown as SessionWithPlayers
+    // Thu trước 2/4 người — persist bảng giá với preserveCounts
+    ctx.targetGroupId = undefined
+    ctx.checkoutCount = 2
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    ctx.pauseRef = new Date('2026-08-07T12:00:00Z')
+    ctx.playersToBill = players.slice(0, 2)
+    ctx.groupRuleMap = new Map()
+    ctx.playersToBillByGroup = [['player-1', 'player-2']]
+    ctx.earlyCollectionGroupIds = ['group-1']
+    ctx.pendingAssignments = [{
+      groupId: 'group-1',
+      label: 'Nhóm 1',
+      playerCount: 4,
+      pricingRuleId: 'rule-1',
+      snapshot: { ruleId: 'rule-1', name: 'Giờ vàng', ratePerHour: 50000, tiers: [] },
+      playerIds: [],
+      preserveCounts: true,
+    }]
+    const state = makeState()
+    state.finalPricing = { ...pricing, tiers: [], hourlyRate: 50000, totalHours: 2, subtotal: 100000, grandTotal: 100000 }
+
+    await runCheckOutTx(repos, ctx, state)
+
+    // updatePricingGroup KHÔNG kèm playerCount/remainingCount (preserveCounts)
+    expect(repos.session.updatePricingGroup).toHaveBeenCalledWith('group-1', expect.not.objectContaining({
+      playerCount: expect.anything(),
+      remainingCount: expect.anything(),
+    }))
+    // Không move players (preserveCounts)
+    expect(repos.session.movePlayersToGroup).not.toHaveBeenCalled()
+    // Decrement theo earlyCollectionGroupIds
+    expect(repos.session.decrementGroupRemaining).toHaveBeenCalledWith('group-1', 2)
+    // Play time metadata có earlyCollection
+    const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0].type === 'PLAY_TIME'
+    )
+    if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
+    expect(playItemCall[0].metadata.earlyCollection).toEqual({ sequence: 1 })
+  })
+
+  it('thu trước multi-group: chọn người từ group 2 → tính theo rule của group 2 (subset index khớp)', async () => {
+    const repos = makeRepositories({
+      billing: {
+        ...makeRepositories().billing,
+        countPaidBySession: vi.fn(async () => 0),
+      },
+      session: {
+        ...makeRepositories().session,
+        decrementGroupRemaining: vi.fn(async () => ({ remainingCount: 1 })),
+        sumRemainingPlayers: vi.fn(async () => 1),
+      },
+    })
+    const ctx = makeCtx()
+    const group1Players = [
+      { id: 'player-1', name: 'An', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:00Z'), updatedAt: new Date() },
+    ] as unknown as SessionWithPlayers['pricingGroups'][number]['players']
+    const group2Players = [
+      { id: 'player-2', name: 'Bình', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-2', createdAt: new Date('2026-08-07T11:00:10Z'), updatedAt: new Date() },
+    ] as unknown as SessionWithPlayers['pricingGroups'][number]['players']
+    ctx.session = {
+      ...makeSession(),
+      startTime: new Date('2026-08-07T11:00:00Z'),
+      playerCount: 2,
+      pricingGroups: [
+        {
+          id: 'group-1',
+          label: 'Nhóm 1',
+          playerCount: 1,
+          remainingCount: 1,
+          hourlyRate: 50000,
+          pricingRuleId: 'rule-1',
+          pricingSnapshot: { ruleId: 'rule-1', name: 'Giờ vàng', ratePerHour: 50000, tiers: [] },
+          players: group1Players,
+        },
+        {
+          id: 'group-2',
+          label: 'Nhóm 2',
+          playerCount: 1,
+          remainingCount: 1,
+          hourlyRate: 80000,
+          pricingRuleId: 'rule-2',
+          pricingSnapshot: { ruleId: 'rule-2', name: 'Giờ tối', ratePerHour: 80000, tiers: [] },
+          players: group2Players,
+        },
+      ],
+    } as unknown as SessionWithPlayers
+    // Thu trước player-2 (group 2) — groupRuleMap keyed subset index 0 → group-2 rule (80k)
+    ctx.targetGroupId = undefined
+    ctx.checkoutCount = 1
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    ctx.pauseRef = new Date('2026-08-07T12:00:00Z')
+    ctx.playersToBill = group2Players
+    ctx.playersToBillByGroup = [['player-2']]
+    ctx.earlyCollectionGroupIds = ['group-2']
+    ctx.groupRuleMap = new Map([[0, { hourlyRate: 80000, tiers: [], ruleName: 'Giờ tối' }]])
+    const state = makeState()
+    state.finalPricing = { ...pricing, tiers: [], hourlyRate: 50000, totalHours: 1, subtotal: 50000, grandTotal: 50000 }
+
+    await runCheckOutTx(repos, ctx, state)
+
+    const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0].type === 'PLAY_TIME'
+    )
+    if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
+    // player-2 tính theo group-2 rule (80k/giờ × 1h = 80k) — không phải group-1 (50k).
+    // unitPrice giữ pricing.hourlyRate (50k) như hành vi hiện có; total phản ánh per-player đúng.
+    expect(playItemCall[0].total).toBe(80000)
+    expect(playItemCall[0].subtotal).toBe(80000)
+    // playerPricing detail phản ánh rule của group-2
+    expect(playItemCall[0].metadata.playerPricing[0].total).toBe(80000)
+    expect(playItemCall[0].metadata.playerPricing[0].pricingRuleName).toBe('Giờ tối')
+    // Decrement đúng group-2
+    expect(repos.session.decrementGroupRemaining).toHaveBeenCalledWith('group-2', 1)
+  })
+
+  it('per-player legacy fallback: không có player rows → markPlayersCheckedOut không được gọi', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    // makeSession() mặc định players: []
+    ctx.targetGroupId = 'group-1'
+    ctx.checkoutCount = 1
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    ctx.playersToBill = []
+    const state = makeState()
+    state.finalPricing = { ...pricing, tiers: [], totalHours: 1, subtotal: 50000, grandTotal: 50000 }
+
+    await runCheckOutTx(repos, ctx, state)
+
+    expect(repos.session.markPlayersCheckedOut).not.toHaveBeenCalled()
+  })
+
+  it('thu trước count-based (không chọn người): thu 1/2 → ghi nhãn earlyCollection', async () => {
+    const repos = makeRepositories({
+      billing: {
+        ...makeRepositories().billing,
+        countPaidBySession: vi.fn(async () => 0),
+      },
+      session: {
+        ...makeRepositories().session,
+        decrementGroupRemaining: vi.fn(async () => ({ remainingCount: 1 })),
+        sumRemainingPlayers: vi.fn(async () => 1),
+      },
+    })
+    const ctx = makeCtx()
+    const players = [
+      { id: 'player-1', name: 'An', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:00Z'), updatedAt: new Date() },
+      { id: 'player-2', name: 'Bình', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:10Z'), updatedAt: new Date() },
+    ] as unknown as SessionWithPlayers['pricingGroups'][number]['players']
+    ctx.session = {
+      ...makeSession(),
+      startTime: new Date('2026-08-07T11:00:00Z'),
+      playerCount: 2,
+      pricingGroups: [{ ...makeSession().pricingGroups[0], playerCount: 2, remainingCount: 2, players }],
+    } as unknown as SessionWithPlayers
+    // Count-based: thu 1 người từ group (không playerIds) → checkoutCount 1 < 2 → thu trước
+    ctx.targetGroupId = 'group-1'
+    ctx.checkoutCount = 1
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    ctx.pauseRef = new Date('2026-08-07T12:00:00Z')
+    ctx.playersToBill = [players[0]]
+    const state = makeState()
+    state.finalPricing = { ...pricing, tiers: [], totalHours: 1, subtotal: 50000, grandTotal: 50000 }
+
+    await runCheckOutTx(repos, ctx, state)
+
+    const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0].type === 'PLAY_TIME'
+    )
+    if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
+    // Thu 1/2 → auto-detect thu trước → sequence 1
+    expect(playItemCall[0].metadata.earlyCollection).toEqual({ sequence: 1 })
+    expect(repos.billing.createPaidInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({ notes: 'Thu trước lần 1 — 1 người' })
+    )
+    // Decrement theo targetGroupId
+    expect(repos.session.decrementGroupRemaining).toHaveBeenCalledWith('group-1', 1)
   })
 })

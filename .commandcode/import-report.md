@@ -4,217 +4,235 @@
 skipped and are listed below with reasons so you can move them manually.
 Nothing in your original setup was modified.
 
-Totals: 58 imported, 9 already present, 0 not supported, 0 failed.
+Totals: 0 imported, 73 already present, 0 not supported, 0 failed.
 
 ## Claude Code
 
-- [Imported] agent engineering-ai-data-remediation-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-ai-data-remediation-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-ai-data-remediation-engineer.md
-- [Imported] agent engineering-ai-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-ai-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-ai-engineer.md
-- [Imported] agent engineering-api-platform-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-api-platform-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-api-platform-engineer.md
-- [Imported] agent engineering-autonomous-optimization-architect
-  - from: /home/sivizstepp/.claude/agents/engineering-autonomous-optimization-architect.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-autonomous-optimization-architect.md
-- [Imported] agent engineering-backend-architect
-  - from: /home/sivizstepp/.claude/agents/engineering-backend-architect.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-backend-architect.md
-- [Imported] agent engineering-cms-developer
-  - from: /home/sivizstepp/.claude/agents/engineering-cms-developer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-cms-developer.md
-- [Imported] agent engineering-code-reviewer
-  - from: /home/sivizstepp/.claude/agents/engineering-code-reviewer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-code-reviewer.md
-- [Imported] agent engineering-codebase-onboarding-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-codebase-onboarding-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-codebase-onboarding-engineer.md
-- [Imported] agent engineering-data-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-data-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-data-engineer.md
-- [Imported] agent engineering-data-visualization-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-data-visualization-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-data-visualization-engineer.md
-- [Imported] agent engineering-database-optimizer
-  - from: /home/sivizstepp/.claude/agents/engineering-database-optimizer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-database-optimizer.md
-- [Imported] agent engineering-database-reliability-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-database-reliability-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-database-reliability-engineer.md
-- [Imported] agent engineering-desktop-app-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-desktop-app-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-desktop-app-engineer.md
-- [Imported] agent engineering-developer-tooling-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-developer-tooling-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-developer-tooling-engineer.md
-- [Imported] agent engineering-devops-automator
-  - from: /home/sivizstepp/.claude/agents/engineering-devops-automator.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-devops-automator.md
-- [Imported] agent engineering-drupal-performance
-  - from: /home/sivizstepp/.claude/agents/engineering-drupal-performance.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-drupal-performance.md
-- [Imported] agent engineering-drupal-shopping-cart
-  - from: /home/sivizstepp/.claude/agents/engineering-drupal-shopping-cart.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-drupal-shopping-cart.md
-- [Imported] agent engineering-email-intelligence-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-email-intelligence-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-email-intelligence-engineer.md
-- [Imported] agent engineering-embedded-firmware-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-embedded-firmware-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-embedded-firmware-engineer.md
-- [Imported] agent engineering-feishu-integration-developer
-  - from: /home/sivizstepp/.claude/agents/engineering-feishu-integration-developer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-feishu-integration-developer.md
-- [Imported] agent engineering-filament-optimization-specialist
-  - from: /home/sivizstepp/.claude/agents/engineering-filament-optimization-specialist.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-filament-optimization-specialist.md
-- [Imported] agent engineering-finops-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-finops-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-finops-engineer.md
-- [Imported] agent engineering-frontend-developer
-  - from: /home/sivizstepp/.claude/agents/engineering-frontend-developer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-frontend-developer.md
-- [Imported] agent engineering-gaussdb-expert
-  - from: /home/sivizstepp/.claude/agents/engineering-gaussdb-expert.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-gaussdb-expert.md
-- [Imported] agent engineering-git-workflow-master
-  - from: /home/sivizstepp/.claude/agents/engineering-git-workflow-master.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-git-workflow-master.md
-- [Imported] agent engineering-i18n-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-i18n-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-i18n-engineer.md
-- [Imported] agent engineering-identity-access-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-identity-access-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-identity-access-engineer.md
-- [Imported] agent engineering-incident-response-commander
-  - from: /home/sivizstepp/.claude/agents/engineering-incident-response-commander.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-incident-response-commander.md
-- [Imported] agent engineering-iot-fleet-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-iot-fleet-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-iot-fleet-engineer.md
-- [Imported] agent engineering-it-service-manager
-  - from: /home/sivizstepp/.claude/agents/engineering-it-service-manager.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-it-service-manager.md
-- [Imported] agent engineering-llm-post-training-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-llm-post-training-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-llm-post-training-engineer.md
-- [Imported] agent engineering-minimal-change-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-minimal-change-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-minimal-change-engineer.md
-- [Imported] agent engineering-mobile-app-builder
-  - from: /home/sivizstepp/.claude/agents/engineering-mobile-app-builder.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-mobile-app-builder.md
-- [Imported] agent engineering-mobile-release-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-mobile-release-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-mobile-release-engineer.md
-- [Imported] agent engineering-multi-agent-systems-architect
-  - from: /home/sivizstepp/.claude/agents/engineering-multi-agent-systems-architect.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-multi-agent-systems-architect.md
-- [Imported] agent engineering-network-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-network-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-network-engineer.md
-- [Imported] agent engineering-orgscript-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-orgscript-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-orgscript-engineer.md
-- [Imported] agent engineering-payments-billing-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-payments-billing-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-payments-billing-engineer.md
-- [Imported] agent engineering-privacy-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-privacy-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-privacy-engineer.md
-- [Imported] agent engineering-prompt-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-prompt-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-prompt-engineer.md
-- [Imported] agent engineering-rag-pipeline-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-rag-pipeline-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-rag-pipeline-engineer.md
-- [Imported] agent engineering-rapid-prototyper
-  - from: /home/sivizstepp/.claude/agents/engineering-rapid-prototyper.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-rapid-prototyper.md
-- [Imported] agent engineering-realtime-collaboration-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-realtime-collaboration-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-realtime-collaboration-engineer.md
-- [Imported] agent engineering-rust-refactoring-specialist
-  - from: /home/sivizstepp/.claude/agents/engineering-rust-refactoring-specialist.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-rust-refactoring-specialist.md
-- [Imported] agent engineering-search-relevance-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-search-relevance-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-search-relevance-engineer.md
-- [Imported] agent engineering-section-508-specialist
-  - from: /home/sivizstepp/.claude/agents/engineering-section-508-specialist.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-section-508-specialist.md
-- [Imported] agent engineering-senior-developer
-  - from: /home/sivizstepp/.claude/agents/engineering-senior-developer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-senior-developer.md
-- [Imported] agent engineering-software-architect
-  - from: /home/sivizstepp/.claude/agents/engineering-software-architect.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-software-architect.md
-- [Imported] agent engineering-solidity-smart-contract-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-solidity-smart-contract-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-solidity-smart-contract-engineer.md
-- [Imported] agent engineering-sre
-  - from: /home/sivizstepp/.claude/agents/engineering-sre.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-sre.md
-- [Imported] agent engineering-technical-writer
-  - from: /home/sivizstepp/.claude/agents/engineering-technical-writer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-technical-writer.md
-- [Imported] agent engineering-uswds-developer
-  - from: /home/sivizstepp/.claude/agents/engineering-uswds-developer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-uswds-developer.md
-- [Imported] agent engineering-video-streaming-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-video-streaming-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-video-streaming-engineer.md
-- [Imported] agent engineering-voice-ai-integration-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-voice-ai-integration-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-voice-ai-integration-engineer.md
-- [Imported] agent engineering-webassembly-engineer
-  - from: /home/sivizstepp/.claude/agents/engineering-webassembly-engineer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-webassembly-engineer.md
-- [Imported] agent engineering-wechat-mini-program-developer
-  - from: /home/sivizstepp/.claude/agents/engineering-wechat-mini-program-developer.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-wechat-mini-program-developer.md
-- [Imported] agent engineering-wordpress-performance
-  - from: /home/sivizstepp/.claude/agents/engineering-wordpress-performance.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-wordpress-performance.md
-- [Imported] agent engineering-wordpress-shopping-cart
-  - from: /home/sivizstepp/.claude/agents/engineering-wordpress-shopping-cart.md
-  - to: /home/sivizstepp/.commandcode/agents/engineering-wordpress-shopping-cart.md
-- [Already present (kept yours)] memory User memory
-  - from: /home/sivizstepp/.claude/CLAUDE.md
-  - to: /home/sivizstepp/.commandcode/AGENTS.md
+- [Already present (kept yours)] agent design-brand-guardian
+  - from: C:\Users\sivizstepp/.claude/agents/design-brand-guardian.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/design-brand-guardian.md
+- [Already present (kept yours)] agent design-image-prompt-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/design-image-prompt-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/design-image-prompt-engineer.md
+- [Already present (kept yours)] agent design-inclusive-visuals-specialist
+  - from: C:\Users\sivizstepp/.claude/agents/design-inclusive-visuals-specialist.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/design-inclusive-visuals-specialist.md
+- [Already present (kept yours)] agent design-persona-walkthrough
+  - from: C:\Users\sivizstepp/.claude/agents/design-persona-walkthrough.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/design-persona-walkthrough.md
+- [Already present (kept yours)] agent design-ui-designer
+  - from: C:\Users\sivizstepp/.claude/agents/design-ui-designer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/design-ui-designer.md
+- [Already present (kept yours)] agent design-ui-finish-gate-reviewer
+  - from: C:\Users\sivizstepp/.claude/agents/design-ui-finish-gate-reviewer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/design-ui-finish-gate-reviewer.md
+- [Already present (kept yours)] agent design-ux-architect
+  - from: C:\Users\sivizstepp/.claude/agents/design-ux-architect.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/design-ux-architect.md
+- [Already present (kept yours)] agent design-ux-researcher
+  - from: C:\Users\sivizstepp/.claude/agents/design-ux-researcher.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/design-ux-researcher.md
+- [Already present (kept yours)] agent design-visual-storyteller
+  - from: C:\Users\sivizstepp/.claude/agents/design-visual-storyteller.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/design-visual-storyteller.md
+- [Already present (kept yours)] agent design-whimsy-injector
+  - from: C:\Users\sivizstepp/.claude/agents/design-whimsy-injector.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/design-whimsy-injector.md
+- [Already present (kept yours)] agent engineering-ai-data-remediation-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-ai-data-remediation-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-ai-data-remediation-engineer.md
+- [Already present (kept yours)] agent engineering-ai-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-ai-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-ai-engineer.md
+- [Already present (kept yours)] agent engineering-api-platform-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-api-platform-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-api-platform-engineer.md
+- [Already present (kept yours)] agent engineering-autonomous-optimization-architect
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-autonomous-optimization-architect.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-autonomous-optimization-architect.md
+- [Already present (kept yours)] agent engineering-backend-architect
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-backend-architect.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-backend-architect.md
+- [Already present (kept yours)] agent engineering-cms-developer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-cms-developer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-cms-developer.md
+- [Already present (kept yours)] agent engineering-code-reviewer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-code-reviewer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-code-reviewer.md
+- [Already present (kept yours)] agent engineering-codebase-onboarding-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-codebase-onboarding-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-codebase-onboarding-engineer.md
+- [Already present (kept yours)] agent engineering-data-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-data-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-data-engineer.md
+- [Already present (kept yours)] agent engineering-data-visualization-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-data-visualization-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-data-visualization-engineer.md
+- [Already present (kept yours)] agent engineering-database-optimizer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-database-optimizer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-database-optimizer.md
+- [Already present (kept yours)] agent engineering-database-reliability-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-database-reliability-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-database-reliability-engineer.md
+- [Already present (kept yours)] agent engineering-desktop-app-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-desktop-app-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-desktop-app-engineer.md
+- [Already present (kept yours)] agent engineering-developer-tooling-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-developer-tooling-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-developer-tooling-engineer.md
+- [Already present (kept yours)] agent engineering-devops-automator
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-devops-automator.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-devops-automator.md
+- [Already present (kept yours)] agent engineering-drupal-performance
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-drupal-performance.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-drupal-performance.md
+- [Already present (kept yours)] agent engineering-drupal-shopping-cart
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-drupal-shopping-cart.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-drupal-shopping-cart.md
+- [Already present (kept yours)] agent engineering-email-intelligence-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-email-intelligence-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-email-intelligence-engineer.md
+- [Already present (kept yours)] agent engineering-embedded-firmware-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-embedded-firmware-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-embedded-firmware-engineer.md
+- [Already present (kept yours)] agent engineering-feishu-integration-developer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-feishu-integration-developer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-feishu-integration-developer.md
+- [Already present (kept yours)] agent engineering-filament-optimization-specialist
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-filament-optimization-specialist.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-filament-optimization-specialist.md
+- [Already present (kept yours)] agent engineering-finops-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-finops-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-finops-engineer.md
+- [Already present (kept yours)] agent engineering-frontend-developer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-frontend-developer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-frontend-developer.md
+- [Already present (kept yours)] agent engineering-gaussdb-expert
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-gaussdb-expert.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-gaussdb-expert.md
+- [Already present (kept yours)] agent engineering-git-workflow-master
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-git-workflow-master.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-git-workflow-master.md
+- [Already present (kept yours)] agent engineering-i18n-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-i18n-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-i18n-engineer.md
+- [Already present (kept yours)] agent engineering-identity-access-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-identity-access-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-identity-access-engineer.md
+- [Already present (kept yours)] agent engineering-incident-response-commander
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-incident-response-commander.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-incident-response-commander.md
+- [Already present (kept yours)] agent engineering-iot-fleet-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-iot-fleet-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-iot-fleet-engineer.md
+- [Already present (kept yours)] agent engineering-it-service-manager
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-it-service-manager.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-it-service-manager.md
+- [Already present (kept yours)] agent engineering-llm-post-training-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-llm-post-training-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-llm-post-training-engineer.md
+- [Already present (kept yours)] agent engineering-minimal-change-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-minimal-change-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-minimal-change-engineer.md
+- [Already present (kept yours)] agent engineering-mobile-app-builder
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-mobile-app-builder.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-mobile-app-builder.md
+- [Already present (kept yours)] agent engineering-mobile-release-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-mobile-release-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-mobile-release-engineer.md
+- [Already present (kept yours)] agent engineering-multi-agent-systems-architect
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-multi-agent-systems-architect.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-multi-agent-systems-architect.md
+- [Already present (kept yours)] agent engineering-network-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-network-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-network-engineer.md
+- [Already present (kept yours)] agent engineering-orgscript-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-orgscript-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-orgscript-engineer.md
+- [Already present (kept yours)] agent engineering-payments-billing-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-payments-billing-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-payments-billing-engineer.md
+- [Already present (kept yours)] agent engineering-privacy-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-privacy-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-privacy-engineer.md
+- [Already present (kept yours)] agent engineering-prompt-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-prompt-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-prompt-engineer.md
+- [Already present (kept yours)] agent engineering-rag-pipeline-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-rag-pipeline-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-rag-pipeline-engineer.md
+- [Already present (kept yours)] agent engineering-rapid-prototyper
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-rapid-prototyper.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-rapid-prototyper.md
+- [Already present (kept yours)] agent engineering-realtime-collaboration-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-realtime-collaboration-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-realtime-collaboration-engineer.md
+- [Already present (kept yours)] agent engineering-rust-refactoring-specialist
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-rust-refactoring-specialist.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-rust-refactoring-specialist.md
+- [Already present (kept yours)] agent engineering-search-relevance-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-search-relevance-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-search-relevance-engineer.md
+- [Already present (kept yours)] agent engineering-section-508-specialist
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-section-508-specialist.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-section-508-specialist.md
+- [Already present (kept yours)] agent engineering-senior-developer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-senior-developer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-senior-developer.md
+- [Already present (kept yours)] agent engineering-software-architect
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-software-architect.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-software-architect.md
+- [Already present (kept yours)] agent engineering-solidity-smart-contract-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-solidity-smart-contract-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-solidity-smart-contract-engineer.md
+- [Already present (kept yours)] agent engineering-sre
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-sre.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-sre.md
+- [Already present (kept yours)] agent engineering-technical-writer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-technical-writer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-technical-writer.md
+- [Already present (kept yours)] agent engineering-uswds-developer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-uswds-developer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-uswds-developer.md
+- [Already present (kept yours)] agent engineering-video-streaming-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-video-streaming-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-video-streaming-engineer.md
+- [Already present (kept yours)] agent engineering-voice-ai-integration-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-voice-ai-integration-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-voice-ai-integration-engineer.md
+- [Already present (kept yours)] agent engineering-webassembly-engineer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-webassembly-engineer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-webassembly-engineer.md
+- [Already present (kept yours)] agent engineering-wechat-mini-program-developer
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-wechat-mini-program-developer.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-wechat-mini-program-developer.md
+- [Already present (kept yours)] agent engineering-wordpress-performance
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-wordpress-performance.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-wordpress-performance.md
+- [Already present (kept yours)] agent engineering-wordpress-shopping-cart
+  - from: C:\Users\sivizstepp/.claude/agents/engineering-wordpress-shopping-cart.md
+  - to: C:\Users\sivizstepp/.commandcode/agents/engineering-wordpress-shopping-cart.md
 - [Already present (kept yours)] mcp-server pencil
-  - from: /home/sivizstepp/.claude.json
-  - to: /home/sivizstepp/.commandcode/mcp.json
-- [Already present (kept yours)] skill backend-architecture
-  - from: /home/sivizstepp/LinhStuff/_Projects/qltruongcung/.claude/skills/backend-architecture
-  - to: /home/sivizstepp/LinhStuff/_Projects/qltruongcung/.commandcode/skills/backend-architecture
-- [Already present (kept yours)] skill engineering-software-architect
-  - from: /home/sivizstepp/LinhStuff/_Projects/qltruongcung/.claude/skills/engineering-software-architect
-  - to: /home/sivizstepp/LinhStuff/_Projects/qltruongcung/.commandcode/skills/engineering-software-architect
-- [Already present (kept yours)] skill frontend-design
-  - from: /home/sivizstepp/LinhStuff/_Projects/qltruongcung/.claude/skills/frontend-design
-  - to: /home/sivizstepp/LinhStuff/_Projects/qltruongcung/.commandcode/skills/frontend-design
+  - from: C:\Users\sivizstepp/.claude.json
+  - to: C:\Users\sivizstepp/.commandcode/mcp.json
 - [Already present (kept yours)] memory Project memory
-  - from: /home/sivizstepp/LinhStuff/_Projects/qltruongcung/CLAUDE.md
-  - to: /home/sivizstepp/LinhStuff/_Projects/qltruongcung/AGENTS.md
+  - from: D:\_projects\qltruongcung/CLAUDE.md
+  - to: D:\_projects\qltruongcung/AGENTS.md
 
 ## Codex
 
 - [Already present (kept yours)] mcp-server pencil
-  - from: /home/sivizstepp/.codex/config.toml
-  - to: /home/sivizstepp/.commandcode/mcp.json
+  - from: C:\Users\sivizstepp/.codex/config.toml
+  - to: C:\Users\sivizstepp/.commandcode/mcp.json
 
 ## OpenCode
 
 - [Already present (kept yours)] mcp-server pencil
-  - from: /home/sivizstepp/.config/opencode/opencode.json
-  - to: /home/sivizstepp/.commandcode/mcp.json
+  - from: C:\Users\sivizstepp/.config/opencode/opencode.json
+  - to: C:\Users\sivizstepp/.commandcode/mcp.json
 
 ## Gemini CLI
 
 - [Already present (kept yours)] mcp-server pencil
-  - from: /home/sivizstepp/.gemini/settings.json
-  - to: /home/sivizstepp/.commandcode/mcp.json
+  - from: C:\Users\sivizstepp/.gemini/settings.json
+  - to: C:\Users\sivizstepp/.commandcode/mcp.json

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Edit3,
   Plus,
-  RefreshCw,
   Trash2,
   Wrench,
 } from 'lucide-react'
@@ -15,23 +14,12 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
-import { apiJson } from '@/features/pos/api'
-
-function mutationRequest(method: string, body?: unknown): RequestInit {
-  const headers: Record<string, string> = body ? { 'Content-Type': 'application/json' } : {}
-  const csrfToken = typeof document !== 'undefined'
-    ? document.cookie.match(/(?:^|;\s*)qltrungcung_csrf=([^;]*)/)?.[1]
-    : null
-  if (csrfToken) headers['X-CSRF-Token'] = decodeURIComponent(csrfToken)
-  return {
-    method,
-    headers,
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  }
-}
+import { apiJson } from '@/lib/api'
+import { usePageRefresh } from '@/components/layout/page-refresh-context'
 
 interface Tool {
   id: string
@@ -66,6 +54,12 @@ export function ToolsScreen() {
   const [editTool, setEditTool] = useState<Tool | null>(null)
   const [deleteTool, setDeleteTool] = useState<Tool | null>(null)
   const [form, setForm] = useState<ToolForm>(emptyForm)
+
+  const { registerRefresh } = usePageRefresh()
+
+  useEffect(() => {
+    return registerRefresh(() => void mutate())
+  }, [registerRefresh, mutate])
 
   const tools = toolsData?.data ?? []
   const error = !toolsData?.success ? (toolsData?.error ?? '') : ''
@@ -114,8 +108,8 @@ export function ToolsScreen() {
       }
 
       const data = editTool
-        ? await apiJson<Tool>(`/api/tools/${editTool.id}`, mutationRequest('PATCH', body))
-        : await apiJson<Tool>('/api/tools', mutationRequest('POST', body))
+        ? await apiJson<Tool>(`/api/tools/${editTool.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        : await apiJson<Tool>('/api/tools', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
       if (!data.success) {
         notifyError(data.error || 'Không lưu được dụng cụ')
@@ -137,7 +131,7 @@ export function ToolsScreen() {
 
     setSubmitting(true)
     try {
-      const data = await apiJson(`/api/tools/${deleteTool.id}`, mutationRequest('DELETE'))
+      const data = await apiJson(`/api/tools/${deleteTool.id}`, { method: 'DELETE' })
       if (!data.success) {
         notifyError(data.error || 'Không xoá được dụng cụ')
         return
@@ -190,6 +184,39 @@ export function ToolsScreen() {
     },
   ], [submitting, openEdit])
 
+  // ── Cột cho mobile card list (title + details + actions) ──
+  const toolCardColumns: CardColumn<Tool>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Tên dụng cụ',
+      render: (item) => (
+        <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
+          {item.name}
+          {item.isRequired && <Badge variant="purple" size="sm">Bắt buộc</Badge>}
+        </span>
+      ),
+    },
+    {
+      key: 'description',
+      label: 'Mô tả',
+      render: (item) => item.description || '—',
+    },
+    {
+      key: 'quantity',
+      label: 'SL chuẩn',
+      render: (item) => <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">{item.quantity}</span>,
+    },
+    {
+      label: '',
+      render: (item) => (
+        <div className="flex gap-1.5">
+          <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa" />
+          <Button variant="outline-danger" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteTool(item)} title="Xoá" />
+        </div>
+      ),
+    },
+  ], [submitting, openEdit])
+
   if (loading) {
     return (
       <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
@@ -208,24 +235,14 @@ export function ToolsScreen() {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-3xl space-y-4">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Quản lý dụng cụ
-            </p>
-            <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
+        <header className="hidden items-center justify-between gap-3 md:flex">
+          <div className="min-w-0">
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
               <Wrench size={24} className="text-amber-500" />
               Dụng cụ quầy
             </h1>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={RefreshCw}
-              onClick={() => void mutate()}
-              title="Làm mới"
-            />
             <Button variant="primary" size="sm" icon={Plus} onClick={openCreate}>
               Thêm
             </Button>
@@ -240,16 +257,33 @@ export function ToolsScreen() {
           />
         )}
 
-        <SortableTable
-          columns={toolColumns}
-          data={tools}
-          keyExtractor={(t) => t.id}
-          sortableKeys={['name', 'quantity']}
-          defaultSortKey="name"
-          emptyIcon={Wrench}
-          emptyMessage="Chưa có dụng cụ"
-          emptyDescription="Thêm dụng cụ để nhân viên kiểm đếm khi mở và đóng ca."
-        />
+        {/* Mobile: card list */}
+        <div className="md:hidden">
+          <SortableCardList
+            columns={toolCardColumns}
+            data={tools}
+            keyExtractor={(t) => t.id}
+            sortableKeys={['name', 'quantity']}
+            defaultSortKey="name"
+            emptyIcon={Wrench}
+            emptyMessage="Chưa có dụng cụ"
+            emptyDescription="Thêm dụng cụ để nhân viên kiểm đếm khi mở và đóng ca."
+          />
+        </div>
+
+        {/* Desktop: table */}
+        <div className="hidden md:block">
+          <SortableTable
+            columns={toolColumns}
+            data={tools}
+            keyExtractor={(t) => t.id}
+            sortableKeys={['name', 'quantity']}
+            defaultSortKey="name"
+            emptyIcon={Wrench}
+            emptyMessage="Chưa có dụng cụ"
+            emptyDescription="Thêm dụng cụ để nhân viên kiểm đếm khi mở và đóng ca."
+          />
+        </div>
 
         <ToolFormModal
           open={isFormOpen}

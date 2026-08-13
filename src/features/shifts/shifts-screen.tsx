@@ -14,7 +14,6 @@ import {
   CreditCard,
   History,
   ReceiptText,
-  RefreshCw,
   UserMinus,
   UserRoundPlus,
 } from 'lucide-react'
@@ -28,9 +27,10 @@ import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { apiJson } from '@/features/pos/api'
+import { apiJson } from '@/lib/api'
+import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { formatClock, formatDay, money, paymentMethodLabel, toNumber } from '@/features/pos/format'
-import { toInputDate } from '@/lib/shared/utils'
+import { getVnDay } from '@/lib/shared/utils'
 import type { PaymentMethod, ShiftParticipantRole, UserRole, UserSession } from '@/features/pos/types'
 
 interface TransactionItem {
@@ -88,7 +88,6 @@ interface ShiftRow {
   _count?: {
     sessions: number
     payments: number
-    membershipPayments: number
   }
   toolCounts?: Array<{
     id: string
@@ -113,6 +112,7 @@ interface DayGroup {
   paymentCount: number
   membershipCount: number
   sessionCount: number
+  weekday?: number
   shifts: ShiftRow[]
 }
 
@@ -142,7 +142,7 @@ export function ShiftsScreen() {
   const [txList, setTxList] = useState<TransactionItem[]>([])
   const [txLoading, setTxLoading] = useState(false)
 
-  const todayStr = toInputDate(new Date())
+  const todayWeekday = getVnDay(new Date())
 
   const loadData = useCallback(async (page: number) => {
     setLoading(true)
@@ -182,6 +182,12 @@ export function ShiftsScreen() {
   useEffect(() => {
     void loadData(1)
   }, [loadData])
+
+  const { registerRefresh } = usePageRefresh()
+
+  useEffect(() => {
+    return registerRefresh(() => void loadData(pagination.page))
+  }, [registerRefresh, loadData, pagination.page])
 
   const isAdmin = user?.role === 'ADMIN'
 
@@ -237,6 +243,9 @@ export function ShiftsScreen() {
     })))
     setManageShift((current) => (current?.id === updated.id ? updated : current))
   }
+
+  const isCurrentGroup = (group: DayGroup) =>
+    group.weekday !== undefined && group.weekday === todayWeekday
 
   const upsertParticipant = async (shift: ShiftRow, staffId: string, role: ShiftParticipantRole) => {
     setSubmitting(true)
@@ -306,23 +315,13 @@ export function ShiftsScreen() {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-6xl space-y-4">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Quản lý ca
-            </p>
-            <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
+        <header className="hidden items-center justify-between gap-3 md:flex">
+          <div className="min-w-0">
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
               <CalendarClock size={24} className="text-blue-500" />
               Ca làm
             </h1>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={RefreshCw}
-            onClick={() => void loadData(pagination.page)}
-            title="Làm mới"
-          />
         </header>
 
         {error && (
@@ -424,7 +423,7 @@ export function ShiftsScreen() {
               <DayGroupSection
                 key={group.date}
                 group={group}
-                isToday={group.date === todayStr}
+                isCurrentDay={isCurrentGroup(group)}
                 canManageParticipants={!!isAdmin}
                 submitting={submitting}
                 onManage={setManageShift}
@@ -473,7 +472,7 @@ export function ShiftsScreen() {
 
 function DayGroupSection({
   group,
-  isToday,
+  isCurrentDay,
   canManageParticipants,
   submitting,
   onManage,
@@ -482,7 +481,7 @@ function DayGroupSection({
   onRemove,
 }: {
   group: DayGroup
-  isToday: boolean
+  isCurrentDay: boolean
   canManageParticipants: boolean
   submitting: boolean
   onManage: (shift: ShiftRow) => void
@@ -499,14 +498,14 @@ function DayGroupSection({
 
   return (
     <div className={`overflow-hidden rounded-xl border shadow-sm ${
-      isToday
+      isCurrentDay
         ? 'border-blue-300 bg-blue-50/50 dark:border-blue-500/30 dark:bg-blue-500/5'
         : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
     }`}>
       <div className="border-b px-4 py-3 dark:border-zinc-800">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            {isToday && <Badge variant="purple" size="sm">Hôm nay</Badge>}
+            {isCurrentDay && <Badge variant="purple" size="sm">Hôm nay</Badge>}
             <h3 className="text-sm font-semibold capitalize text-zinc-950 dark:text-white">
               {dayLabel}
             </h3>
@@ -612,7 +611,7 @@ function ShiftCard({
           <div className="rounded bg-zinc-50 px-2 py-1 dark:bg-zinc-950">
             <p className="text-[10px] text-zinc-500 dark:text-zinc-400">GD</p>
             <p className="text-xs font-semibold tabular-nums text-zinc-950 dark:text-white">
-              {(shift._count?.payments ?? 0) + (shift._count?.membershipPayments ?? 0)}
+              {(shift._count?.payments ?? 0)}
             </p>
           </div>
         </div>

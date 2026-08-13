@@ -35,6 +35,8 @@ export interface ShiftRepository {
   markParticipantsLeft(shiftId: string, leftAt: Date): Promise<void>
   /** Cập nhật closeCount cho dụng cụ của ca */
   upsertToolCloseCount(shiftId: string, toolId: string, closeCount: number): Promise<void>
+  /** Ghi openCount cho dụng cụ của ca (đếm dụng cụ đầu ca) — upsert, giữ closeCount nếu có */
+  upsertToolOpenCount(shiftId: string, toolId: string, openCount: number): Promise<void>
   /** Đóng ca — trả về shift CLOSED kèm participants */
   close(shiftId: string, data: CloseShiftData): Promise<OpenShiftDetail>
   /** Thêm/khôi phục participant của ca (join) */
@@ -66,7 +68,7 @@ export interface ShiftRepository {
 export type ShiftListRow = Prisma.ShiftGetPayload<{
   include: {
     staff: { select: { id: true; fullName: true } }
-    _count: { select: { sessions: true; payments: true; membershipPayments: true } }
+    _count: { select: { sessions: true; payments: true } }
     toolCounts: {
       include: { tool: { select: { id: true; name: true; quantity: true; isRequired: true } } }
     }

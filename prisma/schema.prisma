@@ -7,7 +7,7 @@ generator client {
 
 // url và directUrl đã chuyển sang prisma.config.ts (Prisma 7 requirement)
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
 }
 
 // Enums
@@ -45,6 +45,11 @@ enum PaymentMethod {
   TRANSFER
   CARD
   MEMBER
+}
+
+enum PaymentKind {
+  OPERATIONAL
+  MEMBERSHIP
 }
 
 enum MembershipStatus {
@@ -112,7 +117,6 @@ model User {
   shiftParticipants  ShiftParticipant[]
   invoices           Invoice[]
   stockMovements     StockMovement[]
-  membershipPayments MembershipPayment[]
   activityLogs       ActivityLog[]
   cashflowEntries    CashflowEntry[]
 
@@ -127,13 +131,14 @@ model Customer {
   totalHoursPlayed Decimal      @default(0) @map("total_hours_played") @db.Decimal(10, 2)
   totalSpent       Decimal      @default(0) @map("total_spent") @db.Decimal(12, 0)
   notes            String?      @db.Text
+  deletedAt        DateTime?    @map("deleted_at")
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
 
   sessions           Session[]
   memberships        Membership[]
-  membershipPayments MembershipPayment[]
   invoices           Invoice[]
+  payments           Payment[]
 
   @@index([type])
   @@map("customers")
@@ -141,8 +146,12 @@ model Customer {
 
 model Session {
   id                     String                 @id @default(uuid())
-  customerId             String                 @map("customer_id")
-  customer               Customer               @relation(fields: [customerId], references: [id])
+  customerId             String?                @map("customer_id")
+  customer               Customer?              @relation(fields: [customerId], references: [id])
+  /**
+   * Tên khách vãng lai lưu ngay trên phiên (không tạo Customer) — hội viên lấy từ customer.fullName
+   */
+  customerName           String?                @map("customer_name") @db.VarChar(100)
   staffId                String                 @map("staff_id")
   staff                  User                   @relation(fields: [staffId], references: [id])
   shiftId                String?                @map("shift_id")
@@ -151,6 +160,8 @@ model Session {
   membership             Membership?            @relation(fields: [membershipId], references: [id])
   startTime              DateTime               @map("start_time")
   endTime                DateTime?              @map("end_time")
+  pausedAt               DateTime?              @map("paused_at")
+  totalPausedSeconds     Int                    @default(0) @map("total_paused_seconds")
   status                 SessionStatus          @default(ACTIVE)
   totalHours             Decimal?               @map("total_hours") @db.Decimal(5, 2)
   hourlyRate             Decimal                @map("hourly_rate") @db.Decimal(10, 0)
@@ -171,12 +182,15 @@ model Session {
   payments      Payment[]
   invoices      Invoice[]
   pricingGroups SessionPricingGroup[]
+  players       SessionPlayer[]
 
   @@index([customerId, status])
   @@index([shiftId])
   @@index([membershipId])
   @@index([pricingRuleId])
   @@index([promotionRuleId])
+  @@index([createdAt])
+  @@index([status, createdAt])
   @@map("sessions")
 }
 
@@ -193,24 +207,44 @@ model SessionPricingGroup {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
+  players SessionPlayer[]
+
   @@index([sessionId])
   @@map("session_pricing_groups")
 }
 
-model PricingRule {
-  id            String        @id @default(uuid())
-  name          String        @db.VarChar(100)
-  daysOfWeek    Int[]         @default([]) @map("days_of_week")
-  hourFrom      Int           @map("hour_from")
-  hourTo        Int?          @map("hour_to")
-  ratePerHour   Decimal       @map("rate_per_hour") @db.Decimal(12, 2)
-  dayType       DayType       @default(WEEKDAY) @map("day_type")
-  effectiveFrom DateTime      @map("effective_from")
-  effectiveTo   DateTime?     @map("effective_to")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+model SessionPlayer {
+  id                 String              @id @default(uuid())
+  sessionId          String              @map("session_id")
+  session            Session             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  groupId            String              @map("group_id")
+  group              SessionPricingGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name               String?             @db.VarChar(100)
+  pausedAt           DateTime?           @map("paused_at")
+  totalPausedSeconds Int                 @default(0) @map("total_paused_seconds")
+  checkedOutAt       DateTime?           @map("checked_out_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
 
-  tiers         PricingTier[]
+  @@index([sessionId])
+  @@index([groupId])
+  @@map("session_players")
+}
+
+model PricingRule {
+  id            String    @id @default(uuid())
+  name          String    @db.VarChar(100)
+  daysOfWeek    Int[]     @default([]) @map("days_of_week")
+  hourFrom      Int       @map("hour_from")
+  hourTo        Int?      @map("hour_to")
+  ratePerHour   Decimal   @map("rate_per_hour") @db.Decimal(12, 2)
+  dayType       DayType   @default(WEEKDAY) @map("day_type")
+  effectiveFrom DateTime  @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  tiers PricingTier[]
 
   @@index([dayType, hourFrom, hourTo])
   @@map("pricing_rules")
@@ -258,7 +292,7 @@ model MembershipPlan {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   memberships        Membership[]
-  membershipPayments MembershipPayment[]
+  payments           Payment[]
 
   @@map("membership_plans")
 }
@@ -276,37 +310,11 @@ model Membership {
   updatedAt  DateTime         @updatedAt @map("updated_at")
 
   sessions           Session[]
-  membershipPayments MembershipPayment[]
+  payments           Payment[]
 
   @@index([customerId, startsAt, expiresAt])
   @@index([status])
   @@map("memberships")
-}
-
-model MembershipPayment {
-  id            String         @id @default(uuid())
-  customerId    String         @map("customer_id")
-  customer      Customer       @relation(fields: [customerId], references: [id])
-  membershipId  String         @map("membership_id")
-  membership    Membership     @relation(fields: [membershipId], references: [id])
-  planId        String         @map("plan_id")
-  plan          MembershipPlan @relation(fields: [planId], references: [id])
-  invoiceId     String?        @map("invoice_id")
-  invoice       Invoice?       @relation(fields: [invoiceId], references: [id])
-  shiftId       String?        @map("shift_id")
-  shift         Shift?         @relation(fields: [shiftId], references: [id])
-  staffId       String         @map("staff_id")
-  staff         User           @relation(fields: [staffId], references: [id])
-  amount        Decimal        @db.Decimal(12, 0)
-  paymentMethod PaymentMethod  @map("payment_method")
-  paidAt        DateTime       @default(now()) @map("paid_at")
-  notes         String?        @db.Text
-  createdAt     DateTime       @default(now()) @map("created_at")
-
-  @@index([customerId, paidAt])
-  @@index([invoiceId])
-  @@index([shiftId])
-  @@map("membership_payments")
 }
 
 model Shift {
@@ -330,7 +338,6 @@ model Shift {
   toolCounts         ShiftTool[]
   invoices           Invoice[]
   payments           Payment[]
-  membershipPayments MembershipPayment[]
   stockMovements     StockMovement[]
 
   @@index([staffId, status])
@@ -378,10 +385,10 @@ model Invoice {
 
   items              InvoiceItem[]
   payments           Payment[]
-  membershipPayments MembershipPayment[]
 
   @@index([customerId])
   @@index([sessionId])
+  @@index([sessionId, status])
   @@index([shiftId])
   @@index([paidAt])
   @@map("invoices")
@@ -397,6 +404,7 @@ model InvoiceItem {
   description    String          @db.VarChar(200)
   quantity       Decimal         @default(1) @db.Decimal(10, 2)
   unitPrice      Decimal         @default(0) @map("unit_price") @db.Decimal(12, 0)
+  unitCost       Decimal?        @map("unit_cost") @db.Decimal(12, 0)
   subtotal       Decimal         @default(0) @db.Decimal(12, 0)
   discountAmount Decimal         @default(0) @map("discount_amount") @db.Decimal(12, 0)
   total          Decimal         @default(0) @db.Decimal(12, 0)
@@ -411,6 +419,7 @@ model InvoiceItem {
 
 model Payment {
   id            String        @id @default(uuid())
+  kind          PaymentKind   @default(OPERATIONAL)
   sessionId     String?       @map("session_id")
   session       Session?      @relation(fields: [sessionId], references: [id])
   invoiceId     String?       @map("invoice_id")
@@ -419,6 +428,12 @@ model Payment {
   shift         Shift?        @relation(fields: [shiftId], references: [id])
   staffId       String        @map("staff_id")
   staff         User          @relation(fields: [staffId], references: [id])
+  customerId    String?       @map("customer_id")
+  customer      Customer?     @relation(fields: [customerId], references: [id])
+  membershipId  String?       @map("membership_id")
+  membership    Membership?   @relation(fields: [membershipId], references: [id])
+  planId        String?       @map("plan_id")
+  plan          MembershipPlan? @relation(fields: [planId], references: [id])
   totalHours    Decimal       @map("total_hours") @db.Decimal(5, 2)
   subtotal      Decimal       @db.Decimal(12, 0)
   discountTotal Decimal       @default(0) @map("discount_total") @db.Decimal(12, 0)
@@ -430,6 +445,9 @@ model Payment {
 
   @@index([invoiceId])
   @@index([shiftId])
+  @@index([paidAt])
+  @@index([kind])
+  @@index([customerId, paidAt])
   @@map("payments")
 }
 
@@ -484,7 +502,7 @@ model Tool {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  shiftTools  ShiftTool[]
+  shiftTools ShiftTool[]
 
   @@map("tools")
 }
@@ -540,5 +558,8 @@ model ActivityLog {
   details    Json?    @db.JsonB
   createdAt  DateTime @default(now()) @map("created_at")
 
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
   @@map("activity_logs")
 }

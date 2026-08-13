@@ -10,8 +10,39 @@ export type SessionWithDetails = Prisma.SessionGetPayload<{
   }
 }>
 
+/** Session + pricingGroups kèm players — cho pause theo người + checkout group-aware */
+export type SessionWithPlayers = Prisma.SessionGetPayload<{
+  include: {
+    customer: true
+    membership: true
+    pricingGroups: {
+      orderBy: { createdAt: 'asc' }
+      include: { players: true }
+    }
+  }
+}>
+
 export type SessionWithCustomer = Prisma.SessionGetPayload<{
   include: { customer: true }
+}> & { customerName: string | null }
+
+/** Chỉ đủ dữ liệu cho pause/resume theo người chơi — không tải customer/membership nặng */
+export type SessionPlayersForPause = Prisma.SessionGetPayload<{
+  select: {
+    id: true
+    status: true
+    playerCount: true
+    totalPausedSeconds: true
+    pausedAt: true
+    pricingGroups: {
+      select: {
+        id: true
+        players: {
+          select: { id: true, pausedAt: true, totalPausedSeconds: true }
+        }
+      }
+    }
+  }
 }>
 
 export type SessionRefs = Prisma.SessionGetPayload<{
@@ -20,7 +51,7 @@ export type SessionRefs = Prisma.SessionGetPayload<{
     membership: { select: { id: true; startsAt: true; expiresAt: true } }
     shift: { select: { id: true; openedAt: true; status: true } }
   }
-}>
+}> & { customerName: string | null }
 
 /** Dòng phiên trong danh sách — GET /api/sessions */
 export type SessionListRow = Prisma.SessionGetPayload<{
@@ -37,6 +68,9 @@ export type SessionListRow = Prisma.SessionGetPayload<{
     discountAmount: true
     totalAmount: true
     playerCount: true
+    customerName: true
+    pausedAt: true
+    totalPausedSeconds: true
     promotionRuleId: true
     promotionName: true
     promotionDiscountType: true
@@ -54,6 +88,10 @@ export type SessionListRow = Prisma.SessionGetPayload<{
         hourlyRate: true
         pricingRuleId: true
         pricingSnapshot: true
+        players: {
+          select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true, checkedOutAt: true }
+          orderBy: { createdAt: 'asc' }
+        }
       }
       orderBy: { createdAt: 'asc' }
     }
@@ -83,6 +121,10 @@ export type SessionPreviewRow = Prisma.SessionGetPayload<{
         hourlyRate: true
         pricingRuleId: true
         pricingSnapshot: true
+        players: {
+          select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true, checkedOutAt: true }
+          orderBy: { createdAt: 'asc' }
+        }
       }
       orderBy: { createdAt: 'asc' }
     }
@@ -102,25 +144,67 @@ export interface SessionRepository {
   findByIdForPreview(id: string): Promise<SessionPreviewRow | null>
   /** Tổng grandTotal của DRAFT invoices theo từng session — enrich pendingSellTotal */
   findDraftSellTotals(sessionIds: string[]): Promise<Record<string, number>>
+  /** Đếm session tạo trong khoảng thời gian (đặt tên khách vãng lai `Khách #NNN`) */
+  countCreatedBetween(from: Date, to: Date): Promise<number>
   /** Tạo session kèm customer/membership/shift refs */
   createWithRefs(data: CreateSessionData): Promise<SessionRefs>
-  createPricingGroup(data: CreatePricingGroupData): Promise<void>
+  createPricingGroup(data: CreatePricingGroupData): Promise<{ id: string }>
+  /** Gán bảng giá (snapshot) cho pricing group — dùng khi chọn bảng giá tại checkout */
+  updatePricingGroup(groupId: string, data: UpdatePricingGroupData): Promise<void>
   /** Unchecked update — cho phép set trực tiếp shiftId, playerCount, promotion fields... */
   update(id: string, data: Prisma.SessionUncheckedUpdateInput): Promise<void>
   /** Giảm remainingCount của group — trả về remainingCount mới */
   decrementGroupRemaining(groupId: string, count: number): Promise<{ remainingCount: number }>
   /** Tổng remainingCount của tất cả groups trong session */
   sumRemainingPlayers(sessionId: string): Promise<number>
+  /** Session + pricingGroups kèm players — cho checkout-preview + checkout group-aware */
+  findByIdWithPlayers(id: string): Promise<SessionWithPlayers | null>
+  /** Session nhẹ (chỉ status + players) — cho pause/resume theo người chơi, giảm payload */
+  findPlayersForPause(id: string): Promise<SessionPlayersForPause | null>
+  /** Đặt pausedAt cho 1 người chơi (theo group) */
+  pausePlayer(playerId: string, pausedAt: Date): Promise<void>
+  /** Resume 1 người chơi: clear pausedAt + increment totalPausedSeconds */
+  resumePlayer(playerId: string, pausedSeconds: number): Promise<void>
+  /** Đổi tên 1 người chơi — chỉ update name, giữ nguyên id (định danh timer/pause/pricing) */
+  renamePlayer(playerId: string, name: string | null): Promise<void>
+  /** Tạo N SessionPlayer (tên trống, pause 0) cho 1 group — gọi khi check-in */
+  createPlayersForGroup(sessionId: string, groupId: string, count: number): Promise<void>
+  /** Chuyển danh sách player sang group khác (chia nhiều bảng giá tại checkout) */
+  movePlayersToGroup(playerIds: string[], groupId: string): Promise<void>
+  /** Đánh dấu các player đã được tính tiền (checkout từng phần) */
+  markPlayersCheckedOut(playerIds: string[], checkedOutAt: Date): Promise<void>
+}
+
+/** Pause giây đã tích lũy của 1 player tại thời điểm now (gồm cả đang tạm dừng) */
+export function playerPausedSeconds(
+  player: { pausedAt: Date | null; totalPausedSeconds: number },
+  now: Date
+): number {
+  let seconds = player.totalPausedSeconds
+  if (player.pausedAt) {
+    seconds += Math.round(Math.max(0, (now.getTime() - new Date(player.pausedAt).getTime()) / 1000))
+  }
+  return seconds
+}
+
+/** Pause giây của 1 group = tổng các player + phần đang tạm dừng */
+export function groupPausedSeconds(
+  group: { players: Array<{ pausedAt: Date | null; totalPausedSeconds: number }> },
+  now: Date
+): number {
+  return group.players.reduce((sum, player) => sum + playerPausedSeconds(player, now), 0)
 }
 
 export interface CreateSessionData {
-  customerId: string
+  customerId: string | null
+  /** Tên khách vãng lai — null khi là hội viên (lấy từ customer.fullName) */
+  customerName?: string | null
   staffId: string
   shiftId: string
   membershipId?: string
   startTime: Date
   hourlyRate: number
-  pricingRuleId?: string
+  pricingRuleId?: string | null
   pricingRuleSnapshot?: PricingRuleSnapshot | null
   playerCount: number
 }
@@ -132,9 +216,19 @@ export interface CreatePricingGroupData {
   remainingCount: number
   hourlyRate: number
   /** null cho session hội viên (không gắn bảng giá) */
-  pricingRuleId?: string
+  pricingRuleId?: string | null
   /** null cho session hội viên (không tính tiền giờ) */
   pricingSnapshot: PricingRuleSnapshot | null
+}
+
+export interface UpdatePricingGroupData {
+  label?: string
+  playerCount?: number
+  remainingCount?: number
+  /** null khi xoá bảng giá đã gán */
+  pricingRuleId?: string | null
+  pricingSnapshot: PricingRuleSnapshot | null
+  hourlyRate?: number
 }
 
 export interface ProductRecord {

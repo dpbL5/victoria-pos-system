@@ -19,7 +19,7 @@ import { FilterButton } from '@/components/ui/filter-button'
 import { Label, Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { apiJson } from '@/features/pos/api'
+import { apiJson } from '@/lib/api'
 import { formatClock, formatDay, money, paymentMethodLabel } from '@/features/pos/format'
 import type { Shift } from '@/features/pos/types'
 import type { TransactionItem } from '@/types'
@@ -201,7 +201,7 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
             <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.back()}>
               Quay lại
             </Button>
-            <h1 className="text-lg font-bold text-zinc-950 dark:text-white">
+            <h1 className="hidden text-lg font-bold text-zinc-950 dark:text-white md:block">
               Giao dịch trong ca
             </h1>
           </div>

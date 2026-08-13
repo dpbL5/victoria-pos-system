@@ -5,7 +5,6 @@ import {
   CalendarClock,
   Edit3,
   Plus,
-  RefreshCw,
   Ticket,
   Trash2,
   type LucideIcon,
@@ -21,7 +20,8 @@ import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
-import { apiJson, jsonRequest } from '@/features/pos/api'
+import { apiJson, jsonRequest } from '@/lib/api'
+import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import type { UserSession } from '@/features/pos/types'
 import { formatVND } from '@/lib/shared/utils'
 
@@ -62,6 +62,12 @@ export function MembershipPlansScreen() {
 
   const { data: plansData, isLoading: plansLoading, mutate } = useApi<MembershipPlan[]>('/api/membership-plans', { dedupingInterval: 300_000 })
   const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
+
+  const { registerRefresh } = usePageRefresh()
+
+  useEffect(() => {
+    return registerRefresh(() => void mutate())
+  }, [registerRefresh, mutate])
 
   const plans: MembershipPlan[] = plansData?.data ?? []
   const error = !plansData?.success ? (plansData?.error as string ?? '') : ''
@@ -142,22 +148,12 @@ export function MembershipPlansScreen() {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-5xl space-y-4">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Thiết lập hội viên
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-zinc-950 dark:text-white">
+        <header className="hidden items-center justify-between gap-3 md:flex">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
               Gói hội viên
             </h1>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={RefreshCw}
-            onClick={() => void mutate()}
-            title="Làm mới"
-          />
         </header>
 
         {error && (

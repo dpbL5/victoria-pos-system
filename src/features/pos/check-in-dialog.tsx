@@ -1,31 +1,32 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Minus, Plus, Search, ShieldCheck, UserPlus, Users } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Minus, Plus, Search, ShieldCheck, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input, Label, Select } from '@/components/ui/input'
+import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
-import { apiJson, jsonRequest } from './api'
-import { formatDay, money } from './format'
-import { GroupBuilder } from './group-builder'
-import type { Customer, Membership, MembershipPlan, PaymentMethod, SessionRow } from './types'
+import { apiJson, jsonRequest } from '@/lib/api'
+import { formatDay } from './format'
+import type { Customer, Membership, SessionRow } from './types'
 
 type CheckInMode = 'WALK_IN' | 'MEMBER'
 
-interface PricingRuleOption {
-  id: string
-  name: string
-  ratePerHour: number
-  tiers: { minHours: number; ratePerHour: number }[]
+interface MemberSearchResult extends Customer {
+  membershipStatus?: 'ACTIVE' | 'EXPIRED' | 'NONE'
+  currentMembership?: Membership | null
+  latestMembership?: Membership | null
 }
 
-export function CheckInDialog({  open,
+const MAX_PLAYERS = 50
+
+export function CheckInDialog({
+  open,
   initialMode,
-  pricingReady,
   shiftReady,
-  membershipPlans,
+  shiftOpenedAt,
   submitting,
   setSubmitting,
   onClose,
@@ -33,76 +34,46 @@ export function CheckInDialog({  open,
 }: {
   open: boolean
   initialMode: CheckInMode
-  pricingReady: boolean
   shiftReady: boolean
-  membershipPlans: MembershipPlan[]
+  /** Giờ mở ca (ISO) — chặn check-in trước giờ mở ca */
+  shiftOpenedAt?: string | null
   submitting: boolean
   setSubmitting: (value: boolean) => void
   onClose: () => void
   onDone: () => Promise<void>
 }) {
+  const router = useRouter()
   const { success: notifySuccess, error: notifyError } = useToast()
   const [mode, setMode] = useState<CheckInMode>('WALK_IN')
   const [walkInName, setWalkInName] = useState('')
-  const [playerCount, setPlayerCount] = useState(1)
+  const [playerCountInput, setPlayerCountInput] = useState('1')
   const [memberSearch, setMemberSearch] = useState('')
-  const [memberResults, setMemberResults] = useState<Customer[]>([])
+  const [memberResults, setMemberResults] = useState<MemberSearchResult[]>([])
   const [selectedMember, setSelectedMember] = useState<Customer | null>(null)
   const [currentMembership, setCurrentMembership] = useState<Membership | null>(null)
   const [membershipActive, setMembershipActive] = useState(false)
   const [memberLoading, setMemberLoading] = useState(false)
-  const [newMember, setNewMember] = useState(false)
-  const [newMemberName, setNewMemberName] = useState('')
-  const [newMemberPhone, setNewMemberPhone] = useState('')
-  const [planId, setPlanId] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH')
-  const [applicablePricingRules, setApplicablePricingRules] = useState<PricingRuleOption[]>([])
-  const [selectedPricingRuleId, setSelectedPricingRuleId] = useState('')
-  const [pricingRulesLoading, setPricingRulesLoading] = useState(false)
-  const [pricingGroups, setPricingGroups] = useState<Array<{ playerCount: number; pricingRuleId: string }>>([])
   const [checkInStartTime, setCheckInStartTime] = useState('')
+  const [defaultStartTime, setDefaultStartTime] = useState('')
 
   useEffect(() => {
     if (!open) return
     /* eslint-disable react-hooks/set-state-in-effect */
     setMode(initialMode)
     setWalkInName('')
-    setPlayerCount(1)
+    setPlayerCountInput('1')
     setMemberSearch('')
     setMemberResults([])
     setSelectedMember(null)
     setCurrentMembership(null)
     setMembershipActive(false)
-    setNewMember(false)
-    setNewMemberName('')
-    setNewMemberPhone('')
-    setPlanId(membershipPlans[0]?.id ?? '')
-    setPaymentMethod('CASH')
-    setApplicablePricingRules([])
-    setSelectedPricingRuleId('')
-    setPricingGroups([])
     // ── Khởi tạo giờ check-in mặc định = giờ hiện tại (HH:MM) ──
     const now = new Date()
-    setCheckInStartTime(
-      `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    )
+    const nowHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    setDefaultStartTime(nowHHMM)
+    setCheckInStartTime(nowHHMM)
     /* eslint-enable react-hooks/set-state-in-effect */
-
-    // Fetch applicable pricing rules cho WALK_IN mode
-    setPricingRulesLoading(true)
-    apiJson<PricingRuleOption[]>('/api/pricing/applicable')
-      .then((data) => {
-        if (data.success) {
-          const rules = data.data ?? []
-          setApplicablePricingRules(rules)
-          if (rules.length > 0) {
-            setSelectedPricingRuleId(rules[0].id)
-          }
-        }
-      })
-      .catch(() => { /* bỏ qua lỗi, pricing rules optional */ })
-      .finally(() => setPricingRulesLoading(false))
-  }, [open, initialMode, membershipPlans])
+  }, [open, initialMode])
 
   const searchMembers = async () => {
     const q = memberSearch.trim()
@@ -113,8 +84,8 @@ export function CheckInDialog({  open,
     setCurrentMembership(null)
     setMembershipActive(false)
     try {
-      const data = await apiJson<Customer[]>(
-        `/api/customers?type=MEMBER&search=${encodeURIComponent(q)}&limit=8`
+      const data = await apiJson<MemberSearchResult[]>(
+        `/api/customers?type=MEMBER&search=${encodeURIComponent(q)}&limit=8&includeMembershipStatus=true`
       )
       if (!data.success) {
         notifyError(data.error || 'Không tìm được hội viên')
@@ -128,10 +99,16 @@ export function CheckInDialog({  open,
     }
   }
 
-  const loadMembership = async (customer: Customer) => {
+  const loadMembership = async (customer: MemberSearchResult) => {
     setSelectedMember(customer)
     setMemberSearch(customer.fullName)
     setMemberResults([])
+    // Kết quả tìm kiếm đã kèm membershipStatus/currentMembership (includeMembershipStatus)
+    if (customer.membershipStatus !== undefined) {
+      setCurrentMembership(customer.currentMembership ?? null)
+      setMembershipActive(customer.membershipStatus === 'ACTIVE')
+      return
+    }
     setMemberLoading(true)
     try {
       const data = await apiJson<Membership[]>(`/api/memberships?customerId=${customer.id}`)
@@ -148,22 +125,24 @@ export function CheckInDialog({  open,
     }
   }
 
-  const createSession = async (customerId: string) => {
+  const parsedPlayerCount = Math.min(MAX_PLAYERS, Math.max(1, Number.parseInt(playerCountInput, 10) || 1))
+
+  const createSession = async (customerId?: string) => {
     const body: Record<string, unknown> = { customerId }
-    if (checkInStartTime) {
+    // Chỉ gửi startTime khi nhân viên chủ động đổi giờ khác mặc định.
+    // Mặc định: server lấy giờ hiện tại → phiên luôn bắt đầu sau khi đăng ký/gia hạn xong.
+    if (checkInStartTime && checkInStartTime !== defaultStartTime) {
       const [h, m] = checkInStartTime.split(':').map(Number)
       const start = new Date()
       start.setHours(h, m, 0, 0)
       body.startTime = start.toISOString()
     }
     if (mode === 'WALK_IN') {
-      if (playerCount > 1 && pricingGroups.length > 0) {
-        body.groups = pricingGroups
-      } else if (selectedPricingRuleId) {
-        body.pricingRuleId = selectedPricingRuleId
-      }
-      if (playerCount > 1) {
-        body.playerCount = playerCount
+      // Khách vãng lai: gửi thẳng tên lên phiên — không tạo Customer trong DB
+      body.customerName = walkInName.trim()
+      // Bảng giá không chọn lúc check-in — để trống, chọn khi thu tiền
+      if (parsedPlayerCount > 1) {
+        body.playerCount = parsedPlayerCount
       }
     }
     const data = await apiJson<SessionRow>('/api/sessions', jsonRequest(body))
@@ -174,34 +153,29 @@ export function CheckInDialog({  open,
     return true
   }
 
-  const renewThenCheckIn = async (customerId: string) => {
-    if (!planId) {
-      notifyError('Chưa có gói hội viên để gia hạn')
-      return false
-    }
-
-    const renewal = await apiJson('/api/memberships/renew', jsonRequest({
-      customerId,
-      planId,
-      paymentMethod,
-    }))
-    if (!renewal.success) {
-      notifyError(renewal.error || 'Không gia hạn được hội viên')
-      return false
-    }
-
-    return createSession(customerId)
-  }
-
   const handleConfirm = async () => {
     if (!shiftReady) {
       notifyError('Cần mở ca trước khi check-in')
       return
     }
 
-    if (mode === 'WALK_IN' && !pricingReady) {
-      notifyError('Chưa có bảng giá cho khách vãng lai')
-      return
+    // ── Validate giờ check-in (client-side) ──
+    if (checkInStartTime && checkInStartTime !== defaultStartTime) {
+      const [h, m] = checkInStartTime.split(':').map(Number)
+      const chosen = new Date()
+      chosen.setHours(h, m, 0, 0)
+
+      const now = new Date()
+      const maxStart = new Date(now.getTime() + 5 * 60 * 60 * 1000)
+
+      if (shiftOpenedAt && chosen < new Date(shiftOpenedAt)) {
+        notifyError('Giờ check-in không được trước giờ mở ca')
+        return
+      }
+      if (chosen > maxStart) {
+        notifyError('Giờ check-in không được vượt quá 5 tiếng sau thời điểm hiện tại')
+        return
+      }
     }
 
     setSubmitting(true)
@@ -213,39 +187,16 @@ export function CheckInDialog({  open,
           notifyError('Nhập tên khách vãng lai')
           return
         }
-        const customer = await apiJson<Customer>('/api/customers', jsonRequest({
-          fullName: walkInName.trim(),
-          type: 'WALK_IN',
-        }))
-        if (!customer.success || !customer.data) {
-          notifyError(customer.error || 'Không tạo được khách')
-          return
-        }
-        ok = await createSession(customer.data.id)
-      } else if (newMember) {
-        if (!newMemberName.trim()) {
-          notifyError('Nhập tên hội viên')
-          return
-        }
-        if (!planId) {
-          notifyError('Chưa có gói hội viên để đăng ký')
-          return
-        }
-        const registration = await apiJson<{ customer: Customer }>('/api/memberships/register', jsonRequest({
-          fullName: newMemberName.trim(),
-          phone: newMemberPhone.trim(),
-          planId,
-          paymentMethod,
-        }))
-        if (!registration.success || !registration.data) {
-          notifyError(registration.error || 'Không đăng ký được hội viên')
-          return
-        }
-        ok = await createSession(registration.data.customer.id)
+        // Khách vãng lai: không tạo Customer — tên được lưu ngay trên phiên
+        ok = await createSession()
+      } else if (selectedMember && !membershipActive) {
+        // Hội viên hết hạn → chuyển sang tab Hội viên để gia hạn, không check-in tại đây
+        notifyError('Hội viên hết hạn. Vào tab Hội viên để gia hạn trước khi check-in.')
+        onClose()
+        router.push('/customers')
+        return
       } else if (selectedMember) {
-        ok = membershipActive
-          ? await createSession(selectedMember.id)
-          : await renewThenCheckIn(selectedMember.id)
+        ok = await createSession(selectedMember.id)
       } else {
         notifyError('Chọn hội viên để check-in')
         return
@@ -262,8 +213,7 @@ export function CheckInDialog({  open,
     }
   }
 
-  const needsRenewal = mode === 'MEMBER' && (newMember || (selectedMember && !membershipActive))
-  const selectedPlan = membershipPlans.find((plan) => plan.id === planId)
+  const memberNeedsRenewal = mode === 'MEMBER' && !!selectedMember && !membershipActive
 
   return (
     <Modal
@@ -279,11 +229,7 @@ export function CheckInDialog({  open,
           disabled={submitting || !shiftReady}
           onClick={handleConfirm}
         >
-          {submitting
-            ? 'Đang xử lý...'
-            : needsRenewal
-              ? 'Gia hạn & check-in'
-              : 'Check-in'}
+          {submitting ? 'Đang xử lý...' : 'Check-in'}
         </Button>
       }
       size="lg"
@@ -324,9 +270,9 @@ export function CheckInDialog({  open,
             value={checkInStartTime}
             onChange={(e) => setCheckInStartTime(e.target.value)}
           />
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          {/* <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             Mặc định là giờ hiện tại. Sửa nếu cần lùi hoặc tiến giờ check-in.
-          </p>
+          </p> */}
         </div>
 
         {mode === 'WALK_IN' ? (
@@ -343,235 +289,143 @@ export function CheckInDialog({  open,
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setPlayerCount((c) => Math.max(1, c - 1))}
-                  disabled={playerCount <= 1}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
+                  onClick={() =>
+                    setPlayerCountInput((current) => {
+                      const currentParsed = Math.min(MAX_PLAYERS, Math.max(1, Number.parseInt(current, 10) || 1))
+                      return String(Math.max(1, currentParsed - 1))
+                    })
+                  }
+                  disabled={parsedPlayerCount <= 1}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
                 >
                   <Minus size={14} />
                 </button>
-                <span className="w-10 text-center text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
-                  {playerCount}
-                </span>
+                <Input
+                  id="player-count"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={2}
+                  value={playerCountInput}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    if (value === '' || /^\d+$/.test(value)) {
+                      setPlayerCountInput(value)
+                    }
+                  }}
+                  className="w-20 text-center text-lg font-bold tabular-nums"
+                />
                 <button
                   type="button"
-                  onClick={() => setPlayerCount((c) => Math.min(50, c + 1))}
-                  disabled={playerCount >= 50}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-950 text-white disabled:opacity-40 dark:bg-white dark:text-zinc-950"
+                  onClick={() =>
+                    setPlayerCountInput((current) => {
+                      const currentParsed = Math.min(MAX_PLAYERS, Math.max(1, Number.parseInt(current, 10) || 1))
+                      return String(Math.min(MAX_PLAYERS, currentParsed + 1))
+                    })
+                  }
+                  disabled={parsedPlayerCount >= MAX_PLAYERS}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-950 text-white disabled:opacity-40 dark:bg-white dark:text-zinc-950"
                 >
                   <Plus size={14} />
                 </button>
               </div>
-              {playerCount > 1 && (
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Nhóm {playerCount} người — chỉ cần 1 người ghi tên, checkout từng người
-                </p>
-              )}
             </div>
-            {playerCount > 1 ? (
-              <GroupBuilder
-                totalPlayers={playerCount}
-                groups={pricingGroups}
-                onChange={setPricingGroups}
-                applicablePricingRules={applicablePricingRules}
-              />
-            ) : (
-              applicablePricingRules.length > 0 && (
-                <div className="mt-3">
-                  <Label htmlFor="pricing-rule">Bảng giá áp dụng</Label>
-                  <Select
-                    id="pricing-rule"
-                    value={selectedPricingRuleId}
-                    disabled={pricingRulesLoading}
-                    onChange={(event) => setSelectedPricingRuleId(event.target.value)}
-                  >
-                    {applicablePricingRules.map((rule) => (
-                      <option key={rule.id} value={rule.id}>
-                        {rule.name} — {money(rule.ratePerHour)}/giờ
-                        {rule.tiers.length > 0 ? ` (${rule.tiers.length} bậc luỹ tiến)` : ''}
-                      </option>
-                    ))}
-                  </Select>
-                  {selectedPricingRuleId && (() => {
-                    const selected = applicablePricingRules.find((r) => r.id === selectedPricingRuleId)
-                    if (!selected || selected.tiers.length === 0) return null
-                    return (
-                      <div className="mt-2 rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900">
-                        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Giá luỹ tiến:</p>
-                        <div className="mt-1 space-y-0.5">
-                          <p className="text-xs text-zinc-600 dark:text-zinc-300">
-                            0-{selected.tiers[0].minHours}h: {money(selected.ratePerHour)}/giờ
-                          </p>
-                          {selected.tiers.map((tier, i) => {
-                            const nextMin = selected.tiers[i + 1]?.minHours
-                            return (
-                              <p key={i} className="text-xs text-zinc-600 dark:text-zinc-300">
-                                {tier.minHours}h{nextMin ? `-${nextMin}h` : '+'}: {money(tier.ratePerHour)}/giờ
-                              </p>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </div>
-              )
-            )}
-            {!pricingReady && (
-              <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
-                Cần tạo bảng giá trước khi check-in khách vãng lai.
-              </p>
-            )}
           </div>
         ) : (
           <div className="space-y-3">
-            {!newMember && (
-              <>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search
-                      size={15}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-                    />
-                    <Input
-                      value={memberSearch}
-                      onChange={(event) => setMemberSearch(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          void searchMembers()
-                        }
-                      }}
-                      className="pl-9"
-                      placeholder="Tên hoặc SĐT hội viên"
-                    />
-                  </div>
-                  <Button variant="primary" size="md" disabled={memberLoading} onClick={() => void searchMembers()}>
-                    Tìm
-                  </Button>
-                </div>
-
-                {memberResults.length > 0 && (
-                  <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
-                    {memberResults.map((customer) => (
-                      <button
-                        key={customer.id}
-                        type="button"
-                        onClick={() => void loadMembership(customer)}
-                        className="flex w-full items-center justify-between gap-3 border-b border-zinc-100 px-3 py-2.5 text-left last:border-b-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-zinc-950 dark:text-white">
-                            {customer.fullName}
-                          </p>
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                            {customer.phone || 'Chưa có SĐT'}
-                          </p>
-                        </div>
-                        <Badge variant="purple" size="sm">HV</Badge>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {selectedMember && (
-                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-950 dark:text-white">
-                          {selectedMember.fullName}
-                        </p>
-                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                          {membershipActive && currentMembership
-                            ? `Còn hạn đến ${formatDay(currentMembership.expiresAt)}`
-                            : 'Cần gia hạn trước khi chơi'}
-                        </p>
-                      </div>
-                      <Badge variant={membershipActive ? 'success' : 'warning'}>
-                        {membershipActive ? 'Còn hạn' : 'Hết hạn'}
-                      </Badge>
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewMember(true)
-                    setSelectedMember(null)
-                    setCurrentMembership(null)
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search
+                  size={15}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+                />
+                <Input
+                  value={memberSearch}
+                  onChange={(event) => setMemberSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      void searchMembers()
+                    }
                   }}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-300"
-                >
-                  <UserPlus size={14} />
-                  Tạo hội viên mới
-                </button>
-              </>
-            )}
+                  className="pl-9"
+                  placeholder="Tên hoặc SĐT hội viên"
+                />
+              </div>
+              <Button variant="primary" size="md" disabled={memberLoading} onClick={() => void searchMembers()}>
+                Tìm
+              </Button>
+            </div>
 
-            {newMember && (
-              <div className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-500/20 dark:bg-blue-500/10">
-                <div>
-                  <Label htmlFor="new-member-name" required>Tên hội viên</Label>
-                  <Input
-                    id="new-member-name"
-                    value={newMemberName}
-                    onChange={(event) => setNewMemberName(event.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="new-member-phone">Số điện thoại</Label>
-                  <Input
-                    id="new-member-phone"
-                    value={newMemberPhone}
-                    onChange={(event) => setNewMemberPhone(event.target.value)}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setNewMember(false)}
-                  className="text-xs font-medium text-zinc-600 dark:text-zinc-300"
-                >
-                  Quay lại tìm hội viên
-                </button>
+            {memberResults.length > 0 && (
+              <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+                {memberResults.map((customer) => (
+                  <button
+                    key={customer.id}
+                    type="button"
+                    onClick={() => void loadMembership(customer)}
+                    className="flex w-full items-center justify-between gap-3 border-b border-zinc-100 px-3 py-2.5 text-left last:border-b-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-zinc-950 dark:text-white">
+                        {customer.fullName}
+                      </p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {customer.phone || 'Chưa có SĐT'}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={customer.membershipStatus === 'ACTIVE' ? 'success' : 'warning'}
+                      size="sm"
+                    >
+                      {customer.membershipStatus === 'ACTIVE'
+                        ? 'Còn hạn'
+                        : customer.membershipStatus === 'EXPIRED'
+                          ? 'Hết hạn'
+                          : 'Chưa đóng'}
+                    </Badge>
+                  </button>
+                ))}
               </div>
             )}
 
-            {needsRenewal && (
-              <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/20 dark:bg-amber-500/10">
-                <div>
-                  <Label htmlFor="membership-plan" required>Gói hội viên</Label>
-                  <Select
-                    id="membership-plan"
-                    value={planId}
-                    onChange={(event) => setPlanId(event.target.value)}
-                  >
-                    {membershipPlans.map((plan) => (
-                      <option key={plan.id} value={plan.id}>
-                        {plan.name} - {money(plan.price)}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="renew-payment">Thanh toán phí hội viên</Label>
-                  <Select
-                    id="renew-payment"
-                    value={paymentMethod}
-                    onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
-                  >
-                    <option value="CASH">Tiền mặt</option>
-                    <option value="TRANSFER">Chuyển khoản</option>
-                    <option value="CARD">Thẻ</option>
-                  </Select>
-                </div>
-                {selectedPlan && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-zinc-600 dark:text-zinc-300">Phí hội viên</span>
-                    <span className="font-semibold text-zinc-950 dark:text-white">
-                      {money(selectedPlan.price)}
-                    </span>
+            {selectedMember && (
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-950 dark:text-white">
+                      {selectedMember.fullName}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      {membershipActive && currentMembership
+                        ? `Còn hạn đến ${formatDay(currentMembership.expiresAt)}`
+                        : 'Hết hạn — cần gia hạn trước khi chơi'}
+                    </p>
                   </div>
-                )}
+                  <Badge variant={membershipActive ? 'success' : 'warning'}>
+                    {membershipActive ? 'Còn hạn' : 'Hết hạn'}
+                  </Badge>
+                </div>
+              </div>
+            )}
+
+            {memberNeedsRenewal && (
+              <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/20 dark:bg-amber-500/10">
+                <p className="text-sm text-zinc-700 dark:text-zinc-200">
+                  Hội viên hết hạn. Vào tab <span className="font-semibold">Hội viên</span> để gia hạn trước khi check-in.
+                </p>
+                <Button
+                  variant="inverse"
+                  size="md"
+                  fullWidth
+                  icon={ShieldCheck}
+                  onClick={() => {
+                    onClose()
+                    router.push('/customers')
+                  }}
+                >
+                  Đến tab Hội viên
+                </Button>
               </div>
             )}
           </div>
@@ -580,4 +434,3 @@ export function CheckInDialog({  open,
     </Modal>
   )
 }
-

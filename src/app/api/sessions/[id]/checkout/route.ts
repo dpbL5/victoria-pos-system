@@ -35,6 +35,9 @@ export async function POST(
       pricingGroupId: parsed.data.pricingGroupId,
       playerCount: parsed.data.playerCount,
       parkingVehicleCount: parsed.data.parkingVehicleCount ?? 0,
+      pricingRuleId: parsed.data.pricingRuleId,
+      groups: parsed.data.groups,
+      playerIds: parsed.data.playerIds,
     })
 
     return resultToResponse(result, mapCheckoutError)

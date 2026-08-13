@@ -16,8 +16,8 @@ export function formatHours(hours: number): string {
   return `${h}h${m}p`
 }
 
-export function calcHours(start: Date, end: Date): number {
-  const diffMs = end.getTime() - start.getTime()
+export function calcHours(start: Date, end: Date, pausedSeconds = 0): number {
+  const diffMs = end.getTime() - start.getTime() - pausedSeconds * 1000
   return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100
 }
 

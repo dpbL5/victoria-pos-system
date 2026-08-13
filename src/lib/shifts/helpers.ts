@@ -10,6 +10,10 @@ export const shiftWithParticipantsInclude = {
     include: { staff: { select: { id: true, fullName: true } } },
     orderBy: { joinedAt: 'asc' },
   },
+  toolCounts: {
+    include: { tool: { select: { id: true, name: true, quantity: true, isRequired: true } } },
+    orderBy: { createdAt: 'asc' },
+  },
 } satisfies Prisma.ShiftInclude
 
 export const shiftWithAllParticipantsInclude = {
@@ -22,7 +26,6 @@ export const shiftWithAllParticipantsInclude = {
     select: {
       sessions: true,
       payments: true,
-      membershipPayments: true,
     },
   },
 } satisfies Prisma.ShiftInclude
@@ -115,7 +118,6 @@ export interface ShiftRevenueData {
 
 interface ShiftDb {
   payment: Pick<Prisma.PaymentDelegate, 'findMany' | 'groupBy'>
-  membershipPayment: Pick<Prisma.MembershipPaymentDelegate, 'findMany' | 'groupBy'>
 }
 
 const paymentInclude = {
@@ -129,20 +131,16 @@ const paymentInclude = {
   },
   session: {
     select: {
+      customerName: true,
       customer: { select: { fullName: true, type: true } },
     },
   },
-  staff: { select: { fullName: true } },
-} satisfies Prisma.PaymentInclude
-
-const membershipPaymentInclude = {
   customer: { select: { fullName: true, type: true } },
   plan: { select: { name: true } },
   staff: { select: { fullName: true } },
-} satisfies Prisma.MembershipPaymentInclude
+} satisfies Prisma.PaymentInclude
 
 type PaymentRow = Prisma.PaymentGetPayload<{ include: typeof paymentInclude }>
-type MembershipPaymentRow = Prisma.MembershipPaymentGetPayload<{ include: typeof membershipPaymentInclude }>
 
 export async function getShiftTransactions(
   db: ShiftDb,
@@ -160,58 +158,35 @@ export async function getShiftTransactions(
     memberAmount: number
   }
 }> {
-  const [payments, membershipPayments] = await Promise.all([
-    db.payment.findMany({
-      where: { shiftId },
-      include: paymentInclude,
-      orderBy: { paidAt: 'asc' },
-    }),
-    db.membershipPayment.findMany({
-      where: { shiftId },
-      include: membershipPaymentInclude,
-      orderBy: { paidAt: 'asc' },
-    }),
-  ])
+  const payments = await db.payment.findMany({
+    where: { shiftId },
+    include: paymentInclude,
+    orderBy: { paidAt: 'asc' },
+  })
 
   const mapTransaction = (p: PaymentRow): TransactionItem => ({
     id: p.id,
-    type: 'payment' as const,
+    type: p.kind === 'MEMBERSHIP' ? 'membership' as const : 'payment' as const,
     amount: Number(p.grandTotal),
     paymentMethod: p.paymentMethod as string,
     paidAt: p.paidAt instanceof Date ? p.paidAt.toISOString() : String(p.paidAt),
     customerName:
       p.invoice?.customer?.fullName ??
+      p.session?.customerName ??
       p.session?.customer?.fullName ??
+      p.customer?.fullName ??
       'Khách lẻ',
-    customerType: (p.invoice?.customer?.type ?? p.session?.customer?.type) ?? null,
+    customerType: (p.invoice?.customer?.type ?? p.session?.customer?.type ?? p.customer?.type) ?? null,
     invoiceId: p.invoice?.id ?? null,
     invoiceNo: p.invoice?.invoiceNo ?? null,
     invoiceStatus: p.invoice?.status ?? null,
     staffName: p.staff?.fullName ?? '—',
-    planName: null,
+    planName: p.plan?.name ?? null,
   })
 
-  const mapMpTransaction = (mp: MembershipPaymentRow): TransactionItem => ({
-    id: mp.id,
-    type: 'membership' as const,
-    amount: Number(mp.amount),
-    paymentMethod: mp.paymentMethod as string,
-    paidAt: mp.paidAt instanceof Date ? mp.paidAt.toISOString() : String(mp.paidAt),
-    customerName: mp.customer?.fullName ?? '—',
-    customerType: mp.customer?.type ?? null,
-    invoiceId: null,
-    invoiceNo: null,
-    invoiceStatus: null,
-    staffName: mp.staff?.fullName ?? '—',
-    planName: mp.plan?.name ?? null,
-  })
-
-  const transactions: TransactionItem[] = [
-    ...payments.map(mapTransaction),
-    ...membershipPayments.map(mapMpTransaction),
-  ].sort(
-    (a, b) => new Date(a.paidAt).getTime() - new Date(b.paidAt).getTime()
-  )
+  const transactions: TransactionItem[] = payments
+    .map(mapTransaction)
+    .sort((a, b) => new Date(a.paidAt).getTime() - new Date(b.paidAt).getTime())
 
   // Loại trừ giao dịch từ hoá đơn đã huỷ khi tính tổng hợp
   const activeTransactions = transactions.filter(
@@ -246,21 +221,12 @@ export async function getShiftRevenueData(
   db: ShiftDb,
   shiftId: string
 ): Promise<ShiftRevenueData> {
-  const [paymentAgg, mpAgg] = await Promise.all([
-    // Báo cáo doanh thu tự lọc payment từ hoá đơn đã huỷ
-    db.payment.groupBy({
-      by: ['paymentMethod'],
-      where: { shiftId, invoice: { status: { not: 'CANCELLED' } } },
-      _sum: { grandTotal: true },
-      _count: { _all: true },
-    }),
-    db.membershipPayment.groupBy({
-      by: ['paymentMethod'],
-      where: { shiftId },
-      _sum: { amount: true },
-      _count: { _all: true },
-    }),
-  ])
+  const paymentAgg = await db.payment.groupBy({
+    by: ['paymentMethod', 'kind'],
+    where: { shiftId, invoice: { status: { not: 'CANCELLED' } } },
+    _sum: { grandTotal: true },
+    _count: { _all: true },
+  })
 
   let cashRevenue = 0
   let transferRevenue = 0
@@ -275,16 +241,8 @@ export async function getShiftRevenueData(
     else if (row.paymentMethod === 'TRANSFER') transferRevenue += amount
     else if (row.paymentMethod === 'CARD') cardRevenue += amount
     else if (row.paymentMethod === 'MEMBER') memberRevenue += amount
-    paymentCount += row._count?._all ?? 0
-  }
-
-  for (const row of mpAgg) {
-    const amount = Number(row._sum?.amount ?? 0)
-    if (row.paymentMethod === 'CASH') cashRevenue += amount
-    else if (row.paymentMethod === 'TRANSFER') transferRevenue += amount
-    else if (row.paymentMethod === 'CARD') cardRevenue += amount
-    else if (row.paymentMethod === 'MEMBER') memberRevenue += amount
-    membershipCount += row._count?._all ?? 0
+    if (row.kind === 'MEMBERSHIP') membershipCount += row._count?._all ?? 0
+    else paymentCount += row._count?._all ?? 0
   }
 
   // MEMBER là thanh toán qua hội viên, không thu tiền mặt — chỉ tính vào tổng doanh thu

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/shared/auth'
-import { findOpenOperationalShift, findOpenShiftForStaff } from '@/lib/shifts'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { parseStartOfDay, toInputDate } from '@/lib/shared/utils'
 import type { DashboardStats } from '@/types'
@@ -19,8 +18,8 @@ export async function GET() {
     const scope = auth.role === 'STAFF' ? 'STAFF' : 'ALL'
 
     const currentShift = auth.role === 'ADMIN'
-      ? await findOpenOperationalShift(repositories as never)
-      : await findOpenShiftForStaff(repositories as never, auth.userId)
+      ? await repositories.shift.findOpenOperational()
+      : await repositories.shift.findOpenForStaff(auth.userId)
     const currentShiftId = currentShift?.id ?? null
 
     const data = await repositories.reporting.getDashboardData({

@@ -2,10 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  Boxes,
   Package,
   PackagePlus,
-  RefreshCw,
   Search,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -15,10 +13,12 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
-import { apiJson, jsonRequest } from '@/features/pos/api'
+import { apiJson, jsonRequest } from '@/lib/api'
+import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { money, toNumber } from '@/features/pos/format'
 import type { Product, ProductType, UserSession } from '@/features/pos/types'
 
@@ -36,6 +36,12 @@ export function InventoryScreen() {
 
   const { data: productData, isLoading: prodLoading, mutate } = useApi<Product[]>('/api/products?isActive=true', { dedupingInterval: 300_000 })
   const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
+
+  const { registerRefresh } = usePageRefresh()
+
+  useEffect(() => {
+    return registerRefresh(() => void mutate())
+  }, [registerRefresh, mutate])
 
   const products: Product[] = productData?.data ?? []
   const error = !productData?.success ? (productData?.error as string ?? '') : ''
@@ -139,6 +145,61 @@ export function InventoryScreen() {
     },
   ], [canManageStock])
 
+  // ── Cột cho mobile card list (title + details) ──
+  const productCardColumns: CardColumn<Product>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Tên mặt hàng',
+      render: (item) => (
+        <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
+          {item.name}
+          {item.type === 'SERVICE'
+            ? <Badge variant="blue" size="sm">Dịch vụ</Badge>
+            : item.stockQuantity === 0
+              ? <Badge variant="danger" size="sm">Hết</Badge>
+              : item.stockQuantity <= item.minStockLevel
+                ? <Badge variant="warning" size="sm">Sắp hết</Badge>
+                : null
+          }
+        </span>
+      ),
+    },
+    {
+      key: 'price',
+      label: 'Giá',
+      render: (item) => <span className="font-medium tabular-nums text-zinc-950 dark:text-white">{money(item.price)}</span>,
+    },
+    {
+      key: 'stockQuantity',
+      label: 'Tồn kho',
+      render: (item) => {
+        if (item.type === 'SERVICE') return <span className="text-zinc-400">—</span>
+        const out = item.stockQuantity === 0
+        const low = item.stockQuantity <= item.minStockLevel
+        return (
+          <span className={`font-semibold tabular-nums ${
+            out ? 'text-red-600 dark:text-red-300' : low ? 'text-amber-600 dark:text-amber-300' : 'text-zinc-950 dark:text-white'
+          }`}>
+            {item.stockQuantity}
+          </span>
+        )
+      },
+    },
+    {
+      key: 'minStockLevel',
+      label: 'Tối thiểu',
+      render: (item) => item.type === 'PRODUCT' ? item.minStockLevel : '—',
+    },
+    {
+      label: '',
+      render: (item) => (
+        item.type === 'PRODUCT' && canManageStock ? (
+          <Button variant="secondary" size="sm" onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
+        ) : null
+      ),
+    },
+  ], [canManageStock])
+
   if (loading) {
     return <InventorySkeleton />
   }
@@ -146,22 +207,12 @@ export function InventoryScreen() {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-5xl space-y-4">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Kho quầy
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-zinc-950 dark:text-white">
+        <header className="hidden items-center justify-between gap-3 md:flex">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
               Hàng hóa & dịch vụ
             </h1>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={RefreshCw}
-            onClick={() => void mutate()}
-            title="Làm mới"
-          />
         </header>
 
         {error && (
@@ -180,7 +231,7 @@ export function InventoryScreen() {
           />
         )}
 
-        <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <section className="grid grid-cols-4 gap-2">
           <InventoryStat
             label="Đang bán"
             value={stats.total}
@@ -276,16 +327,33 @@ export function InventoryScreen() {
             </Badge>
           </div>
 
-          <SortableTable
-            columns={productColumns}
-            data={filteredProducts}
-            keyExtractor={(p) => p.id}
-            sortableKeys={['name', 'price', 'stockQuantity', 'minStockLevel']}
-            defaultSortKey="name"
-            emptyIcon={Package}
-            emptyMessage="Không có hàng hóa"
-            emptyDescription="Thử đổi bộ lọc hoặc thêm hàng hóa mới."
-          />
+          {/* Mobile: card list */}
+          <div className="md:hidden">
+            <SortableCardList
+              columns={productCardColumns}
+              data={filteredProducts}
+              keyExtractor={(p) => p.id}
+              sortableKeys={['name', 'price', 'stockQuantity', 'minStockLevel']}
+              defaultSortKey="name"
+              emptyIcon={Package}
+              emptyMessage="Không có hàng hóa"
+              emptyDescription="Thử đổi bộ lọc hoặc thêm hàng hóa mới."
+            />
+          </div>
+
+          {/* Desktop: table */}
+          <div className="hidden md:block">
+            <SortableTable
+              columns={productColumns}
+              data={filteredProducts}
+              keyExtractor={(p) => p.id}
+              sortableKeys={['name', 'price', 'stockQuantity', 'minStockLevel']}
+              defaultSortKey="name"
+              emptyIcon={Package}
+              emptyMessage="Không có hàng hóa"
+              emptyDescription="Thử đổi bộ lọc hoặc thêm hàng hóa mới."
+            />
+          </div>
         </section>
       </div>
 
@@ -356,91 +424,6 @@ function InventoryStat({
       </p>
     </button>
   )
-}
-
-function ProductCard({
-  product,
-  canManageStock,
-  onMoveStock,
-}: {
-  product: Product
-  canManageStock: boolean
-  onMoveStock: () => void
-}) {
-  const productIsLow = isLowStock(product)
-  const outOfStock = product.type === 'PRODUCT' && product.stockQuantity === 0
-  const stockWidth = getStockWidth(product)
-
-  return (
-    <div className="px-4 py-3">
-      <div className="grid grid-cols-[1fr_auto] gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
-              {product.name}
-            </p>
-            <ProductStatusBadge product={product} />
-          </div>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {product.sku ? `SKU ${product.sku} · ` : ''}
-            {money(product.price)}
-          </p>
-        </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-          {product.type === 'PRODUCT' ? <Boxes size={18} /> : <Package size={18} />}
-        </div>
-      </div>
-
-      {product.type === 'PRODUCT' ? (
-        <div className="mt-3">
-          <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="text-zinc-500 dark:text-zinc-400">Tồn hiện tại</span>
-            <span className={`font-semibold tabular-nums ${
-              outOfStock
-                ? 'text-red-600 dark:text-red-300'
-                : productIsLow
-                  ? 'text-amber-600 dark:text-amber-300'
-                  : 'text-zinc-950 dark:text-white'
-            }`}
-            >
-              {product.stockQuantity}
-            </span>
-          </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-            <div
-              className={`h-full rounded-full ${
-                outOfStock
-                  ? 'bg-red-500'
-                  : productIsLow
-                    ? 'bg-amber-500'
-                    : 'bg-emerald-500'
-              }`}
-              style={{ width: stockWidth }}
-            />
-          </div>
-          <div className="mt-2 flex items-center justify-between gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-            <span>Tối thiểu {product.minStockLevel}</span>
-            {canManageStock && (
-              <Button variant="secondary" size="xs" onClick={onMoveStock}>
-                Nhập / chỉnh
-              </Button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-          Dịch vụ không trừ tồn kho khi checkout.
-        </p>
-      )}
-    </div>
-  )
-}
-
-function ProductStatusBadge({ product }: { product: Product }) {
-  if (product.type === 'SERVICE') return <Badge variant="blue" size="sm">Dịch vụ</Badge>
-  if (product.stockQuantity === 0) return <Badge variant="danger" size="sm">Hết</Badge>
-  if (isLowStock(product)) return <Badge variant="warning" size="sm">Sắp hết</Badge>
-  return <Badge variant="success" size="sm">Đủ</Badge>
 }
 
 function CreateProductDialog({
@@ -791,13 +774,6 @@ function StockMovementDialog({
 function isLowStock(product: Product): boolean {
   return product.type === 'PRODUCT'
     && product.stockQuantity <= Math.max(1, product.minStockLevel)
-}
-
-function getStockWidth(product: Product): string {
-  if (product.type === 'SERVICE') return '100%'
-  const capacity = Math.max(product.minStockLevel * 2, product.stockQuantity, 1)
-  const percent = Math.max(0, Math.min(100, Math.round((product.stockQuantity / capacity) * 100)))
-  return `${percent}%`
 }
 
 function buildCreateProductPayload(input: {

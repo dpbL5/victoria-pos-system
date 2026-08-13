@@ -157,9 +157,28 @@ export function createProductRepository(store: ProductStore): ProductRepository 
         },
       })
 
+      // ── Cập nhật giá vốn theo weighted average khi nhập kho (RESTOCK) ──
+      // costPrice_mới = (stock_cũ × costPrice_cũ + q_nhập × unitCost_nhập) / (stock_cũ + q_nhập)
+      // Chỉ áp dụng khi có unitCost nhập vào; tồn đầu kỳ (createWithInitialStock) đã set costPrice lúc tạo.
+      let costPriceUpdate: { costPrice?: number } = {}
+      if (
+        input.type === 'RESTOCK' &&
+        input.unitCost != null &&
+        input.unitCost > 0 &&
+        product.stockQuantity > 0
+      ) {
+        const currentValue = Number(product.costPrice ?? 0) * product.stockQuantity
+        const addedValue = input.unitCost * input.quantity
+        const weightedAvg = (currentValue + addedValue) / nextStock
+        costPriceUpdate = { costPrice: Math.round(weightedAvg) }
+      } else if (input.type === 'RESTOCK' && input.unitCost != null && input.unitCost > 0) {
+        // Lô nhập đầu tiên — giá vốn = giá nhập lô này
+        costPriceUpdate = { costPrice: input.unitCost }
+      }
+
       const updatedProduct = await store.product.update({
         where: { id: product.id },
-        data: { stockQuantity: nextStock },
+        data: { stockQuantity: nextStock, ...costPriceUpdate },
       })
 
       return {

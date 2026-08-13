@@ -55,13 +55,21 @@ export async function GET(
               phone: invoice.customer.phone,
               type: invoice.customer.type,
             }
-          : null,
+          : invoice.session?.customerName
+            ? {
+                id: null,
+                fullName: invoice.session.customerName,
+                phone: null,
+                type: 'WALK_IN' as const,
+              }
+            : null,
         session: invoice.session
           ? {
               id: invoice.session.id,
               startTime: invoice.session.startTime.toISOString(),
               endTime: invoice.session.endTime?.toISOString() ?? null,
               status: invoice.session.status,
+              totalPausedSeconds: invoice.session.totalPausedSeconds ?? 0,
             }
           : null,
         shift: invoice.shift
@@ -88,18 +96,22 @@ export async function GET(
         })),
         payments: invoice.payments.map((payment) => ({
           id: payment.id,
+          kind: payment.kind,
           paymentMethod: payment.paymentMethod,
           grandTotal: Number(payment.grandTotal),
           paidAt: payment.paidAt.toISOString(),
           notes: payment.notes,
           staff: { id: payment.staff.id, fullName: payment.staff.fullName },
         })),
-        membershipPayments: invoice.membershipPayments.map((mp) => ({
-          id: mp.id,
-          amount: Number(mp.amount),
-          paidAt: mp.paidAt.toISOString(),
-          planName: mp.membership?.plan?.name ?? null,
-        })),
+        // STI: phí hội viên là Payment kind=MEMBERSHIP — giữ shape cũ cho frontend
+        membershipPayments: invoice.payments
+          .filter((p) => p.kind === 'MEMBERSHIP')
+          .map((mp) => ({
+            id: mp.id,
+            amount: Number(mp.grandTotal),
+            paidAt: mp.paidAt.toISOString(),
+            planName: mp.membership?.plan?.name ?? mp.plan?.name ?? null,
+          })),
       })
   } catch (error) {
     if ((error as Error).message === 'UNAUTHORIZED') {

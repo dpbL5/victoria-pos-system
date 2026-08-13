@@ -29,7 +29,12 @@
       "Shell(for:*)",
       "Shell(do:*)",
       "Shell(done:*)",
-      "Shell(git commit -F - <<'EOF' chore: cập nhật commandcode config, taste và skills lock Co-authored-by: CommandCodeBot <noreply@commandcode.ai> EOF)"
+      "Shell(git commit -F - <<'EOF' chore: cập nhật commandcode config, taste và skills lock Co-authored-by: CommandCodeBot <noreply@commandcode.ai> EOF)",
+      "powershell",
+      "Shell(cmd:*)",
+      "Shell(dashboard:*)",
+      "Shell(/testing/page.tsx src/components/layout/sidebar.tsx 2>&1:*)",
+      "Shell(/testing/page.tsx 2>&1:*)"
     ],
     "deny": [],
     "defaultMode": "default"

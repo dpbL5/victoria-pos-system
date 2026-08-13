@@ -31,7 +31,9 @@
   --color-text-tertiary: #94a3b8;
   --color-text-inverse: #ffffff;
 
-  /* Semantic */
+  /* Focus ring — visible in both light and dark modes */
+  --color-focus-ring: #2563eb;
+
   --color-success: #16a34a;
   --color-success-bg: #f0fdf4;
   --color-success-border: #bbf7d0;
@@ -120,6 +122,9 @@
   --color-accent-purple-bg: rgba(139, 92, 246, 0.1);
   --color-accent-purple-border: rgba(139, 92, 246, 0.25);
 
+  /* Focus ring — visible on dark backgrounds */
+  --color-focus-ring: #3b82f6;
+
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -154,7 +159,7 @@ body {
 
 /* ── Focus ring ─────────────────────────────────────────── */
 *:focus-visible {
-  outline: 2px solid var(--color-brand);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
@@ -184,12 +189,18 @@ body {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
+/* Toast xuất hiện từ top: scale nhỏ (0.9) → đúng kích thước */
+@keyframes toast-pop {
+  from { opacity: 0; transform: translateY(-8px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 .animate-fade-in { animation: fade-in 0.2s ease-out; }
 .animate-slide-up { animation: slide-up 0.25s ease-out; }
 .animate-slide-down { animation: slide-down 0.2s ease-out; }
 .animate-scale-in { animation: scale-in 0.2s ease-out; }
 .animate-slide-in-right { animation: slide-in-right 0.3s ease-out; }
+.animate-toast-pop { animation: toast-pop 0.25s ease-out; }
 
 /* ── Reduced motion ─────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {

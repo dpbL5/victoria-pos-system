@@ -73,9 +73,8 @@ export async function POST(request: NextRequest) {
     const session = await checkIn({
       staffId: auth.userId,
       customerId: parsed.data.customerId,
-      pricingRuleId: parsed.data.pricingRuleId,
+      customerName: parsed.data.customerName,
       playerCount: parsed.data.playerCount,
-      groups: parsed.data.groups,
       now: parsed.data.startTime ? new Date(parsed.data.startTime) : undefined,
     })
 

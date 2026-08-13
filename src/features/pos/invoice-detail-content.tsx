@@ -16,6 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { formatVND } from '@/lib/shared/utils'
+import { formatPausedHMS } from './format'
 
 interface InvoiceItem {
   id: string
@@ -29,7 +30,6 @@ interface InvoiceItem {
   product: { id: string; name: string; sku: string | null; type: string } | null
   metadata: unknown
 }
-
 interface InvoicePayment {
   id: string
   paymentMethod: string
@@ -57,7 +57,7 @@ export interface InvoiceDetail {
   notes: string | null
   createdAt: string
   customer: {
-    id: string
+    id: string | null
     fullName: string
     phone: string | null
     type: string
@@ -67,6 +67,7 @@ export interface InvoiceDetail {
     startTime: string
     endTime: string | null
     status: string
+    totalPausedSeconds?: number | null
   } | null
   shift: {
     id: string
@@ -107,6 +108,10 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
   const parkingFeeTotal = invoice.items
     .filter((item) => item.type === 'SURCHARGE')
     .reduce((sum, item) => sum + Math.abs(item.total), 0)
+  // Thu trước: tìm earlyCollection trong metadata của dòng PLAY_TIME
+  const playItem = invoice.items.find((item) => item.type === 'PLAY_TIME')
+  const playMeta = (playItem?.metadata ?? {}) as { earlyCollection?: { sequence?: number } }
+  const earlyCollectionSequence = playMeta.earlyCollection?.sequence
 
   return (
     <div className="space-y-4">
@@ -116,6 +121,11 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
             <h1 className="flex items-center gap-2 text-xl font-bold text-zinc-950 dark:text-white">
               <ReceiptText size={22} className="text-blue-500" />
               {invoice.invoiceNo}
+              {earlyCollectionSequence !== undefined && (
+                <Badge variant="warning" size="sm">
+                  Thu trước lần {earlyCollectionSequence}
+                </Badge>
+              )}
             </h1>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
               {formatDateTime(invoice.createdAt)}
@@ -152,6 +162,11 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
               <Badge variant={invoice.customer.type === 'MEMBER' ? 'purple' : 'default'} size="sm">
                 {invoice.customer.type === 'MEMBER' ? 'Hội viên' : 'Vãng lai'}
               </Badge>
+              {invoice.customer.id === null && (
+                <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                  Khách vãng lai — không lưu hồ sơ
+                </p>
+              )}
             </div>
           </section>
         )}
@@ -196,6 +211,33 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
               {invoice.session.status === 'COMPLETED' ? 'Đã xong' : invoice.session.status === 'ACTIVE' ? 'Đang chơi' : 'Đã huỷ'}
             </Badge>
           </div>
+          {/* Thời gian đã tạm dừng — từ PLAY_TIME metadata (fallback session.totalPausedSeconds) */}
+          {(() => {
+            const playItem = invoice.items.find((item) => item.type === 'PLAY_TIME')
+            const meta = (playItem?.metadata ?? {}) as { pausedSeconds?: number; playerPauses?: Array<{ id: string; name: string; pausedSeconds: number }> }
+            const pausedSeconds = meta.pausedSeconds ?? invoice.session?.totalPausedSeconds ?? 0
+            if (pausedSeconds <= 0) return null
+            return (
+              <div className="mt-2 space-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                <p>
+                  Đã tạm dừng:{' '}
+                  <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">
+                    {formatPausedHMS(pausedSeconds)}
+                  </span>
+                </p>
+                {(meta.playerPauses?.length ?? 0) > 0 && (
+                  <div className="ml-2 space-y-0.5">
+                    {meta.playerPauses!.map((p) => (
+                      <p key={p.id}>
+                        {p.name?.trim() || 'Người chơi'}:{' '}
+                        <span className="tabular-nums">{formatPausedHMS(p.pausedSeconds)}</span>
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </section>
       )}
 
@@ -223,13 +265,17 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
                         {item.description}
                       </p>
                     </div>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                       <Badge size="sm" variant="outline">
                         {itemTypeLabels[item.type] ?? item.type}
                       </Badge>
-                      <span>
-                        {item.quantity} × {formatVND(item.unitPrice)}
-                      </span>
+                      {item.type === 'PLAY_TIME' ? (
+                        <PlayTimePricing item={item} />
+                      ) : (
+                        <span>
+                          {item.quantity} × {formatVND(item.unitPrice)}
+                        </span>
+                      )}
                       {item.discountAmount > 0 && (
                         <span className="text-red-500">
                           -{formatVND(item.discountAmount)}
@@ -242,13 +288,14 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
                       )}
                     </div>
                   </div>
-                  <p className={`self-center text-sm font-bold tabular-nums ${
+                  <hr />
+                  {/* <p className={`self-center text-sm font-bold tabular-nums ${
                     item.total < 0
                       ? 'text-red-600 dark:text-red-300'
                       : 'text-zinc-950 dark:text-white'
                   }`}>
                     {formatVND(item.total)}
-                  </p>
+                  </p> */}
                 </div>
               )
             })
@@ -377,6 +424,59 @@ function getPromotionName(metadata: unknown): string | null {
   return typeof record.promotionName === 'string' && record.promotionName.trim()
     ? record.promotionName
     : null
+}
+
+/** Hiển thị giá giờ chơi chi tiết theo từng người chơi (metadata playerPricing) */
+function PlayTimePricing({ item }: { item: InvoiceItem }) {
+  const metadata = (item.metadata ?? {}) as Record<string, unknown>
+  const playerPricing = Array.isArray(metadata.playerPricing)
+    ? (metadata.playerPricing as Array<{
+        name?: string
+        totalHours?: number
+        subtotal?: number
+        discountAmount?: number
+        total?: number
+        pricingRuleName?: string
+      }>)
+    : null
+
+  // Hóa đơn cũ không có playerPricing → fallback "X người × đơn giá/người"
+  if (!playerPricing || playerPricing.length === 0) {
+    const checkoutCount = typeof metadata.checkoutCount === 'number' && metadata.checkoutCount > 0
+      ? metadata.checkoutCount
+      : null
+    const perPersonSubtotal = typeof metadata.perPersonSubtotal === 'number'
+      ? metadata.perPersonSubtotal
+      : null
+    return (
+      <span className="tabular-nums">
+        {perPersonSubtotal !== null && perPersonSubtotal >= 0
+          ? `${formatVND(perPersonSubtotal)}/người${checkoutCount ? ` × ${checkoutCount} người` : ''}`
+          : `${item.quantity} × ${formatVND(item.unitPrice)}`}
+      </span>
+    )
+  }
+
+  return (
+    <div className="w-full space-y-1 tabular-nums">
+      {playerPricing.map((p, index) => (
+        <div key={index} className="flex items-baseline justify-between gap-2">
+          <span className="truncate">
+            Ng. {index + 1}: {formatHours(p.totalHours ?? 0)}h{' '}
+            {p.pricingRuleName ? `(${p.pricingRuleName})` : ''}
+          </span>
+          <span className="shrink-0 font-semibold text-zinc-950 dark:text-white">
+            = {formatVND(p.total ?? 0)}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Định dạng số giờ 1 chữ số thập phân, bỏ số 0 thừa (1.4, 2.3) */
+function formatHours(hours: number): string {
+  return (Math.round(hours * 10) / 10).toString()
 }
 
 function paymentMethodLabel(method: string): string {

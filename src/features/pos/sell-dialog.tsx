@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
-import { apiJson, jsonRequest } from './api'
+import { apiJson, jsonRequest } from '@/lib/api'
 import { money, toNumber } from './format'
 import type { Product, SessionRow } from './types'
 
@@ -100,7 +100,7 @@ export function SellDialog({
     <Modal
       open={!!session}
       onClose={onClose}
-      title={session ? `Bán kèm - ${session.customer.fullName}` : 'Bán kèm'}
+      title={session ? `Bán kèm - ${session.customerName ?? session.customer?.fullName ?? 'Khách lẻ'}` : 'Bán kèm'}
       description="Thêm đồ uống / dịch vụ vào phiên. Tiền sẽ được tính khi thu."
       size="lg"
       footer={

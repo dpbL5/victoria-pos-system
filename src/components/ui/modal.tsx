@@ -3,7 +3,7 @@
 // ── Modal component ─────────────────────────────────────
 // Dùng cho dialogs, forms, confirmations trên desktop + mobile
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { Button } from "./button";
 
@@ -35,6 +35,8 @@ export function Modal({
   size = "md",
   className = "",
 }: ModalProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
+
   // Lock body scroll when open
   useEffect(() => {
     if (open) {
@@ -53,21 +55,55 @@ export function Modal({
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
+  // Focus trap — keep Tab inside the modal when open
+  useEffect(() => {
+    if (!open || !contentRef.current) return;
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const focusableSelector =
+      "button, input, select, textarea, a[href], [tabindex]:not([tabindex='-1'])";
+    const focusable = Array.from(
+      contentRef.current.querySelectorAll<HTMLElement>(focusableSelector),
+    ).filter((el) => !el.hasAttribute("disabled") && !el.getAttribute("disabled"));
+
+    if (focusable.length > 0) focusable[0].focus();
+
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleTab);
+    return () => {
+      document.removeEventListener("keydown", handleTab);
+      previouslyFocused?.focus();
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-20 md:pb-4 animate-fade-in"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-8 md:pb-4 animate-fade-in"
       style={{ background: "var(--color-surface-overlay)" }}
       onClick={onClose}
     >
       <div
-        className={`w-full ${sizeClasses[size]} max-h-[calc(100dvh-7rem)] md:max-h-[90vh] flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-xl animate-slide-up border border-zinc-200 dark:border-zinc-800 ${className}`}
+        ref={contentRef}
+        className={`w-full ${sizeClasses[size]} max-h-[calc(100dvh-4rem)] md:max-h-[95vh] flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-xl animate-slide-up border border-zinc-200 dark:border-zinc-800 ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         {(title || description) && (
-          <div className="shrink-0 border-b border-zinc-200 dark:border-zinc-800 px-5 py-4">
+          <div className="shrink-0 border-b border-zinc-200 bg-zinc-100/70 dark:border-zinc-800 dark:bg-zinc-950/60 px-4 py-3 sm:px-5 sm:py-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 {title && (
@@ -87,13 +123,13 @@ export function Modal({
         )}
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="shrink-0 border-t border-zinc-200 dark:border-zinc-800 px-5 py-4">
+          <div className="shrink-0 border-t border-zinc-200 bg-zinc-100/70 dark:border-zinc-800 dark:bg-zinc-950/60 px-4 py-3 sm:px-5 sm:py-4">
             {footer}
           </div>
         )}

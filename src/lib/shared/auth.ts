@@ -73,6 +73,31 @@ export async function destroySession(): Promise<void> {
   await clearCSRFCookie();
 }
 
+// ── User lookup cache — giảm 1 DB read mỗi request ──────
+// requireAuth() chạy trên mọi API request (49 route files). Không cache → mỗi
+// request tốn 1 `user.findUnique`. Cache in-memory TTL ngắn giảm tải đáng kể
+// trên pool chỉ 3 connections, vẫn phản ứng kịp khi user bị disable (TTL 30s).
+const USER_CACHE_TTL_MS = 30_000;
+const userCache = new Map<string, { user: AuthUserLookup | null; expiresAt: number }>();
+
+interface AuthUserLookup {
+  id: string;
+  username: string;
+  fullName: string;
+  role: SessionPayload["role"];
+  isActive: boolean;
+}
+
+function getCachedUser(userId: string): AuthUserLookup | null | undefined {
+  const entry = userCache.get(userId);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= Date.now()) {
+    userCache.delete(userId);
+    return undefined;
+  }
+  return entry.user;
+}
+
 // ── Require auth (throws nếu chưa login) ──────────────
 export async function requireAuth(): Promise<SessionPayload> {
   const session = await verifySession();
@@ -80,18 +105,25 @@ export async function requireAuth(): Promise<SessionPayload> {
     throw new Error("UNAUTHORIZED");
   }
 
-  const user = await withRetry(() =>
-    prisma.user.findUnique({
-      where: { id: session.userId },
-      select: {
-        id: true,
-        username: true,
-        fullName: true,
-        role: true,
-        isActive: true,
-      },
-    })
-  );
+  const cached = getCachedUser(session.userId);
+  let user: AuthUserLookup | null;
+  if (cached === undefined) {
+    user = await withRetry(() =>
+      prisma.user.findUnique({
+        where: { id: session.userId },
+        select: {
+          id: true,
+          username: true,
+          fullName: true,
+          role: true,
+          isActive: true,
+        },
+      })
+    );
+    userCache.set(session.userId, { user, expiresAt: Date.now() + USER_CACHE_TTL_MS });
+  } else {
+    user = cached;
+  }
 
   if (!user || !user.isActive) {
     throw new Error("UNAUTHORIZED");

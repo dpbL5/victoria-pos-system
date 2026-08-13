@@ -56,7 +56,10 @@ async function buildRevenueCsv(fromDate: Date, toDate: Date): Promise<string> {
     rows.push([
       payment.paidAt.toISOString(),
       payment.invoice?.invoiceNo ?? '',
-      payment.invoice?.customer?.fullName ?? payment.session?.customer?.fullName ?? '',
+      payment.invoice?.customer?.fullName
+      ?? payment.session?.customerName
+      ?? payment.session?.customer?.fullName
+      ?? '',
       String(Number(payment.totalHours)),
       String(Number(payment.subtotal)),
       String(Number(payment.discountTotal)),
@@ -79,7 +82,7 @@ async function buildSessionsCsv(fromDate: Date, toDate: Date): Promise<string> {
   for (const session of sessions) {
     rows.push([
       toInputDate(session.createdAt),
-      session.customer?.fullName ?? '',
+      session.customerName ?? session.customer?.fullName ?? '',
       session.customer?.type ?? '',
       session.status,
       session.startTime.toISOString(),

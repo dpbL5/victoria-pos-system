@@ -8,6 +8,8 @@ export interface CreateInvoiceLineInput {
   description: string
   quantity: number
   unitPrice: number
+  /** Giá vốn đơn vị (weighted average cost) tại thời điểm bán — snapshot để truy vết lợi nhuận */
+  unitCost?: number | null
   subtotal: number
   discountAmount: number
   total: number
@@ -16,7 +18,8 @@ export interface CreateInvoiceLineInput {
 
 export interface CreatePaidInvoiceInput {
   invoiceNo: string
-  customerId: string
+  /** Null với khách vãng lai (không tạo Customer) */
+  customerId: string | null
   shiftId: string
   staffId: string
   paidAt: Date
@@ -77,8 +80,7 @@ export interface EditInvoiceTarget {
   grandTotal: number
   staff: { fullName: string } | null
   items: EditInvoiceItemRef[]
-  payments: Array<{ id: string; totalHours: number | null; paymentMethod: string | null }>
-  membershipPayments: Array<{ id: string }>
+  payments: Array<{ id: string; totalHours: number | null; paymentMethod: string | null; kind: string }>
 }
 
 export interface UpdateInvoiceFinancialsInput {
@@ -90,7 +92,8 @@ export interface UpdateInvoiceFinancialsInput {
 
 export interface CreateDraftInvoiceInput {
   invoiceNo: string
-  customerId: string
+  /** Null với khách vãng lai (không tạo Customer) */
+  customerId: string | null
   sessionId: string
   shiftId: string
   staffId: string
@@ -107,6 +110,8 @@ export interface CreateInvoiceItemInput {
   description: string
   quantity: number
   unitPrice: number
+  /** Giá vốn đơn vị (weighted average cost) tại thời điểm bán — snapshot để truy vết lợi nhuận */
+  unitCost?: number | null
   subtotal: number
   discountAmount: number
   total: number
@@ -171,16 +176,52 @@ export interface ReverseStockInput {
 export type InvoiceDetail = Prisma.InvoiceGetPayload<{
   include: {
     customer: { select: { id: true; fullName: true; phone: true; type: true } }
-    session: { select: { id: true; startTime: true; endTime: true; status: true } }
+    session: { select: { id: true; startTime: true; endTime: true; status: true; customerName: true, totalPausedSeconds: true } }
     shift: { select: { id: true; openedAt: true; closedAt: true } }
     staff: { select: { id: true; fullName: true } }
     items: {
       include: { product: { select: { id: true; name: true; sku: true; type: true } } }
       orderBy: { createdAt: 'asc' }
     }
-    payments: { include: { staff: { select: { id: true; fullName: true } } } }
-    membershipPayments: {
-      include: { membership: { include: { plan: { select: { name: true } } } } }
+    payments: {
+      include: {
+        staff: { select: { id: true; fullName: true } }
+        membership: { include: { plan: { select: { name: true } } } }
+        plan: { select: { id: true; name: true } }
+      }
+    }
+  }
+}>
+
+/** Invoice trong lịch sử thanh toán của khách — deep include, dùng cho GET /api/customers/[id]/history */
+export type CustomerInvoiceHistory = Prisma.InvoiceGetPayload<{
+  include: {
+    session: { select: { id: true; startTime: true; endTime: true; status: true; customerName: true; totalHours: true; totalAmount: true } }
+    shift: { select: { id: true; openedAt: true; status: true } }
+    staff: { select: { id: true; fullName: true } }
+    items: {
+      select: {
+        id: true
+        type: true
+        description: true
+        quantity: true
+        unitPrice: true
+        subtotal: true
+        discountAmount: true
+        total: true
+        product: { select: { id: true; name: true; type: true } }
+      }
+      orderBy: { createdAt: 'asc' }
+    }
+    payments: {
+      select: {
+        id: true
+        kind: true
+        paymentMethod: true
+        grandTotal: true
+        paidAt: true
+        plan: { select: { id: true; name: true } }
+      }
     }
   }
 }>
@@ -242,12 +283,16 @@ export interface BillingRepository {
   updateInvoiceFinancials(invoiceId: string, input: UpdateInvoiceFinancialsInput): Promise<void>
   /** Invoice chi tiết (deep include) — GET /api/invoices/[id] */
   findByIdWithDetails(invoiceId: string): Promise<InvoiceDetail | null>
+  /** Các hoá đơn của khách hàng (deep include) — GET /api/customers/[id]/history */
+  findInvoicesByCustomer(customerId: string): Promise<CustomerInvoiceHistory[]>
   /** Invoice tối giản — cho DELETE guard */
   findByIdForDelete(invoiceId: string): Promise<InvoiceDeleteTarget | null>
-  /** Đếm payment/membershipPayment/stockMovement gắn invoice — INVOICE_LINKED guard */
-  countLinkedTransactions(invoiceId: string): Promise<{ payments: number; membershipPayments: number; stockMovements: number }>
+  /** Đếm payment/stockMovement gắn invoice — INVOICE_LINKED guard */
+  countLinkedTransactions(invoiceId: string): Promise<{ payments: number; stockMovements: number }>
   /** Xoá items + invoice (chỉ gọi khi không có giao dịch liên quan) */
   deleteInvoiceWithItems(invoiceId: string): Promise<void>
   /** Draft invoices + items bán kèm phiên — cho checkout-preview */
   findDraftSellPreview(sessionId: string): Promise<DraftSellPreview[]>
+  /** Đếm hoá đơn PAID đã thanh toán của 1 session — xác định số lần thu trước ("lần n") */
+  countPaidBySession(sessionId: string): Promise<number>
 }

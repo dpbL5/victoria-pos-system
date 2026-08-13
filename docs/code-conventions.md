@@ -134,30 +134,28 @@ const handleSubmit = async (e: React.FormEvent) => {
 ## API Route template
 
 ```ts
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
-import { someSchema } from "@/lib/validations/some";
+import { NextRequest } from "next/server";
+import { requireAuth } from "@/lib/shared/auth";
+import { someSchema } from "@/lib/<domain>/validations";
+import { repositories } from "@/lib/infrastructure/repositories";
+import { apiSuccess, apiError, resultToResponse, ERR_UNAUTHORIZED, ERR_CSRF } from "@/lib/infrastructure/api-helpers";
 
+// Read-only route: validate → query qua repositories → apiSuccess/apiError
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth();
-
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-
-    const data = await prisma.model.findMany({ /* ... */ });
-
-    return NextResponse.json({ success: true, data });
+    const auth = await requireAuth();
+    const data = await repositories.someDomain.findMany(/* ... */);
+    return apiSuccess(data);
   } catch (error) {
     if ((error as Error).message === "UNAUTHORIZED") {
-      return NextResponse.json({ success: false, error: "Chưa đăng nhập" }, { status: 401 });
+      return apiError(ERR_UNAUTHORIZED);
     }
     console.error("GET /api/endpoint error:", error);
-    return NextResponse.json({ success: false, error: "Lỗi máy chủ" }, { status: 500 });
+    return apiError({ code: "SERVER_ERROR", message: "Lỗi máy chủ", status: 500 });
   }
 }
 
+// Mutation route: validate → gọi use-case (tự chạy runInTransaction) → resultToResponse
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireMutationAuth(request); // JWT + CSRF + rate limit
@@ -165,24 +163,25 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const parsed = someSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json(
-        { success: false, error: parsed.error.issues[0].message },
-        { status: 400 }
-      );
+      return apiError({ code: "VALIDATION", message: parsed.error.issues[0].message, status: 400 });
     }
 
-    const created = await prisma.model.create({ data: parsed.data });
-
-    return NextResponse.json({ success: true, data: created }, { status: 201 });
+    const result = await someUseCase({ ...parsed.data, staffId: auth.userId });
+    return resultToResponse(result, mapSomeError);
   } catch (error) {
     if ((error as Error).message === "UNAUTHORIZED") {
-      return NextResponse.json({ success: false, error: "Chưa đăng nhập" }, { status: 401 });
+      return apiError(ERR_UNAUTHORIZED);
+    }
+    if ((error as Error).message === "CSRF_MISMATCH") {
+      return apiError(ERR_CSRF);
     }
     console.error("POST /api/endpoint error:", error);
-    return NextResponse.json({ success: false, error: "Lỗi máy chủ" }, { status: 500 });
+    return apiError({ code: "SERVER_ERROR", message: "Lỗi máy chủ", status: 500 });
   }
 }
 ```
+
+Lưu ý: `import { prisma }` không được dùng ở route — query qua `repositories` singleton; mutation nhiều bảng qua use-case (dùng `runInTransaction`). Các hằng số lỗi auth: `ERR_UNAUTHORIZED`, `ERR_FORBIDDEN`, `ERR_CSRF`.
 
 ## Error Handling
 
@@ -193,15 +192,20 @@ try {
   // ...
 } catch (error) {
   if ((error as Error).message === "UNAUTHORIZED") {
-    return NextResponse.json({ success: false, error: "Chưa đăng nhập" }, { status: 401 });
+    return apiError(ERR_UNAUTHORIZED);
   }
   if ((error as Error).message === "FORBIDDEN") {
-    return NextResponse.json({ success: false, error: "Không có quyền" }, { status: 403 });
+    return apiError(ERR_FORBIDDEN);
+  }
+  if ((error as Error).message === "CSRF_MISMATCH") {
+    return apiError(ERR_CSRF);
   }
   console.error("METHOD /api/path error:", error); // Server log
-  return NextResponse.json({ success: false, error: "Lỗi máy chủ" }, { status: 500 });
+  return apiError({ code: "SERVER_ERROR", message: "Lỗi máy chủ", status: 500 });
 }
 ```
+
+Business errors không nằm trong try-catch — use-case trả `Result<T>` (`err()`/`fail()`), route dùng `resultToResponse(result, mapXxxError)`. Xem `CLAUDE.md` §10b.
 
 **Client:**
 

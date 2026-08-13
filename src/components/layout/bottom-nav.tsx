@@ -58,7 +58,7 @@ export function BottomNav() {
               >
                 <Icon size={20} />
               </div>
-              <span className="max-w-[64px] truncate text-[10px] font-medium">
+              <span className="max-w-16 truncate text-[10px] font-medium">
                 {item.label}
               </span>
             </Link>

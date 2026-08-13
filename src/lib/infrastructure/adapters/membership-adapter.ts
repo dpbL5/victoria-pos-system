@@ -55,7 +55,13 @@ export function createMembershipPlanRepository(store: MembershipStore): Membersh
 
 export function createCustomerRepository(store: CustomerStore): CustomerRepository {
   return {
-    findById: (id) => store.customer.findUnique({ where: { id } }),
+    findById: (id) => store.customer.findUnique({ where: { id, deletedAt: null } }),
+    findByIdIncludingDeleted: (id) => store.customer.findUnique({ where: { id } }),
+    findByPhone: (phone) =>
+      store.customer.findFirst({
+        where: { phone, deletedAt: null },
+        orderBy: { createdAt: 'asc' },
+      }),
     async findByIdWithCount(id) {
       return store.customer.findUnique({
         where: { id },
@@ -67,6 +73,7 @@ export function createCustomerRepository(store: CustomerStore): CustomerReposito
           totalHoursPlayed: true,
           totalSpent: true,
           notes: true,
+          deletedAt: true,
           createdAt: true,
           updatedAt: true,
           _count: { select: { sessions: true } },
@@ -77,7 +84,7 @@ export function createCustomerRepository(store: CustomerStore): CustomerReposito
       return store.customer.create({ data })
     },
     async findMany(input) {
-      const where: Record<string, unknown> = {}
+      const where: Record<string, unknown> = { deletedAt: null }
       if (input.search) {
         where.OR = [
           { fullName: { contains: input.search, mode: 'insensitive' } },
@@ -110,6 +117,12 @@ export function createCustomerRepository(store: CustomerStore): CustomerReposito
     },
     async update(id, data) {
       return store.customer.update({ where: { id }, data })
+    },
+    async softDelete(id, at) {
+      await store.customer.update({
+        where: { id },
+        data: { deletedAt: at },
+      })
     },
     async addSpend(customerId, amount, setTypeMember = false) {
       await store.customer.update({

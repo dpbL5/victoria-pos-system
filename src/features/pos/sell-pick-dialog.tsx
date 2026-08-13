@@ -31,14 +31,14 @@ export function SellPickDialog({
           >
             <div>
               <p className="text-sm font-semibold text-zinc-950 dark:text-white">
-                {session.customer.fullName}
+                {session.customerName ?? session.customer?.fullName ?? 'Khách lẻ'}
               </p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 {calcElapsedHMS(session.startTime)} · {formatClock(session.startTime)}
               </p>
             </div>
-            <Badge variant={session.customer.type === 'MEMBER' ? 'purple' : 'default'} size="sm">
-              {session.customer.type === 'MEMBER' ? 'Hội viên' : 'Vãng lai'}
+            <Badge variant={session.customer?.type === 'MEMBER' ? 'purple' : 'default'} size="sm">
+              {session.customer?.type === 'MEMBER' ? 'Hội viên' : 'Vãng lai'}
             </Badge>
           </button>
         ))}

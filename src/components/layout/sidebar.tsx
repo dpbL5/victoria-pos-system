@@ -10,6 +10,7 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
+  FlaskConical,
   Package,
   Settings,
   ShieldCheck,
@@ -40,6 +41,7 @@ export const staffMenuItems: MenuItem[] = [
   { href: '/tools', label: 'Dụng cụ', Icon: Wrench, adminOnly: true },
   { href: '/staff', label: 'Nhân viên', Icon: UserCog, adminOnly: true },
   { href: '/cashflow', label: 'Thu chi', Icon: ArrowRightLeft, adminOnly: true },
+  { href: '/testing', label: 'Testing', Icon: FlaskConical },
   { href: '/settings', label: 'Cài đặt', Icon: Settings },
 ]
 

@@ -5,12 +5,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const fakeStore = vi.hoisted(() => ({
   shift: { findFirst: vi.fn() },
   membershipPlan: { findUnique: vi.fn() },
-  customer: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+  customer: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), findFirst: vi.fn() },
   membership: { create: vi.fn(), findFirst: vi.fn() },
   invoice: { create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn() },
   invoiceItem: { create: vi.fn() },
   payment: { create: vi.fn() },
-  membershipPayment: { create: vi.fn() },
   stockMovement: { create: vi.fn() },
   product: { update: vi.fn() },
   activityLog: { create: vi.fn() },
@@ -48,8 +47,8 @@ function resetMocks() {
     status: 'ACTIVE',
   })
   fakeStore.invoice.create.mockResolvedValue({ id: 'inv-1' })
-  fakeStore.payment.create.mockResolvedValue({ id: 'pay-1' })
-  fakeStore.membershipPayment.create.mockResolvedValue({ id: 'mp-1' })
+  // createMembershipPayment giờ ghi vào store.payment (STI) — trả id cho membershipPaymentId
+  fakeStore.payment.create.mockResolvedValue({ id: 'mp-1' })
 }
 
 const input = {
@@ -75,7 +74,7 @@ describe('registerMember', () => {
     expect(result).toEqual({ ok: false, error: { code: 'PLAN_NOT_FOUND' } })
   })
 
-  it('tạo customer + membership + invoice + payment trong 1 transaction', async () => {
+  it('tạo customer + membership + invoice + payment membership trong 1 transaction', async () => {
     const result = await registerMember(input, repos)
 
     expect(result.ok).toBe(true)
@@ -84,7 +83,6 @@ describe('registerMember', () => {
       customer: { id: 'cust-1', fullName: 'Nguyễn Văn A', type: 'MEMBER' },
       membership: { id: 'mem-1', status: 'ACTIVE' },
       invoiceId: 'inv-1',
-      paymentId: 'pay-1',
       membershipPaymentId: 'mp-1',
     })
 
@@ -110,5 +108,21 @@ describe('registerMember', () => {
     // Ghi chú: registerMember luôn cộng chi tiêu — test này xác nhận increment gọi 1 lần
     await registerMember({ ...input, paymentMethod: 'MEMBER' }, repos)
     expect(fakeStore.customer.update).toHaveBeenCalledTimes(1)
+  })
+
+  it('trả CUSTOMER_ALREADY_EXISTS khi SĐT đã được đăng ký (idempotency)', async () => {
+    fakeStore.customer.findFirst.mockResolvedValue({
+      id: 'cust-dup',
+      fullName: 'Nguyễn Văn A',
+      phone: '0901234567',
+      type: 'MEMBER',
+    })
+    const result = await registerMember(
+      { ...input, phone: '0901234567' },
+      repos
+    )
+    expect(result).toEqual({ ok: false, error: { code: 'CUSTOMER_ALREADY_EXISTS' } })
+    expect(fakeStore.customer.create).not.toHaveBeenCalled()
+    expect(fakeStore.membership.create).not.toHaveBeenCalled()
   })
 })

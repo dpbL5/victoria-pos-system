@@ -9,8 +9,8 @@
 - **PromotionRule (Khuyến mại)**: giảm giá tùy chọn cho tiền giờ chơi hoặc hóa đơn. Chỉ áp dụng cho khách vãng lai.
 - **Membership (Hội viên)**: gói membership của một customer, có `startsAt`/`expiresAt`/`status`. Renewal sớm → kỳ mới bắt đầu sau `expiresAt` cũ; renewal trễ → bắt đầu từ ngày thanh toán.
 - **MembershipPlan (Gói hội viên)**: package định kỳ (durationMonths, price).
-- **Invoice (Hóa đơn)**: tài liệu thanh toán cho một customer/session/shift, gồm `InvoiceItem` (PLAY_TIME, PRODUCT, SERVICE, MEMBERSHIP_FEE, SURCHARGE, DISCOUNT) và `Payment`. Mọi dòng tiền đều qua Invoice → InvoiceItem → Payment (ADR-002). DRAFT invoices được merge vào PAID invoice khi checkout toàn bộ.
-- **Payment (Giao dịch)**: thanh toán theo phương thức `CASH`/`TRANSFER`/`CARD`/`MEMBER` (MEMBER là ghi nợ hội viên, không thu tiền mặt).
+- **Invoice (Hóa đơn)**: tài liệu thanh toán cho một customer/session/shift, gồm `InvoiceItem` (PLAY_TIME, PRODUCT, SERVICE, MEMBERSHIP_FEE, SURCHARGE) và `Payment`. Mọi dòng tiền đều qua Invoice → InvoiceItem → Payment (ADR-002). DRAFT invoices được merge vào PAID invoice khi checkout toàn bộ. Giảm giá khuyến mãi nằm trong `discountAmount` của dòng PLAY_TIME — không có dòng DISCOUNT riêng.
+- **Payment (Giao dịch)**: bản ghi thanh toán với `kind` = `OPERATIONAL` (checkout/bán kèm) hoặc `MEMBERSHIP` (phí hội viên, gộp từ bảng MembershipPayment cũ — ADR-008). Phương thức `CASH`/`TRANSFER`/`CARD`/`MEMBER` (MEMBER là ghi nợ hội viên, không thu tiền mặt).
 - **StockMovement (Phiếu kho)**: dòng biến động tồn kho (RESTOCK/ADJUSTMENT/SALE/VOID) — kho chỉ thay đổi qua stock flows, không sửa `stockQuantity` trực tiếp (ADR-004).
 - **Shift (Ca làm)**: ca quầy chia sẻ — một `Shift` mở có thể có nhiều nhân viên qua `ShiftParticipant`. Có `openingCash`, `expectedCash`, `actualCash`, `cashDifference`, `status`. Mọi hành động thu tiền phải ghi `staffId` thực hiện.
 - **ShiftTool (Dụng cụ ca)**: đếm dụng cụ (bow...) mở/đóng theo ca, unique `[shiftId, toolId]`.
@@ -34,8 +34,9 @@
 
 - **ADR-001**: Modular monolith + use-case pattern.
 - **ADR-002**: Invoice-first finance (mọi dòng tiền qua Invoice → Item → Payment).
-- **ADR-003**: Snapshot pricing tại check-in, không re-resolve khi checkout.
+- **ADR-003**: Snapshot pricing tại checkout — check-in tạo group giá trống (`hourlyRate: 0`), checkout resolve + snapshot rule/tiers vào `SessionPricingGroup.pricingSnapshot`.
 - **ADR-004**: Void invoice phải hoàn stock cả DRAFT đã merge; stock chỉ qua StockMovement.
 - **ADR-005**: Edit invoice in-place (giữ invoiceNo, xóa/tạo items + payments).
 - **ADR-006**: Split large POS components (today-shift-screen 2442 → 409 dòng).
 - **ADR-007**: Port/Adapter cho use-cases (`deps: Repositories`, `Result<T>`, `err()`/`fail()`, `import { prisma }` chỉ trong infrastructure).
+- **ADR-008**: Gộp `MembershipPayment` vào `Payment(kind=MEMBERSHIP)` — single-table inheritance, một bảng payment duy nhất.

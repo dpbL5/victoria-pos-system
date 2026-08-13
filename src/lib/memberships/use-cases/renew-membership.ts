@@ -21,7 +21,6 @@ export interface RenewMembershipInput {
 export interface RenewMembershipResult {
   membershipId: string
   invoiceId: string
-  paymentId: string
   membershipPaymentId: string
   startsAt: Date
   expiresAt: Date
@@ -89,19 +88,6 @@ export async function renewMembership(
       ],
     })
 
-    const payment = await tx.billing.createPayment({
-      invoiceId: invoice.id,
-      shiftId: openShift.id,
-      staffId,
-      totalHours: 0,
-      subtotal: Number(plan.price),
-      discountTotal: 0,
-      grandTotal: Number(plan.price),
-      paymentMethod,
-      paidAt,
-      notes,
-    })
-
     const membershipPayment = await tx.billing.createMembershipPayment({
       customerId: customer.id,
       membershipId: membership.id,
@@ -126,7 +112,6 @@ export async function renewMembership(
       details: {
         customerId: customer.id,
         invoiceId: invoice.id,
-        paymentId: payment.id,
         membershipPaymentId: membershipPayment.id,
         planId: plan.id,
         startsAt: startsAt.toISOString(),
@@ -134,7 +119,7 @@ export async function renewMembership(
       },
     })
 
-    return { membershipId: membership.id, invoiceId: invoice.id, paymentId: payment.id, membershipPaymentId: membershipPayment.id }
+    return { membershipId: membership.id, invoiceId: invoice.id, membershipPaymentId: membershipPayment.id }
   })
 
   if (!result.ok) return result

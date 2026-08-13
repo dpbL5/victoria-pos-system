@@ -24,6 +24,8 @@
 | `Button` | `@/components/ui/button` | Nút (6 variants: primary/secondary/danger/ghost/inverse/outline-danger, 4 sizes, loading state, icon) |
 | `FilterButton` | `@/components/ui/filter-button` | Nút filter toggle (active/onClick) |
 | `NoticeCard` | `@/components/ui/notice-card` | Card thông báo (4 tones: info/success/warning/danger, title + description + action) |
+| `SortableCardList` | `@/components/ui/sortable-card-list` | Danh sách card kéo thả (dụng cụ) |
+| `SortableTable` | `@/components/ui/sortable-table` | Bảng kéo thả (dụng cụ) |
 
 ## Icon mapping chuẩn (dùng nhất quán toàn dự án)
 
@@ -118,7 +120,7 @@ import { Modal } from "@/components/ui/modal";
 </Modal>
 ```
 
-→ Tự động: lock body scroll, close on Escape, click-outside-to-close, animate vào/ra, responsive (bottom sheet mobile, centered overlay desktop).
+→ Tự động: lock body scroll, close on Escape, click-outside-to-close, animate vào/ra, responsive (bottom sheet mobile, centered overlay desktop), **focus trap** (Tab giữ trong modal, restore focus về phần tử trước khi mở), padding responsive (`px-4 py-3` mobile / `sm:px-5 sm:py-4` desktop).
 
 ### Skeleton loading (preferred cho table/card pages)
 

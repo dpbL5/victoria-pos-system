@@ -1,4 +1,6 @@
-import { Clock, Users } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronDown, ChevronUp, ClipboardList, Clock, Users } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatClock, formatDay, money } from './format'
 import { MiniStat } from './mini-stat'
@@ -12,6 +14,8 @@ export function ShiftRail({
   onOpen,
   onClose,
   onViewTransactions,
+  onCountTools,
+  hasCounted,
   canJoin,
   onJoin,
   submitting,
@@ -23,10 +27,15 @@ export function ShiftRail({
   onOpen: () => void
   onClose: () => void
   onViewTransactions: () => void
+  onCountTools: () => void
+  hasCounted: boolean
   canJoin: boolean
   onJoin: () => void
   submitting: boolean
 }) {
+  // Collapse mặc định khi đã mở ca — tối đa không gian cho bảng phiên đang chơi
+  const [collapsed, setCollapsed] = useState(!!shift)
+
   const participantNames = shift?.participants?.map((participant) => participant.staff.fullName) ?? []
   const participantLabel = participantNames.length > 0
     ? `${participantNames.length} nhân viên: ${participantNames.join(', ')}`
@@ -39,29 +48,55 @@ export function ShiftRail({
       <div className="grid grid-cols-[6px_1fr]">
         <div className={shift ? 'bg-emerald-500' : 'bg-amber-500'} />
         <div className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <Clock size={18} className={shift ? 'text-emerald-500' : 'text-amber-500'} />
-                <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
-                  {shift ? `Ca mở từ ${formatClock(shift.openedAt)}` : 'Chưa mở ca'}
-                </h2>
-              </div>
-              <p className="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
+          {/* Trạng thái ca — luôn hiển thị, bấm để thu gọn/mở rộng */}
+          <button
+            type="button"
+            onClick={() => setCollapsed((value) => !value)}
+            className="flex w-full items-center gap-2 text-left"
+            title={collapsed ? 'Mở rộng thông tin ca' : 'Thu gọn thông tin ca'}
+          >
+            <Clock size={18} className={shift ? 'shrink-0 text-emerald-500' : 'shrink-0 text-amber-500'} />
+            <h2 className="min-w-0 flex-1 text-sm font-semibold text-zinc-950 dark:text-white">
+              {shift ? `Ca mở từ ${formatClock(shift.openedAt)}` : 'Chưa mở ca'}
+            </h2>
+            <Badge variant={shift ? 'success' : 'warning'}>
+              {shift ? 'Đang mở' : 'Chưa mở ca'}
+            </Badge>
+            {collapsed ? (
+              <ChevronDown size={16} className="shrink-0 text-zinc-400" />
+            ) : (
+              <ChevronUp size={16} className="shrink-0 text-zinc-400" />
+            )}
+          </button>
+
+          {/* Nội dung chi tiết — ẩn khi thu gọn */}
+          {!collapsed && (
+            <>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                 {shift
                   ? `${formatDay(shift.openedAt)} · Tiền đầu ca ${money(shift.openingCash)}`
                   : 'Mở ca mới hoặc tham gia ca quầy đang mở để vận hành POS.'}
               </p>
+
               {shift && participantLabel && (
-                <p className="mt-2 flex min-w-0 items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="mt-2 flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
                   <Users size={13} className="shrink-0" />
-                  <span className="min-w-0 truncate">{participantLabel}</span>
+                  <span className="min-w-0">{participantLabel}</span>
                 </p>
               )}
-            </div>
-            {shift ? (
-              <div className="shrink-0">
-                <div className="flex items-center gap-2">
+
+              {/* Thao tác — mobile xếp lưới 2 cột, desktop hàng ngang */}
+              {shift ? (
+                <div className="mt-3 grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2">
+                  <Button
+                    variant={hasCounted ? 'secondary' : 'primary'}
+                    size="sm"
+                    icon={ClipboardList}
+                    disabled={hasCounted}
+                    onClick={onCountTools}
+                  >
+                    {hasCounted ? 'Đã đếm D.cụ' : 'Đếm dụng cụ'}
+                  </Button>
                   {canJoin && (
                     <Button
                       variant="primary"
@@ -79,21 +114,21 @@ export function ShiftRail({
                     Đóng ca
                   </Button>
                 </div>
-              </div>
-            ) : (
-              <div className="shrink-0">
-                <Button variant="primary" size="sm" onClick={onOpen}>
-                  Mở/Tham gia
-                </Button>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="mt-3 flex flex-col gap-2 md:flex-row md:justify-end">
+                  <Button variant="primary" size="md" fullWidth onClick={onOpen}>
+                    Mở/Tham gia
+                  </Button>
+                </div>
+              )}
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <MiniStat label="Đang chơi" value={activeCount} />
-            <MiniStat label="Vãng lai" value={walkInCount} />
-            <MiniStat label="Hội viên" value={memberCount} />
-          </div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <MiniStat label="Đang chơi" value={activeCount} />
+                <MiniStat label="Vãng lai" value={walkInCount} />
+                <MiniStat label="Hội viên" value={memberCount} />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </section>

@@ -32,11 +32,13 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       countLinkedTransactions: vi.fn(),
       deleteInvoiceWithItems: vi.fn(),
       findDraftSellPreview: vi.fn(),
+      findInvoicesByCustomer: vi.fn(),
+      countPaidBySession: vi.fn(async () => 0),
     },
     audit: { append: vi.fn(async () => {}), findMany: vi.fn() },
     membership: { findLatest: vi.fn(), findActive: vi.fn(), create: vi.fn(), findManyByCustomer: vi.fn() },
     membershipPlan: { findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), countUsage: vi.fn(), delete: vi.fn() },
-    customer: { findById: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), countWalkInsBetween: vi.fn() },
+    customer: { findById: vi.fn(), findByIdIncludingDeleted: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), softDelete: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), findByPhone: vi.fn(), countWalkInsBetween: vi.fn() },
     shift: {
       findOpenForStaff: vi.fn(async () => ({ id: 'shift-1' }) as never),
       findOpenOperational: vi.fn(),
@@ -44,6 +46,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       calculateExpectedCash: vi.fn(),
       markParticipantsLeft: vi.fn(),
       upsertToolCloseCount: vi.fn(),
+      upsertToolOpenCount: vi.fn(),
       close: vi.fn(),
       upsertParticipant: vi.fn(),
       findByIdOrThrow: vi.fn(),
@@ -79,6 +82,8 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findMany: vi.fn(),
       findByIdForPreview: vi.fn(),
       findDraftSellTotals: vi.fn(),
+      findPlayersForPause: vi.fn(),
+      countCreatedBetween: vi.fn(async () => 0),
       createWithRefs: vi.fn(async () => ({
         id: 'session-1',
         customerId: 'cust-1',
@@ -86,24 +91,27 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
         shiftId: 'shift-1',
         membershipId: null,
         startTime: new Date('2026-08-07T10:00:00Z'),
-        hourlyRate: 50000,
-        pricingRuleId: 'rule-1',
-        pricingRuleSnapshot: {
-          ruleId: 'rule-1',
-          name: 'Giờ vàng',
-          ratePerHour: 50000,
-          tiers: [],
-        },
+        hourlyRate: 0,
+        pricingRuleId: null,
+        pricingRuleSnapshot: null,
         playerCount: 1,
         status: 'ACTIVE',
         customer: { id: 'cust-1', fullName: 'Khách A', type: 'WALK_IN' },
         membership: null,
         shift: { id: 'shift-1', openedAt: new Date('2026-08-07T08:00:00Z'), status: 'OPEN' },
       }) as never),
-      createPricingGroup: vi.fn(async () => {}),
+      createPricingGroup: vi.fn(async () => ({ id: 'group-1' })),
+      createPlayersForGroup: vi.fn(async () => {}),
+      updatePricingGroup: vi.fn(async () => {}),
       update: vi.fn(),
       decrementGroupRemaining: vi.fn(),
       sumRemainingPlayers: vi.fn(),
+      findByIdWithPlayers: vi.fn(),
+      pausePlayer: vi.fn(),
+      resumePlayer: vi.fn(),
+      renamePlayer: vi.fn(),
+      markPlayersCheckedOut: vi.fn(),
+      movePlayersToGroup: vi.fn(async () => {}),
     },
     product: {
       findManyByIds: vi.fn(),
@@ -132,6 +140,9 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       getSessionExportRows: vi.fn(),
       getShiftDayGroups: vi.fn(),
       getShiftRevenue: vi.fn(),
+      getShiftRevenues: vi.fn(),
+      getTrends: vi.fn(),
+      getTopProducts: vi.fn(),
     },
   }
   return { ...base, ...overrides }
@@ -141,19 +152,10 @@ function makeInput(overrides: Partial<CheckInTxInput> = {}): CheckInTxInput {
   return {
     staffId: 'staff-1',
     customerId: 'cust-1',
-    pricingRuleId: 'rule-1',
+    customerName: null,
     playerCount: 1,
-    groups: null as never,
     now: new Date('2026-08-07T10:00:00Z'),
-    pricingRuleSnapshot: {
-      ruleId: 'rule-1',
-      name: 'Giờ vàng',
-      ratePerHour: 50000,
-      tiers: [],
-    },
-    hourlyRate: 50000,
     membershipId: undefined,
-    resolvedGroups: null as never,
     totalPlayers: 1,
     ...overrides,
   }
@@ -182,80 +184,95 @@ describe('runCheckInTx', () => {
     expect(repos.session.createWithRefs).not.toHaveBeenCalled()
   })
 
-  it('tạo khách vãng lai ẩn danh + session + pricing group + audit', async () => {
+  it('khách vãng lai: không tạo Customer — lưu tên trên phiên + pricing group trống giá + audit', async () => {
     const repos = makeRepositories({
-      customer: {
-        ...makeRepositories().customer,
-        countWalkInsBetween: vi.fn(async () => 4),
-        create: vi.fn(async () => ({ id: 'anon-5', fullName: 'Khách #005', type: 'WALK_IN' }) as never),
+      session: {
+        ...makeRepositories().session,
+        countCreatedBetween: vi.fn(async () => 4),
       },
     })
-    const result = await runCheckInTx(repos, makeInput({ customerId: null }))
+    const result = await runCheckInTx(repos, makeInput({ customerId: null, customerName: 'Nguyễn Văn A' }))
 
-    expect(repos.customer.create).toHaveBeenCalledWith({ fullName: 'Khách #005', type: 'WALK_IN' })
+    // Không còn tạo customer ẩn danh
+    expect(repos.customer.create).not.toHaveBeenCalled()
     expect(repos.session.createWithRefs).toHaveBeenCalledWith(
-      expect.objectContaining({ customerId: 'anon-5', staffId: 'staff-1', playerCount: 1 })
+      expect.objectContaining({ customerId: null, customerName: 'Nguyễn Văn A', staffId: 'staff-1', playerCount: 1 })
+    )
+    // Bảng giá để trống lúc check-in — chọn khi thu tiền
+    expect(repos.session.createWithRefs).toHaveBeenCalledWith(
+      expect.objectContaining({ hourlyRate: 0, pricingRuleId: null, pricingRuleSnapshot: null })
     )
     expect(repos.session.createPricingGroup).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'session-1', label: 'Nhóm 1', playerCount: 1 })
+      expect.objectContaining({ sessionId: 'session-1', label: 'Nhóm 1', playerCount: 1, hourlyRate: 0, pricingSnapshot: null })
     )
     expect(repos.audit.append).toHaveBeenCalledTimes(1)
     const auditCall = (repos.audit.append as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(auditCall.action).toBe('SESSION_CHECK_IN')
-    expect(auditCall.details).toMatchObject({ customerType: 'WALK_IN', groupCount: 1 })
+    expect(auditCall.details).toMatchObject({ customerType: 'WALK_IN', playerCount: 1, customerName: 'Nguyễn Văn A' })
+    expect(auditCall.details.hourlyRate).toBeUndefined()
+    expect(auditCall.details.pricingRuleId).toBeUndefined()
 
-    expect(result.hourlyRate).toBe(50000)
+    expect(result.hourlyRate).toBe(0)
   })
 
-  it('tạo pricing groups riêng khi có groups', async () => {
+  it('khách vãng lai không nhập tên: tự đặt Khách #NNN theo số phiên trong ngày', async () => {
     const repos = makeRepositories({
-      customer: {
-        ...makeRepositories().customer,
-        countWalkInsBetween: vi.fn(async () => 0),
-        create: vi.fn(async () => ({ id: 'anon-1', fullName: 'Khách #001', type: 'WALK_IN' }) as never),
+      session: {
+        ...makeRepositories().session,
+        countCreatedBetween: vi.fn(async () => 4),
       },
     })
-    const input = makeInput({
-      customerId: null,
-      playerCount: 3,
-      resolvedGroups: [
-        { playerCount: 2, pricingRuleId: 'rule-1', pricingRuleSnapshot: { ruleId: 'rule-1', name: 'Giờ vàng', ratePerHour: 50000, tiers: [] } },
-        { playerCount: 1, pricingRuleId: 'rule-2', pricingRuleSnapshot: { ruleId: 'rule-2', name: 'Giờ tối', ratePerHour: 40000, tiers: [] } },
-      ],
-      totalPlayers: 3,
-      hourlyRate: 50000,
-    })
-    const result = await runCheckInTx(repos, input)
+    await runCheckInTx(repos, makeInput({ customerId: null, customerName: null }))
 
-    const groupCalls = (repos.session.createPricingGroup as ReturnType<typeof vi.fn>).mock.calls
-    expect(groupCalls).toHaveLength(2)
-    expect(groupCalls[0][0]).toMatchObject({ label: 'Nhóm 1', playerCount: 2, hourlyRate: 50000 })
-    expect(groupCalls[1][0]).toMatchObject({ label: 'Nhóm 2', playerCount: 1, hourlyRate: 40000 })
+    expect(repos.customer.create).not.toHaveBeenCalled()
     expect(repos.session.createWithRefs).toHaveBeenCalledWith(
-      expect.objectContaining({ playerCount: 3 })
+      expect.objectContaining({ customerId: null, customerName: 'Khách #005' })
     )
   })
 
-  it('không tạo customer mới khi check-in khách đã đăng ký', async () => {
+  it('WALK_IN nhóm nhiều người: luôn tạo 1 pricing group trống giá theo playerCount', async () => {
+    const repos = makeRepositories({
+      session: {
+        ...makeRepositories().session,
+        countCreatedBetween: vi.fn(async () => 0),
+      },
+    })
+    await runCheckInTx(repos, makeInput({
+      customerId: null,
+      customerName: 'Nhóm khách',
+      playerCount: 3,
+      totalPlayers: 3,
+    }))
+
+    const groupCalls = (repos.session.createPricingGroup as ReturnType<typeof vi.fn>).mock.calls
+    expect(groupCalls).toHaveLength(1)
+    expect(groupCalls[0][0]).toMatchObject({ label: 'Nhóm 1', playerCount: 3, remainingCount: 3, hourlyRate: 0, pricingSnapshot: null })
+    expect(repos.session.createWithRefs).toHaveBeenCalledWith(
+      expect.objectContaining({ playerCount: 3, hourlyRate: 0, pricingRuleId: null })
+    )
+  })
+
+  it('không tạo customer mới khi check-in khách đã đăng ký (WALK_IN đăng ký: bảng giá để trống)', async () => {
     const repos = makeRepositories()
     const result = await runCheckInTx(repos, makeInput())
 
     expect(repos.customer.create).not.toHaveBeenCalled()
     expect(repos.session.createWithRefs).toHaveBeenCalledWith(
-      expect.objectContaining({ customerId: 'cust-1', hourlyRate: 50000 })
+      expect.objectContaining({ customerId: 'cust-1', hourlyRate: 0, pricingRuleId: null })
     )
-    expect(result.hourlyRate).toBe(50000)
+    expect(result.hourlyRate).toBe(0)
   })
 
   it('hội viên: hourlyRate = 0 và không cần pricing snapshot', async () => {
     const repos = makeRepositories()
-    const result = await runCheckInTx(repos, makeInput({ membershipId: 'mem-1', hourlyRate: 0, pricingRuleId: undefined, pricingRuleSnapshot: null }))
+    const result = await runCheckInTx(repos, makeInput({ membershipId: 'mem-1' }))
 
     expect(repos.session.createWithRefs).toHaveBeenCalledWith(
-      expect.objectContaining({ membershipId: 'mem-1', hourlyRate: 0, pricingRuleId: undefined })
+      expect.objectContaining({ membershipId: 'mem-1', hourlyRate: 0, pricingRuleId: null })
     )
     expect(repos.session.createPricingGroup).toHaveBeenCalledWith(
       expect.objectContaining({ hourlyRate: 0, pricingSnapshot: null })
     )
+    expect(result.hourlyRate).toBe(0)
   })
 })

@@ -25,5 +25,6 @@ export type {
   CreateDraftInvoiceInput,
   CreateInvoiceItemInput,
   CreatePaymentInput,
+  CustomerInvoiceHistory,
 } from './ports'
 export * from './validations'

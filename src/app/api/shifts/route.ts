@@ -14,7 +14,7 @@ import { repositories } from '@/lib/infrastructure/repositories'
 
 const stripeShiftInclude = {
   staff: { select: { id: true, fullName: true } },
-  _count: { select: { sessions: true, payments: true, membershipPayments: true } },
+  _count: { select: { sessions: true, payments: true } },
   toolCounts: {
     include: { tool: { select: { id: true, name: true, quantity: true, isRequired: true } } },
   },
@@ -38,6 +38,22 @@ export async function GET(request: NextRequest) {
       statusParam === 'OPEN' || statusParam === 'CLOSED'
         ? statusParam
         : undefined
+
+    // ── Bootstrap: 1 request lấy cả shift của staff + shift OPEN bất kỳ ──
+    // Giảm 2 round-trip → 1 cho màn POS (TodayShiftScreen gọi cả 2).
+    if (current && openOperational) {
+      const [myShift, openShift] = await Promise.all([
+        repositories.shift.findOpenForStaff(auth.userId),
+        repositories.shift.findOpenOperational(),
+      ])
+      return NextResponse.json({
+        success: true,
+        data: {
+          myShift,
+          openShift,
+        },
+      })
+    }
 
     if (current) {
       let shift = await repositories.shift.findOpenForStaff(auth.userId)

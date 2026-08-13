@@ -14,10 +14,6 @@ function createShiftDb() {
       findMany: vi.fn(),
       groupBy: vi.fn(),
     },
-    membershipPayment: {
-      findMany: vi.fn(),
-      groupBy: vi.fn(),
-    },
   }
 }
 
@@ -37,6 +33,7 @@ function createShiftStore() {
 function makePayment(overrides: Record<string, unknown> = {}) {
   return {
     id: 'pay-1',
+    kind: 'OPERATIONAL',
     grandTotal: 120_000,
     paymentMethod: 'MEMBER',
     paidAt: new Date('2026-08-06T10:00:00Z'),
@@ -46,17 +43,23 @@ function makePayment(overrides: Record<string, unknown> = {}) {
       customer: { fullName: 'Nguyễn Văn A', type: 'MEMBER' },
     },
     session: null,
+    customer: null,
+    plan: null,
     staff: { fullName: 'Thu ngân A' },
     ...overrides,
   }
 }
 
+/** Membership payment — Payment kind=MEMBERSHIP (STI) */
 function makeMembershipPayment(overrides: Record<string, unknown> = {}) {
   return {
     id: 'mp-1',
-    amount: 300_000,
+    kind: 'MEMBERSHIP',
+    grandTotal: 300_000,
     paymentMethod: 'CASH',
     paidAt: new Date('2026-08-06T09:00:00Z'),
+    invoice: null,
+    session: null,
     customer: { fullName: 'Nguyễn Văn A', type: 'MEMBER' },
     plan: { name: 'Gói VIP' },
     staff: { fullName: 'Thu ngân A' },
@@ -73,7 +76,6 @@ describe('getShiftTransactions', () => {
       makePayment({ id: 'p1', paymentMethod: 'CASH', grandTotal: 80_000 }),
       makePayment({ id: 'p2', paymentMethod: 'MEMBER', grandTotal: 120_000 }),
     ])
-    db.membershipPayment.findMany.mockResolvedValue([])
 
     const { transactions, summary } = await getShiftTransactions(db, 'shift-1')
 
@@ -88,11 +90,10 @@ describe('getShiftTransactions', () => {
     expect(transactions).toHaveLength(2)
   })
 
-  it('memberAmount gộp cả membershipPayment thanh toán MEMBER', async () => {
+  it('memberAmount gộp cả payment membership thanh toán MEMBER', async () => {
     const db = createShiftDb()
-    db.payment.findMany.mockResolvedValue([])
-    db.membershipPayment.findMany.mockResolvedValue([
-      makeMembershipPayment({ id: 'mp1', paymentMethod: 'MEMBER', amount: 300_000 }),
+    db.payment.findMany.mockResolvedValue([
+      makeMembershipPayment({ id: 'mp1', paymentMethod: 'MEMBER', grandTotal: 300_000 }),
     ])
 
     const { summary } = await getShiftTransactions(db, 'shift-1')
@@ -107,8 +108,6 @@ describe('getShiftTransactions', () => {
     const db = createShiftDb()
     db.payment.findMany.mockResolvedValue([
       makePayment({ id: 'p-late', paidAt: new Date('2026-08-06T10:00:00Z') }),
-    ])
-    db.membershipPayment.findMany.mockResolvedValue([
       makeMembershipPayment({ id: 'mp-early', paidAt: new Date('2026-08-06T09:00:00Z') }),
     ])
 
@@ -122,7 +121,7 @@ describe('getShiftTransactions', () => {
     expect(transactions[1].invoiceNo).toBe('HD-001')
   })
 
-  it('customerName fallback: invoice → session → "Khách lẻ"', async () => {
+  it('customerName fallback: invoice → session → customer → "Khách lẻ"', async () => {
     const db = createShiftDb()
     db.payment.findMany.mockResolvedValue([
       makePayment({
@@ -132,7 +131,6 @@ describe('getShiftTransactions', () => {
       }),
       makePayment({ id: 'p2', invoice: null, session: null }),
     ])
-    db.membershipPayment.findMany.mockResolvedValue([])
 
     const { transactions } = await getShiftTransactions(db, 'shift-1')
 
@@ -146,8 +144,9 @@ describe('getShiftTransactions', () => {
 // ── getShiftRevenueData ─────────────────────────────────
 
 describe('getShiftRevenueData', () => {
-  const paymentRow = (paymentMethod: string, grandTotal: number | null) => ({
+  const paymentRow = (paymentMethod: string, grandTotal: number | null, kind = 'OPERATIONAL') => ({
     paymentMethod,
+    kind,
     _sum: { grandTotal },
     _count: { _all: 1 },
   })
@@ -160,7 +159,6 @@ describe('getShiftRevenueData', () => {
       paymentRow('CARD', 150_000),
       paymentRow('MEMBER', 250_000),
     ])
-    db.membershipPayment.groupBy.mockResolvedValue([])
 
     const rev = await getShiftRevenueData(db, 'shift-1')
 
@@ -176,7 +174,6 @@ describe('getShiftRevenueData', () => {
   it('MEMBER không nằm trong cash/transfer/card nhưng có trong tổng doanh thu', async () => {
     const db = createShiftDb()
     db.payment.groupBy.mockResolvedValue([paymentRow('MEMBER', 250_000)])
-    db.membershipPayment.groupBy.mockResolvedValue([])
 
     const rev = await getShiftRevenueData(db, 'shift-1')
 
@@ -187,12 +184,11 @@ describe('getShiftRevenueData', () => {
     expect(rev.totalRevenue).toBe(250_000)
   })
 
-  it('gộp doanh thu membershipPayment theo phương thức', async () => {
+  it('gộp doanh thu payment membership theo phương thức', async () => {
     const db = createShiftDb()
-    db.payment.groupBy.mockResolvedValue([])
-    db.membershipPayment.groupBy.mockResolvedValue([
-      { paymentMethod: 'CASH', _sum: { amount: 300_000 }, _count: { _all: 1 } },
-      { paymentMethod: 'MEMBER', _sum: { amount: 300_000 }, _count: { _all: 1 } },
+    db.payment.groupBy.mockResolvedValue([
+      paymentRow('CASH', 300_000, 'MEMBERSHIP'),
+      paymentRow('MEMBER', 300_000, 'MEMBERSHIP'),
     ])
 
     const rev = await getShiftRevenueData(db, 'shift-1')
@@ -206,7 +202,6 @@ describe('getShiftRevenueData', () => {
   it('không có dữ liệu → tất cả về 0', async () => {
     const db = createShiftDb()
     db.payment.groupBy.mockResolvedValue([])
-    db.membershipPayment.groupBy.mockResolvedValue([])
 
     const rev = await getShiftRevenueData(db, 'shift-1')
 
@@ -224,7 +219,6 @@ describe('getShiftRevenueData', () => {
   it('row _sum = null vẫn đếm giao dịch nhưng không cộng doanh thu', async () => {
     const db = createShiftDb()
     db.payment.groupBy.mockResolvedValue([paymentRow('CASH', null)])
-    db.membershipPayment.groupBy.mockResolvedValue([])
 
     const rev = await getShiftRevenueData(db, 'shift-1')
 

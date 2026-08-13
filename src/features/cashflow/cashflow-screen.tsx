@@ -1,11 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowRightLeft,
   Edit3,
   Plus,
-  RefreshCw,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -23,7 +22,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
-import { apiJson, jsonRequest } from '@/features/pos/api'
+import { apiJson, jsonRequest } from '@/lib/api'
+import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { formatDay, formatClock, money } from '@/features/pos/format'
 import type { UserSession } from '@/features/pos/types'
 
@@ -78,6 +78,12 @@ export function CashflowScreen() {
     pagination: Pagination
   }>(url, { dedupingInterval: 30_000 })
   const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
+
+  const { registerRefresh } = usePageRefresh()
+
+  useEffect(() => {
+    return registerRefresh(() => void mutate())
+  }, [registerRefresh, mutate])
 
   const entries = apiData?.data?.entries ?? []
   const summary = apiData?.data?.summary ?? { income: 0, expense: 0, balance: 0 }
@@ -241,22 +247,12 @@ export function CashflowScreen() {
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-5xl space-y-4">
         {/* Header */}
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Quản trị
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-zinc-950 dark:text-white">
+        <header className="hidden items-center justify-between gap-3 md:flex">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
               Thu chi
             </h1>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={RefreshCw}
-            onClick={() => void mutate()}
-            title="Làm mới"
-          />
         </header>
 
         {error && (

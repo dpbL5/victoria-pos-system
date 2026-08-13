@@ -30,12 +30,8 @@ export async function GET(request: NextRequest) {
 
     const shiftIds = shifts.map((s) => s.id)
 
-    const revenueMap = new Map<string, Awaited<ReturnType<typeof repositories.reporting.getShiftRevenue>>>()
-    await Promise.all(
-      shiftIds.map(async (id) => {
-        revenueMap.set(id, await repositories.reporting.getShiftRevenue(id))
-      })
-    )
+    // Gộp revenue toàn bộ shiftIds bằng 2 groupBy — thay N+1 loop cũ
+    const revenueMap = await repositories.reporting.getShiftRevenues(shiftIds)
 
     const data: ShiftRevenueSummary[] = shifts.map((shift) => {
       const rev = revenueMap.get(shift.id) ?? {

@@ -19,23 +19,15 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const { rows: payments, recentPayments } = await repositories.reporting.getRevenueData({
+    const { grouped, recentPayments } = await repositories.reporting.getRevenueData({
       from: fromDate,
       to: toDate,
       scope: auth.role === 'STAFF' ? 'STAFF' : 'ALL',
       staffId: auth.userId,
     })
 
-    const grouped: Record<string, { revenue: number; count: number }> = {}
-    for (const payment of payments) {
-      const key = toInputDate(payment.paidAt)
-      if (!grouped[key]) grouped[key] = { revenue: 0, count: 0 }
-      grouped[key].revenue += Number(payment.grandTotal)
-      grouped[key].count += 1
-    }
-
-    const data = Object.entries(grouped).map(([period, value]) => ({
-      period,
+    const data = grouped.map((value) => ({
+      period: value.period,
       revenue: value.revenue,
       sessionCount: value.count,
       avgRevenuePerSession: value.count > 0 ? Math.round(value.revenue / value.count) : 0,
@@ -59,6 +51,7 @@ export async function GET(request: NextRequest) {
         paidAt: payment.paidAt,
         customerName:
           payment.invoice?.customer?.fullName
+          ?? payment.session?.customerName
           ?? payment.session?.customer?.fullName
           ?? 'Khách lẻ',
         invoiceId: payment.invoice?.id ?? null,

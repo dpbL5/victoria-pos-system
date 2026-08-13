@@ -1,122 +1,168 @@
-import { Timer } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronDown, ChevronUp, Clock, LogIn, Pause, Play } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { calcCurrentPlayCost, calcElapsedHMS, formatClock, money, toNumber } from './format'
+import { calcElapsedHMS, formatClock, money, pausedSecondsUntil, toNumber } from './format'
+import { PlayerPauseCard } from './player-pause-card'
+import { SessionTimer } from './session-timer'
 import type { SessionRow } from './types'
 
 export function ActiveSessionCard({
   session,
   checkoutDisabled,
+  pauseDisabled,
   onCheckout,
+  onPause,
+  onResume,
+  onPausePlayer,
+  onResumePlayer,
+  onRenamePlayer,
 }: {
   session: SessionRow
   checkoutDisabled: boolean
+  pauseDisabled: boolean
   onCheckout: () => void
+  onPause: () => void
+  onResume: () => void
+  /** Pause theo từng người chơi (phiên nhiều người) */
+  onPausePlayer?: (playerId: string) => void
+  onResumePlayer?: (playerId: string) => void
+  /** Đổi tên 1 người chơi — trả true nếu thành công */
+  onRenamePlayer?: (playerId: string, name: string) => Promise<boolean>
 }) {
-  const isMember = session.customer.type === 'MEMBER'
+  const isMember = session.customer?.type === 'MEMBER' || !!session.membership
   const playerCount = session.playerCount ?? 1
   const isGroup = playerCount > 1
-  const groups = session.pricingGroups ?? []
-  const hasGroups = groups.length > 0
-
-  // Calculate total running cost
-  const currentCost = isMember
-    ? 0
-    : hasGroups
-      ? groups
-          .filter(g => g.remainingCount > 0)
-          .reduce((sum, g) => {
-            return sum + calcCurrentPlayCost(
-              session.startTime,
-              g.hourlyRate,
-              undefined,
-              g.pricingSnapshot?.tiers,
-              g.remainingCount,
-            )
-          }, 0)
-      : calcCurrentPlayCost(
-          session.startTime,
-          session.hourlyRate,
-          undefined,
-          session.pricingRuleSnapshot?.tiers,
-          playerCount,
-        )
+  const isPaused = !!session.pausedAt
   const pendingSell = toNumber(session.pendingSellTotal ?? 0)
-  const runningTotal = currentCost + pendingSell
+
+  // Phiên nhiều người CÓ player rows → mỗi người 1 thẻ riêng (pause per-player)
+  const hasPlayers = isGroup && (session.pricingGroups?.some((g) => (g.players?.length ?? 0) > 0) ?? false)
+
+  // Thu gọn bảng người chơi (chỉ phiên nhóm) — collapse mặc định khi có nhiều người
+  const [collapsed, setCollapsed] = useState(isGroup)
+  const toggleCollapsed = () => setCollapsed((value) => !value)
+
+  // Đang đổi tên 1 người chơi — disable để tránh bấm nhầm / submit lồng nhau
+  const [renaming, setRenaming] = useState(false)
+
+  const elapsed = isPaused
+    ? calcElapsedHMS(session.startTime, session.pausedAt ?? undefined, session.totalPausedSeconds ?? 0)
+    : calcElapsedHMS(session.startTime, undefined, session.totalPausedSeconds ?? 0)
+
+  // Thời gian đã tạm dừng (phiên 1 người / legacy): khi đang paused → tick live từ pausedAt
+  const pausedSeconds = pausedSecondsUntil(session.pausedAt, session.totalPausedSeconds ?? 0)
 
   return (
-    <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
-            {session.customer.fullName}
-          </p>
-          <Badge variant={isMember ? 'purple' : 'default'} size="sm">
-            {isMember ? 'Hội viên' : 'Vãng lai'}
-          </Badge>
-          {isGroup && (
-            <Badge variant="outline" size="sm">
-              {playerCount} người
-            </Badge>
-          )}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-          <span className="inline-flex items-center gap-1 tabular-nums">
-            <Timer size={13} />
-            {calcElapsedHMS(session.startTime)}
-          </span>
-          <span>{formatClock(session.startTime)}</span>
-          {session.shift ? <span>Ca {formatClock(session.shift.openedAt)}</span> : <span>Chưa gắn ca</span>}
-        </div>
-        {!isMember && hasGroups && (
-          <div className="mt-2 space-y-1">
-            {groups.filter(g => g.remainingCount > 0).map((g) => {
-              const groupCost = calcCurrentPlayCost(
-                session.startTime,
-                g.hourlyRate,
-                undefined,
-                g.pricingSnapshot?.tiers,
-                g.remainingCount,
-              )
-              return (
-                <div key={g.id} className="flex items-center justify-between text-xs">
-                  <span className="truncate text-zinc-400 dark:text-zinc-500">
-                    {g.label}: {g.remainingCount} người · {g.pricingSnapshot?.name ?? 'Bảng giá'}
-                  </span>
-                  <span className="shrink-0 tabular-nums text-zinc-600 dark:text-zinc-300">
-                    {money(groupCost)}
-                  </span>
-                </div>
-              )
-            })}
+    <div className="px-4 py-3">
+      <div className="grid grid-cols-[1fr_auto] gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
+              {session.customerName ?? session.customer?.fullName ?? 'Khách lẻ'}
+            </p>
+            {isMember && (
+              <Badge variant="purple" size="sm">
+                Hội viên
+              </Badge>
+            )}
+            {isPaused && !hasPlayers && (
+              <Badge variant="warning" size="sm">
+                Tạm dừng
+              </Badge>
+            )}
+            {isGroup && (
+              <Badge variant="outline" size="sm">
+                {playerCount} người
+              </Badge>
+            )}
+            {hasPlayers && (
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                className="ml-1 shrink-0 rounded-lg p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                title={collapsed ? 'Mở rộng bảng người chơi' : 'Thu gọn bảng người chơi'}
+              >
+                {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+              </button>
+            )}
           </div>
-        )}
-        {!isMember && !hasGroups && session.pricingRuleSnapshot && (
-          <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-            Bảng giá: {session.pricingRuleSnapshot.name} — {money(session.pricingRuleSnapshot.ratePerHour)}/giờ
-          </p>
-        )}
-      </div>
-      <div className="flex flex-col items-end justify-between gap-2">
-        <div className="text-right">
-          <p className="text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
-            {money(runningTotal)}
-          </p>
-          {isGroup && !isMember && !hasGroups && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {money(currentCost / playerCount)}/người
+          <div className="mt-2 space-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="flex items-center gap-1.5">
+              <Clock size={12} className="shrink-0" />
+              {session.shift ? `Ca ${formatClock(session.shift.openedAt)}` : 'Chưa gắn ca'}
             </p>
-          )}
-          {pendingSell > 0 && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {!isGroup && !isMember ? `${money(currentCost)} giờ + ` : ''}{money(pendingSell)} thêm
+            <p className="flex items-center gap-1.5">
+              <LogIn size={12} className="shrink-0" />
+              {formatClock(session.startTime)}
             </p>
-          )}
+          </div>
         </div>
-        <Button variant="inverse" size="xs" disabled={checkoutDisabled} onClick={onCheckout}>
-          Thu
-        </Button>
+        <div className="flex flex-col items-end justify-between gap-2">
+          {!hasPlayers && (
+            <SessionTimer
+              elapsed={elapsed}
+              pausedSeconds={pausedSeconds}
+              isPaused={isPaused}
+              accent={isMember ? 'purple' : 'emerald'}
+            />
+          )}
+          <div className="flex items-center gap-2">
+            {pendingSell > 0 && (
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                Tạm tính: <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">{money(pendingSell)}</span>
+              </span>
+            )}
+            {!hasPlayers && (isPaused ? (
+              <Button variant="inverse" size="xs" disabled={pauseDisabled} onClick={onResume} title="Tiếp tục chơi">
+                <Play size={12} className="mr-1" />
+                Chơi
+              </Button>
+            ) : (
+              <Button variant="secondary" size="xs" disabled={pauseDisabled} onClick={onPause} title="Tạm dừng">
+                <Pause size={12} className="mr-1" />
+                Dừng
+              </Button>
+            ))}
+            <Button variant="inverse" size="xs" disabled={checkoutDisabled} onClick={onCheckout}>
+              Thu
+            </Button>
+          </div>
+        </div>
       </div>
+
+      {/* Phiên nhiều người → thẻ từng người chơi với timer + pause riêng (thu gọn được) */}
+      {hasPlayers && !collapsed && (
+        <div className="mt-3 space-y-2">
+          {session.pricingGroups!
+            .filter((g) => g.remainingCount > 0)
+            .map((group) => {
+              // Lọc người đã được thu trước (checkedOutAt) — không hiển thị thẻ pause nữa
+              const players = (group.players ?? []).filter((p) => !p.checkedOutAt)
+              return players.map((player, index) => (
+                <PlayerPauseCard
+                  key={player.id}
+                  player={player}
+                  index={index}
+                  startTime={session.startTime}
+                  pauseDisabled={pauseDisabled}
+                  renaming={renaming}
+                  onPause={() => onPausePlayer?.(player.id)}
+                  onResume={() => onResumePlayer?.(player.id)}
+                  onRename={async (name) => {
+                    if (!onRenamePlayer) return false
+                    setRenaming(true)
+                    try {
+                      return await onRenamePlayer(player.id, name)
+                    } finally {
+                      setRenaming(false)
+                    }
+                  }}
+                />
+              ))
+            })}
+        </div>
+      )}
     </div>
   )
 }
