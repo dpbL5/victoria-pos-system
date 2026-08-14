@@ -137,6 +137,9 @@ export function CheckoutDrawer({
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState("");
   const [parkingVehicleCount, setParkingVehicleCount] = useState(0);
+  // Danh sách DRAFT invoice (lần bán kèm) được chọn thu trong lần checkout này
+  const [selectedDraftInvoiceIds, setSelectedDraftInvoiceIds] = useState<string[]>([]);
+  const draftSelectionInitialized = useRef(false);
   // Bảng giá hiệu lực — chỉ cần cho session chưa gán giá (fresh walk-in)
   const [applicablePricingRules, setApplicablePricingRules] = useState<
     PricingRuleOption[]
@@ -195,6 +198,8 @@ export function CheckoutDrawer({
       setPromotions([]);
       setPromotionsError("");
       setParkingVehicleCount(0);
+      setSelectedDraftInvoiceIds([]);
+      draftSelectionInitialized.current = false;
       setApplicablePricingRules([]);
       setPickerGroups([]);
       nextGroupKey.current = 0;
@@ -451,8 +456,22 @@ export function CheckoutDrawer({
   const playSubtotal = playQuote?.subtotal ?? 0;
   const playDiscount = playQuote?.discountAmount ?? 0;
   const playTotal = playQuote?.grandTotal ?? 0;
-  const pendingSellTotal = playQuote?.pendingSellTotal ?? 0;
-  const pendingSellItems = playQuote?.pendingSellItems ?? [];
+  const pendingSellItems = useMemo(
+    () => playQuote?.pendingSellItems ?? [],
+    [playQuote],
+  );
+  // Mặc định chọn tất cả DRAFT invoices đang chưa thu; nhân viên có thể bỏ chọn.
+  const availableDraftIds = useMemo(
+    () =>
+      Array.from(new Set(pendingSellItems.map((item) => item.draftInvoiceId))),
+    [pendingSellItems],
+  );
+  const pendingSellTotal = useMemo(() => {
+    const selected = new Set(selectedDraftInvoiceIds);
+    return pendingSellItems
+      .filter((item) => selected.has(item.draftInvoiceId))
+      .reduce((sum, item) => sum + item.subtotal, 0);
+  }, [pendingSellItems, selectedDraftInvoiceIds]);
   const parkingFeeUnitPrice = playQuote?.parkingFeeUnitPrice ?? 0;
   const parkingFeeTotal = parkingVehicleCount * parkingFeeUnitPrice;
 
@@ -469,6 +488,22 @@ export function CheckoutDrawer({
     0,
     playTotal + pendingSellTotal + productSubtotal - parkingFeeTotal,
   );
+
+  const toggleDraftInvoice = (draftInvoiceId: string) => {
+    setSelectedDraftInvoiceIds((current) =>
+      current.includes(draftInvoiceId)
+        ? current.filter((id) => id !== draftInvoiceId)
+        : [...current, draftInvoiceId],
+    );
+  };
+
+  // Mặc định chọn tất cả DRAFT invoices khi danh sách bán kèm được tải.
+  useEffect(() => {
+    if (availableDraftIds.length > 0 && !draftSelectionInitialized.current) {
+      draftSelectionInitialized.current = true;
+      setSelectedDraftInvoiceIds(availableDraftIds);
+    }
+  }, [availableDraftIds]);
 
   const pricingBlocked = needsPricing && applicablePricingRules.length === 0;
   // Chọn ít nhất 1 người khi dùng picker
@@ -545,6 +580,9 @@ export function CheckoutDrawer({
       }
       if (parkingVehicleCount > 0) {
         body.parkingVehicleCount = parkingVehicleCount;
+      }
+      if (availableDraftIds.length > 0) {
+        body.draftInvoiceIds = selectedDraftInvoiceIds;
       }
       const data = await apiJson<CheckoutResponse>(
         `/api/sessions/${session.id}/checkout`,
@@ -704,15 +742,56 @@ export function CheckoutDrawer({
               {pendingSellItems.length > 0 && (
                 <div className="border-t border-dashed border-zinc-200 pt-3 dark:border-zinc-800">
                   <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    Đã thêm vào phiên (chưa thu)
+                    Đã thêm vào phiên (chưa thu) — chọn lần bán kèm cần thu
                   </p>
-                  {pendingSellItems.map((item, index) => (
-                    <InvoiceRow
-                      key={`${item.productId}-${index}`}
-                      label={`${item.productName} x${item.quantity}`}
-                      value={money(item.subtotal)}
-                    />
-                  ))}
+                  {availableDraftIds.map((draftId) => {
+                    const draftItems = pendingSellItems.filter(
+                      (item) => item.draftInvoiceId === draftId,
+                    );
+                    const draftTotal = draftItems.reduce(
+                      (sum, item) => sum + item.subtotal,
+                      0,
+                    );
+                    const selected = selectedDraftInvoiceIds.includes(draftId);
+                    return (
+                      <label
+                        key={draftId}
+                        className="mb-2 flex cursor-pointer items-start gap-2 rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-800"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleDraftInvoice(draftId)}
+                          className="mt-1 h-4 w-4 shrink-0 accent-emerald-600"
+                        />
+                        <span className="flex-1">
+                          <span className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-medium text-zinc-950 dark:text-white">
+                              Bán kèm
+                            </span>
+                            <span className="text-sm tabular-nums text-zinc-950 dark:text-white">
+                              {money(draftTotal)}
+                            </span>
+                          </span>
+                          <span className="mt-1 space-y-1">
+                            {draftItems.map((item, index) => (
+                              <span
+                                key={`${item.productId}-${index}`}
+                                className="flex items-center justify-between gap-3 text-xs text-zinc-500 dark:text-zinc-400"
+                              >
+                                <span>
+                                  {item.productName} x{item.quantity}
+                                </span>
+                                <span className="tabular-nums">
+                                  {money(item.subtotal)}
+                                </span>
+                              </span>
+                            ))}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
               {cartLines.map((line) => (

@@ -46,7 +46,9 @@ export function CheckoutPlayerPicker({
 }) {
   const keyCounter = useRef(0)
 
-  if (rules.length === 0) return null
+  // Mode B: các nhóm đã gán giá (locked) không cần danh sách bảng giá để chọn người.
+  // Chỉ ẩn picker khi còn nhóm chưa khóa (mode A) mà chưa tải được bảng giá hiệu lực.
+  if (rules.length === 0 && groups.some((g) => !g.locked)) return null
 
   const setGroup = (index: number, patch: Partial<PickerGroup>) => {
     onChange(groups.map((g, i) => (i === index ? { ...g, ...patch } : g)))
