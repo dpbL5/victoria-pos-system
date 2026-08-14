@@ -33,6 +33,8 @@ export const checkoutSessionSchema = z.object({
   groups: z.array(checkoutPricingGroupSchema).min(1).optional(),
   // Thu trước: chọn người chơi cụ thể (ở bất kỳ nhóm nào) để checkout — loại trừ với groups/pricingGroupId
   playerIds: z.array(z.string().uuid("ID người chơi không hợp lệ")).min(1, "Chọn ít nhất 1 người chơi").optional(),
+  // DRAFT invoices (lần bán kèm) được chọn thu trong lần checkout này — không gửi = gộp toàn bộ (tương thích cũ)
+  draftInvoiceIds: z.array(z.string().uuid("ID hóa đơn bán kèm không hợp lệ")).optional(),
 }).superRefine((data, ctx) => {
   const chosen = [data.playerIds, data.groups, data.pricingGroupId].filter(v => v !== undefined).length
   if (chosen > 1) {

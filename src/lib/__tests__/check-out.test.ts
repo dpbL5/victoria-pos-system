@@ -510,6 +510,25 @@ describe('runCheckOutTx', () => {
     expect(result.remainingPlayers).toBe(0)
   })
 
+  it('partial checkout với merged drafts: hủy draft ngay để không tính lặp', async () => {
+    const repos = makeRepositories({
+      session: {
+        ...makeRepositories().session,
+        decrementGroupRemaining: vi.fn(async () => ({ remainingCount: 1 })),
+        sumRemainingPlayers: vi.fn(async () => 1),
+      },
+    })
+    const ctx = makeCtx()
+    ctx.draftInvoiceIds = ['draft-1']
+    const result = await runCheckOutTx(repos, ctx, makeState())
+
+    expect(result.remainingPlayers).toBe(1)
+    expect(repos.billing.cancelDraftInvoices).toHaveBeenCalledWith(
+      ['draft-1'],
+      'Đã gộp vào hóa đơn INV-1'
+    )
+  })
+
   it('WALK_IN session chưa có giá: persist bảng giá vào group 1 trước khi tạo invoice', async () => {
     const repos = makeRepositories()
     const ctx = makeCtx()

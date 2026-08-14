@@ -350,6 +350,7 @@ export async function GET(
           quantity: Number(item.quantity),
           unitPrice: Number(item.unitPrice),
           subtotal: Number(item.subtotal),
+          draftInvoiceId: draft.id,
         })
       }
     }

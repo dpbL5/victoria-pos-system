@@ -50,6 +50,8 @@ export interface CheckoutInput {
   groups?: CheckoutPricingGroupInput[]
   /** Thu trước: chọn người chơi cụ thể (bất kỳ nhóm nào) để checkout — loại trừ với groups/pricingGroupId */
   playerIds?: string[]
+  /** DRAFT invoices (lần bán kèm) được chọn thu lần này — không truyền = gộp toàn bộ (tương thích cũ) */
+  draftInvoiceIds?: string[]
 }
 
 export interface CheckoutResult {
@@ -105,6 +107,7 @@ export interface CheckoutContext {
   pricing: PricingResult
   checkoutLines: CheckoutLine[]
   productSubtotal: number
+  /** DRAFT invoices được gộp vào hoá đơn này (để huỷ ngay sau khi gộp) */
   draftInvoiceIds: string[]
   newQuantityByProductId: Map<string, number>
   parkingVehicleCount: number
@@ -157,6 +160,7 @@ export async function checkOut(
     pricingRuleId,
     groups,
     playerIds,
+    draftInvoiceIds,
   } = input
 
   // ── Pha 1: Guard trước transaction ──
@@ -411,10 +415,16 @@ export async function checkOut(
   const newQuantityByProductId = new Map<string, number>()
 
   // ── Gom sản phẩm từ hóa đơn DRAFT (bán kèm — đã trừ kho lúc thêm vào phiên) ──
+  // Nếu client truyền draftInvoiceIds → chỉ gom các lần bán kèm được chọn.
+  // Không truyền → gộp toàn bộ (giữ hành vi cũ cho client cũ).
   const draftInvoices = await deps.billing.findDraftInvoices(sessionId)
-  const draftInvoiceIds: string[] = []
+  const selectedDraftIds = draftInvoiceIds
+    ? new Set(draftInvoiceIds)
+    : null
+  const mergedDraftInvoiceIds: string[] = []
   for (const draft of draftInvoices) {
-    draftInvoiceIds.push(draft.id)
+    if (selectedDraftIds && !selectedDraftIds.has(draft.id)) continue
+    mergedDraftInvoiceIds.push(draft.id)
     for (const item of draft.items) {
       if (item.productId) {
         quantityByProductId.set(
@@ -481,7 +491,7 @@ export async function checkOut(
     pricing,
     checkoutLines,
     productSubtotal,
-    draftInvoiceIds,
+    draftInvoiceIds: mergedDraftInvoiceIds,
     newQuantityByProductId,
     parkingVehicleCount,
     checkoutAt,
@@ -1132,8 +1142,10 @@ export async function runCheckOutTx(
     })
   }
 
-  // ── Chỉ huỷ hóa đơn DRAFT khi checkout toàn bộ phiên ──
-  if (isFullCheckout && draftInvoiceIds.length > 0) {
+  // ── Huỷ hóa đơn DRAFT ngay khi đã gộp vào hoá đơn này ──
+  // Trước đây chỉ huỷ khi checkout toàn bộ phiên, khiến mỗi lần thu trước đều tính lại
+  // cùng hàng bán kèm. Giờ mỗi DRAFT được tính tiền một lần duy nhất.
+  if (draftInvoiceIds.length > 0) {
     await tx.billing.cancelDraftInvoices(
       draftInvoiceIds,
       `Đã gộp vào hóa đơn ${invoice.invoiceNo}`
@@ -1159,7 +1171,7 @@ export async function runCheckOutTx(
       remainingPlayers: totalRemaining,
       isFullCheckout,
       pricingGroupId: targetGroupId ?? null,
-      mergedDraftInvoices: isFullCheckout && draftInvoiceIds.length > 0 ? draftInvoiceIds : undefined,
+      mergedDraftInvoices: draftInvoiceIds.length > 0 ? draftInvoiceIds : undefined,
       parkingFeeTotal: parkingFeeTotal || undefined,
       pricingAssignedAtCheckout: (pendingAssignments?.length ?? 0) > 0,
       assignedPricingRuleIds: pendingAssignments?.map(a => a.pricingRuleId),
