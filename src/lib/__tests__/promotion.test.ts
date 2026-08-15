@@ -3,6 +3,7 @@ import {
   calculatePlayPrice,
   calculatePromotionDiscount,
   toPromotionSnapshot,
+  toPromotionMetadata,
   type PromotionSnapshot,
 } from '@/lib/promotion-calculation'
 import {
@@ -268,6 +269,33 @@ describe('toPromotionSnapshot', () => {
     })
 
     expect(snapshot).toBeNull()
+  })
+
+  it('không tạo snapshot khi discountValue <= 0', () => {
+    const snapshot = toPromotionSnapshot({
+      promotionRuleId: 'promotion-1',
+      promotionName: 'Giảm 0đ',
+      promotionDiscountType: 'FIXED_AMOUNT',
+      promotionDiscountValue: 0,
+    })
+
+    expect(snapshot).toBeNull()
+  })
+})
+
+describe('toPromotionMetadata', () => {
+  it('gói đủ field vào metadata để snapshot xuống dòng PLAY_TIME', () => {
+    const metadata = toPromotionMetadata(percentPromotion)
+    expect(metadata).toEqual({
+      ruleId: 'promotion-percent',
+      name: 'Giảm 15%',
+      discountType: 'PERCENT_PLAY_TIME',
+      discountValue: 15,
+    })
+  })
+
+  it('trả null khi không có khuyến mại', () => {
+    expect(toPromotionMetadata(null)).toBeNull()
   })
 })
 

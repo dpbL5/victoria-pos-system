@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { createPricingRuleSchema, updatePricingRuleSchema } from '@/lib/pricing'
-import { calcHours, getDayType } from '@/lib/shared/utils'
+import {
+  createPricingRuleSchema,
+  updatePricingRuleSchema,
+  pricingRuleWhere,
+  deriveDayTypeFromDays,
+  normalizeDaysOfWeek,
+  resolveRuleDaysOfWeek,
+  hasSharedDay,
+} from '@/lib/pricing'
+import { calcHours, getDayType, getVnDay } from '@/lib/shared/utils'
 
 // ── createPricingRuleSchema ───────────────────────────────
 
@@ -269,5 +277,75 @@ describe('calcHours', () => {
     const start = new Date('2026-07-09T11:00:00Z')
     const end = new Date('2026-07-09T10:00:00Z')
     expect(calcHours(start, end)).toBe(-1)
+  })
+})
+
+// ── pricingRuleWhere — điều kiện khớp rule (hourTo độc quyền, ngày hiệu lực) ──
+
+describe('pricingRuleWhere', () => {
+  const at = new Date('2026-07-09T10:00:00Z') // thứ 5 (WEEKDAY) giờ VN
+
+  it('hourTo độc quyền: giờ hiện tại bằng hourTo thì KHÔNG khớp', () => {
+    // hourTo = 21 → giờ 21:00 không còn nằm trong khung 17–21
+    const where = pricingRuleWhere(21, 'WEEKDAY', at)
+    expect(where.hourFrom).toEqual({ lte: 21 })
+    expect(where.OR).toEqual([{ hourTo: null }, { hourTo: { gt: 21 } }])
+  })
+
+  it('rule có daysOfWeek cụ thể → ưu tiên daysOfWeek (bỏ qua dayType)', () => {
+    const where = pricingRuleWhere(10, 'WEEKDAY', at)
+    // AND[1] có 2 nhánh OR: daysOfWeek has ngày VN, hoặc daysOfWeek rỗng + dayType
+    const dayBranch = where.AND[1].OR
+    expect(dayBranch[0]).toEqual({ daysOfWeek: { has: getVnDay(at) } })
+    expect(dayBranch[1]).toEqual({ daysOfWeek: { isEmpty: true }, dayType: 'WEEKDAY' })
+  })
+
+  it('hiệu lực: effectiveFrom ≤ at và (effectiveTo null hoặc ≥ at)', () => {
+    const where = pricingRuleWhere(10, 'WEEKDAY', at)
+    expect(where.effectiveFrom).toEqual({ lte: at })
+    expect(where.AND[0].OR).toEqual([{ effectiveTo: null }, { effectiveTo: { gte: at } }])
+  })
+})
+
+// ── overlap helpers — suy dayType / resolve ngày / giao ngày ──
+
+describe('deriveDayTypeFromDays', () => {
+  it('chỉ T7/CN → WEEKEND', () => {
+    expect(deriveDayTypeFromDays([0, 6])).toBe('WEEKEND')
+  })
+
+  it('có ngày trong tuần → WEEKDAY', () => {
+    expect(deriveDayTypeFromDays([1, 2, 3])).toBe('WEEKDAY')
+  })
+
+  it('rỗng → WEEKDAY', () => {
+    expect(deriveDayTypeFromDays([])).toBe('WEEKDAY')
+  })
+})
+
+describe('normalizeDaysOfWeek', () => {
+  it('dedupe + filter 0-6 + sort asc', () => {
+    expect(normalizeDaysOfWeek([5, 1, 5, 9, -1, 2])).toEqual([1, 2, 5])
+  })
+})
+
+describe('resolveRuleDaysOfWeek', () => {
+  it('daysOfWeek có giá trị → giữ nguyên (ưu tiên)', () => {
+    expect(resolveRuleDaysOfWeek([1, 3], 'WEEKEND')).toEqual([1, 3])
+  })
+
+  it('daysOfWeek rỗng → fallback theo dayType', () => {
+    expect(resolveRuleDaysOfWeek([], 'WEEKEND')).toEqual([0, 6])
+    expect(resolveRuleDaysOfWeek(null, 'WEEKDAY')).toEqual([1, 2, 3, 4, 5])
+  })
+})
+
+describe('hasSharedDay', () => {
+  it('có ngày trùng → true', () => {
+    expect(hasSharedDay([1, 2], [2, 3])).toBe(true)
+  })
+
+  it('không trùng → false', () => {
+    expect(hasSharedDay([1, 2], [3, 4])).toBe(false)
   })
 })
