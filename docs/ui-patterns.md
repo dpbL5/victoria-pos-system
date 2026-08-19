@@ -70,23 +70,42 @@
 
 Nguồn sự thật: **`src/app/globals.css`** — CSS custom properties định nghĩa trong `:root` (light) và `.dark` (dark mode), gồm `--color-brand`, `--color-surface-*`, `--color-border-*`, `--color-text-*`, `--color-success/warning/danger/info-*`, `--color-accent-purple-*`, `--shadow-*`, `--radius-*`.
 
-Codebase hiện tại viết style bằng **Tailwind utility classes (bảng zinc)** — bảng tham chiếu dưới đây phản ánh convention đang dùng; đối chiếu `globals.css` khi cần giá trị màu chính xác (globals.css dùng bảng màu slate cho các giá trị semantic).
+Từ Tailwind v4, `globals.css` có block `@theme inline` **map token → utility class**. Token dùng được trực tiếp dưới dạng `bg-brand`, `text-gold`, `border-danger`, `bg-surface-primary`… (light + dark tự động theo CSS var). Mỗi token có thể dùng với prefix `bg-`/`text-`/`border-`/`ring-`/`fill-`/`stroke-`:
 
-| Token | Tailwind class (light) | Tailwind class (dark override) | Dùng cho |
-|-------|------------------------|-------------------------------|----------|
-| Surface primary | `bg-white` | `dark:bg-zinc-950` | Nền trang chính |
-| Surface secondary | `bg-zinc-50` | `dark:bg-zinc-900` | Cards, sidebar |
-| Surface elevated | `bg-white` | `dark:bg-zinc-900` | Modal, dropdown |
-| Border default | `border-zinc-200` | `dark:border-zinc-800` | Card border, table border |
-| Border input | `border-zinc-300` | `dark:border-zinc-700` | Input, select border |
-| Text primary | `text-zinc-900` | `dark:text-white` | Headings |
-| Text secondary | `text-zinc-500` | `dark:text-zinc-400` | Labels, descriptions |
-| Text tertiary | `text-zinc-400` | `dark:text-zinc-500` | Placeholder, muted |
-| Brand / Primary | `bg-blue-600 text-white` | `dark:bg-blue-600 dark:text-white` | Nút chính, nav active |
-| Success | `text-emerald-600 bg-emerald-50` | `dark:text-emerald-400 dark:bg-emerald-500/15` | Active, thành công |
-| Warning | `text-amber-600 bg-amber-50` | `dark:text-amber-400 dark:bg-amber-500/15` | Cảnh báo |
-| Danger | `text-red-600 bg-red-50` | `dark:text-red-400 dark:bg-red-500/15` | Lỗi, disabled |
-| Purple accent | `text-purple-600 bg-purple-50` | `dark:text-purple-400 dark:bg-purple-500/15` | Member badge |
+| Token | Utility | Giá trị light | Giá trị dark | Dùng cho |
+|-------|---------|---------------|--------------|----------|
+| `--color-brand` | `bg-brand`, `text-brand` | `#2563eb` | `#1a1a1a` (charcoal) | Nút primary, nav active (light) |
+| `--color-gold` | `text-gold` | `#d4b572` | `#d4b572` | Tagline `ARCHERY CLUB`, wordmark |
+| `--color-gold-dark` | `text-gold-dark` | `#b69854` | `#b69854` | Tagline trên nền sáng |
+| `--color-surface-primary` | `bg-surface-primary` | `#ffffff` | `#18181b` | Nền trang chính |
+| `--color-surface-secondary` | `bg-surface-secondary` | `#f8fafc` | `#27272a` | Cards, sidebar |
+| `--color-border-default` | `border-border-default` | `#e2e8f0` | `#3f3f46` | Card/table border |
+| `--color-text-primary` | `text-text-primary` | `#0f172a` | `#fafafa` | Headings |
+| `--color-success` | `text-success`, `bg-success` | `#16a34a` | `#22c55e` | Trạng thái thành công |
+| `--color-warning` | `text-warning`, `bg-warning` | `#d97706` | `#f59e0b` | Cảnh báo |
+| `--color-danger` | `text-danger`, `bg-danger` | `#dc2626` | `#ef4444` | Lỗi |
+| `--color-accent-purple` | `text-accent-purple` | `#7c3aed` | `#8b5cf6` | Member badge |
+| `--color-info` | `text-info`, `bg-info` | `#2563eb` | `#3b82f6` | Thông tin |
+
+> Lưu ý: `--color-brand` đổi thành charcoal trong dark mode (theo thương hiệu). Với nút primary giữ nguyên màu xanh ở dark, dùng `dark:bg-blue-600` thay vì `dark:bg-brand`.
+
+### Card primitive
+
+Shell thẻ chuẩn đã extract thành **`Card`** (`@/components/ui/card`) — dùng cho mọi khối nội dung, thay cho việc lặp class dài:
+
+```tsx
+import { Card } from "@/components/ui/card";
+
+<Card padding="md">          // "none" | "sm" | "md" | "lg"
+  Nội dung
+</Card>
+
+<Card padding="md" interactive className="text-left">  // thẻ bấm được (hover)
+  ...
+</Card>
+```
+
+Card render `div` với class cơ sở `rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900` + padding theo prop. **Không dùng Card để thay `<button>`/`<a>`** (Card là `div`).
 
 ## Ví dụ code UI
 

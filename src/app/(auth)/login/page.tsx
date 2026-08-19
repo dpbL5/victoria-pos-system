@@ -57,7 +57,7 @@ export default function LoginPage() {
           </div>
           <div className="text-center">
             <h1 className="text-xl font-bold tracking-wide text-white">VICTORIA</h1>
-            <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-amber-400">
+            <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-gold">
               Archery Club
             </p>
           </div>

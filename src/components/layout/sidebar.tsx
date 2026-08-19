@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FlaskConical,
+  GraduationCap,
   Package,
   Settings,
   ShieldCheck,
@@ -39,6 +40,7 @@ export const staffMenuItems: MenuItem[] = [
   { href: '/pricing', label: 'Bảng giá', Icon: Banknote, adminOnly: true },
   { href: '/promotions', label: 'Khuyến mại', Icon: Tag, adminOnly: true },
   { href: '/tools', label: 'Dụng cụ', Icon: Wrench, adminOnly: true },
+  { href: '/students', label: 'Học viên', Icon: GraduationCap, adminOnly: true },
   { href: '/staff', label: 'Nhân viên', Icon: UserCog, adminOnly: true },
   { href: '/cashflow', label: 'Thu chi', Icon: ArrowRightLeft, adminOnly: true },
   { href: '/testing', label: 'Testing', Icon: FlaskConical },
@@ -96,7 +98,7 @@ export function Sidebar({ collapsed, onToggle, userRole }: SidebarProps) {
             <h1 className="truncate text-sm font-bold leading-tight tracking-wide text-zinc-900 dark:text-white">
               VICTORIA
             </h1>
-            <p className="truncate text-[10px] font-medium uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">
+            <p className="truncate text-[10px] font-medium uppercase tracking-[0.2em] text-gold-dark dark:text-gold">
               Archery Club
             </p>
           </div>
