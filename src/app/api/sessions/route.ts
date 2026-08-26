@@ -31,13 +31,13 @@ export async function GET(request: NextRequest) {
       take: limit,
     })
 
-    // ── Tính tổng tiền bán kèm chưa thanh toán (DRAFT invoices) cho từng phiên ──
+    // ── Tính tổng tiền bán kèm chưa thanh toán (SessionSellItem) cho từng phiên ──
     const sessionIds = data.map((s) => s.id)
-    const draftTotals = await repositories.session.findDraftSellTotals(sessionIds)
+    const sellItemTotals = await repositories.session.findSellItemTotals(sessionIds)
 
     const enriched = data.map((s) => ({
       ...s,
-      pendingSellTotal: draftTotals[s.id] ?? 0,
+      pendingSellTotal: sellItemTotals[s.id] ?? 0,
     }))
 
     return apiSuccess(enriched, 200)

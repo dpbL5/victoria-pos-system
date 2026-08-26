@@ -76,8 +76,8 @@ export interface PendingSellItem {
   quantity: number
   unitPrice: number
   subtotal: number
-  /** ID của DRAFT invoice chứa item này — dùng để chọn/bỏ chọn theo từng lần bán kèm */
-  draftInvoiceId: string
+  /** ID của dòng bán kèm (SessionSellItem) — dùng để xoá từng dòng trước khi checkout */
+  sessionSellItemId: string
 }
 
 export interface PricingTier {

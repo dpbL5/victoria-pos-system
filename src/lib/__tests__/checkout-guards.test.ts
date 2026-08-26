@@ -7,7 +7,7 @@ import { checkOut, type CheckoutInput } from '@/lib/sessions/use-cases/check-out
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import type { SessionWithPlayers } from '@/lib/sessions/ports'
 
-function makeSession(overrides: Partial<SessionWithPlayers> = {}): SessionWithPlayers {
+function makeSession(overrides: Record<string, unknown> = {}): SessionWithPlayers {
   return {
     id: 'session-1',
     customerId: 'cust-1',
@@ -43,11 +43,11 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     billing: {
       findVoidTarget: vi.fn(), findMergedDraftItems: vi.fn(), reverseStock: vi.fn(), markInvoiceCancelled: vi.fn(),
       createPaidInvoice: vi.fn(async () => ({ id: 'inv-1', invoiceNo: 'INV-1' })), createPayment: vi.fn(async () => ({ id: 'pay-1' })),
-      createMembershipPayment: vi.fn(), createDraftInvoice: vi.fn(), createInvoiceItem: vi.fn(async () => ({ id: 'item-1' })),
-      updateInvoiceTotals: vi.fn(), findDraftInvoices: vi.fn(async () => []), cancelDraftInvoices: vi.fn(),
+      createMembershipPayment: vi.fn(), createInvoiceItem: vi.fn(async () => ({ id: 'item-1' })),
+      updateInvoiceTotals: vi.fn(),
       findByIdForEdit: vi.fn(), deleteInvoiceItems: vi.fn(), deletePayments: vi.fn(), updateInvoiceFinancials: vi.fn(),
       findByIdWithDetails: vi.fn(), findByIdForDelete: vi.fn(), countLinkedTransactions: vi.fn(), deleteInvoiceWithItems: vi.fn(),
-      findDraftSellPreview: vi.fn(), findInvoicesByCustomer: vi.fn(), countPaidBySession: vi.fn(async () => 0),
+      findInvoicesByCustomer: vi.fn(), countPaidBySession: vi.fn(async () => 0),
     },
     audit: { append: vi.fn(async () => {}), findMany: vi.fn() },
     membership: { findLatest: vi.fn(), findActive: vi.fn(async () => null), create: vi.fn(), findManyByCustomer: vi.fn() },
@@ -62,7 +62,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     promotions: { findAvailable: vi.fn(), findAvailableById: vi.fn(async () => null), findOverlapping: vi.fn(), findMany: vi.fn(), findById: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     settings: { get: vi.fn(), getNumeric: vi.fn(async () => 0), upsert: vi.fn(), getWithLabel: vi.fn(), findAll: vi.fn() },
     session: {
-      findByIdForCheckout: vi.fn(), findByIdWithCustomer: vi.fn(), findActiveByCustomer: vi.fn(), findMany: vi.fn(), findByIdForPreview: vi.fn(), findDraftSellTotals: vi.fn(),
+      findByIdForCheckout: vi.fn(), findByIdWithCustomer: vi.fn(), findActiveByCustomer: vi.fn(), findMany: vi.fn(), findByIdForPreview: vi.fn(), findSellItemTotals: vi.fn(async () => ({})), findSellItems: vi.fn(async () => []), addSellItem: vi.fn(async () => {}), removeSellItems: vi.fn(async () => {}), clearSellItems: vi.fn(async () => {}),
       countCreatedBetween: vi.fn(), createWithRefs: vi.fn(), createPricingGroup: vi.fn(), createPlayersForGroup: vi.fn(), updatePricingGroup: vi.fn(), update: vi.fn(),
       decrementGroupRemaining: vi.fn(), sumRemainingPlayers: vi.fn(async () => 0), findByIdWithPlayers: vi.fn(async () => makeSession()),
       findPlayersForPause: vi.fn(), pausePlayer: vi.fn(), resumePlayer: vi.fn(), renamePlayer: vi.fn(), movePlayersToGroup: vi.fn(), markPlayersCheckedOut: vi.fn(),
@@ -164,7 +164,9 @@ describe('checkOut — guard trước transaction (business invariants)', () => 
         // pricing engine gọi findByIdForCheckout (SessionWithDetails) — trả cùng session
         findByIdForCheckout: vi.fn(async () => memberSession as never),
       },
-      promotions: { ...makeRepositories().promotions, findAvailableById: vi.fn(async () => ({ ruleId: 'promo-1', name: 'Giảm', discountType: 'PERCENT', discountValue: 10 })) },
+      // Hội viên còn hiệu lực — để guard PROMOTION_NOT_APPLICABLE được kiểm tra (không vướng MEMBERSHIP_EXPIRED)
+      membership: { ...makeRepositories().membership, findActive: vi.fn(async () => ({ id: 'mem-1', customerId: 'cust-1', planId: 'plan-1', status: 'ACTIVE', startsAt: new Date('2026-08-01T00:00:00Z'), expiresAt: new Date('2026-08-30T00:00:00Z'), createdAt: new Date(), updatedAt: new Date(), plan: { id: 'plan-1', name: 'Gói tháng', price: 300000, durationMonths: 1, isActive: true, createdAt: new Date(), updatedAt: new Date() } } as never)) },
+      promotions: { ...makeRepositories().promotions, findAvailableById: vi.fn(async () => ({ ruleId: 'promo-1', name: 'Giảm', discountType: 'PERCENT' as const, discountValue: 10 })) },
     })
     const result = await checkOut(makeInput({ promotionRuleId: 'promo-1' }), repos)
     expect(result).toEqual({ ok: false, error: { code: 'PROMOTION_NOT_APPLICABLE' } })

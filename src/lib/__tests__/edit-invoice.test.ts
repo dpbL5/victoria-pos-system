@@ -8,6 +8,7 @@ import { runEditInvoice, type EditInvoiceInput } from '@/lib/invoicing/use-cases
 import { RollbackSignal } from '@/lib/infrastructure/db-helpers'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import type { EditInvoiceTarget } from '@/lib/invoicing/ports'
+import type { ProductRecord } from '@/lib/sessions/ports'
 
 function makeInvoice(overrides: Partial<EditInvoiceTarget> = {}): EditInvoiceTarget {
   return {
@@ -54,11 +55,8 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       createPaidInvoice: vi.fn(),
       createPayment: vi.fn(async () => ({ id: 'pay-1' })),
       createMembershipPayment: vi.fn(),
-      createDraftInvoice: vi.fn(),
       createInvoiceItem: vi.fn(async () => ({ id: 'item-new' })),
       updateInvoiceTotals: vi.fn(),
-      findDraftInvoices: vi.fn(),
-      cancelDraftInvoices: vi.fn(),
       findByIdForEdit: vi.fn(async () => makeInvoice()),
       deleteInvoiceItems: vi.fn(async () => {}),
       deletePayments: vi.fn(async () => {}),
@@ -67,7 +65,6 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findByIdForDelete: vi.fn(),
       countLinkedTransactions: vi.fn(),
       deleteInvoiceWithItems: vi.fn(),
-      findDraftSellPreview: vi.fn(),
       findInvoicesByCustomer: vi.fn(),
       countPaidBySession: vi.fn(async () => 0),
     },
@@ -84,16 +81,16 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     promotions: { findAvailable: vi.fn(), findAvailableById: vi.fn(), findOverlapping: vi.fn(), findMany: vi.fn(), findById: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     settings: { get: vi.fn(), getNumeric: vi.fn(), upsert: vi.fn(), getWithLabel: vi.fn(), findAll: vi.fn() },
     session: {
-      findByIdForCheckout: vi.fn(), findByIdWithCustomer: vi.fn(), findActiveByCustomer: vi.fn(), findMany: vi.fn(), findByIdForPreview: vi.fn(), findDraftSellTotals: vi.fn(),
+      findByIdForCheckout: vi.fn(), findByIdWithCustomer: vi.fn(), findActiveByCustomer: vi.fn(), findMany: vi.fn(), findByIdForPreview: vi.fn(), findSellItemTotals: vi.fn(async () => ({})), findSellItems: vi.fn(async () => []), addSellItem: vi.fn(async () => {}), removeSellItems: vi.fn(async () => {}), clearSellItems: vi.fn(async () => {}),
       countCreatedBetween: vi.fn(), createWithRefs: vi.fn(), createPricingGroup: vi.fn(), createPlayersForGroup: vi.fn(), updatePricingGroup: vi.fn(), update: vi.fn(),
       decrementGroupRemaining: vi.fn(), sumRemainingPlayers: vi.fn(), findByIdWithPlayers: vi.fn(), findPlayersForPause: vi.fn(), pausePlayer: vi.fn(), resumePlayer: vi.fn(),
       renamePlayer: vi.fn(), movePlayersToGroup: vi.fn(), markPlayersCheckedOut: vi.fn(),
     },
     product: {
-      findManyByIds: vi.fn(async () => [
+      findManyByIds: vi.fn(async (): Promise<ProductRecord[]> => [
         { id: 'prod-2', name: 'Trà sữa', type: 'PRODUCT', price: 25000, costPrice: 12000, stockQuantity: 10, isActive: true },
       ]),
-      findByIdForSale: vi.fn(async () => ({ id: 'prod-2', name: 'Trà sữa', type: 'PRODUCT', price: 25000, costPrice: 12000, stockQuantity: 10, isActive: true })),
+      findByIdForSale: vi.fn(async (): Promise<ProductRecord | null> => ({ id: 'prod-2', name: 'Trà sữa', type: 'PRODUCT', price: 25000, costPrice: 12000, stockQuantity: 10, isActive: true })),
       decrementStockIfAvailable: vi.fn(async () => ({ count: 1 })),
       recordSaleMovement: vi.fn(async () => {}),
       findManyForAdmin: vi.fn(), findByIdAdmin: vi.fn(), createWithInitialStock: vi.fn(), applyStockMovement: vi.fn(),
@@ -105,6 +102,11 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       getDashboardData: vi.fn(), getRevenueData: vi.fn(), getRevenueExportRows: vi.fn(), getSessionExportRows: vi.fn(), getShiftDayGroups: vi.fn(), getShiftRevenue: vi.fn(),
       getShiftRevenues: vi.fn(), getTrends: vi.fn(), getTopProducts: vi.fn(),
     },
+    student: { findMany: vi.fn(), findById: vi.fn(), findByIdIncludingDeleted: vi.fn(), create: vi.fn(), update: vi.fn(), softDelete: vi.fn() },
+    lesson: { findManyBetween: vi.fn(), findById: vi.fn(), findBySeries: vi.fn(), findUpcomingByStudent: vi.fn(), findPastByStudent: vi.fn(), create: vi.fn(), update: vi.fn(), cancel: vi.fn(), setGoogleEventId: vi.fn(), deleteFutureBySeries: vi.fn(), countLessonsByStudent: vi.fn(), upsertAttendance: vi.fn(), setPackage: vi.fn() },
+    lessonSeries: { findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    lessonPackage: { findById: vi.fn(), findActiveByStudent: vi.fn(), create: vi.fn(), update: vi.fn(), incrementUsed: vi.fn() },
+    calendarConnection: { find: vi.fn(async () => null), upsert: vi.fn(), updateToken: vi.fn(), delete: vi.fn() },
     ...overrides,
   }
 }

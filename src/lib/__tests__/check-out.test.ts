@@ -60,11 +60,8 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       createPaidInvoice: vi.fn(async () => ({ id: 'inv-1', invoiceNo: 'INV-1' })),
       createPayment: vi.fn(async () => ({ id: 'pay-1' })),
       createMembershipPayment: vi.fn(),
-      createDraftInvoice: vi.fn(),
       createInvoiceItem: vi.fn(async () => ({ id: 'item-1' })),
       updateInvoiceTotals: vi.fn(),
-      findDraftInvoices: vi.fn(),
-      cancelDraftInvoices: vi.fn(),
       findByIdForEdit: vi.fn(),
       deleteInvoiceItems: vi.fn(),
       deletePayments: vi.fn(),
@@ -73,7 +70,6 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findByIdForDelete: vi.fn(),
       countLinkedTransactions: vi.fn(async () => ({ payments: 0, stockMovements: 0 })),
       deleteInvoiceWithItems: vi.fn(),
-      findDraftSellPreview: vi.fn(),
       findInvoicesByCustomer: vi.fn(),
       countPaidBySession: vi.fn(async () => 0),
     },
@@ -123,7 +119,11 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findActiveByCustomer: vi.fn(),
       findMany: vi.fn(),
       findByIdForPreview: vi.fn(),
-      findDraftSellTotals: vi.fn(),
+      findSellItemTotals: vi.fn(async () => ({})),
+      findSellItems: vi.fn(async () => []),
+      addSellItem: vi.fn(async () => {}),
+      removeSellItems: vi.fn(async () => {}),
+      clearSellItems: vi.fn(async () => {}),
       countCreatedBetween: vi.fn(async () => 0),
       createWithRefs: vi.fn(),
       createPricingGroup: vi.fn(async () => ({ id: 'group-1' })),
@@ -203,7 +203,8 @@ function makeCtx(): CheckoutContext {
       { productId: 'prod-1', type: 'PRODUCT', description: 'Nước suối', quantity: 2, unitPrice: 15000, subtotal: 30000 },
     ],
     productSubtotal: 30000,
-    draftInvoiceIds: [],
+    mergedSellItemIds: [],
+    sellItemLines: [],
     newQuantityByProductId: new Map([['prod-1', 2]]),
     parkingVehicleCount: 0,
     checkoutAt: new Date('2026-08-07T12:00:00Z'),
@@ -501,21 +502,22 @@ describe('runCheckOutTx', () => {
     expect(result.finalPricing.isMemberSession).toBe(true)
   })
 
-  it('checkout full với merged drafts: hủy draft invoices khi đóng phiên', async () => {
+  it('checkout full với sell items: gộp thành InvoiceItem + xoá dòng bán kèm', async () => {
     const repos = makeRepositories()
     const ctx = makeCtx()
-    ctx.draftInvoiceIds = ['draft-1', 'draft-2']
+    ctx.mergedSellItemIds = ['ssi-1', 'ssi-2']
+    ctx.sellItemLines = [
+      { id: 'ssi-1', productId: 'prod-1', quantity: 1, unitPrice: 15000, unitCost: 8000 },
+      { id: 'ssi-2', productId: 'prod-1', quantity: 1, unitPrice: 15000, unitCost: 8000 },
+    ]
     const result = await runCheckOutTx(repos, ctx, makeState())
 
-    // Full checkout → cancel drafts với note gộp vào invoice
-    expect(repos.billing.cancelDraftInvoices).toHaveBeenCalledWith(
-      ['draft-1', 'draft-2'],
-      'Đã gộp vào hóa đơn INV-1'
-    )
+    // Full checkout → xoá các dòng bán kèm đã gộp
+    expect(repos.session.removeSellItems).toHaveBeenCalledWith(['ssi-1', 'ssi-2'])
     expect(result.remainingPlayers).toBe(0)
   })
 
-  it('partial checkout với merged drafts: hủy draft ngay để không tính lặp', async () => {
+  it('partial checkout với sell items: xoá dòng bán kèm đã gộp ngay để không tính lặp', async () => {
     const repos = makeRepositories({
       session: {
         ...makeRepositories().session,
@@ -524,14 +526,14 @@ describe('runCheckOutTx', () => {
       },
     })
     const ctx = makeCtx()
-    ctx.draftInvoiceIds = ['draft-1']
+    ctx.mergedSellItemIds = ['ssi-1']
+    ctx.sellItemLines = [
+      { id: 'ssi-1', productId: 'prod-1', quantity: 1, unitPrice: 15000, unitCost: 8000 },
+    ]
     const result = await runCheckOutTx(repos, ctx, makeState())
 
     expect(result.remainingPlayers).toBe(1)
-    expect(repos.billing.cancelDraftInvoices).toHaveBeenCalledWith(
-      ['draft-1'],
-      'Đã gộp vào hóa đơn INV-1'
-    )
+    expect(repos.session.removeSellItems).toHaveBeenCalledWith(['ssi-1'])
   })
 
   it('WALK_IN session chưa có giá: persist bảng giá vào group 1 trước khi tạo invoice', async () => {

@@ -335,24 +335,28 @@ export async function GET(
       }
     }
 
-    // ── Lấy danh sách bán kèm chưa thanh toán (DRAFT invoices) ──
-    const draftInvoices = await repositories.billing.findDraftSellPreview(id)
+    // ── Lấy danh sách dòng bán kèm chưa thanh toán (SessionSellItem) ──
+    const sellItems = await repositories.session.findSellItems(id)
+    const sellProductIds = Array.from(new Set(sellItems.map((i) => i.productId)))
+    const sellProducts = sellProductIds.length > 0
+      ? await repositories.product.findManyByIds(sellProductIds)
+      : []
+    const sellProductById = new Map(sellProducts.map((p) => [p.id, p]))
 
     let pendingSellTotal = 0
     const pendingSellItems: PlayTimeQuote['pendingSellItems'] = []
-    for (const draft of draftInvoices) {
-      pendingSellTotal += draft.grandTotal
-      for (const item of draft.items) {
-        pendingSellItems.push({
-          productId: item.productId,
-          productName: item.description,
-          type: item.type as 'PRODUCT' | 'SERVICE',
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice),
-          subtotal: Number(item.subtotal),
-          draftInvoiceId: draft.id,
-        })
-      }
+    for (const item of sellItems) {
+      const product = sellProductById.get(item.productId)
+      pendingSellTotal += item.quantity * item.unitPrice
+      pendingSellItems.push({
+        productId: item.productId,
+        productName: product?.name ?? 'Sản phẩm',
+        type: product?.type ?? 'PRODUCT',
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        subtotal: item.quantity * item.unitPrice,
+        sessionSellItemId: item.id,
+      })
     }
 
     const quote: PlayTimeQuote = {

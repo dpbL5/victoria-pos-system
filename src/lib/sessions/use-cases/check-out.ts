@@ -50,8 +50,6 @@ export interface CheckoutInput {
   groups?: CheckoutPricingGroupInput[]
   /** Thu trước: chọn người chơi cụ thể (bất kỳ nhóm nào) để checkout — loại trừ với groups/pricingGroupId */
   playerIds?: string[]
-  /** DRAFT invoices (lần bán kèm) được chọn thu lần này — không truyền = gộp toàn bộ (tương thích cũ) */
-  draftInvoiceIds?: string[]
 }
 
 export interface CheckoutResult {
@@ -107,8 +105,16 @@ export interface CheckoutContext {
   pricing: PricingResult
   checkoutLines: CheckoutLine[]
   productSubtotal: number
-  /** DRAFT invoices được gộp vào hoá đơn này (để huỷ ngay sau khi gộp) */
-  draftInvoiceIds: string[]
+  /** Các dòng bán kèm chờ thu được gộp vào hoá đơn này (xoá sau khi gộp) */
+  mergedSellItemIds: string[]
+  /** Snapshot dòng bán kèm — để tạo InvoiceItem (giá vốn đã chốt lúc bán kèm) */
+  sellItemLines: Array<{
+    id: string
+    productId: string
+    quantity: number
+    unitPrice: number
+    unitCost: number | null
+  }>
   newQuantityByProductId: Map<string, number>
   parkingVehicleCount: number
   checkoutAt: Date
@@ -160,7 +166,6 @@ export async function checkOut(
     pricingRuleId,
     groups,
     playerIds,
-    draftInvoiceIds,
   } = input
 
   // ── Pha 1: Guard trước transaction ──
@@ -414,25 +419,15 @@ export async function checkOut(
   const quantityByProductId = new Map<string, number>()
   const newQuantityByProductId = new Map<string, number>()
 
-  // ── Gom sản phẩm từ hóa đơn DRAFT (bán kèm — đã trừ kho lúc thêm vào phiên) ──
-  // Nếu client truyền draftInvoiceIds → chỉ gom các lần bán kèm được chọn.
-  // Không truyền → gộp toàn bộ (giữ hành vi cũ cho client cũ).
-  const draftInvoices = await deps.billing.findDraftInvoices(sessionId)
-  const selectedDraftIds = draftInvoiceIds
-    ? new Set(draftInvoiceIds)
-    : null
-  const mergedDraftInvoiceIds: string[] = []
-  for (const draft of draftInvoices) {
-    if (selectedDraftIds && !selectedDraftIds.has(draft.id)) continue
-    mergedDraftInvoiceIds.push(draft.id)
-    for (const item of draft.items) {
-      if (item.productId) {
-        quantityByProductId.set(
-          item.productId,
-          (quantityByProductId.get(item.productId) ?? 0) + item.quantity
-        )
-      }
-    }
+  // ── Gom dòng bán kèm chờ thu (SessionSellItem — đã trừ kho lúc thêm vào phiên) ──
+  // Checkout gộp TOÀN BỘ dòng bán kèm còn lại vào invoice INV duy nhất.
+  const sellItems = await deps.session.findSellItems(sessionId)
+  const mergedSellItemIds: string[] = sellItems.map((item) => item.id)
+  for (const item of sellItems) {
+    quantityByProductId.set(
+      item.productId,
+      (quantityByProductId.get(item.productId) ?? 0) + item.quantity
+    )
   }
 
   // ── Gom sản phẩm từ request checkout hiện tại (cần trừ kho) ──
@@ -456,20 +451,29 @@ export async function checkOut(
     return err('PRODUCT_NOT_FOUND')
   }
 
-  const checkoutLines: CheckoutLine[] = products.map((product) => {
-    const quantity = quantityByProductId.get(product.id) ?? 0
-    const unitPrice = product.price
-    return {
-      productId: product.id,
-      type: product.type,
-      description: product.name,
-      quantity,
-      unitPrice,
-      subtotal: quantity * unitPrice,
-    }
-  })
+  // ── Dòng hàng mới gửi kèm request checkout (chỉ items hiện tại — bán kèm tạo riêng từ sellItemLines) ──
+  const checkoutLines: CheckoutLine[] = products
+    .filter((product) => newQuantityByProductId.has(product.id))
+    .map((product) => {
+      const quantity = newQuantityByProductId.get(product.id) ?? 0
+      const unitPrice = product.price
+      return {
+        productId: product.id,
+        type: product.type,
+        description: product.name,
+        quantity,
+        unitPrice,
+        subtotal: quantity * unitPrice,
+      }
+    })
 
-  const productSubtotal = checkoutLines.reduce((sum, line) => sum + line.subtotal, 0)
+  // ── Tổng hàng hoá = hàng mới trong request + hàng bán kèm chờ thu ──
+  const sellSubtotal = sellItems.reduce(
+    (sum, item) => sum + item.quantity * item.unitPrice,
+    0
+  )
+  const productSubtotal =
+    checkoutLines.reduce((sum, line) => sum + line.subtotal, 0) + sellSubtotal
 
   // ── Nhân tiền giờ chơi với số người checkout ──
   const multipliedSubtotal = pricing.subtotal * checkoutCount
@@ -491,7 +495,14 @@ export async function checkOut(
     pricing,
     checkoutLines,
     productSubtotal,
-    draftInvoiceIds: mergedDraftInvoiceIds,
+    mergedSellItemIds,
+    sellItemLines: sellItems.map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      unitCost: item.unitCost,
+    })),
     newQuantityByProductId,
     parkingVehicleCount,
     checkoutAt,
@@ -719,7 +730,8 @@ export async function runCheckOutTx(
     pricing,
     checkoutLines,
     productSubtotal,
-    draftInvoiceIds,
+    mergedSellItemIds,
+    sellItemLines,
     newQuantityByProductId,
     parkingVehicleCount,
     checkoutAt,
@@ -1014,6 +1026,26 @@ export async function runCheckOutTx(
     }
   }
 
+  // ── Tạo InvoiceItem cho các dòng bán kèm đã chờ thu (không trừ kho — đã trừ lúc bán kèm) ──
+  for (const sellLine of sellItemLines) {
+    const sellProduct = await tx.product.findByIdForSale(sellLine.productId)
+    if (!sellProduct || !sellProduct.isActive) {
+      fail('PRODUCT_UNAVAILABLE')
+    }
+    await tx.billing.createInvoiceItem({
+      invoiceId: invoice.id,
+      productId: sellProduct.id,
+      type: sellProduct.type,
+      description: sellProduct.name,
+      quantity: sellLine.quantity,
+      unitPrice: sellLine.unitPrice,
+      unitCost: sellLine.unitCost,
+      subtotal: sellLine.quantity * sellLine.unitPrice,
+      discountAmount: 0,
+      total: sellLine.quantity * sellLine.unitPrice,
+    })
+  }
+
   for (const line of checkoutLines) {
     const latestProduct = await tx.product.findByIdForSale(line.productId)
     if (!latestProduct || !latestProduct.isActive) {
@@ -1142,14 +1174,9 @@ export async function runCheckOutTx(
     })
   }
 
-  // ── Huỷ hóa đơn DRAFT ngay khi đã gộp vào hoá đơn này ──
-  // Trước đây chỉ huỷ khi checkout toàn bộ phiên, khiến mỗi lần thu trước đều tính lại
-  // cùng hàng bán kèm. Giờ mỗi DRAFT được tính tiền một lần duy nhất.
-  if (draftInvoiceIds.length > 0) {
-    await tx.billing.cancelDraftInvoices(
-      draftInvoiceIds,
-      `Đã gộp vào hóa đơn ${invoice.invoiceNo}`
-    )
+  // ── Xoá các dòng bán kèm đã gộp vào hoá đơn này ──
+  if (mergedSellItemIds.length > 0) {
+    await tx.session.removeSellItems(mergedSellItemIds)
   }
 
   await tx.audit.append({
@@ -1171,7 +1198,7 @@ export async function runCheckOutTx(
       remainingPlayers: totalRemaining,
       isFullCheckout,
       pricingGroupId: targetGroupId ?? null,
-      mergedDraftInvoices: draftInvoiceIds.length > 0 ? draftInvoiceIds : undefined,
+      mergedSellItemCount: mergedSellItemIds.length > 0 ? mergedSellItemIds.length : undefined,
       parkingFeeTotal: parkingFeeTotal || undefined,
       pricingAssignedAtCheckout: (pendingAssignments?.length ?? 0) > 0,
       assignedPricingRuleIds: pendingAssignments?.map(a => a.pricingRuleId),

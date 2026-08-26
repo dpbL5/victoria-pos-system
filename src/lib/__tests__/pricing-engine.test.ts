@@ -129,7 +129,7 @@ describe('calculateSessionPriceFromLoaded', () => {
     }
   }
 
-  function makeSession(overrides: Partial<SessionWithDetails> = {}): SessionWithDetails {
+  function makeSession(overrides: Record<string, unknown> = {}): SessionWithDetails {
     return {
       id: 'session-1',
       customerId: null,

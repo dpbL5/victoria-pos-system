@@ -131,6 +131,18 @@ export type SessionPreviewRow = Prisma.SessionGetPayload<{
   }
 }>
 
+/** Dòng bán kèm tạm trên phiên — chưa phải hóa đơn; checkout gộp vào invoice INV */
+export type SessionSellItemRecord = {
+  id: string
+  sessionId: string
+  productId: string
+  quantity: number
+  unitPrice: number
+  unitCost: number | null
+  notes: string | null
+  createdAt: Date
+}
+
 export interface SessionRepository {
   /** Session + customer + membership + pricingGroups (orderBy createdAt asc) — cho checkout */
   findByIdForCheckout(id: string): Promise<SessionWithDetails | null>
@@ -142,8 +154,8 @@ export interface SessionRepository {
   findMany(input: SessionListFilter): Promise<{ rows: SessionListRow[]; total: number }>
   /** Session + pricingGroups — cho checkout-preview */
   findByIdForPreview(id: string): Promise<SessionPreviewRow | null>
-  /** Tổng grandTotal của DRAFT invoices theo từng session — enrich pendingSellTotal */
-  findDraftSellTotals(sessionIds: string[]): Promise<Record<string, number>>
+  /** Tổng grandTotal của các dòng bán kèm chờ thu theo từng session — enrich pendingSellTotal */
+  findSellItemTotals(sessionIds: string[]): Promise<Record<string, number>>
   /** Đếm session tạo trong khoảng thời gian (đặt tên khách vãng lai `Khách #NNN`) */
   countCreatedBetween(from: Date, to: Date): Promise<number>
   /** Tạo session kèm customer/membership/shift refs */
@@ -173,6 +185,21 @@ export interface SessionRepository {
   movePlayersToGroup(playerIds: string[], groupId: string): Promise<void>
   /** Đánh dấu các player đã được tính tiền (checkout từng phần) */
   markPlayersCheckedOut(playerIds: string[], checkedOutAt: Date): Promise<void>
+  /** Các dòng bán kèm chờ thu của phiên — cho checkout/preview */
+  findSellItems(sessionId: string): Promise<SessionSellItemRecord[]>
+  /** Thêm dòng bán kèm — upsert theo productId (cộng quantity nếu đã có) */
+  addSellItem(input: {
+    sessionId: string
+    productId: string
+    quantity: number
+    unitPrice: number
+    unitCost: number | null
+    notes?: string | null
+  }): Promise<void>
+  /** Xoá các dòng bán kèm (đã checkout/huỷ) */
+  removeSellItems(ids: string[]): Promise<void>
+  /** Xoá toàn bộ dòng bán kèm của phiên — phiên huỷ/hoàn tất */
+  clearSellItems(sessionId: string): Promise<void>
 }
 
 /** Pause giây đã tích lũy của 1 player tại thời điểm now (gồm cả đang tạm dừng) */
@@ -270,7 +297,7 @@ export interface ProductRepository {
   /** Ghi StockMovement SALE */
   recordSaleMovement(input: {
     productId: string
-    invoiceItemId: string
+    invoiceItemId: string | null
     shiftId: string
     staffId: string
     quantity: number

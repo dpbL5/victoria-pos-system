@@ -1,21 +1,24 @@
-import { LogIn, Package } from 'lucide-react'
+import { LogIn, Package, ShoppingCart } from 'lucide-react'
 
 export function QuickActions({
   shiftReady,
   onCheckIn,
   onSell,
+  onRetail,
 }: {
   shiftReady: boolean
   onCheckIn: () => void
   onSell: () => void
+  onRetail: () => void
 }) {
   const actions = [
     { label: 'Check-in', Icon: LogIn, onClick: onCheckIn, tone: 'emerald' },
     { label: 'Bán kèm', Icon: Package, onClick: onSell, tone: 'zinc' },
+    { label: 'Bán lẻ', Icon: ShoppingCart, onClick: onRetail, tone: 'zinc' },
   ] as const
 
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-3 gap-2">
       {actions.map(({ label, Icon, onClick, tone }) => (
         <button
           key={label}

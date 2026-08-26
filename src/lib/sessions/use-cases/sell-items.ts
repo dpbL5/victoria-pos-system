@@ -1,11 +1,10 @@
-// ── Use-case: sellItems — thêm sản phẩm/dịch vụ vào phiên (invoice DRAFT) ─────
+// ── Use-case: sellItems — thêm sản phẩm/dịch vụ bán kèm vào phiên (chưa tạo hóa đơn) ─────
 import { err, ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
 import { fail, runInTransaction } from '@/lib/infrastructure/db-helpers'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import { repositories } from '@/lib/infrastructure/repositories'
 import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
-import { generateInvoiceNo } from '@/lib/invoicing'
 import type { CheckoutLine } from './checkout-types'
 
 export interface SellLineInput {
@@ -21,8 +20,8 @@ export interface SellItemsInput {
 }
 
 export interface SellItemsResult {
-  invoiceId: string
-  invoiceNo: string
+  sessionId: string
+  itemCount: number
   grandTotal: number
 }
 
@@ -63,8 +62,8 @@ export async function sellItems(
       type: product.type,
       description: product.name,
       quantity,
-      unitPrice: product.price,
-      subtotal: quantity * product.price,
+      unitPrice: Number(product.price),
+      subtotal: quantity * Number(product.price),
     }
   })
 
@@ -75,44 +74,23 @@ export async function sellItems(
     const openShift = await tx.shift.findOpenForStaff(staffId)
     if (!openShift) fail('SHIFT_REQUIRED')
 
-    const shiftId = session.shiftId ?? openShift.id
-
-    // Tạo invoice DRAFT — chưa thanh toán, chưa trừ kho.
-    // Khi checkout (thu tiền) mới tạo invoice PAID, trừ kho và thu tiền.
-    const invoice = await tx.billing.createDraftInvoice({
-      invoiceNo: generateInvoiceNo('SEL'),
-      // Khách vãng lai không có Customer → customerId null (tên hiển thị lấy từ session)
-      customerId: session.customerId,
-      sessionId,
-      shiftId,
-      staffId,
-      subtotal: grandTotal,
-      discountTotal: 0,
-      grandTotal,
-      notes,
-    })
-
+    // ── Ghi dòng bán kèm tạm (chưa phải hóa đơn) + trừ kho ngay ──
     for (const line of lines) {
       const latestProduct = await tx.product.findByIdForSale(line.productId)
       if (!latestProduct || !latestProduct.isActive) {
         fail('PRODUCT_UNAVAILABLE')
       }
 
-      const invoiceItem = await tx.billing.createInvoiceItem({
-        invoiceId: invoice.id,
+      await tx.session.addSellItem({
+        sessionId,
         productId: latestProduct.id,
-        type: latestProduct.type,
-        description: latestProduct.name,
         quantity: line.quantity,
-        unitPrice: line.unitPrice,
-        // Snapshot giá vốn (weighted average cost) tại thời điểm bán — để truy vết lợi nhuận
-        unitCost: latestProduct.costPrice,
-        subtotal: line.subtotal,
-        discountAmount: 0,
-        total: line.subtotal,
+        unitPrice: Number(latestProduct.price),
+        // Snapshot giá vốn (weighted average cost) tại thời điểm bán kèm
+        unitCost: latestProduct.costPrice !== null ? Number(latestProduct.costPrice) : null,
+        notes: notes ?? null,
       })
 
-      // ── Trừ kho ngay khi thêm vào phiên ──
       if (latestProduct.type === 'PRODUCT') {
         const stockUpdate = await tx.product.decrementStockIfAvailable(latestProduct.id, line.quantity)
         if (stockUpdate.count === 0) {
@@ -121,11 +99,11 @@ export async function sellItems(
 
         await tx.product.recordSaleMovement({
           productId: latestProduct.id,
-          invoiceItemId: invoiceItem.id,
-          shiftId,
+          invoiceItemId: null,
+          shiftId: openShift.id,
           staffId,
           quantity: line.quantity,
-          unitCost: latestProduct.costPrice,
+          unitCost: latestProduct.costPrice !== null ? Number(latestProduct.costPrice) : null,
           reason: `Bán kèm phiên ${sessionId}`,
         })
       }
@@ -134,26 +112,99 @@ export async function sellItems(
     await tx.audit.append({
       userId: staffId,
       action: 'SESSION_SELL',
-      entityType: 'Invoice',
-      entityId: invoice.id,
+      entityType: 'Session',
+      entityId: sessionId,
       details: {
-        sessionId,
-        shiftId,
+        shiftId: openShift.id,
         grandTotal,
         itemCount: lines.length,
-        note: 'Thêm vào phiên (chưa thanh toán)',
+        note: 'Thêm dòng bán kèm vào phiên (chưa thanh toán)',
       },
     })
 
-    return { invoice }
+    return { itemCount: lines.length }
   })
 
   if (!result.ok) return result
   return ok({
-    invoiceId: result.value.invoice.id,
-    invoiceNo: result.value.invoice.invoiceNo,
+    sessionId,
+    itemCount: result.value.itemCount,
     grandTotal,
   })
+}
+
+export interface RemoveSellItemsInput {
+  sessionId: string
+  staffId: string
+  itemIds: string[]
+}
+
+export interface RemoveSellItemsResult {
+  removedCount: number
+}
+
+/**
+ * Xoá các dòng bán kèm chưa checkout khỏi phiên và hoàn kho tương ứng.
+ * Chỉ được xoá khi phiên còn ACTIVE (hàng chờ thu chưa được tính tiền).
+ */
+export async function removeSellItems(
+  input: RemoveSellItemsInput,
+  deps: Repositories = repositories
+): Promise<Result<RemoveSellItemsResult>> {
+  const { sessionId, staffId, itemIds } = input
+  if (itemIds.length === 0) return err('NO_ITEMS')
+
+  const session = await deps.session.findByIdWithCustomer(sessionId)
+  if (!session) return err('SESSION_NOT_FOUND')
+  if (session.status !== 'ACTIVE') {
+    return err(session.status === 'COMPLETED' ? 'SESSION_COMPLETED' : 'SESSION_CANCELLED')
+  }
+
+  const result = await runInTransaction(async (tx) => {
+    const openShift = await tx.shift.findOpenForStaff(staffId)
+    if (!openShift) fail('SHIFT_REQUIRED')
+
+    // Chỉ xoá các dòng thuộc đúng phiên này
+    const rows = await tx.session.findSellItems(sessionId)
+    const toRemove = rows.filter((r) => itemIds.includes(r.id))
+    if (toRemove.length === 0) fail('SELL_ITEM_NOT_FOUND')
+
+    // Hoàn kho các dòng là sản phẩm (PRODUCT) — SERVICE không trừ kho
+    const productIds = Array.from(new Set(toRemove.map((r) => r.productId)))
+    const products = productIds.length > 0 ? await tx.product.findManyByIds(productIds) : []
+    const productTypeById = new Map(products.map((p) => [p.id, p.type]))
+    for (const row of toRemove) {
+      if (productTypeById.get(row.productId) !== 'PRODUCT') continue
+      await tx.billing.reverseStock({
+        invoiceItemId: null,
+        productId: row.productId,
+        shiftId: openShift.id,
+        staffId,
+        quantity: row.quantity,
+        unitCost: row.unitCost,
+        reason: `Huỷ bán kèm phiên ${sessionId}`,
+      })
+    }
+
+    await tx.session.removeSellItems(toRemove.map((r) => r.id))
+
+    await tx.audit.append({
+      userId: staffId,
+      action: 'SESSION_SELL_REMOVE',
+      entityType: 'Session',
+      entityId: sessionId,
+      details: {
+        shiftId: openShift.id,
+        removedCount: toRemove.length,
+        removedSellItemIds: toRemove.map((r) => r.id),
+      },
+    })
+
+    return { removedCount: toRemove.length }
+  })
+
+  if (!result.ok) return result
+  return ok(result.value)
 }
 
 export function mapSellItemsError(error: DomainError): HttpErrorInfo {
@@ -174,6 +225,25 @@ export function mapSellItemsError(error: DomainError): HttpErrorInfo {
       return { code: 'INSUFFICIENT_STOCK', message: `${error.detail ?? 'Sản phẩm'} không đủ tồn kho`, status: 400 }
     case 'SHIFT_REQUIRED':
       return { code: 'SHIFT_REQUIRED', message: 'Cần mở hoặc tham gia ca trước khi thêm vào phiên', status: 409 }
+    default:
+      return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
+  }
+}
+
+export function mapRemoveSellItemsError(error: DomainError): HttpErrorInfo {
+  switch (error.code) {
+    case 'SESSION_NOT_FOUND':
+      return { code: 'SESSION_NOT_FOUND', message: 'Không tìm thấy phiên', status: 404 }
+    case 'SESSION_COMPLETED':
+      return { code: 'SESSION_COMPLETED', message: 'Phiên đã kết thúc rồi', status: 400 }
+    case 'SESSION_CANCELLED':
+      return { code: 'SESSION_CANCELLED', message: 'Phiên đã bị hủy rồi', status: 400 }
+    case 'NO_ITEMS':
+      return { code: 'NO_ITEMS', message: 'Chưa chọn dòng bán kèm để xoá', status: 400 }
+    case 'SELL_ITEM_NOT_FOUND':
+      return { code: 'SELL_ITEM_NOT_FOUND', message: 'Dòng bán kèm không tồn tại trong phiên', status: 404 }
+    case 'SHIFT_REQUIRED':
+      return { code: 'SHIFT_REQUIRED', message: 'Cần mở hoặc tham gia ca trước khi xoá dòng bán kèm', status: 409 }
     default:
       return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
   }

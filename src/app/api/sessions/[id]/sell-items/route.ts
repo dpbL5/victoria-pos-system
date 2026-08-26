@@ -1,15 +1,22 @@
 import { NextRequest } from 'next/server'
 import { requireMutationAuth } from '@/lib/shared/auth'
-import { checkoutSessionSchema } from '@/lib/sessions'
-import { checkOut, mapCheckoutError } from '@/lib/sessions'
+import { removeSellItems, mapRemoveSellItemsError } from '@/lib/sessions'
 import {
   apiError,
   resultToResponse,
   ERR_UNAUTHORIZED,
   ERR_CSRF,
 } from '@/lib/infrastructure/api-helpers'
+import { z } from 'zod'
 
-export async function POST(
+const removeSchema = z.object({
+  itemIds: z
+    .array(z.string().uuid('ID dòng bán kèm không hợp lệ'))
+    .min(1, 'Cần chọn ít nhất một dòng bán kèm'),
+})
+
+/** Xoá các dòng bán kèm chưa checkout khỏi phiên (hoàn kho tương ứng) */
+export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -18,34 +25,24 @@ export async function POST(
     const { id } = await params
 
     const body = await request.json()
-    const parsed = checkoutSessionSchema.safeParse(body)
+    const parsed = removeSchema.safeParse(body)
 
     if (!parsed.success) {
       return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     }
 
-    const result = await checkOut({
+    const result = await removeSellItems({
       sessionId: id,
       staffId: auth.userId,
-      paymentMethod: parsed.data.paymentMethod,
-      promotionRuleId: parsed.data.promotionRuleId ?? undefined,
-      endTime: parsed.data.endTime ? new Date(parsed.data.endTime) : undefined,
-      items: parsed.data.items,
-      notes: parsed.data.notes,
-      pricingGroupId: parsed.data.pricingGroupId,
-      playerCount: parsed.data.playerCount,
-      parkingVehicleCount: parsed.data.parkingVehicleCount ?? 0,
-      pricingRuleId: parsed.data.pricingRuleId,
-      groups: parsed.data.groups,
-      playerIds: parsed.data.playerIds,
+      itemIds: parsed.data.itemIds,
     })
 
-    return resultToResponse(result, mapCheckoutError)
+    return resultToResponse(result, mapRemoveSellItemsError)
   } catch (error) {
     const message = (error as Error).message
     if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
     if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
-    console.error('POST /api/sessions/[id]/checkout error:', error)
+    console.error('DELETE /api/sessions/[id]/sell-items error:', error)
     return apiError({ code: 'SERVER_ERROR', message: 'Lỗi máy chủ', status: 500 })
   }
 }
