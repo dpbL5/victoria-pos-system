@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { createToolSchema } from '@/lib/tools'
 
@@ -22,7 +23,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireMutationAuth(request)
-    if (auth.role !== 'ADMIN') {
+    if (!isAdminOnly(auth.role)) {
       return NextResponse.json({ success: false, error: 'Chỉ quản trị viên được truy cập' }, { status: 403 })
     }
 

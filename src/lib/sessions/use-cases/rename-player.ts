@@ -1,3 +1,4 @@
+import { isManagerOrAdmin } from '@/lib/shared/roles'
 // ── Use-case: renamePlayer — đổi tên 1 người chơi trong phiên ACTIVE ─────
 import { err, ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
@@ -10,7 +11,7 @@ export interface RenamePlayerInput {
   sessionId: string
   playerId: string
   staffId: string
-  role: 'ADMIN' | 'STAFF'
+  role: 'ADMIN' | 'MANAGER' | 'STAFF'
   /** Tên mới — đã trim; rỗng/undefined → xoá tên (UI fallback "Người N") */
   name?: string | null
 }
@@ -38,7 +39,7 @@ export async function renamePlayer(
   if (session.status !== 'ACTIVE') return err('SESSION_NOT_ACTIVE')
 
   // IDOR: STAFF chỉ đổi tên được player trong phiên mình tạo hoặc trong ca mình tham gia
-  if (role !== 'ADMIN') {
+  if (!isManagerOrAdmin(role)) {
     const isOwner = session.staffId === staffId
     const isParticipant = session.shiftId
       ? Boolean(await deps.shift.findByIdAccess(session.shiftId))

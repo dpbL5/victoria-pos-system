@@ -1,7 +1,7 @@
 // ── Shared TypeScript types ─────────────────────────────
 
 // Re-export Prisma enums as convenience types
-export type UserRole = "ADMIN" | "STAFF"
+export type UserRole = "ADMIN" | "MANAGER" | "STAFF"
 export type CustomerType = "WALK_IN" | "MEMBER"
 export type SessionStatus = "ACTIVE" | "COMPLETED" | "CANCELLED"
 export type DayType = "WEEKDAY" | "WEEKEND"

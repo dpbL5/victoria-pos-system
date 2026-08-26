@@ -1,5 +1,5 @@
 // ── Use-cases: Sản phẩm & tồn kho (create/apply stock) ─────
-import { ok } from '@/lib/shared/result'
+import { err, ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
 import { runInTransaction, fail } from '@/lib/infrastructure/db-helpers'
 import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
@@ -144,6 +144,89 @@ export function mapApplyStockMovementError(error: DomainError): HttpErrorInfo {
       return { code: 'SERVICE_HAS_NO_STOCK', message: 'Dịch vụ không quản lý tồn kho', status: 400 }
     case 'NEGATIVE_STOCK':
       return { code: 'NEGATIVE_STOCK', message: 'Tồn kho không được âm', status: 400 }
+    default:
+      return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
+  }
+}
+
+// ── Delete product (deactivate nếu đã có giao dịch, hard delete nếu chưa) ──
+export interface DeleteProductInput {
+  staffId: string
+  productId: string
+}
+
+export interface DeleteProductResult {
+  deleted: boolean
+  deactivated: ProductAdminDetail | null
+}
+
+/**
+ * Xoá hàng trong Kho:
+ * - Nếu hàng chưa có giao dịch liên quan (stock movement, invoice item, sell item) → hard delete.
+ * - Nếu đã có giao dịch → đánh dấu ngưng bán (isActive=false) để giữ lịch sử.
+ */
+export async function deleteProduct(
+  input: DeleteProductInput,
+  deps: Repositories = repositories
+): Promise<Result<DeleteProductResult>> {
+  const existing = await deps.product.findByIdAdmin(input.productId)
+  if (!existing) return err('PRODUCT_NOT_FOUND')
+
+  const usageCount = await deps.product.countUsage(input.productId)
+
+  if (usageCount > 0) {
+    // Đã có giao dịch → ngưng bán, không xoá
+    const result = await runInTransaction(async (tx) => {
+      await tx.product.deactivate(input.productId)
+
+      await tx.audit.append({
+        userId: input.staffId,
+        action: 'PRODUCT_DEACTIVATE',
+        entityType: 'Product',
+        entityId: input.productId,
+        details: {
+          name: existing.name,
+          type: existing.type,
+          sku: existing.sku,
+          reason: 'Đã có giao dịch liên quan (stock movement, invoice item, sell item)',
+          usageCount,
+        },
+      })
+
+      return null
+    })
+
+    if (!result.ok) return result
+    return ok({ deleted: false, deactivated: existing })
+  }
+
+  // Chưa có giao dịch → xoá cứng
+  const result = await runInTransaction(async (tx) => {
+    await tx.product.delete(input.productId)
+
+    await tx.audit.append({
+      userId: input.staffId,
+      action: 'PRODUCT_DELETE',
+      entityType: 'Product',
+      entityId: input.productId,
+      details: {
+        name: existing.name,
+        type: existing.type,
+        sku: existing.sku,
+      },
+    })
+
+    return null
+  })
+
+  if (!result.ok) return result
+  return ok({ deleted: true, deactivated: null })
+}
+
+export function mapDeleteProductError(error: DomainError): HttpErrorInfo {
+  switch (error.code) {
+    case 'PRODUCT_NOT_FOUND':
+      return { code: 'PRODUCT_NOT_FOUND', message: 'Không tìm thấy hàng hóa', status: 404 }
     default:
       return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
   }

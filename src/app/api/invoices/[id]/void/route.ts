@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireMutationAuth } from '@/lib/shared/auth'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { voidInvoice, mapVoidInvoiceError } from '@/lib/invoicing'
 import { apiError, ERR_UNAUTHORIZED, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
 
@@ -14,7 +15,7 @@ export async function POST(
 ) {
   try {
     const auth = await requireMutationAuth(request)
-    if (auth.role !== 'ADMIN') {
+    if (!isAdminOnly(auth.role)) {
       return apiError({ code: 'FORBIDDEN', message: 'Chỉ quản trị viên được huỷ hoá đơn', status: 403 })
     }
 

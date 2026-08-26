@@ -337,6 +337,20 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
       })
     },
 
+    async pausePlayersForSession(sessionId, pausedAt) {
+      await store.sessionPlayer.updateMany({
+        where: { sessionId, checkedOutAt: null },
+        data: { pausedAt },
+      })
+    },
+
+    async resumePlayersForSession(sessionId, pausedSeconds) {
+      await store.sessionPlayer.updateMany({
+        where: { sessionId, checkedOutAt: null },
+        data: { pausedAt: null, totalPausedSeconds: { increment: pausedSeconds } },
+      })
+    },
+
     async renamePlayer(playerId, name) {
       await store.sessionPlayer.update({
         where: { id: playerId },

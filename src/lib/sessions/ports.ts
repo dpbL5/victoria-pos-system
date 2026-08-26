@@ -177,6 +177,10 @@ export interface SessionRepository {
   pausePlayer(playerId: string, pausedAt: Date): Promise<void>
   /** Resume 1 người chơi: clear pausedAt + increment totalPausedSeconds */
   resumePlayer(playerId: string, pausedSeconds: number): Promise<void>
+  /** Pause toàn phiên: set pausedAt cho tất cả player chưa checkout (đồng bộ session → player) */
+  pausePlayersForSession(sessionId: string, pausedAt: Date): Promise<void>
+  /** Resume toàn phiên: clear pausedAt + increment totalPausedSeconds cho tất cả player chưa checkout */
+  resumePlayersForSession(sessionId: string, pausedSeconds: number): Promise<void>
   /** Đổi tên 1 người chơi — chỉ update name, giữ nguyên id (định danh timer/pause/pricing) */
   renamePlayer(playerId: string, name: string | null): Promise<void>
   /** Tạo N SessionPlayer (tên trống, pause 0) cho 1 group — gọi khi check-in */
@@ -220,6 +224,18 @@ export function groupPausedSeconds(
   now: Date
 ): number {
   return group.players.reduce((sum, player) => sum + playerPausedSeconds(player, now), 0)
+}
+
+/** Pause giây session-level tại thời điểm now (fallback cho phiên cũ pause toàn phiên) */
+export function sessionPauseSeconds(
+  session: { pausedAt: Date | null; totalPausedSeconds: number },
+  now: Date
+): number {
+  let seconds = session.totalPausedSeconds
+  if (session.pausedAt) {
+    seconds += Math.round(Math.max(0, (now.getTime() - new Date(session.pausedAt).getTime()) / 1000))
+  }
+  return seconds
 }
 
 export interface CreateSessionData {
@@ -329,5 +345,11 @@ export interface ProductRepository {
     unitCost: number | null
     reason: string | null
     shiftId: string | null
-  }): Promise<{ movementId: string; before: number; after: number; shiftId: string | null; type: string; quantity: number }>
+   }): Promise<{ movementId: string; before: number; after: number; shiftId: string | null; type: string; quantity: number }>
+  /** Đánh dấu ngưng bán: set isActive=false — dùng khi hàng đã có giao dịch liên quan */
+  deactivate(id: string): Promise<void>
+  /** Xoá cứng product — chỉ dùng khi chưa có giao dịch liên quan */
+  delete(id: string): Promise<void>
+  /** Đếm số bản ghi liên quan (stock movements + invoice items + sell items) */
+  countUsage(id: string): Promise<number>
 }

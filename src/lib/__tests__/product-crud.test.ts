@@ -5,7 +5,7 @@ const fakeStore = vi.hoisted(() => ({
   sessionPricingGroup: { create: vi.fn(), update: vi.fn(), findMany: vi.fn() },
   shift: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
   shiftParticipant: { create: vi.fn() },
-  product: { findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn(), create: vi.fn() },
+  product: { findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn(), create: vi.fn(), delete: vi.fn() },
   stockMovement: { create: vi.fn() },
   invoice: { create: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
   invoiceItem: { create: vi.fn(), findMany: vi.fn() },
@@ -28,7 +28,7 @@ vi.mock('@/lib/infrastructure/prisma', () => ({
   prisma: { $transaction: (work: (store: unknown) => Promise<unknown>) => work(fakeStore) },
 }))
 
-import { createProduct, applyStockMovement } from '@/lib/sessions/use-cases/product-crud'
+import { createProduct, applyStockMovement, deleteProduct, mapDeleteProductError } from '@/lib/sessions/use-cases/product-crud'
 import { createRepositories } from '@/lib/infrastructure/repositories'
 
 const repos = createRepositories(fakeStore as never)
@@ -162,5 +162,67 @@ describe('applyStockMovement', () => {
 
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('PRODUCT_NOT_FOUND')
+  })
+})
+
+describe('deleteProduct', () => {
+  beforeEach(resetMocks)
+
+  it('xoá cứng khi chưa có giao dịch', async () => {
+    fakeStore.product.findUnique
+      .mockResolvedValueOnce({
+        id: 'prod-1', name: 'Nước suối', sku: 'NUOC-1', type: 'PRODUCT', price: 10000,
+        costPrice: 5000, stockQuantity: 0, minStockLevel: 5, isActive: true,
+        createdAt: new Date(), updatedAt: new Date(),
+      })
+      .mockResolvedValueOnce({
+        _count: { stockMovements: 0, invoiceItems: 0, sellItems: 0 },
+      })
+
+    const result = await deleteProduct({ staffId: 'staff-1', productId: 'prod-1' }, repos)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.deleted).toBe(true)
+    expect(result.value.deactivated).toBeNull()
+    expect(fakeStore.product.delete).toHaveBeenCalledWith({ where: { id: 'prod-1' } })
+    expect(fakeStore.activityLog.create).toHaveBeenCalled()
+  })
+
+  it('deactivate khi đã có giao dịch (ngưng bán, giữ lịch sử)', async () => {
+    fakeStore.product.findUnique
+      .mockResolvedValueOnce({
+        id: 'prod-1', name: 'Nước suối', sku: 'NUOC-1', type: 'PRODUCT', price: 10000,
+        costPrice: 5000, stockQuantity: 20, minStockLevel: 5, isActive: true,
+        createdAt: new Date(), updatedAt: new Date(),
+      })
+      .mockResolvedValueOnce({
+        _count: { stockMovements: 2, invoiceItems: 1, sellItems: 0 },
+      })
+
+    const result = await deleteProduct({ staffId: 'staff-1', productId: 'prod-1' }, repos)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.deleted).toBe(false)
+    expect(result.value.deactivated).not.toBeNull()
+    expect(fakeStore.product.update).toHaveBeenCalledWith({ where: { id: 'prod-1' }, data: { isActive: false } })
+    expect(fakeStore.product.delete).not.toHaveBeenCalled()
+    const auditCall = fakeStore.activityLog.create.mock.calls[0][0]
+    expect(auditCall.data.action).toBe('PRODUCT_DEACTIVATE')
+  })
+
+  it('trả PRODUCT_NOT_FOUND khi hàng không tồn tại', async () => {
+    fakeStore.product.findUnique.mockResolvedValue(null)
+    const result = await deleteProduct({ staffId: 'staff-1', productId: 'missing' }, repos)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('PRODUCT_NOT_FOUND')
+    expect(fakeStore.product.delete).not.toHaveBeenCalled()
+    expect(fakeStore.product.update).not.toHaveBeenCalled()
+  })
+
+  it('mapDeleteProductError mapping đúng status', () => {
+    expect(mapDeleteProductError({ code: 'PRODUCT_NOT_FOUND' } as never)).toMatchObject({ status: 404 })
   })
 })

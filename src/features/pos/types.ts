@@ -3,7 +3,7 @@ import type { PaymentMethod, PricingRuleSnapshot, PromotionDiscountType, Session
 export type { PaymentMethod } from '@/types'
 export type CustomerType = 'WALK_IN' | 'MEMBER'
 export type ProductType = 'PRODUCT' | 'SERVICE'
-export type UserRole = 'ADMIN' | 'STAFF'
+export type UserRole = 'ADMIN' | 'MANAGER' | 'STAFF'
 export type ShiftParticipantRole = 'LEAD' | 'STAFF'
 
 export interface ApiResponse<T = unknown> {

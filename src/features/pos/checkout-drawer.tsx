@@ -463,6 +463,47 @@ export function CheckoutDrawer({
   const parkingFeeUnitPrice = playQuote?.parkingFeeUnitPrice ?? 0;
   const parkingFeeTotal = parkingVehicleCount * parkingFeeUnitPrice;
 
+  // Thời gian đã tạm dừng hiển thị khi checkout:
+  // - Phiên có player rows → pause nằm ở từng người chơi; chỉ tính các player
+  //   được thu lần này (đúng lựa chọn picker), chốt theo frozenAt.
+  // - Phiên legacy (không player rows) → pause session-level.
+  const displayPausedSeconds = useMemo(() => {
+    if (!session) return 0;
+    const groupHasPlayers = (session.pricingGroups ?? []).some(
+      (g) => (g.players?.length ?? 0) > 0,
+    );
+    const pausedAtRef = frozenAt ? new Date(frozenAt).getTime() : undefined;
+    if (groupHasPlayers && playQuote?.pricingGroups) {
+      const billingIds = pickerActive
+        ? new Set(pickerGroups.flatMap((g) => g.selectedIds))
+        : null;
+      return playQuote.pricingGroups.reduce(
+        (sum, g) =>
+          sum +
+          (g.players ?? [])
+            .filter(
+              (p) => !p.checkedOutAt && (!billingIds || billingIds.has(p.id)),
+            )
+            .reduce(
+              (s, p) =>
+                s +
+                pausedSecondsUntil(
+                  p.pausedAt,
+                  p.totalPausedSeconds ?? 0,
+                  pausedAtRef,
+                ),
+              0,
+            ),
+        0,
+      );
+    }
+    return pausedSecondsUntil(
+      session.pausedAt,
+      session.totalPausedSeconds ?? 0,
+      pausedAtRef,
+    );
+  }, [session, playQuote, frozenAt, pickerActive, pickerGroups]);
+
   const cartLines = products
     .map((product) => ({
       product,
@@ -607,7 +648,7 @@ export function CheckoutDrawer({
       }
       description={
         session
-          ? `${isMember ? "Hội viên" : "Vãng lai"} · ${calcElapsedHMS(session.startTime, frozenAt ?? undefined, session.totalPausedSeconds ?? 0)}${isGroupSession ? ` · ${sessionPlayerCount} người` : ""}`
+          ? `${isMember ? "Hội viên" : "Vãng lai"} · ${calcElapsedHMS(session.startTime, frozenAt ?? undefined, displayPausedSeconds)}${isGroupSession ? ` · ${sessionPlayerCount} người` : ""}`
           : undefined
       }
       size="lg"
@@ -653,25 +694,10 @@ export function CheckoutDrawer({
                   {/* ── Thời gian chơi + đã tạm dừng (mọi phiên) ── */}
                   {session &&
                     (() => {
-                      const groupHasPlayers =
-                        (session.pricingGroups ?? []).some(
-                          (g) => (g.players?.length ?? 0) > 0,
-                        );
-                      let pausedSeconds = playQuote?.pausedSeconds ?? 0;
-                      if (pausedSeconds === 0 && !groupHasPlayers) {
-                        const pausedAtRef = frozenAt
-                          ? new Date(frozenAt).getTime()
-                          : undefined;
-                        pausedSeconds = pausedSecondsUntil(
-                          session.pausedAt,
-                          session.totalPausedSeconds ?? 0,
-                          pausedAtRef,
-                        );
-                      }
                       const playTime = calcElapsedHMS(
                         session.startTime,
                         frozenAt ?? undefined,
-                        pausedSeconds,
+                        displayPausedSeconds,
                       );
                       return (
                         <div className="mt-2 space-y-1 border-t border-dashed border-zinc-200 pt-2 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
@@ -684,7 +710,7 @@ export function CheckoutDrawer({
                           <div className="flex justify-between gap-3">
                             <span className="truncate">Đã tạm dừng</span>
                             <span className="shrink-0 tabular-nums">
-                              {formatPausedHMS(pausedSeconds)}
+                              {formatPausedHMS(displayPausedSeconds)}
                             </span>
                           </div>
                         </div>

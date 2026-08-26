@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireMutationAuth } from '@/lib/shared/auth'
+import { isManagerOrAdmin } from '@/lib/shared/roles'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { applyStockMovement, mapApplyStockMovementError } from '@/lib/sessions'
 import { repositories } from '@/lib/infrastructure/repositories'
@@ -11,7 +12,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireMutationAuth(request)
+    if (!isManagerOrAdmin(auth.role)) {
+      return apiError({ code: 'FORBIDDEN', message: 'Không có quyền', status: 403 })
+    }
     await validateCSRF(request)
     const { id } = await params
 

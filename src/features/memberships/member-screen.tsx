@@ -19,6 +19,7 @@ import { useApi } from '@/hooks/use-api'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
+import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { formatDay, money, paymentMethodLabel } from '@/features/pos/format'
@@ -91,7 +92,8 @@ export function MemberScreen() {
     expired: members.filter((member) => member.membershipStatus === 'EXPIRED').length,
     none: members.filter((member) => member.membershipStatus === 'NONE').length,
   }), [members])
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = isManagerOrAdmin(user?.role)
+  const canManagePlans = isAdminOnly(user?.role)
 
   const openMember = useCallback(async (member: MemberCustomer) => {
     setSelectedMember(member)
@@ -281,7 +283,7 @@ export function MemberScreen() {
             <Button variant="secondary" size="sm" onClick={() => setSearchQuery(searchInput)}>
               Tìm
             </Button>
-            {isAdmin && (
+            {canManagePlans && (
               <Link
                 href="/membership-plans"
                 className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"

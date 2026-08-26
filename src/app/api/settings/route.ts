@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { SETTING_KEYS, updateSetting, mapUpdateSettingError } from '@/lib/settings'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { z } from 'zod'
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const auth = await requireMutationAuth(request)
-    if (auth.role !== 'ADMIN') return apiError(ERR_FORBIDDEN)
+    if (!isAdminOnly(auth.role)) return apiError(ERR_FORBIDDEN)
 
     const body = await request.json()
     const parsed = updateSchema.safeParse(body)

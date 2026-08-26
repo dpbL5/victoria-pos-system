@@ -83,7 +83,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     session: {
       findByIdForCheckout: vi.fn(), findByIdWithCustomer: vi.fn(), findActiveByCustomer: vi.fn(), findMany: vi.fn(), findByIdForPreview: vi.fn(), findSellItemTotals: vi.fn(async () => ({})), findSellItems: vi.fn(async () => []), addSellItem: vi.fn(async () => {}), removeSellItems: vi.fn(async () => {}), clearSellItems: vi.fn(async () => {}),
       countCreatedBetween: vi.fn(), createWithRefs: vi.fn(), createPricingGroup: vi.fn(), createPlayersForGroup: vi.fn(), updatePricingGroup: vi.fn(), update: vi.fn(),
-      decrementGroupRemaining: vi.fn(), sumRemainingPlayers: vi.fn(), findByIdWithPlayers: vi.fn(), findPlayersForPause: vi.fn(), pausePlayer: vi.fn(), resumePlayer: vi.fn(),
+      decrementGroupRemaining: vi.fn(), sumRemainingPlayers: vi.fn(), findByIdWithPlayers: vi.fn(), findPlayersForPause: vi.fn(), pausePlayer: vi.fn(), resumePlayer: vi.fn(), pausePlayersForSession: vi.fn(), resumePlayersForSession: vi.fn(),
       renamePlayer: vi.fn(), movePlayersToGroup: vi.fn(), markPlayersCheckedOut: vi.fn(),
     },
     product: {
@@ -94,6 +94,9 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       decrementStockIfAvailable: vi.fn(async () => ({ count: 1 })),
       recordSaleMovement: vi.fn(async () => {}),
       findManyForAdmin: vi.fn(), findByIdAdmin: vi.fn(), createWithInitialStock: vi.fn(), applyStockMovement: vi.fn(),
+      deactivate: vi.fn(),
+      delete: vi.fn(),
+      countUsage: vi.fn(),
     },
     cashflow: { create: vi.fn(), findById: vi.fn(), update: vi.fn(), delete: vi.fn(), list: vi.fn(), summarize: vi.fn() },
     user: { findByUsername: vi.fn(), findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), findActiveOpenShiftParticipants: vi.fn() },

@@ -27,6 +27,7 @@ import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { formatClock, formatDay, money, paymentMethodLabel, toNumber } from '@/features/pos/format'
@@ -160,7 +161,7 @@ export function ShiftsScreen() {
 
       const [shiftData, userData] = await Promise.all([
         fetch(`/api/shifts?${params.toString()}`).then((r) => r.json()) as Promise<DayGroupsResponse>,
-        me.data.role === 'ADMIN'
+        isAdminOnly(me.data.role)
           ? apiJson<UserRow[]>('/api/users')
           : Promise.resolve({ success: true, data: [] as UserRow[], error: undefined }),
       ])
@@ -189,7 +190,7 @@ export function ShiftsScreen() {
     return registerRefresh(() => void loadData(pagination.page))
   }, [registerRefresh, loadData, pagination.page])
 
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = isManagerOrAdmin(user?.role)
 
   const allShifts = useMemo(() => dayGroups.flatMap((g) => g.shifts), [dayGroups])
 

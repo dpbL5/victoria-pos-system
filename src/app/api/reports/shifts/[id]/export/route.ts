@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireAuth } from '@/lib/shared/auth'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { getShiftTransactions } from '@/lib/shifts'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { prisma } from '@/lib/infrastructure/prisma'
@@ -21,7 +22,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin()
+    const auth = await requireAuth()
+    if (!isAdminOnly(auth.role)) {
+      return NextResponse.json({ success: false, error: 'Không có quyền' }, { status: 403 })
+    }
     const { id } = await params
 
     const shift = await repositories.shift.findByIdExport(id)

@@ -161,7 +161,7 @@ export async function getShiftTransactions(
   const payments = await db.payment.findMany({
     where: { shiftId },
     include: paymentInclude,
-    orderBy: { paidAt: 'asc' },
+    orderBy: { paidAt: 'desc' },
   })
 
   const mapTransaction = (p: PaymentRow): TransactionItem => ({
@@ -186,7 +186,7 @@ export async function getShiftTransactions(
 
   const transactions: TransactionItem[] = payments
     .map(mapTransaction)
-    .sort((a, b) => new Date(a.paidAt).getTime() - new Date(b.paidAt).getTime())
+    .sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime())
 
   // Loại trừ giao dịch từ hoá đơn đã huỷ khi tính tổng hợp
   const activeTransactions = transactions.filter(

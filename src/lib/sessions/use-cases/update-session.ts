@@ -1,3 +1,4 @@
+import { isAdminOnly } from '@/lib/shared/roles'
 // ── Use-case: updateSession — cập nhật phiên (pause/cancel...) ─────
 import { err, ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
@@ -10,7 +11,7 @@ import type { Prisma } from '@/generated/prisma/client'
 export interface UpdateSessionInput {
   sessionId: string
   staffId: string
-  role: 'ADMIN' | 'STAFF'
+  role: 'ADMIN' | 'MANAGER' | 'STAFF'
   data: Prisma.SessionUncheckedUpdateInput
   notes?: string | null
 }
@@ -28,8 +29,8 @@ export async function updateSession(
   const existing = await deps.session.findByIdWithCustomer(input.sessionId)
   if (!existing) return err('SESSION_NOT_FOUND')
 
-  // IDOR: STAFF chỉ sửa được phiên mình tạo hoặc trong ca mình tham gia
-  if (input.role !== 'ADMIN') {
+  // IDOR: STAFF/MANAGER chỉ sửa được phiên mình tạo hoặc trong ca mình tham gia
+  if (!isAdminOnly(input.role)) {
     const isOwner = existing.staffId === input.staffId
     const isParticipant = existing.shiftId
       ? Boolean(await deps.shift.findByIdAccess(existing.shiftId))

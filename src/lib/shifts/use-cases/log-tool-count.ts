@@ -1,3 +1,4 @@
+import { isManagerOrAdmin } from '@/lib/shared/roles'
 // ── Use-case: logToolCount — ghi lại số lượng dụng cụ trong ca ─────
 import { err, ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
@@ -12,7 +13,7 @@ export interface LogToolCountInput {
   staffId: string
   username: string
   fullName: string
-  role: 'ADMIN' | 'STAFF'
+  role: 'ADMIN' | 'MANAGER' | 'STAFF'
   toolCounts: ToolCountEntry[]
 }
 
@@ -43,7 +44,7 @@ export async function logToolCount(
   const isActiveParticipant = shift.participants.some(
     (participant) => participant.staffId === staffId
   )
-  if (role !== 'ADMIN' && shift.staffId !== staffId && !isActiveParticipant) {
+  if (!isManagerOrAdmin(role) && shift.staffId !== staffId && !isActiveParticipant) {
     return err('FORBIDDEN')
   }
 

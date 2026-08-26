@@ -7,7 +7,7 @@ export { updateSession, mapUpdateSessionError } from './use-cases/update-session
 export { pauseSession, resumeSession, mapPauseSessionError, mapResumeSessionError } from './use-cases/pause-session'
 export { pausePlayer, resumePlayer, mapPausePlayerError, mapResumePlayerError } from './use-cases/pause-session'
 export { renamePlayer, mapRenamePlayerError } from './use-cases/rename-player'
-export { createProduct, mapCreateProductError, applyStockMovement, mapApplyStockMovementError } from './use-cases/product-crud'
+export { createProduct, mapCreateProductError, applyStockMovement, mapApplyStockMovementError, deleteProduct, mapDeleteProductError } from './use-cases/product-crud'
 export {
   calculateSessionPrice,
   calculateSessionPriceFromLoaded,
@@ -59,6 +59,8 @@ export type {
   CreateProductResult,
   ApplyStockMovementInput,
   ApplyStockMovementResult,
+  DeleteProductInput,
+  DeleteProductResult,
 } from './use-cases/product-crud'
 export type {
   SessionRepository,
@@ -78,6 +80,6 @@ export type {
   ProductAdminRow,
   ProductAdminDetail,
 } from './ports'
-export { playerPausedSeconds, groupPausedSeconds } from './ports'
+export { playerPausedSeconds, groupPausedSeconds, sessionPauseSeconds } from './ports'
 export * from './session-validations'
 export * from './product-validations'

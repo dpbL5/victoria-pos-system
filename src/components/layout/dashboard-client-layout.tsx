@@ -62,7 +62,7 @@ export function DashboardClientLayout({ user, children }: { user: User; children
             </PageRefreshProvider>
           </div>
 
-          <BottomNav />
+          <BottomNav userRole={user.role} />
         </div>
       </ToastProvider>
     </ThemeProvider>

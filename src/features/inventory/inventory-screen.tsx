@@ -5,6 +5,7 @@ import {
   Package,
   PackagePlus,
   Search,
+  Trash2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
+import { isManagerOrAdmin } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
@@ -26,12 +28,13 @@ type InventoryFilter = 'ALL' | 'LOW_STOCK' | ProductType
 type StockMovementType = 'RESTOCK' | 'ADJUSTMENT'
 
 export function InventoryScreen() {
-  const { success: notifySuccess } = useToast()
+  const { success: notifySuccess, error: notifyError } = useToast()
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [filter, setFilter] = useState<InventoryFilter>('ALL')
   const [createOpen, setCreateOpen] = useState(false)
   const [movementProduct, setMovementProduct] = useState<Product | null>(null)
+  const [deleteProduct, setDeleteProduct] = useState<Product | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const { data: productData, isLoading: prodLoading, mutate } = useApi<Product[]>('/api/products?isActive=true', { dedupingInterval: 300_000 })
@@ -48,7 +51,7 @@ export function InventoryScreen() {
   const loading = prodLoading || userLoading
   const user = userData?.data ?? null
 
-  const canManageStock = user?.role === 'ADMIN'
+  const canManageStock = isManagerOrAdmin(user?.role)
   const lowStockProducts = useMemo(
     () => products.filter((product) => isLowStock(product)),
     [products]
@@ -83,8 +86,28 @@ export function InventoryScreen() {
     notifySuccess(message)
     setCreateOpen(false)
     setMovementProduct(null)
+    setDeleteProduct(null)
     await mutate()
   }
+
+  const handleDelete = useCallback(async () => {
+    if (!deleteProduct) return
+    setSubmitting(true)
+    try {
+      const data = await apiJson(`/api/products/${deleteProduct.id}`, { method: 'DELETE' })
+      if (!data.success) {
+        notifyError(data.error || 'Không xóa được hàng hóa')
+        return
+      }
+      notifySuccess(data.message || 'Đã xóa hàng hóa')
+      setDeleteProduct(null)
+      await mutate()
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [deleteProduct, mutate, notifyError, notifySuccess])
 
   const productColumns: Column<Product>[] = useMemo(() => [
     {
@@ -139,7 +162,10 @@ export function InventoryScreen() {
       cellClassName: 'px-4 py-3',
       render: (item) => (
         item.type === 'PRODUCT' && canManageStock ? (
-          <Button variant="secondary" size="sm" onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
+          <div className="flex gap-1">
+            <Button variant="secondary" size="sm" onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
+            <Button variant="danger" size="sm" icon={Trash2} onClick={() => setDeleteProduct(item)}>Xóa</Button>
+          </div>
         ) : null
       ),
     },
@@ -194,7 +220,10 @@ export function InventoryScreen() {
       label: '',
       render: (item) => (
         item.type === 'PRODUCT' && canManageStock ? (
-          <Button variant="secondary" size="sm" onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
+          <div className="flex gap-1">
+            <Button variant="secondary" size="sm" onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
+            <Button variant="danger" size="sm" icon={Trash2} onClick={() => setDeleteProduct(item)}>Xóa</Button>
+          </div>
         ) : null
       ),
     },
@@ -371,6 +400,13 @@ export function InventoryScreen() {
         setSubmitting={setSubmitting}
         onClose={() => setMovementProduct(null)}
         onDone={() => refreshAfterChange('Đã cập nhật tồn kho')}
+      />
+
+      <DeleteProductConfirmDialog
+        product={deleteProduct}
+        submitting={submitting}
+        onClose={() => setDeleteProduct(null)}
+        onDone={handleDelete}
       />
     </div>
   )
@@ -766,6 +802,45 @@ function StockMovementDialog({
             />
           </div>
         </div>
+      )}
+    </Modal>
+  )
+}
+
+function DeleteProductConfirmDialog({
+  product,
+  submitting,
+  onClose,
+  onDone,
+}: {
+  product: Product | null
+  submitting: boolean
+  onClose: () => void
+  onDone: () => void
+}) {
+  const actionLabel = product?.isActive ? 'Ngưng bán' : 'Xoá'
+  return (
+    <Modal
+      open={!!product}
+      onClose={onClose}
+      title="Xác nhận xóa hàng"
+      description={product ? `Bạn có chắc muốn xóa "${product.name}" khỏi kho?` : ''}
+      footer={
+        <div className="flex gap-2">
+          <Button variant="secondary" disabled={submitting} onClick={onClose}>Hủy</Button>
+          <Button variant="danger" loading={submitting} onClick={onDone}>{actionLabel}</Button>
+        </div>
+      }
+    >
+      {product && (
+        <NoticeCard
+          tone={product.isActive ? 'warning' : 'info'}
+          title={product.isActive ? 'Ngưng bán' : 'Xoá cứng'}
+          description={product.isActive
+            ? 'Hàng đã có giao dịch sẽ được đưa sang trạng thái ngưng bán, giữ lại lịch sử bán hàng.'
+            : 'Hàng chưa có giao dịch sẽ được xoá hoàn toàn.'
+          }
+        />
       )}
     </Modal>
   )

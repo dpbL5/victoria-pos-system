@@ -1,3 +1,4 @@
+import { isAdminOnly } from '@/lib/shared/roles'
 // ── Use-case: deleteInvoice — xoá hoá đơn chưa có giao dịch liên quan ─────
 import { err, ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
@@ -9,7 +10,7 @@ import { repositories } from '@/lib/infrastructure/repositories'
 export interface DeleteInvoiceInput {
   invoiceId: string
   staffId: string
-  role: 'ADMIN' | 'STAFF'
+  role: 'ADMIN' | 'MANAGER' | 'STAFF'
 }
 
 export interface DeleteInvoiceResult {
@@ -20,7 +21,7 @@ export async function deleteInvoice(
   input: DeleteInvoiceInput,
   deps: Repositories = repositories
 ): Promise<Result<DeleteInvoiceResult>> {
-  if (input.role !== 'ADMIN') return err('FORBIDDEN')
+  if (!isAdminOnly(input.role)) return err('FORBIDDEN')
 
   const existing = await deps.billing.findByIdForDelete(input.invoiceId)
   if (!existing) return err('INVOICE_NOT_FOUND')

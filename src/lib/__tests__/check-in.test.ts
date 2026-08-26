@@ -109,6 +109,8 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findByIdWithPlayers: vi.fn(),
       pausePlayer: vi.fn(),
       resumePlayer: vi.fn(),
+      pausePlayersForSession: vi.fn(),
+      resumePlayersForSession: vi.fn(),
       renamePlayer: vi.fn(),
       markPlayersCheckedOut: vi.fn(),
       movePlayersToGroup: vi.fn(async () => {}),
@@ -122,6 +124,9 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findByIdAdmin: vi.fn(),
       createWithInitialStock: vi.fn(),
       applyStockMovement: vi.fn(),
+      deactivate: vi.fn(),
+      delete: vi.fn(),
+      countUsage: vi.fn(),
     },
     cashflow: {
       create: vi.fn(),

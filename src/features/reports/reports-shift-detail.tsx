@@ -29,12 +29,15 @@ interface DetailResponse {
 
 interface ReportsShiftDetailProps {
   shiftId: string
+  /** Được điều chỉnh chênh lệch tiền mặt — chỉ ADMIN */
   isAdmin: boolean
+  /** Được tải CSV báo cáo ca — ADMIN/MANAGER */
+  canExport: boolean
   onClose: () => void
   onUpdated?: () => void
 }
 
-export function ReportsShiftDetail({ shiftId, isAdmin, onClose, onUpdated }: ReportsShiftDetailProps) {
+export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpdated }: ReportsShiftDetailProps) {
   const router = useRouter()
   const toast = useToast()
   const [detail, setDetail] = useState<ShiftReportDetail | null>(null)
@@ -370,7 +373,7 @@ export function ReportsShiftDetail({ shiftId, isAdmin, onClose, onUpdated }: Rep
               <h3 className="text-sm font-semibold text-zinc-950 dark:text-white">
                 Giao dịch ({detail.transactions.length})
               </h3>
-              {isAdmin && detail.transactions.length > 0 && (
+              {canExport && detail.transactions.length > 0 && (
                 <a
                   href={exportUrl}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white"

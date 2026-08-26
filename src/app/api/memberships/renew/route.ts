@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { requireMutationAuth } from '@/lib/shared/auth'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { renewMembership, mapRenewMembershipError, renewMembershipSchema } from '@/lib/memberships'
 import {
   apiError,
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
       return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     }
 
-    if (parsed.data.paidAt && auth.role !== 'ADMIN') {
+    if (parsed.data.paidAt && !isAdminOnly(auth.role)) {
       return apiError({ code: 'FORBIDDEN', message: 'Chỉ quản trị viên được chọn ngày thu phí', status: 403 })
     }
 

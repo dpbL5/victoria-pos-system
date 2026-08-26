@@ -360,6 +360,7 @@ export function TodayShiftScreen() {
 
         <QuickActions
           shiftReady={shiftReady}
+          retailDisabled
           onCheckIn={() => {
             setCheckInInitialMode('WALK_IN')
             setCheckInDialog(true)
@@ -508,7 +509,7 @@ export function TodayShiftScreen() {
         }}
       />
 
-      <RetailDialog
+      {/* <RetailDialog
         open={retailOpen}
         products={products}
         shiftReady={shiftReady}
@@ -519,7 +520,7 @@ export function TodayShiftScreen() {
           setRetailOpen(false)
           await loadData()
         }}
-      />
+      /> */}
 
     </div>
   )

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin, requireAuth } from '@/lib/shared/auth'
+import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
+import { isManagerOrAdmin } from '@/lib/shared/roles'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { createProduct, mapCreateProductError } from '@/lib/sessions'
 import { repositories } from '@/lib/infrastructure/repositories'
@@ -37,7 +38,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireMutationAuth(request)
+    if (!isManagerOrAdmin(auth.role)) {
+      return apiError({ code: 'FORBIDDEN', message: 'Không có quyền', status: 403 })
+    }
     await validateCSRF(request)
     const body = await request.json()
     const parsed = createProductSchema.safeParse(body)

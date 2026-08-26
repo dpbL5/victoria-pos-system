@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin, requireMutationAuth } from '@/lib/shared/auth'
+import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { getShiftTransactions, getShiftRevenueData, adjustShiftCashDifference, mapAdjustShiftCashDifferenceError } from '@/lib/shifts'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { prisma } from '@/lib/infrastructure/prisma'
@@ -25,7 +26,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin()
+    const auth = await requireAuth()
+    if (!isAdminOnly(auth.role)) {
+      return apiError({ code: 'FORBIDDEN', message: 'Không có quyền', status: 403 })
+    }
     const { id } = await params
 
     const shift = await repositories.shift.findByIdWithToolStats(id)
@@ -118,7 +122,7 @@ export async function PATCH(
 ) {
   try {
     const auth = await requireMutationAuth(request)
-    if (auth.role !== 'ADMIN') {
+    if (!isAdminOnly(auth.role)) {
       return apiError({ code: 'FORBIDDEN', message: 'Chỉ quản trị viên được điều chỉnh', status: 403 })
     }
 

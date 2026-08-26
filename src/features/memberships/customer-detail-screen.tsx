@@ -20,6 +20,7 @@ import { Input, Label, Textarea } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { isManagerOrAdmin } from '@/lib/shared/roles'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { money, formatDay } from '@/features/pos/format'
 import type { UserSession } from '@/features/pos/types'
@@ -138,7 +139,7 @@ export function CustomerDetailScreen({ id }: Props) {
     return () => window.clearTimeout(timeoutId)
   }, [loadData])
 
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = isManagerOrAdmin(user?.role)
 
   const startEdit = useCallback(() => {
     if (!customer) return

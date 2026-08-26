@@ -45,6 +45,9 @@ export async function pauseSession(
 
   const result = await runInTransaction(async (tx) => {
     await tx.session.update(sessionId, { pausedAt: now })
+    // Đồng bộ xuống player chưa checkout — phiên 1 người cũng có player row,
+    // checkout/preview tính pause theo player nên cần dữ liệu tại đây.
+    await tx.session.pausePlayersForSession(sessionId, now)
     await tx.audit.append({
       userId: staffId,
       action: 'SESSION_PAUSE',
@@ -81,6 +84,8 @@ export async function resumeSession(
       pausedAt: null,
       totalPausedSeconds: { increment: pausedSeconds },
     })
+    // Đồng bộ xuống player chưa checkout — cùng khoảng pause, cùng lúc resume.
+    await tx.session.resumePlayersForSession(sessionId, pausedSeconds)
     await tx.audit.append({
       userId: staffId,
       action: 'SESSION_RESUME',
@@ -149,9 +154,6 @@ export async function pausePlayer(
   if (!session) return err('SESSION_NOT_FOUND')
   if (session.status !== 'ACTIVE') return err('SESSION_NOT_ACTIVE')
 
-  // Chỉ phiên nhiều người mới hỗ trợ pause theo người
-  if (session.playerCount <= 1) return err('PLAYER_PAUSE_NOT_SUPPORTED')
-
   const player = findPlayerInSession(session, playerId)
   if (!player) return err('PLAYER_NOT_FOUND')
   if (player.pausedAt) return err('PLAYER_ALREADY_PAUSED')
@@ -184,8 +186,6 @@ export async function resumePlayer(
   const session = await deps.session.findPlayersForPause(sessionId)
   if (!session) return err('SESSION_NOT_FOUND')
   if (session.status !== 'ACTIVE') return err('SESSION_NOT_ACTIVE')
-
-  if (session.playerCount <= 1) return err('PLAYER_PAUSE_NOT_SUPPORTED')
 
   const player = findPlayerInSession(session, playerId)
   if (!player) return err('PLAYER_NOT_FOUND')
@@ -220,8 +220,6 @@ export function mapPausePlayerError(error: DomainError): HttpErrorInfo {
       return { code: 'PLAYER_NOT_FOUND', message: 'Không tìm thấy người chơi trong phiên', status: 404 }
     case 'PLAYER_ALREADY_PAUSED':
       return { code: 'PLAYER_ALREADY_PAUSED', message: 'Người chơi đã tạm dừng rồi', status: 400 }
-    case 'PLAYER_PAUSE_NOT_SUPPORTED':
-      return { code: 'PLAYER_PAUSE_NOT_SUPPORTED', message: 'Phiên 1 người dùng tạm dừng toàn phiên', status: 400 }
     default:
       return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
   }
@@ -237,8 +235,6 @@ export function mapResumePlayerError(error: DomainError): HttpErrorInfo {
       return { code: 'PLAYER_NOT_FOUND', message: 'Không tìm thấy người chơi trong phiên', status: 404 }
     case 'PLAYER_NOT_PAUSED':
       return { code: 'PLAYER_NOT_PAUSED', message: 'Người chơi chưa tạm dừng', status: 400 }
-    case 'PLAYER_PAUSE_NOT_SUPPORTED':
-      return { code: 'PLAYER_PAUSE_NOT_SUPPORTED', message: 'Phiên 1 người dùng tạm dừng toàn phiên', status: 400 }
     default:
       return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
   }

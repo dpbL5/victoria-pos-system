@@ -14,7 +14,7 @@ import { generateInvoiceNo } from '@/lib/invoicing'
 import { getDayType, getVnDay, getVnHour } from '@/lib/shared/utils'
 import { SETTING_KEYS } from '@/lib/settings'
 import type { CheckoutPaymentMethod } from '@/types'
-import { groupPausedSeconds, playerPausedSeconds, type SessionWithPlayers } from '../ports'
+import { groupPausedSeconds, playerPausedSeconds, sessionPauseSeconds, type SessionWithPlayers } from '../ports'
 import type { CheckoutLine } from './checkout-types'
 
 export interface CheckoutLineInput {
@@ -381,7 +381,10 @@ export async function checkOut(
   const hasPlayers = session.pricingGroups.some((g) => g.players.length > 0)
   let pausedSeconds: number
   if (playersToBill.length > 0) {
-    pausedSeconds = playersToBill.reduce((sum, p) => sum + playerPausedSeconds(p, pauseRef), 0)
+    pausedSeconds = playersToBill.reduce(
+      (sum, p) => sum + playerPauseWithSessionFallback(p, session, pauseRef, checkoutCount),
+      0
+    )
   } else if (hasPlayers && targetGroup) {
     pausedSeconds = groupPausedSeconds(targetGroup, pauseRef)
   } else {
@@ -820,7 +823,7 @@ export async function runCheckOutTx(
   // Nhiều bảng giá (groupRuleMap): mỗi player dùng rule của nhóm chứa nó (theo index).
   const totalPlayerCount = playersToBill.length
   const pausedSecondsPerPlayer = totalPlayerCount > 0
-    ? playersToBill.map((p) => playerPausedSeconds(p, pauseRef))
+    ? playersToBill.map((p) => playerPauseWithSessionFallback(p, session, pauseRef, checkoutCount))
     : []
   // playerId → index nhóm (nhiều bảng giá, chọn tay)
   const playerGroupIndex = new Map<string, number>()
@@ -889,14 +892,14 @@ export async function runCheckOutTx(
   }
 
   // ── Pause theo player được thu: tổng giây paused chỉ tính cho người được checkout ──
-  // (fallback session-level cho session cũ không có player rows)
+  // (fallback session-level cho phiên 1 người cũ — dữ liệu pause chưa đồng bộ xuống player)
   const playPausedSeconds = playersToBill.length > 0
-    ? playersToBill.reduce((sum, p) => sum + playerPausedSeconds(p, pauseRef), 0)
+    ? playersToBill.reduce((sum, p) => sum + playerPauseWithSessionFallback(p, session, pauseRef, checkoutCount), 0)
     : (session.totalPausedSeconds ?? 0)
   const playerPauses = playersToBill.map(p => ({
     id: p.id,
     name: p.name ?? '',
-    pausedSeconds: playerPausedSeconds(p, pauseRef),
+    pausedSeconds: playerPauseWithSessionFallback(p, session, pauseRef, checkoutCount),
   }))
 
   // Chi tiết từng người chơi được thu — hiển thị trên hoá đơn:
@@ -1227,6 +1230,25 @@ function moneyPerPerson(value: number): string {
     return `${(value / 1000).toLocaleString('vi-VN')}kđ`
   }
   return `${value.toLocaleString('vi-VN')}đ`
+}
+
+/**
+ * Pause giây của player được thu, kèm fallback session-level cho phiên 1 người cũ
+ * (pause toàn phiên trước đây ghi trên Session, không ghi lên player).
+ * Chỉ fallback khi có đúng 1 player chưa checkout và player chưa có pause nào —
+ * tránh double-count khi dữ liệu player đã được đồng bộ (phiên mới).
+ */
+function playerPauseWithSessionFallback(
+  player: { pausedAt: Date | null; totalPausedSeconds: number },
+  session: { pausedAt: Date | null; totalPausedSeconds: number },
+  now: Date,
+  billableCount: number
+): number {
+  const playerSeconds = playerPausedSeconds(player, now)
+  if (billableCount === 1 && playerSeconds === 0) {
+    return sessionPauseSeconds(session, now)
+  }
+  return playerSeconds
 }
 
 export function mapCheckoutError(error: DomainError): HttpErrorInfo {

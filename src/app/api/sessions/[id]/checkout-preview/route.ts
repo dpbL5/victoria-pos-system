@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/shared/auth'
 import { SETTING_KEYS } from '@/lib/settings'
-import { calculatePlayerPrice, calculateSessionPrice, calculateSessionPriceFromLoaded, groupPausedSeconds, playerPausedSeconds } from '@/lib/sessions'
+import { calculatePlayerPrice, calculateSessionPrice, calculateSessionPriceFromLoaded, groupPausedSeconds, playerPausedSeconds, sessionPauseSeconds } from '@/lib/sessions'
 import type { PendingGroupPricing } from '@/lib/sessions'
 import { repositories } from '@/lib/infrastructure/repositories'
 import type { PlayTimeQuote, PricingRuleSnapshot } from '@/types'
@@ -264,6 +264,9 @@ export async function GET(
       }
 
       if (playersToQuote.length > 0) {
+        // Fallback session-level cho phiên 1 người cũ (pause toàn phiên chưa đồng bộ
+        // xuống player): chỉ áp khi quote đúng 1 người và player chưa có pause nào.
+        const quoteCount = playersToQuote.length
         const quoteFor = (p: typeof playersToQuote[number]) => {
           const groupIndex = playerToGroupIndex.get(p.id)
           // resolved chỉ được populate khi needsPricing (bảng giá chọn tại checkout).
@@ -278,11 +281,15 @@ export async function GET(
                 ruleName: snapshot.name,
               }
             : groupRuleByName(session.pricingGroups.find((g) => g.id === p.groupId) ?? session.pricingGroups[0])
+          const playerSeconds = playerPausedSeconds(p, pausedAtRef)
+          const pausedSeconds = quoteCount === 1 && playerSeconds === 0
+            ? sessionPauseSeconds(session, pausedAtRef)
+            : playerSeconds
           return {
             result: calculatePlayerPrice({
               startTime: session.startTime,
               endTime,
-              pausedSeconds: playerPausedSeconds(p, pausedAtRef),
+              pausedSeconds,
               hourlyRate: rule.hourlyRate,
               tiers: rule.tiers,
               promotion,

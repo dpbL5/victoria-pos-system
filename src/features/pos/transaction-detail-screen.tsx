@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label, Textarea } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { apiJson, jsonRequest } from '@/lib/api'
 import type { UserSession } from '@/features/pos/types'
 import { InvoiceDetailContent, type InvoiceDetail } from './invoice-detail-content'
@@ -59,7 +60,7 @@ export function TransactionDetailScreen({ id }: Props) {
     return () => window.clearTimeout(timeoutId)
   }, [loadData])
 
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = isAdminOnly(user?.role)
 
   const handleDeleteConfirm = async () => {
     if (!invoice) return
