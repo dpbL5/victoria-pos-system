@@ -1,6 +1,6 @@
 // ── PUT /api/users/[id] ─────────────────────────────────
 import { NextRequest } from "next/server";
-import { requireAdmin } from "@/lib/shared/auth";
+import { requireAdminOnly } from "@/lib/shared/auth";
 import { validateCSRF } from "@/lib/shared/csrf";
 import { updateUser, mapUpdateUserError, resetUserPassword, mapResetUserPasswordError } from "@/lib/users";
 import { resetPasswordSchema, updateUserSchema } from "@/lib/users";
@@ -18,7 +18,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdmin();
+    const auth = await requireAdminOnly();
     await validateCSRF(request);
     const { id } = await params;
 
@@ -47,7 +47,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdmin();
+    const auth = await requireAdminOnly();
     await validateCSRF(request);
     const { id } = await params;
 

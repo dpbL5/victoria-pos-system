@@ -6,11 +6,12 @@ import type { Repositories } from '@/lib/infrastructure/repositories'
 import { repositories } from '@/lib/infrastructure/repositories'
 import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
 import type { ToolCountEntry } from '../validations'
+import { isManagerOrAdmin } from '@/lib/shared/roles'
 
 export interface CloseShiftInput {
   shiftId: string
   staffId: string
-  staffRole: 'ADMIN' | 'STAFF'
+  staffRole: 'ADMIN' | 'MANAGER' | 'STAFF'
   username: string
   fullName: string
   closingCash: number
@@ -50,7 +51,7 @@ export async function closeShift(
   const isActiveParticipant = shift.participants.some(
     (participant) => participant.staffId === staffId
   )
-  if (staffRole !== 'ADMIN' && shift.staffId !== staffId && !isActiveParticipant) {
+  if (!isManagerOrAdmin(staffRole) && shift.staffId !== staffId && !isActiveParticipant) {
     return err('FORBIDDEN')
   }
 

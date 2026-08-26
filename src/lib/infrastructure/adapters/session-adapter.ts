@@ -123,19 +123,68 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
       })
     },
 
-    async findDraftSellTotals(sessionIds) {
+    async findSellItemTotals(sessionIds) {
       if (sessionIds.length === 0) return {}
-      const drafts = await store.invoice.findMany({
-        where: { sessionId: { in: sessionIds }, status: 'DRAFT' },
-        select: { sessionId: true, grandTotal: true },
+      const rows = await store.sessionSellItem.findMany({
+        where: { sessionId: { in: sessionIds } },
+        select: { sessionId: true, quantity: true, unitPrice: true },
       })
       const totals: Record<string, number> = {}
-      for (const d of drafts) {
-        if (d.sessionId) {
-          totals[d.sessionId] = (totals[d.sessionId] ?? 0) + Number(d.grandTotal)
-        }
+      for (const r of rows) {
+        totals[r.sessionId] = (totals[r.sessionId] ?? 0) + Number(r.quantity) * Number(r.unitPrice)
       }
       return totals
+    },
+
+    async findSellItems(sessionId) {
+      const rows = await store.sessionSellItem.findMany({
+        where: { sessionId },
+        orderBy: { createdAt: 'asc' },
+      })
+      return rows.map((r) => ({
+        id: r.id,
+        sessionId: r.sessionId,
+        productId: r.productId,
+        quantity: r.quantity,
+        unitPrice: Number(r.unitPrice),
+        unitCost: r.unitCost !== null ? Number(r.unitCost) : null,
+        notes: r.notes,
+        createdAt: r.createdAt,
+      }))
+    },
+
+    async addSellItem(input) {
+      // Upsert theo productId trong cùng phiên — nếu đã có thì cộng quantity
+      const existing = await store.sessionSellItem.findFirst({
+        where: { sessionId: input.sessionId, productId: input.productId },
+        select: { id: true },
+      })
+      if (existing) {
+        await store.sessionSellItem.update({
+          where: { id: existing.id },
+          data: { quantity: { increment: input.quantity }, unitPrice: input.unitPrice },
+        })
+        return
+      }
+      await store.sessionSellItem.create({
+        data: {
+          sessionId: input.sessionId,
+          productId: input.productId,
+          quantity: input.quantity,
+          unitPrice: input.unitPrice,
+          unitCost: input.unitCost,
+          notes: input.notes ?? null,
+        },
+      })
+    },
+
+    async removeSellItems(ids) {
+      if (ids.length === 0) return
+      await store.sessionSellItem.deleteMany({ where: { id: { in: ids } } })
+    },
+
+    async clearSellItems(sessionId) {
+      await store.sessionSellItem.deleteMany({ where: { sessionId } })
     },
 
     async createWithRefs(data) {
@@ -284,6 +333,20 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
     async resumePlayer(playerId, pausedSeconds) {
       await store.sessionPlayer.update({
         where: { id: playerId },
+        data: { pausedAt: null, totalPausedSeconds: { increment: pausedSeconds } },
+      })
+    },
+
+    async pausePlayersForSession(sessionId, pausedAt) {
+      await store.sessionPlayer.updateMany({
+        where: { sessionId, checkedOutAt: null },
+        data: { pausedAt },
+      })
+    },
+
+    async resumePlayersForSession(sessionId, pausedSeconds) {
+      await store.sessionPlayer.updateMany({
+        where: { sessionId, checkedOutAt: null },
         data: { pausedAt: null, totalPausedSeconds: { increment: pausedSeconds } },
       })
     },

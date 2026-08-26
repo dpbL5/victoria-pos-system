@@ -90,19 +90,6 @@ export interface UpdateInvoiceFinancialsInput {
   notes: string
 }
 
-export interface CreateDraftInvoiceInput {
-  invoiceNo: string
-  /** Null với khách vãng lai (không tạo Customer) */
-  customerId: string | null
-  sessionId: string
-  shiftId: string
-  staffId: string
-  subtotal: number
-  discountTotal: number
-  grandTotal: number
-  notes?: string
-}
-
 export interface CreateInvoiceItemInput {
   invoiceId: string
   productId?: string | null
@@ -116,11 +103,6 @@ export interface CreateInvoiceItemInput {
   discountAmount: number
   total: number
   metadata?: Prisma.InputJsonValue
-}
-
-export interface DraftInvoiceRef {
-  id: string
-  items: Array<{ productId: string | null; quantity: number }>
 }
 
 export interface CreateMembershipPaymentInput {
@@ -163,7 +145,7 @@ export interface VoidInvoiceTarget {
 }
 
 export interface ReverseStockInput {
-  invoiceItemId: string
+  invoiceItemId: string | null
   productId: string
   shiftId: string
   staffId: string
@@ -237,20 +219,6 @@ export interface InvoiceDeleteTarget {
   items: Array<{ id: string }>
 }
 
-/** Draft items bán kèm phiên — cho checkout-preview */
-export interface DraftSellPreview {
-  id: string
-  grandTotal: number
-  items: Array<{
-    productId: string
-    description: string
-    type: string
-    quantity: number
-    unitPrice: number
-    subtotal: number
-  }>
-}
-
 export interface BillingRepository {
   /** Invoice + items + StockMovement SALE + staff — dùng cho void */
   findVoidTarget(invoiceId: string): Promise<VoidInvoiceTarget | null>
@@ -266,16 +234,10 @@ export interface BillingRepository {
   createPayment(input: CreatePaymentInput): Promise<{ id: string }>
   /** Tạo MembershipPayment (phí hội viên) */
   createMembershipPayment(input: CreateMembershipPaymentInput): Promise<{ id: string }>
-  /** Tạo invoice DRAFT (bán kèm phiên — chưa thanh toán) */
-  createDraftInvoice(input: CreateDraftInvoiceInput): Promise<{ id: string; invoiceNo: string }>
   /** Tạo invoice item */
   createInvoiceItem(input: CreateInvoiceItemInput): Promise<{ id: string }>
   /** Cập nhật subtotal/grandTotal sau khi trừ phí gửi xe */
   updateInvoiceTotals(invoiceId: string, subtotal: number, grandTotal: number): Promise<void>
-  /** Invoice DRAFT của phiên (gom sản phẩm bán kèm) */
-  findDraftInvoices(sessionId: string): Promise<DraftInvoiceRef[]>
-  /** Huỷ các invoice DRAFT đã gộp vào hoá đơn thanh toán */
-  cancelDraftInvoices(ids: string[], notes: string): Promise<void>
   /** Invoice + items + stockMovements + payments + membershipPayments — cho edit-in-place */
   findByIdForEdit(invoiceId: string): Promise<EditInvoiceTarget | null>
   deleteInvoiceItems(invoiceId: string): Promise<void>
@@ -291,8 +253,6 @@ export interface BillingRepository {
   countLinkedTransactions(invoiceId: string): Promise<{ payments: number; stockMovements: number }>
   /** Xoá items + invoice (chỉ gọi khi không có giao dịch liên quan) */
   deleteInvoiceWithItems(invoiceId: string): Promise<void>
-  /** Draft invoices + items bán kèm phiên — cho checkout-preview */
-  findDraftSellPreview(sessionId: string): Promise<DraftSellPreview[]>
   /** Đếm hoá đơn PAID đã thanh toán của 1 session — xác định số lần thu trước ("lần n") */
   countPaidBySession(sessionId: string): Promise<number>
 }

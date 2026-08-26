@@ -23,6 +23,7 @@ import { toInputDate } from '@/lib/shared/utils'
 import type { ShiftRevenueSummary } from '@/types'
 import type { UserSession } from '@/features/pos/types'
 import { ReportsShiftDetail } from './reports-shift-detail'
+import { isAdminOnly } from '@/lib/shared/roles'
 
 interface ShiftListResponse {
   success: boolean
@@ -104,7 +105,7 @@ export function ReportsShifts({ user }: ReportsShiftsProps) {
     void loadShifts(pagination.page)
   }
 
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = isAdminOnly(user?.role)
 
   return (
     <div className="space-y-4">
@@ -215,6 +216,7 @@ export function ReportsShifts({ user }: ReportsShiftsProps) {
         <ReportsShiftDetail
           shiftId={selectedShiftId}
           isAdmin={isAdmin}
+          canExport={isAdmin}
           onClose={closeDetail}
           onUpdated={handleDetailRefresh}
         />

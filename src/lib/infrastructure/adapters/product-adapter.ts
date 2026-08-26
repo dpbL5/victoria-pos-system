@@ -190,5 +190,31 @@ export function createProductRepository(store: ProductStore): ProductRepository 
         quantity: movement.quantity,
       }
     },
+
+    async deactivate(id) {
+      await store.product.update({ where: { id }, data: { isActive: false } })
+    },
+
+    async delete(id) {
+      await store.product.delete({ where: { id } })
+    },
+
+    async countUsage(id) {
+      const result = await store.product.findUnique({
+        where: { id },
+        select: {
+          _count: {
+            select: {
+              stockMovements: true,
+              invoiceItems: true,
+              sellItems: true,
+            }
+          }
+        }
+      })
+      if (!result) return 0
+      const c = result._count
+      return c.stockMovements + c.invoiceItems + c.sellItems
+    },
   }
 }

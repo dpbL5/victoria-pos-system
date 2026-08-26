@@ -25,7 +25,7 @@ export async function GET(
       shift.staffId === auth.userId ||
       shift.participants.some((p) => p.staffId === auth.userId)
 
-    if (auth.role !== 'ADMIN' && !isParticipant) {
+    if (auth.role !== 'ADMIN' && auth.role !== 'MANAGER' && !isParticipant) {
       return NextResponse.json(
         { success: false, error: 'Không có quyền xem giao dịch của ca này' },
         { status: 403 }

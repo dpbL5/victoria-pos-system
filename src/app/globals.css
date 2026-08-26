@@ -3,6 +3,65 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ═══════════════════════════════════════════════════════════
+   Token → Tailwind utilities (Tailwind v4)
+   @theme inline: các token sinh utility `bg-brand`, `text-danger`…
+   tham chiếu runtime CSS var (định nghĩa trong :root / .dark bên dưới).
+   ═══════════════════════════════════════════════════════════ */
+@theme inline {
+  /* Brand */
+  --color-brand: var(--color-brand);
+  --color-brand-light: var(--color-brand-light);
+  --color-brand-dark: var(--color-brand-dark);
+
+  /* Gold — vàng thương hiệu */
+  --color-gold: var(--color-gold);
+  --color-gold-light: var(--color-gold-light);
+  --color-gold-dark: var(--color-gold-dark);
+  --color-gold-bg: var(--color-gold-bg);
+  --color-gold-border: var(--color-gold-border);
+
+  /* Surfaces */
+  --color-surface-primary: var(--color-surface-primary);
+  --color-surface-secondary: var(--color-surface-secondary);
+  --color-surface-tertiary: var(--color-surface-tertiary);
+  --color-surface-elevated: var(--color-surface-elevated);
+  --color-surface-overlay: var(--color-surface-overlay);
+
+  /* Borders */
+  --color-border-default: var(--color-border-default);
+  --color-border-strong: var(--color-border-strong);
+  --color-border-subtle: var(--color-border-subtle);
+
+  /* Text */
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-tertiary: var(--color-text-tertiary);
+  --color-text-inverse: var(--color-text-inverse);
+
+  /* Focus ring */
+  --color-focus-ring: var(--color-focus-ring);
+
+  /* Semantic */
+  --color-success: var(--color-success);
+  --color-success-bg: var(--color-success-bg);
+  --color-success-border: var(--color-success-border);
+  --color-warning: var(--color-warning);
+  --color-warning-bg: var(--color-warning-bg);
+  --color-warning-border: var(--color-warning-border);
+  --color-danger: var(--color-danger);
+  --color-danger-bg: var(--color-danger-bg);
+  --color-danger-border: var(--color-danger-border);
+  --color-info: var(--color-info);
+  --color-info-bg: var(--color-info-bg);
+  --color-info-border: var(--color-info-border);
+
+  /* Accent — members */
+  --color-accent-purple: var(--color-accent-purple);
+  --color-accent-purple-bg: var(--color-accent-purple-bg);
+  --color-accent-purple-border: var(--color-accent-purple-border);
+}
+
+/* ═══════════════════════════════════════════════════════════
    Design Token System — QL Trường Cung POS
    ═══════════════════════════════════════════════════════════ */
 
@@ -12,6 +71,13 @@
   --color-brand: #2563eb;
   --color-brand-light: #3b82f6;
   --color-brand-dark: #1d4ed8;
+
+  /* Gold — vàng thương hiệu (light: dùng gold-dark cho đủ tương phản trên nền sáng) */
+  --color-gold: #d4b572;
+  --color-gold-light: #e2c685;
+  --color-gold-dark: #b69854;
+  --color-gold-bg: rgba(212, 181, 114, 0.12);
+  --color-gold-border: rgba(212, 181, 114, 0.35);
 
   /* Surfaces */
   --color-surface-primary: #ffffff;

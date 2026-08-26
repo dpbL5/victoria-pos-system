@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { playerPausedSeconds, groupPausedSeconds } from '@/lib/sessions/ports'
+import { playerPausedSeconds, groupPausedSeconds, sessionPauseSeconds } from '@/lib/sessions/ports'
 
 const fakeStore = vi.hoisted(() => ({
   session: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
   sessionPricingGroup: { create: vi.fn(), update: vi.fn(), findMany: vi.fn() },
-  sessionPlayer: { update: vi.fn(), createMany: vi.fn() },
+  sessionPlayer: { update: vi.fn(), updateMany: vi.fn(), createMany: vi.fn() },
   shift: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
   shiftParticipant: { create: vi.fn() },
   product: { findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn(), create: vi.fn() },
@@ -30,7 +30,7 @@ vi.mock('@/lib/infrastructure/prisma', () => ({
   prisma: { $transaction: (work: (store: unknown) => Promise<unknown>) => work(fakeStore) },
 }))
 
-import { pausePlayer, resumePlayer } from '@/lib/sessions/use-cases/pause-session'
+import { pausePlayer, resumePlayer, pauseSession, resumeSession } from '@/lib/sessions/use-cases/pause-session'
 import { createRepositories } from '@/lib/infrastructure/repositories'
 
 const repos = createRepositories(fakeStore as never)
@@ -74,6 +74,7 @@ function resetMocks() {
   vi.clearAllMocks()
   fakeStore.session.findUnique.mockResolvedValue(makeMultiPlayerSession())
   fakeStore.sessionPlayer.update.mockResolvedValue({})
+  fakeStore.sessionPlayer.updateMany.mockResolvedValue({ count: 2 })
 }
 
 describe('pausePlayer', () => {
@@ -91,10 +92,16 @@ describe('pausePlayer', () => {
     expect(result).toEqual({ ok: false, error: { code: 'SESSION_NOT_ACTIVE' } })
   })
 
-  it('trả PLAYER_PAUSE_NOT_SUPPORTED cho phiên 1 người', async () => {
+  it('phiên 1 người: pausePlayer vẫn hoạt động (có player row — dùng chung luồng nhóm)', async () => {
     fakeStore.session.findUnique.mockResolvedValue({ ...makeMultiPlayerSession(), playerCount: 1 })
     const result = await pausePlayer({ sessionId: 'sess-1', playerId: 'player-1', staffId: 'staff-1', now: NOW }, repos)
-    expect(result).toEqual({ ok: false, error: { code: 'PLAYER_PAUSE_NOT_SUPPORTED' } })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value).toMatchObject({ sessionId: 'sess-1', playerId: 'player-1', pausedAt: NOW })
+    expect(fakeStore.sessionPlayer.update).toHaveBeenCalledWith({
+      where: { id: 'player-1' },
+      data: { pausedAt: NOW },
+    })
   })
 
   it('trả PLAYER_NOT_FOUND khi player không thuộc session', async () => {
@@ -164,6 +171,58 @@ describe('resumePlayer', () => {
     })
     const auditCall = fakeStore.activityLog.create.mock.calls[0][0]
     expect(auditCall.data).toMatchObject({ userId: 'staff-1', action: 'PLAYER_RESUME', entityId: 'player-1', details: { pausedSeconds: 3600 } })
+  })
+})
+
+describe('pauseSession / resumeSession — đồng bộ session pause xuống player', () => {
+  beforeEach(resetMocks)
+
+  it('pauseSession: set Session.pausedAt + đồng bộ pausedAt cho player chưa checkout', async () => {
+    const result = await pauseSession({ sessionId: 'sess-1', staffId: 'staff-1', now: NOW }, repos)
+
+    expect(result.ok).toBe(true)
+    expect(fakeStore.session.update).toHaveBeenCalledWith({ where: { id: 'sess-1' }, data: { pausedAt: NOW } })
+    expect(fakeStore.sessionPlayer.updateMany).toHaveBeenCalledWith({
+      where: { sessionId: 'sess-1', checkedOutAt: null },
+      data: { pausedAt: NOW },
+    })
+  })
+
+  it('resumeSession: increment session + increment/clear tất cả player chưa checkout', async () => {
+    fakeStore.session.findUnique.mockResolvedValue({
+      ...makeMultiPlayerSession(),
+      pausedAt: new Date('2026-08-10T11:00:00Z'),
+      totalPausedSeconds: 600,
+    })
+    const result = await resumeSession({ sessionId: 'sess-1', staffId: 'staff-1', now: NOW }, repos)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.pausedSeconds).toBe(3600)
+    expect(fakeStore.session.update).toHaveBeenCalledWith({
+      where: { id: 'sess-1' },
+      data: { pausedAt: null, totalPausedSeconds: { increment: 3600 } },
+    })
+    expect(fakeStore.sessionPlayer.updateMany).toHaveBeenCalledWith({
+      where: { sessionId: 'sess-1', checkedOutAt: null },
+      data: { pausedAt: null, totalPausedSeconds: { increment: 3600 } },
+    })
+  })
+
+  it('resumeSession: trả SESSION_NOT_PAUSED khi session chưa paused', async () => {
+    const result = await resumeSession({ sessionId: 'sess-1', staffId: 'staff-1', now: NOW }, repos)
+    expect(result).toEqual({ ok: false, error: { code: 'SESSION_NOT_PAUSED' } })
+  })
+})
+
+describe('sessionPauseSeconds (pure helper)', () => {
+  it('session chưa paused: trả totalPausedSeconds', () => {
+    expect(sessionPauseSeconds({ pausedAt: null, totalPausedSeconds: 900 }, NOW)).toBe(900)
+  })
+
+  it('session đang paused: cộng elapsed từ pausedAt', () => {
+    // 12:00 - 11:30 = 1800 + 900 tích lũy
+    expect(sessionPauseSeconds({ pausedAt: new Date('2026-08-10T11:30:00Z'), totalPausedSeconds: 900 }, NOW)).toBe(2700)
   })
 })
 

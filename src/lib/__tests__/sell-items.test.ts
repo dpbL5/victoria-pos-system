@@ -11,6 +11,8 @@ const fakeStore = vi.hoisted(() => ({
     update: vi.fn(),
   },
   sessionPricingGroup: { create: vi.fn(), update: vi.fn(), findMany: vi.fn() },
+  sessionPlayer: { createMany: vi.fn(), updateMany: vi.fn(), findMany: vi.fn() },
+  sessionSellItem: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
   shift: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
   shiftParticipant: { create: vi.fn() },
   product: {
@@ -42,7 +44,7 @@ vi.mock('@/lib/infrastructure/prisma', () => ({
   prisma: { $transaction: (work: (store: unknown) => Promise<unknown>) => work(fakeStore) },
 }))
 
-import { sellItems } from '@/lib/sessions/use-cases/sell-items'
+import { sellItems, removeSellItems } from '@/lib/sessions/use-cases/sell-items'
 import { createRepositories } from '@/lib/infrastructure/repositories'
 
 const repos = createRepositories(fakeStore as never)
@@ -77,9 +79,12 @@ function resetMocks() {
     id: 'prod-1', name: 'Nước suối', type: 'PRODUCT', price: 10000, costPrice: 5000, stockQuantity: 10, isActive: true,
   })
 
-  // Invoice DRAFT
-  fakeStore.invoice.create.mockResolvedValue({ id: 'inv-1' })
-  fakeStore.invoiceItem.create.mockResolvedValue({ id: 'item-1' })
+  // SessionSellItem chưa có dòng nào (chưa bán kèm)
+  fakeStore.sessionSellItem.findMany.mockResolvedValue([])
+  fakeStore.sessionSellItem.findFirst.mockResolvedValue(null)
+  fakeStore.sessionSellItem.create.mockResolvedValue({ id: 'ssi-1' })
+  fakeStore.sessionSellItem.update.mockResolvedValue({ id: 'ssi-1' })
+  fakeStore.sessionSellItem.deleteMany.mockResolvedValue({ count: 1 })
 
   // Trừ kho thành công
   fakeStore.product.updateMany.mockResolvedValue({ count: 1 })
@@ -113,16 +118,25 @@ describe('sellItems', () => {
     if (!result.ok) expect(result.error.code).toBe('SESSION_COMPLETED')
   })
 
-  it('tạo invoice DRAFT + trừ kho + ghi audit trong 1 transaction', async () => {
+  it('ghi SessionSellItem + trừ kho + ghi audit trong 1 transaction (không tạo invoice)', async () => {
     const result = await sellItems(input, repos)
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.value).toMatchObject({ invoiceId: 'inv-1', grandTotal: 20000 })
+    expect(result.value).toMatchObject({ sessionId: 'sess-1', itemCount: 1, grandTotal: 20000 })
 
-    // Invoice DRAFT — chưa thanh toán
-    const invoiceCall = fakeStore.invoice.create.mock.calls[0][0]
-    expect(invoiceCall.data).toMatchObject({ sessionId: 'sess-1', shiftId: 'shift-1', grandTotal: 20000 })
+    // Không tạo invoice nào
+    expect(fakeStore.invoice.create).not.toHaveBeenCalled()
+
+    // Ghi dòng bán kèm tạm
+    const sellCall = fakeStore.sessionSellItem.create.mock.calls[0][0]
+    expect(sellCall.data).toMatchObject({
+      sessionId: 'sess-1',
+      productId: 'prod-1',
+      quantity: 2,
+      unitPrice: 10000,
+      unitCost: 5000,
+    })
 
     // Trừ kho 2 nước suối
     expect(fakeStore.product.updateMany).toHaveBeenCalledWith({
@@ -130,11 +144,20 @@ describe('sellItems', () => {
       data: { stockQuantity: { decrement: 2 } },
     })
 
-    // Ghi stock movement SALE
+    // Ghi stock movement SALE (không gắn invoiceItemId)
     const movementCall = fakeStore.stockMovement.create.mock.calls[0][0]
-    expect(movementCall.data).toMatchObject({ type: 'SALE', quantity: -2, productId: 'prod-1' })
+    expect(movementCall.data).toMatchObject({ type: 'SALE', quantity: -2, productId: 'prod-1', invoiceItemId: null })
 
     expect(fakeStore.activityLog.create).toHaveBeenCalled()
+  })
+
+  it('upsert theo productId khi bán kèm trùng sản phẩm (cộng quantity)', async () => {
+    fakeStore.sessionSellItem.findFirst.mockResolvedValue({ id: 'ssi-1' })
+    const result = await sellItems(input, repos)
+    expect(result.ok).toBe(true)
+    // Không tạo mới — update increment
+    expect(fakeStore.sessionSellItem.create).not.toHaveBeenCalled()
+    expect(fakeStore.sessionSellItem.update).toHaveBeenCalled()
   })
 
   it('trả INSUFFICIENT_STOCK khi không đủ tồn', async () => {
@@ -149,5 +172,47 @@ describe('sellItems', () => {
     const result = await sellItems(input, repos)
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('SHIFT_REQUIRED')
+  })
+})
+
+describe('removeSellItems', () => {
+  beforeEach(resetMocks)
+
+  it('xoá dòng bán kèm + hoàn kho + ghi audit', async () => {
+    fakeStore.sessionSellItem.findMany.mockResolvedValue([
+      {
+        id: 'ssi-1',
+        sessionId: 'sess-1',
+        productId: 'prod-1',
+        quantity: 2,
+        unitPrice: 10000,
+        unitCost: 5000,
+        notes: null,
+        createdAt: new Date(),
+      },
+    ])
+    const result = await removeSellItems({ sessionId: 'sess-1', staffId: 'staff-1', itemIds: ['ssi-1'] }, repos)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value).toEqual({ removedCount: 1 })
+
+    // Xoá đúng dòng
+    expect(fakeStore.sessionSellItem.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['ssi-1'] } },
+    })
+
+    // Hoàn kho qua reverseStock (stockMovement VOID + product.update increment)
+    const voidCall = fakeStore.stockMovement.create.mock.calls[0][0]
+    expect(voidCall.data).toMatchObject({ type: 'VOID', quantity: 2, productId: 'prod-1', invoiceItemId: null })
+
+    expect(fakeStore.activityLog.create).toHaveBeenCalled()
+  })
+
+  it('trả SELL_ITEM_NOT_FOUND khi dòng không thuộc phiên', async () => {
+    fakeStore.sessionSellItem.findMany.mockResolvedValue([])
+    const result = await removeSellItems({ sessionId: 'sess-1', staffId: 'staff-1', itemIds: ['ssi-x'] }, repos)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('SELL_ITEM_NOT_FOUND')
   })
 })

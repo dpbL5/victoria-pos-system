@@ -13,7 +13,7 @@ export interface CreateUserInput {
   username: string
   password: string
   fullName: string
-  role: 'ADMIN' | 'STAFF'
+  role: 'ADMIN' | 'MANAGER' | 'STAFF'
 }
 
 export interface CreateUserResult {

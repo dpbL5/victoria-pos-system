@@ -25,10 +25,22 @@ const navItems: NavItem[] = [
   { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
 ]
 
-export function BottomNav() {
+interface BottomNavProps {
+  userRole?: string
+}
+
+export function BottomNav({ userRole }: BottomNavProps) {
   const pathname = usePathname()
-  const visibleItems = navItems
-  const gridCols = 'grid-cols-5'
+  // STAFF: Ca, Hội viên, Cài đặt. MANAGER: + Kho (không Báo cáo). ADMIN: đủ 5 tab.
+  const visibleItems = navItems.filter((item) => {
+    if (userRole === 'STAFF') {
+      return item.href === '/sessions' || item.href === '/customers' || item.href === '/settings'
+    }
+    if (userRole === 'MANAGER') {
+      return item.href !== '/reports'
+    }
+    return true
+  })
 
   const isActive = (href: string) =>
     href === '/sessions'
@@ -37,7 +49,10 @@ export function BottomNav() {
 
   return (
     <nav className="safe-area-bottom fixed inset-x-0 bottom-0 z-50 border-t border-zinc-200 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 md:hidden">
-      <div className={`grid h-16 ${gridCols}`}>
+      <div
+        className="grid h-16"
+        style={{ gridTemplateColumns: `repeat(${visibleItems.length}, minmax(0, 1fr))` }}
+      >
         {visibleItems.map((item) => {
           const active = isActive(item.href)
           const { Icon } = item

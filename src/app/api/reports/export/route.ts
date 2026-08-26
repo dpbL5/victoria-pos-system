@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireAuth } from '@/lib/shared/auth'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { toCsv } from '@/lib/shared/csv'
 import { toInputDate, parseStartOfDay, parseEndOfDay } from '@/lib/shared/utils'
@@ -13,7 +14,10 @@ const paymentMethodLabel: Record<string, string> = {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin()
+    const auth = await requireAuth()
+    if (!isAdminOnly(auth.role)) {
+      return NextResponse.json({ success: false, error: 'Không có quyền' }, { status: 403 })
+    }
 
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type') || 'revenue'

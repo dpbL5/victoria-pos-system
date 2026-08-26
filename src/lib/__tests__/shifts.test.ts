@@ -104,7 +104,7 @@ describe('getShiftTransactions', () => {
     expect(summary.membershipCount).toBe(1)
   })
 
-  it('sắp xếp transactions theo paidAt tăng dần (gộp payment + membership)', async () => {
+  it('sắp xếp transactions theo paidAt giảm dần (gộp payment + membership)', async () => {
     const db = createShiftDb()
     db.payment.findMany.mockResolvedValue([
       makePayment({ id: 'p-late', paidAt: new Date('2026-08-06T10:00:00Z') }),
@@ -113,12 +113,12 @@ describe('getShiftTransactions', () => {
 
     const { transactions } = await getShiftTransactions(db, 'shift-1')
 
-    expect(transactions.map((t) => t.id)).toEqual(['mp-early', 'p-late'])
-    expect(transactions[0].type).toBe('membership')
-    expect(transactions[0].planName).toBe('Gói VIP')
-    expect(transactions[0].paidAt).toBe('2026-08-06T09:00:00.000Z')
-    expect(transactions[1].type).toBe('payment')
-    expect(transactions[1].invoiceNo).toBe('HD-001')
+    expect(transactions.map((t) => t.id)).toEqual(['p-late', 'mp-early'])
+    expect(transactions[0].type).toBe('payment')
+    expect(transactions[0].invoiceNo).toBe('HD-001')
+    expect(transactions[1].type).toBe('membership')
+    expect(transactions[1].planName).toBe('Gói VIP')
+    expect(transactions[1].paidAt).toBe('2026-08-06T09:00:00.000Z')
   })
 
   it('customerName fallback: invoice → session → customer → "Khách lẻ"', async () => {

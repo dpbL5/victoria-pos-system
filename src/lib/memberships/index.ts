@@ -8,6 +8,7 @@ export {
 export { registerMember, mapRegisterMemberError } from './use-cases/register-member'
 export { renewMembership, mapRenewMembershipError } from './use-cases/renew-membership'
 export { deleteMember, runDeleteMemberTx, mapDeleteMemberError } from './use-cases/delete-member'
+export { updateCustomer, mapUpdateCustomerError } from './use-cases/update-customer'
 export {
   createMembershipPlan,
   mapCreateMembershipPlanError,
@@ -24,6 +25,10 @@ export type {
   DeleteMemberInput,
   DeleteMemberResult,
 } from './use-cases/delete-member'
+export type {
+  UpdateCustomerInput,
+  UpdateCustomerResult,
+} from './use-cases/update-customer'
 export type {
   RenewMembershipInput,
   RenewMembershipResult,

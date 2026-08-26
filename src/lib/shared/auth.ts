@@ -6,6 +6,10 @@ import { generateCSRFToken, setCSRFCookie, clearCSRFCookie, validateCSRF } from 
 import { rateLimit } from "@/lib/shared/rate-limit";
 import { withRetry } from "@/lib/infrastructure/db-retry";
 import type { SessionPayload } from "@/types";
+import { isAdminOnly, isManagerOrAdmin } from './roles';
+
+// Re-export for API route usage
+export { isAdminOnly, isManagerOrAdmin };
 
 // ── Config ─────────────────────────────────────────────
 const rawSessionSecret = process.env.SESSION_SECRET;
@@ -137,8 +141,20 @@ export async function requireAuth(): Promise<SessionPayload> {
   };
 }
 
-// ── Require admin role ─────────────────────────────────
+// ── Require admin role (ADMIN only — quản trị hệ thống) ──
+// MANAGER không có quyền quản trị (bảng giá, khuyến mại, dụng cụ, nhân viên,
+// học viên, thu chi, sửa/xoá hoá đơn...). Các quyền vận hành (báo cáo, kho,
+// đóng ca) dùng isManagerOrAdmin() trực tiếp trong route.
 export async function requireAdmin(): Promise<SessionPayload> {
+  const session = await requireAuth();
+  if (!isAdminOnly(session.role)) {
+    throw new Error("FORBIDDEN");
+  }
+  return session;
+}
+
+// ── Require ADMIN only (user management) ──────────────
+export async function requireAdminOnly(): Promise<SessionPayload> {
   const session = await requireAuth();
   if (session.role !== "ADMIN") {
     throw new Error("FORBIDDEN");

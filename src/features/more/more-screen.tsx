@@ -13,6 +13,7 @@ import {
   CalendarClock,
   Car,
   CheckCircle2,
+  GraduationCap,
   LogOut,
   Monitor,
   Moon,
@@ -35,6 +36,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
+import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
 import { formatClock, money } from '@/features/pos/format'
 import type { Product, Shift, UserSession } from '@/features/pos/types'
 import { useTheme, type Theme } from '@/hooks/use-theme'
@@ -89,18 +91,24 @@ export function MoreScreen() {
     setMounted(true)
   }, [])
 
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = isAdminOnly(user?.role)
+  const canViewShifts = isManagerOrAdmin(user?.role)
   const coreLinks = [
-    { href: '/shifts', label: 'Ca làm', description: 'Lịch sử và nhân viên ca', Icon: CalendarClock, tone: 'blue' },
+    ...(canViewShifts
+      ? [{ href: '/shifts', label: 'Ca làm', description: 'Lịch sử và nhân viên ca', Icon: CalendarClock, tone: 'blue' as const }]
+      : []),
     { href: '/customers', label: 'Hội viên', description: 'Đăng ký và gia hạn', Icon: ShieldCheck, tone: 'purple' },
     { href: '/insventory', label: 'Kho quầy', description: 'Xem tồn và hàng sắp hết', Icon: Package, tone: 'amber' },
-    { href: '/reports', label: 'Báo cáo', description: 'Đối soát ca và ngày', Icon: BarChart3, tone: 'blue' },
+    ...(isAdmin
+      ? [{ href: '/reports', label: 'Báo cáo', description: 'Đối soát ca và ngày', Icon: BarChart3, tone: 'blue' as const }]
+      : []),
   ] as const
 
   const adminLinks = [
     { href: '/pricing', label: 'Bảng giá', description: 'Giá giờ chơi vãng lai', Icon: Banknote },
     { href: '/promotions', label: 'Khuyến mại', description: 'Giảm giá giờ chơi vãng lai', Icon: Tag },
     { href: '/membership-plans', label: 'Gói hội viên', description: 'Phí tháng và thời hạn gói', Icon: Ticket },
+    { href: '/students', label: 'Học viên', description: 'Quản lý học viên và lịch học', Icon: GraduationCap },
     { href: '/staff', label: 'Nhân viên', description: 'Tài khoản và phân quyền', Icon: UserCog },
     { href: '/tools', label: 'Dụng cụ', description: 'Công cụ hệ thống', Icon: Wrench },
     { href: '/cashflow', label: 'Thu chi', description: 'Theo dõi thu nhập và chi phí', Icon: ArrowRightLeft },
@@ -191,11 +199,11 @@ export function MoreScreen() {
                   </p>
                   <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                     {user?.username ?? ''}
-                    {user ? ` · ${user.role === 'ADMIN' ? 'Quản trị viên' : 'Nhân viên'}` : ''}
+                    {user ? ` · ${user.role === 'ADMIN' ? 'Quản trị viên' : user.role === 'MANAGER' ? 'Quản lý' : 'Nhân viên'}` : ''}
                   </p>
                 </div>
                 <Badge variant={isAdmin ? 'purple' : 'default'}>
-                  {isAdmin ? 'Admin' : 'Staff'}
+                  {user?.role === 'ADMIN' ? 'Admin' : user?.role === 'MANAGER' ? 'QL' : 'Staff'}
                 </Badge>
               </div>
 

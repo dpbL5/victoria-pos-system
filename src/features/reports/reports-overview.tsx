@@ -25,6 +25,7 @@ import { formatClock, money, paymentMethodLabel } from '@/features/pos/format'
 import type { PaymentMethod, UserSession } from '@/features/pos/types'
 import { toInputDate } from '@/lib/shared/utils'
 import { AreaChart, DonutChart, HourlyBarChart, DailyVolumeChart } from './reports-charts'
+import { isAdminOnly } from '@/lib/shared/roles'
 
 type ItemType = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT' | 'SURCHARGE'
 type Scope = 'STAFF' | 'ALL'
@@ -231,8 +232,8 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [from, to, loadRevenue, loadTrends])
 
-  const canExport = user?.role === 'ADMIN'
-  const isAdmin = user?.role === 'ADMIN'
+  const canExport = isAdminOnly(user?.role)
+  const isAdmin = isAdminOnly(user?.role)
   const currentShift = dashboard?.currentShift ?? null
   const today = dashboard?.today
 

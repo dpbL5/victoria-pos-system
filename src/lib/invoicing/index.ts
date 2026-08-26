@@ -3,6 +3,7 @@ export { generateInvoiceNo } from './helpers'
 export { voidInvoice, mapVoidInvoiceError } from './use-cases/void-invoice'
 export { editInvoice, mapEditInvoiceError } from './use-cases/edit-invoice'
 export { deleteInvoice, mapDeleteInvoiceError } from './use-cases/delete-invoice'
+export { retailSale, mapRetailSaleError } from './use-cases/retail-sale'
 export type {
   VoidInvoiceInput,
   VoidInvoiceResult,
@@ -16,13 +17,17 @@ export type {
   DeleteInvoiceResult,
 } from './use-cases/delete-invoice'
 export type {
+  RetailSaleInput,
+  RetailSaleLineInput,
+  RetailSaleResult,
+} from './use-cases/retail-sale'
+export type {
   BillingRepository,
   VoidInvoiceTarget,
   VoidInvoiceItemRef,
   ReverseStockInput,
   EditInvoiceTarget,
   CreatePaidInvoiceInput,
-  CreateDraftInvoiceInput,
   CreateInvoiceItemInput,
   CreatePaymentInput,
   CustomerInvoiceHistory,

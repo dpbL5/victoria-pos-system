@@ -60,11 +60,8 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       createPaidInvoice: vi.fn(async () => ({ id: 'inv-1', invoiceNo: 'INV-1' })),
       createPayment: vi.fn(async () => ({ id: 'pay-1' })),
       createMembershipPayment: vi.fn(),
-      createDraftInvoice: vi.fn(),
       createInvoiceItem: vi.fn(async () => ({ id: 'item-1' })),
       updateInvoiceTotals: vi.fn(),
-      findDraftInvoices: vi.fn(),
-      cancelDraftInvoices: vi.fn(),
       findByIdForEdit: vi.fn(),
       deleteInvoiceItems: vi.fn(),
       deletePayments: vi.fn(),
@@ -73,7 +70,6 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findByIdForDelete: vi.fn(),
       countLinkedTransactions: vi.fn(async () => ({ payments: 0, stockMovements: 0 })),
       deleteInvoiceWithItems: vi.fn(),
-      findDraftSellPreview: vi.fn(),
       findInvoicesByCustomer: vi.fn(),
       countPaidBySession: vi.fn(async () => 0),
     },
@@ -123,7 +119,11 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findActiveByCustomer: vi.fn(),
       findMany: vi.fn(),
       findByIdForPreview: vi.fn(),
-      findDraftSellTotals: vi.fn(),
+      findSellItemTotals: vi.fn(async () => ({})),
+      findSellItems: vi.fn(async () => []),
+      addSellItem: vi.fn(async () => {}),
+      removeSellItems: vi.fn(async () => {}),
+      clearSellItems: vi.fn(async () => {}),
       countCreatedBetween: vi.fn(async () => 0),
       createWithRefs: vi.fn(),
       createPricingGroup: vi.fn(async () => ({ id: 'group-1' })),
@@ -136,6 +136,8 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findPlayersForPause: vi.fn(),
       pausePlayer: vi.fn(async () => {}),
       resumePlayer: vi.fn(async () => {}),
+      pausePlayersForSession: vi.fn(async () => {}),
+      resumePlayersForSession: vi.fn(async () => {}),
       renamePlayer: vi.fn(),
       movePlayersToGroup: vi.fn(async () => {}),
       markPlayersCheckedOut: vi.fn(async () => {}),
@@ -157,6 +159,9 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findByIdAdmin: vi.fn(),
       createWithInitialStock: vi.fn(),
       applyStockMovement: vi.fn(),
+      deactivate: vi.fn(),
+      delete: vi.fn(),
+      countUsage: vi.fn(),
     },
     cashflow: {
       create: vi.fn(),
@@ -168,6 +173,11 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     },
     user: { findByUsername: vi.fn(), findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), findActiveOpenShiftParticipants: vi.fn() },
     tool: { findMany: vi.fn(), findById: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    student: { findMany: vi.fn(), findById: vi.fn(), findByIdIncludingDeleted: vi.fn(), create: vi.fn(), update: vi.fn(), softDelete: vi.fn() },
+    lesson: { findManyBetween: vi.fn(), findById: vi.fn(), findBySeries: vi.fn(), findUpcomingByStudent: vi.fn(), findPastByStudent: vi.fn(), create: vi.fn(), update: vi.fn(), cancel: vi.fn(), setGoogleEventId: vi.fn(), deleteFutureBySeries: vi.fn(), countLessonsByStudent: vi.fn(), upsertAttendance: vi.fn(), setPackage: vi.fn() },
+    lessonSeries: { findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    lessonPackage: { findById: vi.fn(), findActiveByStudent: vi.fn(), create: vi.fn(), update: vi.fn(), incrementUsed: vi.fn() },
+    calendarConnection: { find: vi.fn(async () => null), upsert: vi.fn(), updateToken: vi.fn(), delete: vi.fn() },
     reporting: {
       getDashboardData: vi.fn(),
       getRevenueData: vi.fn(),
@@ -198,7 +208,8 @@ function makeCtx(): CheckoutContext {
       { productId: 'prod-1', type: 'PRODUCT', description: 'Nước suối', quantity: 2, unitPrice: 15000, subtotal: 30000 },
     ],
     productSubtotal: 30000,
-    draftInvoiceIds: [],
+    mergedSellItemIds: [],
+    sellItemLines: [],
     newQuantityByProductId: new Map([['prod-1', 2]]),
     parkingVehicleCount: 0,
     checkoutAt: new Date('2026-08-07T12:00:00Z'),
@@ -496,21 +507,22 @@ describe('runCheckOutTx', () => {
     expect(result.finalPricing.isMemberSession).toBe(true)
   })
 
-  it('checkout full với merged drafts: hủy draft invoices khi đóng phiên', async () => {
+  it('checkout full với sell items: gộp thành InvoiceItem + xoá dòng bán kèm', async () => {
     const repos = makeRepositories()
     const ctx = makeCtx()
-    ctx.draftInvoiceIds = ['draft-1', 'draft-2']
+    ctx.mergedSellItemIds = ['ssi-1', 'ssi-2']
+    ctx.sellItemLines = [
+      { id: 'ssi-1', productId: 'prod-1', quantity: 1, unitPrice: 15000, unitCost: 8000 },
+      { id: 'ssi-2', productId: 'prod-1', quantity: 1, unitPrice: 15000, unitCost: 8000 },
+    ]
     const result = await runCheckOutTx(repos, ctx, makeState())
 
-    // Full checkout → cancel drafts với note gộp vào invoice
-    expect(repos.billing.cancelDraftInvoices).toHaveBeenCalledWith(
-      ['draft-1', 'draft-2'],
-      'Đã gộp vào hóa đơn INV-1'
-    )
+    // Full checkout → xoá các dòng bán kèm đã gộp
+    expect(repos.session.removeSellItems).toHaveBeenCalledWith(['ssi-1', 'ssi-2'])
     expect(result.remainingPlayers).toBe(0)
   })
 
-  it('partial checkout với merged drafts: hủy draft ngay để không tính lặp', async () => {
+  it('partial checkout với sell items: xoá dòng bán kèm đã gộp ngay để không tính lặp', async () => {
     const repos = makeRepositories({
       session: {
         ...makeRepositories().session,
@@ -519,14 +531,14 @@ describe('runCheckOutTx', () => {
       },
     })
     const ctx = makeCtx()
-    ctx.draftInvoiceIds = ['draft-1']
+    ctx.mergedSellItemIds = ['ssi-1']
+    ctx.sellItemLines = [
+      { id: 'ssi-1', productId: 'prod-1', quantity: 1, unitPrice: 15000, unitCost: 8000 },
+    ]
     const result = await runCheckOutTx(repos, ctx, makeState())
 
     expect(result.remainingPlayers).toBe(1)
-    expect(repos.billing.cancelDraftInvoices).toHaveBeenCalledWith(
-      ['draft-1'],
-      'Đã gộp vào hóa đơn INV-1'
-    )
+    expect(repos.session.removeSellItems).toHaveBeenCalledWith(['ssi-1'])
   })
 
   it('WALK_IN session chưa có giá: persist bảng giá vào group 1 trước khi tạo invoice', async () => {
@@ -675,6 +687,83 @@ describe('runCheckOutTx', () => {
       { id: 'player-1', name: '', pausedSeconds: 2100 },
       { id: 'player-2', name: 'Minh', pausedSeconds: 0 },
     ])
+  })
+
+  it('per-player fallback session pause: phiên 1 người pause toàn phiên → player pause 0 → tính đúng (trừ pause)', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    // Phiên 1 người: session pause toàn phiên (900s tích lũy) — player chưa có pause (dữ liệu cũ chưa đồng bộ)
+    ctx.session = {
+      ...makeSession(),
+      playerCount: 1,
+      startTime: new Date('2026-08-07T11:00:00Z'),
+      totalPausedSeconds: 900,
+      pausedAt: null,
+      pricingGroups: [{
+        ...makeSession().pricingGroups[0],
+        playerCount: 1,
+        remainingCount: 1,
+        players: [{
+          id: 'player-1', name: null, pausedAt: null, totalPausedSeconds: 0,
+          sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:00Z'), updatedAt: new Date(),
+        }],
+      }],
+    } as unknown as SessionWithPlayers
+    ctx.targetGroupId = 'group-1'
+    ctx.checkoutCount = 1
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    ctx.pauseRef = new Date('2026-08-07T12:00:00Z')
+    ctx.playersToBill = [ctx.session.pricingGroups[0].players[0]]
+    const state = makeState()
+    state.finalPricing = { ...pricing, tiers: [], hourlyRate: 50000, totalHours: 1, subtotal: 50000, grandTotal: 50000 }
+
+    await runCheckOutTx(repos, ctx, state)
+
+    const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0].type === 'PLAY_TIME'
+    )
+    if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
+    // Elapsed 1h − pause 900s (0.25h) = 0.75h × 50k = 37.500đ
+    expect(playItemCall[0].quantity).toBeCloseTo(0.75, 2)
+    expect(playItemCall[0].subtotal).toBe(37500)
+    expect(playItemCall[0].metadata.pausedSeconds).toBe(900)
+    expect(playItemCall[0].metadata.playerPauses).toEqual([{ id: 'player-1', name: '', pausedSeconds: 900 }])
+  })
+
+  it('per-player không fallback khi nhiều người: session pause không cộng vào player (tránh double-count)', async () => {
+    const repos = makeRepositories()
+    const ctx = makeCtx()
+    const players = [
+      { id: 'player-1', name: null, pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:00Z'), updatedAt: new Date() },
+      { id: 'player-2', name: 'Minh', pausedAt: null, totalPausedSeconds: 0, sessionId: 'session-1', groupId: 'group-1', createdAt: new Date('2026-08-07T11:00:10Z'), updatedAt: new Date() },
+    ] as unknown as SessionWithPlayers['pricingGroups'][number]['players']
+    ctx.session = {
+      ...makeSession(),
+      startTime: new Date('2026-08-07T11:00:00Z'),
+      playerCount: 2,
+      totalPausedSeconds: 900,
+      pausedAt: null,
+      pricingGroups: [{ ...makeSession().pricingGroups[0], playerCount: 2, remainingCount: 2, players }],
+    } as unknown as SessionWithPlayers
+    ctx.targetGroupId = 'group-1'
+    ctx.checkoutCount = 2
+    ctx.checkoutAt = new Date('2026-08-07T12:00:00Z')
+    ctx.endTime = new Date('2026-08-07T12:00:00Z')
+    ctx.pauseRef = new Date('2026-08-07T12:00:00Z')
+    ctx.playersToBill = players
+    const state = makeState()
+    state.finalPricing = { ...pricing, tiers: [], hourlyRate: 50000, totalHours: 2, subtotal: 100000, grandTotal: 100000 }
+
+    await runCheckOutTx(repos, ctx, state)
+
+    const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0].type === 'PLAY_TIME'
+    )
+    if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
+    // 2 người × 1h = 2h, KHÔNG trừ session pause (dữ liệu player đã có)
+    expect(playItemCall[0].quantity).toBe(2)
+    expect(playItemCall[0].metadata.pausedSeconds).toBe(0)
   })
 
   it('PLAY_TIME metadata fallback session.totalPausedSeconds khi không có player rows (legacy)', async () => {

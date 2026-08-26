@@ -13,6 +13,13 @@ import { createCashflowRepository } from './adapters/cashflow-adapter'
 import { createUserRepository } from './adapters/user-adapter'
 import { createToolRepository } from './adapters/tool-adapter'
 import { createReportingRepository } from './adapters/reporting-adapter'
+import {
+  createStudentRepository,
+  createLessonRepository,
+  createLessonSeriesRepository,
+  createLessonPackageRepository,
+  createCalendarConnectionRepository,
+} from './adapters/student-adapter'
 import { createCachedSettingsRepository } from '@/lib/settings'
 import type { Prisma } from '@/generated/prisma/client'
 import type { BillingRepository } from '@/lib/invoicing/ports'
@@ -27,6 +34,13 @@ import type { CashflowRepository } from '@/lib/cashflow/ports'
 import type { UserRepository } from '@/lib/users/ports'
 import type { ToolRepository } from '@/lib/tools/ports'
 import type { ReportingRepository } from '@/lib/reports/ports'
+import type {
+  StudentRepository,
+  LessonRepository,
+  LessonSeriesRepository,
+  LessonPackageRepository,
+  CalendarConnectionRepository,
+} from '@/lib/students/ports'
 
 /**
  * Bundle các repository theo từng domain. Interface được bổ sung dần
@@ -48,6 +62,11 @@ export interface Repositories {
   user: UserRepository
   tool: ToolRepository
   reporting: ReportingRepository
+  student: StudentRepository
+  lesson: LessonRepository
+  lessonSeries: LessonSeriesRepository
+  lessonPackage: LessonPackageRepository
+  calendarConnection: CalendarConnectionRepository
 }
 
 export function createRepositories(store: Prisma.TransactionClient): Repositories {
@@ -68,6 +87,11 @@ export function createRepositories(store: Prisma.TransactionClient): Repositorie
     user: createUserRepository(store),
     tool: createToolRepository(store),
     reporting: createReportingRepository(store),
+    student: createStudentRepository(store),
+    lesson: createLessonRepository(store),
+    lessonSeries: createLessonSeriesRepository(store),
+    lessonPackage: createLessonPackageRepository(store),
+    calendarConnection: createCalendarConnectionRepository(store),
   }
 }
 

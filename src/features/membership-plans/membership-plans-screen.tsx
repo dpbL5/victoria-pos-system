@@ -19,6 +19,7 @@ import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
@@ -97,7 +98,7 @@ export function MembershipPlansScreen() {
     [plans, filter]
   )
 
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = isAdminOnly(user?.role)
 
   const openCreate = () => {
     setEditingPlan(null)

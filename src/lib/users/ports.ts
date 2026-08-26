@@ -25,10 +25,10 @@ export interface UserRepository {
     username: string
     passwordHash: string
     fullName: string
-    role: 'ADMIN' | 'STAFF'
+    role: 'ADMIN' | 'MANAGER' | 'STAFF'
   }): Promise<UserListItem>
   /** Cập nhật user */
-  update(id: string, data: { fullName?: string; role?: 'ADMIN' | 'STAFF'; isActive?: boolean; passwordHash?: string }): Promise<UserListItem>
+  update(id: string, data: { fullName?: string; role?: 'ADMIN' | 'MANAGER' | 'STAFF'; isActive?: boolean; passwordHash?: string }): Promise<UserListItem>
   /** Participants chưa rời ca của staff — chặn khoá user đang trong ca OPEN */
   findActiveOpenShiftParticipants(staffId: string): Promise<Array<{ shiftId: string }>>
 }

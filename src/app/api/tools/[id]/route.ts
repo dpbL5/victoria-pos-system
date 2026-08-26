@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireMutationAuth } from '@/lib/shared/auth'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { updateToolSchema } from '@/lib/tools'
 
 async function requireAdminMutation(request: NextRequest) {
   const auth = await requireMutationAuth(request)
-  if (auth.role !== 'ADMIN') {
+  if (!isAdminOnly(auth.role)) {
     throw new Error('FORBIDDEN')
   }
   return auth

@@ -186,24 +186,6 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
       return { id: payment.id }
     },
 
-    async createDraftInvoice(input) {
-      const invoice = await store.invoice.create({
-        data: {
-          invoiceNo: input.invoiceNo,
-          customerId: input.customerId,
-          sessionId: input.sessionId,
-          shiftId: input.shiftId,
-          staffId: input.staffId,
-          status: 'DRAFT',
-          subtotal: input.subtotal,
-          discountTotal: input.discountTotal,
-          grandTotal: input.grandTotal,
-          notes: input.notes,
-        },
-      })
-      return { id: invoice.id, invoiceNo: invoice.invoiceNo }
-    },
-
     async createInvoiceItem(input) {
       const item = await store.invoiceItem.create({
         data: {
@@ -227,33 +209,6 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
       await store.invoice.update({
         where: { id: invoiceId },
         data: { subtotal, grandTotal },
-      })
-    },
-
-    async findDraftInvoices(sessionId) {
-      const drafts = await store.invoice.findMany({
-        where: { sessionId, status: 'DRAFT' },
-        select: {
-          id: true,
-          items: {
-            where: { productId: { not: null } },
-            select: { productId: true, quantity: true },
-          },
-        },
-      })
-      return drafts.map((d) => ({
-        id: d.id,
-        items: d.items.map((item) => ({
-          productId: item.productId,
-          quantity: Number(item.quantity),
-        })),
-      }))
-    },
-
-    async cancelDraftInvoices(ids, notes) {
-      await store.invoice.updateMany({
-        where: { id: { in: ids }, status: 'DRAFT' },
-        data: { status: 'CANCELLED', notes },
       })
     },
 
@@ -437,37 +392,6 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
     async deleteInvoiceWithItems(invoiceId) {
       await store.invoiceItem.deleteMany({ where: { invoiceId } })
       await store.invoice.delete({ where: { id: invoiceId } })
-    },
-
-    async findDraftSellPreview(sessionId) {
-      const drafts = await store.invoice.findMany({
-        where: { sessionId, status: 'DRAFT' },
-        include: {
-          items: {
-            where: { productId: { not: null } },
-            select: {
-              productId: true,
-              description: true,
-              type: true,
-              quantity: true,
-              unitPrice: true,
-              subtotal: true,
-            },
-          },
-        },
-      })
-      return drafts.map((d) => ({
-        id: d.id,
-        grandTotal: Number(d.grandTotal),
-        items: d.items.map((item) => ({
-          productId: item.productId!,
-          description: item.description,
-          type: item.type,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice),
-          subtotal: Number(item.subtotal),
-        })),
-      }))
     },
 
     async countPaidBySession(sessionId) {

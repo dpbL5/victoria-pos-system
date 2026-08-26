@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireAuth } from '@/lib/shared/auth'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { calcToolStats } from '@/lib/shifts'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { parseStartOfDay, toInputDate } from '@/lib/shared/utils'
@@ -7,7 +8,10 @@ import type { ShiftRevenueSummary } from '@/types'
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin()
+    const auth = await requireAuth()
+    if (!isAdminOnly(auth.role)) {
+      return NextResponse.json({ success: false, error: 'Không có quyền' }, { status: 403 })
+    }
 
     const { searchParams } = new URL(request.url)
     const fromStr = searchParams.get('from') ?? toInputDate(new Date())

@@ -35,6 +35,7 @@ import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { toInputDate } from '@/lib/shared/utils'
 import type { UserSession } from '@/features/pos/types'
 import type { UserRole } from '@/types'
+import { isAdminOnly } from '@/lib/shared/roles'
 
 interface UserRow {
   id: string
@@ -129,7 +130,7 @@ export default function StaffPage() {
     return <StaffSkeleton />
   }
 
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = isAdminOnly(user?.role)
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
@@ -267,7 +268,7 @@ function AccountsTab({
   const stats = useMemo(() => ({
     total: users.length,
     active: users.filter((item) => item.isActive).length,
-    admins: users.filter((item) => item.role === 'ADMIN').length,
+    admins: users.filter((item) => item.role === 'ADMIN' || item.role === 'MANAGER').length,
     staff: users.filter((item) => item.role === 'STAFF').length,
   }), [users])
 
@@ -323,7 +324,7 @@ function AccountsTab({
     if (!roleEditTarget) return
 
     // Chặn làm mất quản trị viên duy nhất còn lại.
-    if (selectedRole === 'STAFF' && roleEditTarget.role === 'ADMIN') {
+    if (selectedRole !== 'ADMIN' && roleEditTarget.role === 'ADMIN') {
       const otherAdmins = users.filter((item) => item.role === 'ADMIN' && item.id !== roleEditTarget.id)
       if (otherAdmins.length === 0) {
         notifyError('Phải giữ lại ít nhất một quản trị viên.')
@@ -343,7 +344,7 @@ function AccountsTab({
       }
 
       notifySuccess(
-        `Đã cập nhật vai trò ${roleEditTarget.fullName} → ${selectedRole === 'ADMIN' ? 'Quản trị viên' : 'Nhân viên'}`,
+        `Đã cập nhật vai trò ${roleEditTarget.fullName} → ${selectedRole === 'ADMIN' ? 'Quản trị viên' : selectedRole === 'MANAGER' ? 'Quản lý' : 'Nhân viên'}`,
       )
       setRoleEditTarget(null)
       await onReload()
@@ -396,8 +397,8 @@ function AccountsTab({
       label: 'Vai trò',
       cellClassName: 'px-4 py-3',
       render: (item) => (
-        <Badge variant={item.role === 'ADMIN' ? 'purple' : 'default'} size="sm">
-          {item.role === 'ADMIN' ? 'Admin' : 'Nhân viên'}
+        <Badge variant={isAdminOnly(item.role) ? 'purple' : 'default'} size="sm">
+          {isAdminOnly(item.role) ? 'Admin' : 'Nhân viên'}
         </Badge>
       ),
     },
@@ -460,8 +461,8 @@ function AccountsTab({
       render: (item) => (
         <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
           {item.fullName}
-          <Badge variant={item.role === 'ADMIN' ? 'purple' : 'default'} size="sm">
-            {item.role === 'ADMIN' ? 'Admin' : 'Nhân viên'}
+          <Badge variant={isAdminOnly(item.role) ? 'purple' : 'default'} size="sm">
+            {isAdminOnly(item.role) ? 'Admin' : 'Nhân viên'}
           </Badge>
         </span>
       ),
@@ -613,6 +614,7 @@ function AccountsTab({
                   onChange={(event) => setForm({ ...form, role: event.target.value as UserRole })}
                 >
                   <option value="STAFF">Nhân viên</option>
+                  <option value="MANAGER">Quản lý</option>
                   <option value="ADMIN">Quản trị viên</option>
                 </Select>
               </div>
@@ -740,6 +742,7 @@ function AccountsTab({
               onChange={(event) => setSelectedRole(event.target.value as UserRole)}
             >
               <option value="STAFF">Nhân viên</option>
+              <option value="MANAGER">Quản lý</option>
               <option value="ADMIN">Quản trị viên</option>
             </Select>
           </div>

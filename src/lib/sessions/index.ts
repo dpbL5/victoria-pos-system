@@ -2,11 +2,12 @@
 export { checkIn, mapCheckInError } from './use-cases/check-in'
 export { checkOut, mapCheckoutError } from './use-cases/check-out'
 export { sellItems, mapSellItemsError } from './use-cases/sell-items'
+export { removeSellItems, mapRemoveSellItemsError } from './use-cases/sell-items'
 export { updateSession, mapUpdateSessionError } from './use-cases/update-session'
 export { pauseSession, resumeSession, mapPauseSessionError, mapResumeSessionError } from './use-cases/pause-session'
 export { pausePlayer, resumePlayer, mapPausePlayerError, mapResumePlayerError } from './use-cases/pause-session'
 export { renamePlayer, mapRenamePlayerError } from './use-cases/rename-player'
-export { createProduct, mapCreateProductError, applyStockMovement, mapApplyStockMovementError } from './use-cases/product-crud'
+export { createProduct, mapCreateProductError, applyStockMovement, mapApplyStockMovementError, deleteProduct, mapDeleteProductError } from './use-cases/product-crud'
 export {
   calculateSessionPrice,
   calculateSessionPriceFromLoaded,
@@ -32,6 +33,10 @@ export type {
   SellItemsResult,
 } from './use-cases/sell-items'
 export type {
+  RemoveSellItemsInput,
+  RemoveSellItemsResult,
+} from './use-cases/sell-items'
+export type {
   PauseSessionInput,
   PauseSessionResult,
   ResumeSessionInput,
@@ -54,6 +59,8 @@ export type {
   CreateProductResult,
   ApplyStockMovementInput,
   ApplyStockMovementResult,
+  DeleteProductInput,
+  DeleteProductResult,
 } from './use-cases/product-crud'
 export type {
   SessionRepository,
@@ -65,6 +72,7 @@ export type {
   SessionListRow,
   SessionPreviewRow,
   SessionListFilter,
+  SessionSellItemRecord,
   CreateSessionData,
   CreatePricingGroupData,
   UpdatePricingGroupData,
@@ -72,6 +80,6 @@ export type {
   ProductAdminRow,
   ProductAdminDetail,
 } from './ports'
-export { playerPausedSeconds, groupPausedSeconds } from './ports'
+export { playerPausedSeconds, groupPausedSeconds, sessionPauseSeconds } from './ports'
 export * from './session-validations'
 export * from './product-validations'

@@ -10,7 +10,7 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
-  FlaskConical,
+  GraduationCap,
   Package,
   Settings,
   ShieldCheck,
@@ -22,31 +22,37 @@ import {
 } from 'lucide-react'
 import { useCallback } from 'react'
 import { Button } from '@/components/ui/button'
+import { isAdminOnly } from '@/lib/shared/roles'
 
 interface MenuItem {
   href: string
   label: string
   Icon: LucideIcon
   adminOnly?: boolean
+  staffHidden?: boolean
 }
 
 export const staffMenuItems: MenuItem[] = [
   { href: '/sessions', label: 'Ca hôm nay', Icon: Timer },
-  { href: '/shifts', label: 'Ca làm', Icon: CalendarClock },
+  { href: '/shifts', label: 'Ca làm', Icon: CalendarClock, staffHidden: true },
   { href: '/customers', label: 'Hội viên', Icon: ShieldCheck },
-  { href: '/inventory', label: 'Kho', Icon: Package },
-  { href: '/reports', label: 'Báo cáo', Icon: BarChart3 },
+  { href: '/inventory', label: 'Kho', Icon: Package, staffHidden: true },
+  { href: '/reports', label: 'Báo cáo', Icon: BarChart3, adminOnly: true },
   { href: '/pricing', label: 'Bảng giá', Icon: Banknote, adminOnly: true },
   { href: '/promotions', label: 'Khuyến mại', Icon: Tag, adminOnly: true },
   { href: '/tools', label: 'Dụng cụ', Icon: Wrench, adminOnly: true },
+  { href: '/students', label: 'Học viên', Icon: GraduationCap, adminOnly: true },
   { href: '/staff', label: 'Nhân viên', Icon: UserCog, adminOnly: true },
   { href: '/cashflow', label: 'Thu chi', Icon: ArrowRightLeft, adminOnly: true },
-  { href: '/testing', label: 'Testing', Icon: FlaskConical },
   { href: '/settings', label: 'Cài đặt', Icon: Settings },
 ]
 
 export function getVisibleStaffMenuItems(userRole?: string): MenuItem[] {
-  return staffMenuItems.filter((item) => !item.adminOnly || userRole === 'ADMIN')
+  return staffMenuItems.filter((item) => {
+    if (item.adminOnly && !isAdminOnly(userRole)) return false
+    if (item.staffHidden && userRole === 'STAFF') return false
+    return true
+  })
 }
 
 interface SidebarProps {
@@ -96,7 +102,7 @@ export function Sidebar({ collapsed, onToggle, userRole }: SidebarProps) {
             <h1 className="truncate text-sm font-bold leading-tight tracking-wide text-zinc-900 dark:text-white">
               VICTORIA
             </h1>
-            <p className="truncate text-[10px] font-medium uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">
+            <p className="truncate text-[10px] font-medium uppercase tracking-[0.2em] text-gold-dark dark:text-gold">
               Archery Club
             </p>
           </div>

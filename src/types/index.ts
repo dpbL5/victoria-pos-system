@@ -1,7 +1,7 @@
 // ── Shared TypeScript types ─────────────────────────────
 
 // Re-export Prisma enums as convenience types
-export type UserRole = "ADMIN" | "STAFF"
+export type UserRole = "ADMIN" | "MANAGER" | "STAFF"
 export type CustomerType = "WALK_IN" | "MEMBER"
 export type SessionStatus = "ACTIVE" | "COMPLETED" | "CANCELLED"
 export type DayType = "WEEKDAY" | "WEEKEND"
@@ -76,8 +76,8 @@ export interface PendingSellItem {
   quantity: number
   unitPrice: number
   subtotal: number
-  /** ID của DRAFT invoice chứa item này — dùng để chọn/bỏ chọn theo từng lần bán kèm */
-  draftInvoiceId: string
+  /** ID của dòng bán kèm (SessionSellItem) — dùng để xoá từng dòng trước khi checkout */
+  sessionSellItemId: string
 }
 
 export interface PricingTier {

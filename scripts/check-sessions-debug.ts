@@ -17,10 +17,10 @@ async function main() {
   }
 
   try {
-    const totals = await repositories.session.findDraftSellTotals(['8d38d788-02a8-449e-8b24-7480f7fef3f5'])
-    console.log('findDraftSellTotals OK:', JSON.stringify(totals))
+    const totals = await repositories.session.findSellItemTotals(['8d38d788-02a8-449e-8b24-7480f7fef3f5'])
+    console.log('findSellItemTotals OK:', JSON.stringify(totals))
   } catch (e) {
-    console.error('findDraftSellTotals FAILED:', e)
+    console.error('findSellItemTotals FAILED:', e)
   }
 }
 

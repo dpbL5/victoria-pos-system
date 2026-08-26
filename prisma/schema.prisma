@@ -14,6 +14,7 @@ datasource db {
 
 enum UserRole {
   ADMIN
+  MANAGER
   STAFF
 }
 
@@ -97,6 +98,23 @@ enum ShiftParticipantRole {
 enum CashflowType {
   INCOME
   EXPENSE
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum LessonStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum LessonAttendance {
+  SCHEDULED
+  COMPLETED
+  ABSENT
 }
 
 // Models
@@ -183,6 +201,7 @@ model Session {
   invoices      Invoice[]
   pricingGroups SessionPricingGroup[]
   players       SessionPlayer[]
+  sellItems     SessionSellItem[]
 
   @@index([customerId, status])
   @@index([shiftId])
@@ -192,6 +211,24 @@ model Session {
   @@index([createdAt])
   @@index([status, createdAt])
   @@map("sessions")
+}
+
+/** Dòng bán kèm tạm trên phiên — chưa phải hóa đơn; khi checkout mới tạo invoice INV duy nhất */
+model SessionSellItem {
+  id        String   @id @default(uuid())
+  sessionId String   @map("session_id")
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  productId String   @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int      @default(1)
+  unitPrice Decimal  @default(0) @map("unit_price") @db.Decimal(12, 0)
+  unitCost  Decimal? @map("unit_cost") @db.Decimal(12, 0)
+  notes     String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([sessionId])
+  @@map("session_sell_items")
 }
 
 model SessionPricingGroup {
@@ -466,6 +503,7 @@ model Product {
 
   invoiceItems   InvoiceItem[]
   stockMovements StockMovement[]
+  sellItems      SessionSellItem[]
 
   @@index([isActive])
   @@map("products")
@@ -562,4 +600,111 @@ model ActivityLog {
   @@index([entityType, entityId])
   @@index([action, createdAt])
   @@map("activity_logs")
+}
+
+// ── Domain Học viên (tách biệt khỏi POS/Customer) ─────
+
+model Student {
+  id        String        @id @default(uuid())
+  fullName  String        @map("full_name") @db.VarChar(100)
+  phone     String?       @db.VarChar(20)
+  birthYear Int?          @map("birth_year")
+  notes     String?       @db.Text
+  status    StudentStatus @default(ACTIVE)
+  deletedAt DateTime?     @map("deleted_at") // soft delete — giữ lịch sử
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  packages LessonPackage[]
+  lessons  LessonStudent[]
+
+  @@index([status])
+  @@map("students")
+}
+
+model LessonPackage {
+  id        String   @id @default(uuid())
+  studentId String   @map("student_id")
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  name      String   @db.VarChar(100)
+  total     Int      @default(1) // số buổi đã mua
+  used      Int      @default(0) // số buổi đã dùng
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  lessonStudents LessonStudent[]
+
+  @@index([studentId, isActive])
+  @@map("lesson_packages")
+}
+
+model LessonSeries {
+  id            String    @id @default(uuid())
+  title         String    @db.VarChar(150)
+  coachName     String?   @map("coach_name") @db.VarChar(100)
+  daysOfWeek    Int[]     @map("days_of_week") // [1,4] = T2, T5 (0=CN)
+  startTime     String    @map("start_time") @db.VarChar(5) // "18:00"
+  durationMin   Int       @default(60) @map("duration_min")
+  rrule         String    @db.VarChar(200) // FREQ=WEEKLY;BYDAY=MO,TH
+  startsOn      DateTime  @map("starts_on")
+  endsOn        DateTime? @map("ends_on")
+  isActive      Boolean   @default(true) @map("is_active")
+  googleEventId String?   @map("google_event_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  lessons Lesson[]
+
+  @@index([startsOn])
+  @@map("lesson_series")
+}
+
+model Lesson {
+  id            String         @id @default(uuid())
+  seriesId      String?        @map("series_id")
+  series        LessonSeries?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  title         String         @db.VarChar(150)
+  coachName     String?        @map("coach_name") @db.VarChar(100)
+  startsAt      DateTime       @map("starts_at")
+  durationMin   Int            @default(60) @map("duration_min")
+  status        LessonStatus   @default(SCHEDULED)
+  note          String?        @db.Text // note cấp buổi
+  googleEventId String?        @map("google_event_id")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  students LessonStudent[]
+
+  @@index([startsAt])
+  @@index([seriesId])
+  @@map("lessons")
+}
+
+model LessonStudent {
+  id        String           @id @default(uuid())
+  lessonId  String           @map("lesson_id")
+  lesson    Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  studentId String           @map("student_id")
+  student   Student          @relation(fields: [studentId], references: [id])
+  status    LessonAttendance @default(SCHEDULED)
+  note      String?          @db.Text // note riêng từng HV
+  packageId String?          @map("package_id") // gói bị trừ khi hoàn thành buổi này
+  package   LessonPackage?   @relation(fields: [packageId], references: [id], onDelete: SetNull)
+
+  @@unique([lessonId, studentId])
+  @@index([studentId])
+  @@map("lesson_students")
+}
+
+model CalendarConnection {
+  id             String   @id @default(uuid())
+  email          String   @db.VarChar(200)
+  accessToken    String   @map("access_token") @db.Text
+  refreshToken   String   @map("refresh_token") @db.Text
+  tokenExpiresAt DateTime @map("token_expires_at")
+  calendarId     String?  @map("calendar_id") @db.VarChar(200) // null = calendar "primary"
+  connectedAt    DateTime @default(now()) @map("connected_at")
+
+  @@map("calendar_connections")
 }

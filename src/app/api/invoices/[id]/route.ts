@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { deleteInvoice, mapDeleteInvoiceError } from '@/lib/invoicing'
 import { repositories } from '@/lib/infrastructure/repositories'
 import {
@@ -32,7 +33,7 @@ export async function GET(
       return apiError({ code: 'INVOICE_NOT_FOUND', message: 'Không tìm thấy hoá đơn', status: 404 })
     }
 
-    const isAdmin = auth.role === 'ADMIN'
+    const isAdmin = auth.role === 'ADMIN' || auth.role === 'MANAGER'
     const isOwner = invoice.staffId === auth.userId
     if (!isAdmin && !isOwner) {
       return apiError({ code: 'FORBIDDEN', message: 'Không có quyền xem hoá đơn này', status: 403 })
@@ -133,7 +134,7 @@ export async function DELETE(
 ) {
   try {
     const auth = await requireMutationAuth(request)
-    if (auth.role !== 'ADMIN') return apiError(ERR_FORBIDDEN)
+    if (!isAdminOnly(auth.role)) return apiError(ERR_FORBIDDEN)
     const { id } = await params
 
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {

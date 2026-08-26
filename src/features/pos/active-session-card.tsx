@@ -36,10 +36,11 @@ export function ActiveSessionCard({
   const isPaused = !!session.pausedAt
   const pendingSell = toNumber(session.pendingSellTotal ?? 0)
 
-  // Phiên nhiều người CÓ player rows → mỗi người 1 thẻ riêng (pause per-player)
-  const hasPlayers = isGroup && (session.pricingGroups?.some((g) => (g.players?.length ?? 0) > 0) ?? false)
+  // Phiên có player rows → mỗi người 1 thẻ riêng (pause per-player, 2 đồng hồ).
+  // Phiên 1 người cũng có player row (check-in luôn tạo) — dùng chung nguồn dữ liệu.
+  const hasPlayers = (session.pricingGroups?.some((g) => (g.players?.length ?? 0) > 0) ?? false)
 
-  // Thu gọn bảng người chơi (chỉ phiên nhóm) — collapse mặc định khi có nhiều người
+  // Thu gọn bảng người chơi — mặc định mở với phiên 1 người, thu gọn khi nhiều người
   const [collapsed, setCollapsed] = useState(isGroup)
   const toggleCollapsed = () => setCollapsed((value) => !value)
 
@@ -76,7 +77,7 @@ export function ActiveSessionCard({
                 {playerCount} người
               </Badge>
             )}
-            {hasPlayers && (
+            {hasPlayers && isGroup && (
               <button
                 type="button"
                 onClick={toggleCollapsed}
@@ -131,7 +132,8 @@ export function ActiveSessionCard({
         </div>
       </div>
 
-      {/* Phiên nhiều người → thẻ từng người chơi với timer + pause riêng (thu gọn được) */}
+      {/* Phiên có player rows → thẻ từng người chơi với timer + pause riêng (2 đồng hồ).
+          Phiên 1 người cũng hiển thị 1 thẻ — dùng chung luồng với phiên nhiều người. */}
       {hasPlayers && !collapsed && (
         <div className="mt-3 space-y-2">
           {session.pricingGroups!

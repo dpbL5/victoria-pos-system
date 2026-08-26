@@ -252,7 +252,7 @@ async function getRevenueExportRows(store: ReportingStore, from: Date, to: Date)
       },
       staff: { select: { fullName: true } },
     },
-    orderBy: { paidAt: 'asc' },
+    orderBy: { paidAt: 'desc' },
   })
   return rows as unknown as RevenueRow[]
 }

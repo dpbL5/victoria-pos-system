@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       username: user.username,
       fullName: user.fullName,
-      role: user.role as "ADMIN" | "STAFF",
+      role: user.role as "ADMIN" | "MANAGER" | "STAFF",
     });
 
     return NextResponse.json({

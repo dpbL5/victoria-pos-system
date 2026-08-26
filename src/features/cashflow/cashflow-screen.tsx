@@ -21,6 +21,7 @@ import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
+import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
@@ -92,7 +93,7 @@ export function CashflowScreen() {
   const loading = isLoading || userLoading
   const user = userData?.data ?? null
 
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = isAdminOnly(user?.role)
 
   const goPage = (p: number) => {
     if (p < 1 || p > pagination.totalPages) return

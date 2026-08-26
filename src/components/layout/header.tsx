@@ -23,7 +23,6 @@ const TITLES: Record<string, string> = {
   '/settings': 'Thêm',
   '/cashflow': 'Thu chi',
   '/membership-plans': 'Gói hội viên',
-  '/testing': 'Testing',
 }
 
 function getTitle(pathname: string): string {
@@ -36,7 +35,7 @@ function getTitle(pathname: string): string {
 export function Header({ userFullName, userRole }: HeaderProps) {
   const pathname = usePathname()
   const { refresh } = usePageRefresh()
-  const roleLabel = userRole === 'ADMIN' ? 'Quản trị viên' : 'Nhân viên'
+  const roleLabel = userRole === 'ADMIN' ? 'Quản trị viên' : userRole === 'MANAGER' ? 'Quản lý' : 'Nhân viên'
   const initial = userFullName.charAt(0).toUpperCase()
   const title = getTitle(pathname)
 

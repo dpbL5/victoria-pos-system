@@ -17,7 +17,7 @@ export async function GET() {
     const { start, end } = getTodayRange()
     const scope = auth.role === 'STAFF' ? 'STAFF' : 'ALL'
 
-    const currentShift = auth.role === 'ADMIN'
+    const currentShift = auth.role === 'ADMIN' || auth.role === 'MANAGER'
       ? await repositories.shift.findOpenOperational()
       : await repositories.shift.findOpenForStaff(auth.userId)
     const currentShiftId = currentShift?.id ?? null

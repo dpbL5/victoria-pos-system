@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/shared/auth'
 import { SETTING_KEYS } from '@/lib/settings'
-import { calculatePlayerPrice, calculateSessionPrice, calculateSessionPriceFromLoaded, groupPausedSeconds, playerPausedSeconds } from '@/lib/sessions'
+import { calculatePlayerPrice, calculateSessionPrice, calculateSessionPriceFromLoaded, groupPausedSeconds, playerPausedSeconds, sessionPauseSeconds } from '@/lib/sessions'
 import type { PendingGroupPricing } from '@/lib/sessions'
 import { repositories } from '@/lib/infrastructure/repositories'
 import type { PlayTimeQuote, PricingRuleSnapshot } from '@/types'
@@ -264,6 +264,9 @@ export async function GET(
       }
 
       if (playersToQuote.length > 0) {
+        // Fallback session-level cho phiên 1 người cũ (pause toàn phiên chưa đồng bộ
+        // xuống player): chỉ áp khi quote đúng 1 người và player chưa có pause nào.
+        const quoteCount = playersToQuote.length
         const quoteFor = (p: typeof playersToQuote[number]) => {
           const groupIndex = playerToGroupIndex.get(p.id)
           // resolved chỉ được populate khi needsPricing (bảng giá chọn tại checkout).
@@ -278,11 +281,15 @@ export async function GET(
                 ruleName: snapshot.name,
               }
             : groupRuleByName(session.pricingGroups.find((g) => g.id === p.groupId) ?? session.pricingGroups[0])
+          const playerSeconds = playerPausedSeconds(p, pausedAtRef)
+          const pausedSeconds = quoteCount === 1 && playerSeconds === 0
+            ? sessionPauseSeconds(session, pausedAtRef)
+            : playerSeconds
           return {
             result: calculatePlayerPrice({
               startTime: session.startTime,
               endTime,
-              pausedSeconds: playerPausedSeconds(p, pausedAtRef),
+              pausedSeconds,
               hourlyRate: rule.hourlyRate,
               tiers: rule.tiers,
               promotion,
@@ -335,24 +342,28 @@ export async function GET(
       }
     }
 
-    // ── Lấy danh sách bán kèm chưa thanh toán (DRAFT invoices) ──
-    const draftInvoices = await repositories.billing.findDraftSellPreview(id)
+    // ── Lấy danh sách dòng bán kèm chưa thanh toán (SessionSellItem) ──
+    const sellItems = await repositories.session.findSellItems(id)
+    const sellProductIds = Array.from(new Set(sellItems.map((i) => i.productId)))
+    const sellProducts = sellProductIds.length > 0
+      ? await repositories.product.findManyByIds(sellProductIds)
+      : []
+    const sellProductById = new Map(sellProducts.map((p) => [p.id, p]))
 
     let pendingSellTotal = 0
     const pendingSellItems: PlayTimeQuote['pendingSellItems'] = []
-    for (const draft of draftInvoices) {
-      pendingSellTotal += draft.grandTotal
-      for (const item of draft.items) {
-        pendingSellItems.push({
-          productId: item.productId,
-          productName: item.description,
-          type: item.type as 'PRODUCT' | 'SERVICE',
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice),
-          subtotal: Number(item.subtotal),
-          draftInvoiceId: draft.id,
-        })
-      }
+    for (const item of sellItems) {
+      const product = sellProductById.get(item.productId)
+      pendingSellTotal += item.quantity * item.unitPrice
+      pendingSellItems.push({
+        productId: item.productId,
+        productName: product?.name ?? 'Sản phẩm',
+        type: product?.type ?? 'PRODUCT',
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        subtotal: item.quantity * item.unitPrice,
+        sessionSellItemId: item.id,
+      })
     }
 
     const quote: PlayTimeQuote = {

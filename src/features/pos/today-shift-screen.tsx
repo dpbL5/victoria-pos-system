@@ -21,6 +21,7 @@ import { OpenShiftDialog } from './open-shift-dialog'
 import { CloseShiftDialog } from './close-shift-dialog'
 import { ToolCountDialog } from './tool-count-dialog'
 import { SellDialog } from './sell-dialog'
+import { RetailDialog } from './retail-dialog'
 import { CheckInDialog } from './check-in-dialog'
 import { CheckoutDrawer } from './checkout-drawer'
 import type {
@@ -54,6 +55,7 @@ export function TodayShiftScreen() {
   const [checkoutFrozenAt, setCheckoutFrozenAt] = useState<string | null>(null)
   const [sellSession, setSellSession] = useState<SessionRow | null>(null)
   const [sellPickOpen, setSellPickOpen] = useState(false)
+  const [retailOpen, setRetailOpen] = useState(false)
   const [tools, setTools] = useState<{ id: string; name: string; quantity: number; isRequired: boolean }[]>([])
 
   const [, setTick] = useState(0)
@@ -358,6 +360,7 @@ export function TodayShiftScreen() {
 
         <QuickActions
           shiftReady={shiftReady}
+          retailDisabled
           onCheckIn={() => {
             setCheckInInitialMode('WALK_IN')
             setCheckInDialog(true)
@@ -373,6 +376,7 @@ export function TodayShiftScreen() {
               setSellPickOpen(true)
             }
           }}
+          onRetail={() => setRetailOpen(true)}
         />
 
         <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -504,6 +508,19 @@ export function TodayShiftScreen() {
           setSellSession(session)
         }}
       />
+
+      {/* <RetailDialog
+        open={retailOpen}
+        products={products}
+        shiftReady={shiftReady}
+        submitting={submitting}
+        setSubmitting={setSubmitting}
+        onClose={() => setRetailOpen(false)}
+        onDone={async () => {
+          setRetailOpen(false)
+          await loadData()
+        }}
+      /> */}
 
     </div>
   )

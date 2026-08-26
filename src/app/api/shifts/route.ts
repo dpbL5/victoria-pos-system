@@ -39,6 +39,17 @@ export async function GET(request: NextRequest) {
         ? statusParam
         : undefined
 
+    // ── STAFF chỉ được dùng các query POS (current/openOperational) ──
+    // Danh sách ca làm / groupByDay là quyền MANAGER/ADMIN.
+    const isStaff = auth.role === 'STAFF'
+    const posOnly = current || openOperational
+    if (isStaff && !posOnly) {
+      return NextResponse.json(
+        { success: false, error: 'Không có quyền xem danh sách ca làm' },
+        { status: 403 }
+      )
+    }
+
     // ── Bootstrap: 1 request lấy cả shift của staff + shift OPEN bất kỳ ──
     // Giảm 2 round-trip → 1 cho màn POS (TodayShiftScreen gọi cả 2).
     if (current && openOperational) {
@@ -57,7 +68,7 @@ export async function GET(request: NextRequest) {
 
     if (current) {
       let shift = await repositories.shift.findOpenForStaff(auth.userId)
-      if (!shift && auth.role === 'ADMIN') {
+      if (!shift && auth.role === 'ADMIN' || auth.role === 'MANAGER') {
         shift = await repositories.shift.findOpenOperational()
       }
       return NextResponse.json({ success: true, data: shift })
