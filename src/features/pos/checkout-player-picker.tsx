@@ -1,8 +1,9 @@
 'use client'
 
 import { useRef } from 'react'
-import { Plus, User } from 'lucide-react'
-import { Label, Select } from '@/components/ui/input'
+import { Plus } from 'lucide-react'
+import { Select } from '@/components/ui/input'
+import { money } from './format'
 
 export interface PickerRuleOption {
   id: string
@@ -14,6 +15,16 @@ export interface PickerRuleOption {
 export interface PickerMember {
   id: string
   name: string | null
+}
+
+/** Tiền cần thu + thời gian đã chơi/tạm dừng của từng người chơi (key = playerId) */
+export interface PickerMemberStat {
+  /** null = không được thu lần này */
+  amount?: number | null
+  /** "Đã chơi" dạng hh:mm */
+  playedText?: string
+  /** "Nghỉ" dạng hh:mm */
+  pausedText?: string
 }
 
 export interface PickerGroup {
@@ -35,13 +46,21 @@ export interface PickerGroup {
   selectedIds: string[]
 }
 
+/** Cột tiền chung của hoá đơn — mọi số tiền thẳng một lề phải.
+ *  Drawer và picker dùng chung để bảng đọc như một biên lai. */
+export const MONEY_RAIL = 'w-[5.75rem] shrink-0 text-right tabular-nums'
+export const GROUP_LABEL =
+  'text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400'
+
 export function CheckoutPlayerPicker({
   groups,
   rules,
+  memberStats,
   onChange,
 }: {
   groups: PickerGroup[]
   rules: PickerRuleOption[]
+  memberStats?: Record<string, PickerMemberStat>
   onChange: (groups: PickerGroup[]) => void
 }) {
   const keyCounter = useRef(0)
@@ -101,42 +120,60 @@ export function CheckoutPlayerPicker({
   }
 
   const assignedInOtherGroup = (selfIndex: number, memberId: string) =>
-    groups.some(
-      (g, gi) => gi !== selfIndex && g.selectedIds.includes(memberId),
-    )
+    groups.some((g, gi) => gi !== selfIndex && g.selectedIds.includes(memberId))
+
+  const totalPlayers = new Set(
+    groups.flatMap((g) => g.members.map((m) => m.id)),
+  ).size
+  const assignedCount = new Set(groups.flatMap((g) => g.selectedIds)).size
+  const showGroupNames = groups.length > 1
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       {groups.map((group, i) => {
-        const totalMembers = group.members.length
         const allSelected =
-          totalMembers > 0 &&
+          group.members.length > 0 &&
           group.members.every((m) => group.selectedIds.includes(m.id))
-        const checkedInThis = group.selectedIds.length
-        // Tổng người đã phân vào nhóm nào đó (để hiển thị tiến độ)
-        const assignedCount = new Set(
-          groups.flatMap((g) => g.selectedIds),
-        ).size
-        const totalPlayers = new Set(groups.flatMap((g) => g.members.map((m) => m.id))).size
         return (
-          <div
-            key={group.key}
-            className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
-          >
-            {/* Header nhóm */}
+          <div key={group.key}>
+            {/* ── Tên nhóm | Chọn bảng giá ── */}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="text-sm font-semibold text-zinc-950 dark:text-white">
-                  {group.label}
-                </span>
-                {group.locked ? (
-                  <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-                    {group.pricingRuleName ?? 'Bảng giá'}
-                  </span>
-                ) : null}
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {group.locked ? (
+              <span className={`${GROUP_LABEL} min-w-0 truncate`}>
+                {showGroupNames ? group.label : 'Giờ chơi'}
+                {group.locked && group.pricingRuleName
+                  ? ` · ${group.pricingRuleName}`
+                  : ''}
+                {group.locked && group.checkedOutCount
+                  ? ` · đã thu ${group.checkedOutCount}`
+                  : ''}
+              </span>
+              <div className="flex shrink-0 items-center justify-end gap-2">
+                {!group.locked && rules.length > 0 && (
+                  <Select
+                    aria-label="Chọn bảng giá"
+                    value={group.pricingRuleId}
+                    className="w-[11rem] px-2 py-1.5 text-sm"
+                    onChange={(e) =>
+                      setGroup(i, { pricingRuleId: e.target.value })
+                    }
+                  >
+                    {rules.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+                {!group.locked && groups.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeGroup(i)}
+                    className="text-xs text-red-500 dark:text-red-300"
+                  >
+                    Xoá nhóm
+                  </button>
+                )}
+                {group.locked && (
                   <button
                     type="button"
                     onClick={() =>
@@ -150,110 +187,74 @@ export function CheckoutPlayerPicker({
                   >
                     {allSelected ? 'Bỏ chọn' : 'Chọn tất cả'}
                   </button>
-                ) : (
-                  groups.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeGroup(i)}
-                      className="text-xs text-red-500 dark:text-red-300"
-                    >
-                      Xoá nhóm
-                    </button>
-                  )
                 )}
               </div>
             </div>
 
-            {/* Thông tin nhóm (mode B) */}
-            {group.locked &&
-              (group.remainingCount !== undefined ||
-                group.checkedOutCount !== undefined) && (
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Còn {group.remainingCount ?? 0} người chưa thu
-                  {group.checkedOutCount
-                    ? ` · đã thu ${group.checkedOutCount}`
-                    : ''}
-                </p>
-              )}
-
-            {/* Chọn bảng giá (mode A) */}
-            {!group.locked && (
-              <>
-                <Label className="text-xs mt-2">Bảng giá</Label>
-                <Select
-                  value={group.pricingRuleId}
-                  onChange={(e) =>
-                    setGroup(i, { pricingRuleId: e.target.value })
-                  }
-                >
-                  {rules.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </Select>
-              </>
-            )}
-
-            {/* Người chơi */}
-            <div className="mt-2">
-              <Label className="text-xs">
-                Người chơi
-                {group.locked
-                  ? ` (${checkedInThis}/${totalMembers})`
-                  : ` (${assignedCount}/${totalPlayers})`}
-              </Label>
-              {totalMembers === 0 ? (
-                <p className="rounded-lg bg-zinc-50 p-2 text-xs text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
-                  Không còn người chơi để chọn.
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {group.members.map((m) => {
-                    const checked = group.selectedIds.includes(m.id)
-                    // Mode A: người đã ở nhóm khác — hiển thị mờ; bấm vào sẽ chuyển nhóm
-                    const inOther = !group.locked && assignedInOtherGroup(i, m.id)
-                    return (
+            {/* ── Mỗi người chơi: [Checkbox] Tên + thời gian ‖ số tiền ── */}
+            {group.members.length === 0 ? (
+              <p className="py-2 text-xs text-zinc-500 dark:text-zinc-400">
+                Không còn người chơi để chọn.
+              </p>
+            ) : (
+              <ul className="mt-2 divide-y divide-zinc-100 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+                {group.members.map((m) => {
+                  const checked = group.selectedIds.includes(m.id)
+                  const inOther = !group.locked && assignedInOtherGroup(i, m.id)
+                  const stat = memberStats?.[m.id]
+                  return (
+                    <li key={`${group.key}-${m.id}`}>
                       <button
-                        key={m.id}
                         type="button"
                         onClick={() => toggleMember(i, m.id)}
-                        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-sm transition-colors ${
-                          checked
-                            ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
-                            : inOther
-                              ? 'border-zinc-200 bg-zinc-50 opacity-50 dark:border-zinc-800 dark:bg-zinc-900'
-                              : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
-                        }`}
+                        className={`flex w-full items-start gap-3 py-2 text-left transition-colors ${
+                          checked ? '' : 'opacity-55'
+                        } ${inOther ? 'opacity-40' : ''}`}
                       >
                         <input
                           type="checkbox"
-                          disabled
+                          readOnly
                           checked={checked}
-                          className="h-3.5 w-3.5 accent-emerald-600"
+                          tabIndex={-1}
+                          className="mt-1 h-4 w-4 shrink-0 accent-emerald-600"
                         />
-                        <User size={13} className="shrink-0 text-zinc-400" />
-                        <span className="max-w-[8rem] break-words leading-tight text-zinc-950 dark:text-white">
-                          {m.name?.trim() || 'Người chơi'}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[15px] leading-tight text-zinc-950 dark:text-white">
+                            {m.name?.trim() || 'Người chơi'}
+                          </span>
+                          <span className="block text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+                            chơi {stat?.playedText ?? '—'} · nghỉ{' '}
+                            {stat?.pausedText ?? '—'}
+                          </span>
+                        </span>
+                        <span
+                          className={`${MONEY_RAIL} pt-0.5 text-[15px] font-medium ${
+                            checked
+                              ? 'text-zinc-950 dark:text-white'
+                              : 'text-zinc-400 dark:text-zinc-600'
+                          }`}
+                        >
+                          {checked ? money(stat?.amount ?? 0) : '—'}
                         </span>
                       </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </div>
         )
       })}
 
-      {groups.some((g) => !g.locked) && (
+      {/* ── Chọn ít hơn tổng người của phiên → tạo thêm nhóm ── */}
+      {assignedCount < totalPlayers && (
         <button
           type="button"
           onClick={addGroup}
-          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-300"
+          className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 dark:text-blue-300"
         >
           <Plus size={14} />
-          Thêm nhóm
+          Tạo thêm nhóm
         </button>
       )}
     </div>

@@ -220,7 +220,7 @@ export function InvoiceDetailContent({ invoice }: InvoiceDetailContentProps) {
             return (
               <div className="mt-2 space-y-1 text-xs text-zinc-500 dark:text-zinc-400">
                 <p>
-                  Đã tạm dừng:{' '}
+                  Nghỉ:{' '}
                   <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">
                     {formatPausedHMS(pausedSeconds)}
                   </span>

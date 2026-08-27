@@ -23,6 +23,7 @@ import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { formatDay, money, paymentMethodLabel } from '@/features/pos/format'
+import { RenewMemberDialog, type RenewMemberInput } from './renew-member-dialog'
 import type { Customer, Membership, MembershipPlan, PaymentMethod, Shift, UserSession } from '@/features/pos/types'
 
 type MemberStatus = 'ACTIVE' | 'EXPIRED' | 'NONE'
@@ -51,7 +52,7 @@ export function MemberScreen() {
   const [history, setHistory] = useState<Membership[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [registerOpen, setRegisterOpen] = useState(false)
-  const [renewMember, setRenewMember] = useState<MemberCustomer | null>(null)
+  const [renewMember, setRenewMember] = useState<RenewMemberInput | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
@@ -113,20 +114,8 @@ export function MemberScreen() {
     }
   }, [notifyError])
 
-  const renderRenewButton = useCallback((item: MemberCustomer) => (
-    <Button
-      variant="inverse"
-      size="sm"
-      disabled={!shift}
-      onClick={() => setRenewMember(item)}
-    >
-      {item.membershipStatus === 'ACTIVE' ? 'Đóng tiếp' : 'Gia hạn'}
-    </Button>
-  ), [shift])
-
   const renderActions = useCallback((item: MemberCustomer) => (
     <div className="flex items-center gap-2">
-      {renderRenewButton(item)}
       {isAdmin && (
         <Link
           href={`/customers/${item.id}`}
@@ -137,7 +126,7 @@ export function MemberScreen() {
         </Link>
       )}
     </div>
-  ), [renderRenewButton, isAdmin])
+  ), [isAdmin])
 
   const renderMembershipStatus = useCallback((item: MemberCustomer) => {
     if (item.membershipStatus === 'ACTIVE' && item.currentMembership) {
@@ -373,13 +362,7 @@ export function MemberScreen() {
         member={selectedMember}
         history={history}
         loading={historyLoading}
-        renewDisabled={!shift}
         onClose={() => setSelectedMember(null)}
-        onRenew={() => {
-          if (selectedMember) {
-            setRenewMember(selectedMember)
-          }
-        }}
       />
     </div>
   )
@@ -539,108 +522,6 @@ function RegisterMemberDialog({
   )
 }
 
-function RenewMemberDialog({
-  member,
-  plans,
-  submitting,
-  setSubmitting,
-  onClose,
-  onDone,
-}: {
-  member: MemberCustomer | null
-  plans: MembershipPlan[]
-  submitting: boolean
-  setSubmitting: (value: boolean) => void
-  onClose: () => void
-  onDone: () => Promise<void>
-}) {
-  const { error: notifyError } = useToast()
-  const [planId, setPlanId] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH')
-  const [notes, setNotes] = useState('')
-
-  useEffect(() => {
-    if (!member) return
-    /* eslint-disable react-hooks/set-state-in-effect */
-    setPlanId(plans[0]?.id ?? '')
-    setPaymentMethod('CASH')
-    setNotes('')
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, [member, plans])
-
-  const selectedPlan = plans.find((plan) => plan.id === planId)
-
-  const submit = async () => {
-    if (!member) return
-    if (!planId) {
-      notifyError('Chưa có gói hội viên')
-      return
-    }
-
-    setSubmitting(true)
-    try {
-      const data = await apiJson('/api/memberships/renew', jsonRequest({
-        customerId: member.id,
-        planId,
-        paymentMethod,
-        notes: notes.trim() || undefined,
-      }))
-      if (!data.success) {
-        notifyError(data.error || 'Không gia hạn được hội viên')
-        return
-      }
-      await onDone()
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <Modal
-      open={!!member}
-      onClose={onClose}
-      title={member ? `Gia hạn - ${member.fullName}` : 'Gia hạn hội viên'}
-      description="Kỳ mới tự nối tiếp nếu hội viên còn hạn"
-      footer={
-        <Button variant="inverse" size="lg" fullWidth disabled={submitting} onClick={submit}>
-          {submitting ? 'Đang gia hạn...' : 'Thu phí & gia hạn'}
-        </Button>
-      }
-    >
-      <div className="space-y-4">
-        {member && (
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-zinc-950 dark:text-white">
-                  {member.fullName}
-                </p>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  {member.membershipStatus === 'ACTIVE' && member.currentMembership
-                    ? `Kỳ mới bắt đầu sau ${formatDay(member.currentMembership.expiresAt)}`
-                    : 'Kỳ mới bắt đầu từ ngày đóng phí'}
-                </p>
-              </div>
-              <StatusBadge status={member.membershipStatus} />
-            </div>
-          </div>
-        )}
-        <MemberPaymentForm
-          planId={planId}
-          plans={plans}
-          paymentMethod={paymentMethod}
-          notes={notes}
-          selectedPlan={selectedPlan}
-          onPlanChange={setPlanId}
-          onPaymentMethodChange={setPaymentMethod}
-          onNotesChange={setNotes}
-        />
-      </div>
-    </Modal>
-  )
-}
 
 function MemberPaymentForm({
   fullName,
@@ -750,16 +631,12 @@ function MemberDetailDrawer({
   member,
   history,
   loading,
-  renewDisabled,
   onClose,
-  onRenew,
 }: {
   member: MemberCustomer | null
   history: Membership[]
   loading: boolean
-  renewDisabled: boolean
   onClose: () => void
-  onRenew: () => void
 }) {
   return (
     <Modal
@@ -767,11 +644,6 @@ function MemberDetailDrawer({
       onClose={onClose}
       title={member?.fullName ?? 'Chi tiết hội viên'}
       description={member?.phone || 'Chưa có số điện thoại'}
-      footer={
-        <Button variant="inverse" size="lg" fullWidth disabled={renewDisabled} onClick={onRenew}>
-          {member?.membershipStatus === 'ACTIVE' ? 'Đóng tiếp kỳ mới' : 'Gia hạn để chơi'}
-        </Button>
-      }
     >
       {member && (
         <div className="space-y-4">

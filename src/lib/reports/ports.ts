@@ -117,6 +117,8 @@ export interface TrendTotals {
   players: number
   avgHours: number
   revenuePerSession: number
+  /** Doanh thu trung bình / người chơi trong kỳ — 0 khi players = 0 */
+  revenuePerPlayer: number
 }
 
 export interface TrendData {

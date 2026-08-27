@@ -94,6 +94,8 @@ export interface SessionPlayerDTO {
   totalPausedSeconds: number
   /** Thời điểm đã được tính tiền (checkout từng phần) — null nếu chưa thu */
   checkedOutAt?: string | null
+  /** Thứ tự trong group — ổn định qua các lần query, dùng làm sort key */
+  position: number
 }
 
 export interface SessionPricingGroupDTO {

@@ -260,11 +260,15 @@ model SessionPlayer {
   pausedAt           DateTime?           @map("paused_at")
   totalPausedSeconds Int                 @default(0) @map("total_paused_seconds")
   checkedOutAt       DateTime?           @map("checked_out_at")
+  /// Thứ tự người chơi trong group — gán khi tạo, dùng làm sort key ổn định
+  /// (không phụ thuộc createdAt hay CTID). 0 = người đầu tiên.
+  position           Int                 @default(0) @map("position")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
 
   @@index([sessionId])
   @@index([groupId])
+  @@index([groupId, position])
   @@map("session_players")
 }
 

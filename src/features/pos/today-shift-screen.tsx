@@ -170,19 +170,28 @@ export function TodayShiftScreen() {
   }
 
   const handlePause = async (session: SessionRow) => {
+    // Optimistic update — bật trạng thái paused ngay để UI react tức thì,
+    // chỉ revert nếu API thất bại.
+    const pausedAt = new Date().toISOString()
+    const previousPausedAt = session.pausedAt
+    setSessions((current) => current.map((s) => (
+      s.id === session.id ? { ...s, pausedAt } : s
+    )))
     setSubmitting(true)
     try {
       const data = await apiJson(`/api/sessions/${session.id}/pause`, jsonRequest({}))
       if (!data.success) {
+        setSessions((current) => current.map((s) => (
+          s.id === session.id ? { ...s, pausedAt: previousPausedAt } : s
+        )))
         notifyError(data.error || 'Không tạm dừng được')
         return
       }
-      // Cập nhật cục bộ — không reload toàn bộ
-      setSessions((current) => current.map((s) => (
-        s.id === session.id ? { ...s, pausedAt: new Date().toISOString() } : s
-      )))
-      notifySuccess('Đã tạm dừng phiên')
+      notifySuccess('Đã cho phiên nghỉ')
     } catch {
+      setSessions((current) => current.map((s) => (
+        s.id === session.id ? { ...s, pausedAt: previousPausedAt } : s
+      )))
       notifyError('Lỗi kết nối máy chủ')
     } finally {
       setSubmitting(false)
@@ -190,22 +199,43 @@ export function TodayShiftScreen() {
   }
 
   const handleResume = async (session: SessionRow) => {
+    // Optimistic update — clear pausedAt ngay, cộng dồn pausedSeconds tạm tính
+    // (server trả về pausedSeconds thật; chênh lệch chỉ vài giây, không đáng để flicker).
+    const previousPausedAt = session.pausedAt
+    const previousTotalPaused = session.totalPausedSeconds ?? 0
+    setSessions((current) => current.map((s) => {
+      if (s.id !== session.id) return s
+      const optimisticPausedSeconds = previousPausedAt
+        ? Math.max(0, Math.floor((Date.now() - new Date(previousPausedAt).getTime()) / 1000))
+        : 0
+      return { ...s, pausedAt: null, totalPausedSeconds: previousTotalPaused + optimisticPausedSeconds }
+    }))
     setSubmitting(true)
     try {
       const data = await apiJson<{ pausedSeconds?: number }>(`/api/sessions/${session.id}/resume`, jsonRequest({}))
       if (!data.success) {
+        setSessions((current) => current.map((s) => (
+          s.id === session.id
+            ? { ...s, pausedAt: previousPausedAt, totalPausedSeconds: previousTotalPaused }
+            : s
+        )))
         notifyError(data.error || 'Không tiếp tục được')
         return
       }
-      // Cập nhật cục bộ: clear pausedAt + cộng dồn pausedSeconds lần này
+      // Reconciliation: thay optimistic bằng pausedSeconds thật từ server
       const resumedSeconds = data.data?.pausedSeconds ?? 0
       setSessions((current) => current.map((s) => (
         s.id === session.id
-          ? { ...s, pausedAt: null, totalPausedSeconds: (s.totalPausedSeconds ?? 0) + resumedSeconds }
+          ? { ...s, pausedAt: null, totalPausedSeconds: previousTotalPaused + resumedSeconds }
           : s
       )))
       notifySuccess('Đã tiếp tục phiên')
     } catch {
+      setSessions((current) => current.map((s) => (
+        s.id === session.id
+          ? { ...s, pausedAt: previousPausedAt, totalPausedSeconds: previousTotalPaused }
+          : s
+      )))
       notifyError('Lỗi kết nối máy chủ')
     } finally {
       setSubmitting(false)
@@ -229,17 +259,34 @@ export function TodayShiftScreen() {
   }
 
   const handlePausePlayer = async (session: SessionRow, playerId: string) => {
+    // Optimistic update — flip pausedAt trước khi gọi API để UI react tức thì.
+    const pausedAt = new Date().toISOString()
+    let previousPausedAt: string | null | undefined
+    setSessions((current) => current.map((s) => {
+      if (s.id !== session.id) return s
+      return {
+        ...s,
+        pricingGroups: s.pricingGroups?.map((g) => ({
+          ...g,
+          players: g.players?.map((p) => {
+            if (p.id !== playerId) return p
+            previousPausedAt = p.pausedAt
+            return { ...p, pausedAt }
+          }),
+        })),
+      }
+    }))
     setSubmitting(true)
     try {
       const data = await apiJson(`/api/sessions/${session.id}/players/${playerId}/pause`, jsonRequest({}))
       if (!data.success) {
+        updatePlayerInSession(session.id, playerId, (p) => ({ ...p, pausedAt: previousPausedAt ?? p.pausedAt }))
         notifyError(data.error || 'Không tạm dừng được người chơi')
         return
       }
-      // Cập nhật cục bộ: set pausedAt = now → tab đóng băng ngay, không reload
-      updatePlayerInSession(session.id, playerId, (p) => ({ ...p, pausedAt: new Date().toISOString() }))
-      notifySuccess('Đã tạm dừng người chơi')
+      notifySuccess('Đã cho người chơi nghỉ')
     } catch {
+      updatePlayerInSession(session.id, playerId, (p) => ({ ...p, pausedAt: previousPausedAt ?? p.pausedAt }))
       notifyError('Lỗi kết nối máy chủ')
     } finally {
       setSubmitting(false)
@@ -247,22 +294,46 @@ export function TodayShiftScreen() {
   }
 
   const handleResumePlayer = async (session: SessionRow, playerId: string) => {
+    // Optimistic update — clear pausedAt + cộng dồn pausedSeconds tạm tính.
+    const group = session.pricingGroups?.find((g) => g.players?.some((p) => p.id === playerId))
+    const player = group?.players?.find((p) => p.id === playerId)
+    const previousPausedAt = player?.pausedAt ?? null
+    const previousTotalPaused = player?.totalPausedSeconds ?? 0
+    updatePlayerInSession(session.id, playerId, (p) => {
+      const optimisticPausedSeconds = previousPausedAt
+        ? Math.max(0, Math.floor((Date.now() - new Date(previousPausedAt).getTime()) / 1000))
+        : 0
+      return {
+        ...p,
+        pausedAt: null,
+        totalPausedSeconds: (p.totalPausedSeconds ?? 0) + optimisticPausedSeconds,
+      }
+    })
     setSubmitting(true)
     try {
       const data = await apiJson<{ pausedSeconds?: number }>(`/api/sessions/${session.id}/players/${playerId}/resume`, jsonRequest({}))
       if (!data.success) {
+        updatePlayerInSession(session.id, playerId, (p) => ({
+          ...p,
+          pausedAt: previousPausedAt ?? p.pausedAt,
+          totalPausedSeconds: previousTotalPaused || p.totalPausedSeconds,
+        }))
         notifyError(data.error || 'Không tiếp tục được người chơi')
         return
       }
-      // Cập nhật cục bộ: clear pausedAt + cộng dồn pausedSeconds lần này
       const resumedSeconds = data.data?.pausedSeconds ?? 0
       updatePlayerInSession(session.id, playerId, (p) => ({
         ...p,
         pausedAt: null,
-        totalPausedSeconds: (p.totalPausedSeconds ?? 0) + resumedSeconds,
+        totalPausedSeconds: previousTotalPaused + resumedSeconds,
       }))
       notifySuccess('Đã tiếp tục người chơi')
     } catch {
+      updatePlayerInSession(session.id, playerId, (p) => ({
+        ...p,
+        pausedAt: previousPausedAt ?? p.pausedAt,
+        totalPausedSeconds: previousTotalPaused || p.totalPausedSeconds,
+      }))
       notifyError('Lỗi kết nối máy chủ')
     } finally {
       setSubmitting(false)
@@ -271,7 +342,15 @@ export function TodayShiftScreen() {
 
   // ── Đổi tên 1 người chơi — PATCH theo đúng playerId (giữ định danh timer/pause/pricing) ──
   // Trả true khi thành công để PlayerPauseCard thoát editing.
+  // Optimistic update — đổi tên hiển thị ngay, chỉ revert nếu API lỗi.
   const handleRenamePlayer = async (session: SessionRow, playerId: string, name: string) => {
+    const trimmed = name.trim() || null
+    const previousName = (() => {
+      const group = session.pricingGroups?.find((g) => g.players?.some((p) => p.id === playerId))
+      const player = group?.players?.find((p) => p.id === playerId)
+      return player?.name ?? null
+    })()
+    updatePlayerInSession(session.id, playerId, (p) => ({ ...p, name: trimmed }))
     setSubmitting(true)
     try {
       const data = await apiJson(`/api/sessions/${session.id}/players/${playerId}`, {
@@ -279,14 +358,14 @@ export function TodayShiftScreen() {
         method: 'PATCH',
       })
       if (!data.success) {
+        updatePlayerInSession(session.id, playerId, (p) => ({ ...p, name: previousName }))
         notifyError(data.error || 'Không đổi được tên người chơi')
         return false
       }
-      // Cập nhật cục bộ theo đúng player — tên rỗng → null (fallback "Người N")
-      updatePlayerInSession(session.id, playerId, (p) => ({ ...p, name: name.trim() || null }))
       notifySuccess('Đã đổi tên người chơi')
       return true
     } catch {
+      updatePlayerInSession(session.id, playerId, (p) => ({ ...p, name: previousName }))
       notifyError('Lỗi kết nối máy chủ')
       return false
     } finally {
@@ -407,10 +486,11 @@ export function TodayShiftScreen() {
             />
           ) : (
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {sessions.map((session) => (
+              {sessions.map((session, index) => (
                 <ActiveSessionCard
                   key={session.id}
                   session={session}
+                  index={index}
                   checkoutDisabled={!shiftReady}
                   pauseDisabled={!shiftReady}
                   onCheckout={() => { setCheckoutFrozenAt(new Date().toISOString()); setCheckoutSession(session) }}
