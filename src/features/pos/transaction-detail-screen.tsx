@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Pencil, ReceiptText, Trash2, User, XCircle } from 'lucide-react'
+import { ArrowLeft, Pencil, ReceiptText, Trash2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -146,25 +146,14 @@ export function TransactionDetailScreen({ id }: Props) {
       <div className="mx-auto max-w-6xl space-y-6">
         {/* ── Folio chrome ── */}
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={ArrowLeft}
-              onClick={() => router.back()}
-            >
-              Quay lại
-            </Button>
-            <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-              <User size={14} className="shrink-0" />
-              <span>Khách hàng: </span>
-              <span className="font-medium text-zinc-900 dark:text-white">
-                {invoice.customer?.type === 'MEMBER'
-                  ? invoice.customer.fullName
-                  : (invoice.session?.customerName ?? invoice.customer?.fullName ?? '—')}
-              </span>
-            </div>
-          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={ArrowLeft}
+            onClick={() => router.back()}
+          >
+            Quay lại
+          </Button>
 
           {isAdmin && (
             <div className="flex items-center gap-2">
