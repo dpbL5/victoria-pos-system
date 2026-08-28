@@ -396,26 +396,28 @@ export function TodayShiftScreen() {
           />
         )}
 
-        <ShiftRail
-          shift={shift}
-          activeCount={sessions.length}
-          walkInCount={activeWalkIns}
-          memberCount={activeMembers}
-          onOpen={() => setOpenShiftDialog(true)}
-          onClose={() => setCloseShiftDialog(true)}
-          onViewTransactions={() => {
-            if (shift) router.push(`/transactions?shiftId=${shift.id}`)
-          }}
-          onCountTools={() => setCountToolsDialog(true)}
-          hasCounted={hasCountedTools}
-          canJoin={canJoinCurrentShift}
-          onJoin={() => void handleOpenShift()}
-          submitting={submitting}
-        />
+        <div className="animate-slide-up">
+          <ShiftRail
+            shift={shift}
+            activeCount={sessions.length}
+            walkInCount={activeWalkIns}
+            memberCount={activeMembers}
+            onOpen={() => setOpenShiftDialog(true)}
+            onClose={() => setCloseShiftDialog(true)}
+            onViewTransactions={() => {
+              if (shift) router.push(`/transactions?shiftId=${shift.id}`)
+            }}
+            onCountTools={() => setCountToolsDialog(true)}
+            hasCounted={hasCountedTools}
+            canJoin={canJoinCurrentShift}
+            onJoin={() => void handleOpenShift()}
+            submitting={submitting}
+          />
+        </div>
 
         {!shiftReady && (
           <div className="fixed inset-0 bottom-16 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm md:bottom-0">
-            <div className="mx-4 flex w-full max-w-sm flex-col items-center rounded-2xl border border-amber-200 bg-white p-6 text-center shadow-xl dark:border-amber-500/20 dark:bg-zinc-900">
+            <div className="mx-4 flex w-full max-w-sm animate-slide-up flex-col items-center rounded-2xl border border-amber-200 bg-white p-6 text-center shadow-xl dark:border-amber-500/20 dark:bg-zinc-900">
               <div className="flex size-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/20">
                 <ShieldCheck size={24} className="text-amber-600 dark:text-amber-400" />
               </div>
@@ -437,28 +439,33 @@ export function TodayShiftScreen() {
           </div>
         )}
 
-        <QuickActions
-          shiftReady={shiftReady}
-          retailDisabled
-          onCheckIn={() => {
-            setCheckInInitialMode('WALK_IN')
-            setCheckInDialog(true)
-          }}
-          onSell={() => {
-            if (sessions.length === 0) {
-              notifyError('Chưa có phiên đang chơi để bán kèm')
-              return
-            }
-            if (sessions.length === 1) {
-              setSellSession(sessions[0])
-            } else {
-              setSellPickOpen(true)
-            }
-          }}
-          onRetail={() => setRetailOpen(true)}
-        />
+        <div className="animate-slide-up" style={{ animationDelay: '40ms' }}>
+          <QuickActions
+            shiftReady={shiftReady}
+            retailDisabled
+            onCheckIn={() => {
+              setCheckInInitialMode('WALK_IN')
+              setCheckInDialog(true)
+            }}
+            onSell={() => {
+              if (sessions.length === 0) {
+                notifyError('Chưa có phiên đang chơi để bán kèm')
+                return
+              }
+              if (sessions.length === 1) {
+                setSellSession(sessions[0])
+              } else {
+                setSellPickOpen(true)
+              }
+            }}
+            onRetail={() => setRetailOpen(true)}
+          />
+        </div>
 
-        <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <section
+          className="animate-slide-up rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+          style={{ animationDelay: '80ms' }}
+        >
           <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
             <div>
               <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">

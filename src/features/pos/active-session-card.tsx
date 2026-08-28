@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, LogIn, Pause, Play, Timer } from 'lucide-react'
+import { ChevronDown, LogIn, Pause, Play, Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { calcElapsedHMS, formatClock, formatPausedHMS, money, pausedSecondsUntil, toNumber } from './format'
 import { PlayerPauseCard } from './player-pause-card'
@@ -71,10 +71,10 @@ export function ActiveSessionCard({
             <p
               className={
                 isPaused
-                  ? 'truncate text-base font-semibold text-amber-600 dark:text-amber-400'
+                  ? 'truncate text-base font-semibold text-amber-600 transition-colors duration-200 dark:text-amber-400'
                   : isMember
-                    ? 'truncate text-base font-semibold text-purple-600 dark:text-purple-400'
-                    : 'truncate text-base font-semibold text-zinc-950 dark:text-white'
+                    ? 'truncate text-base font-semibold text-purple-600 transition-colors duration-200 dark:text-purple-400'
+                    : 'truncate text-base font-semibold text-zinc-950 transition-colors duration-200 dark:text-white'
               }
             >
               {session.customerName ?? session.customer?.fullName ?? 'Khách lẻ'}
@@ -95,7 +95,7 @@ export function ActiveSessionCard({
           {!isGroup && (
             <span
               aria-hidden={!hasPausedSeconds}
-              className={`inline-flex items-center gap-1 text-xs tabular-nums ${
+              className={`inline-flex items-center gap-1 text-xs tabular-nums transition-colors duration-200 ${
                 hasPausedSeconds
                   ? isPaused
                     ? 'text-amber-600 dark:text-amber-400'
@@ -133,7 +133,10 @@ export function ActiveSessionCard({
               className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
               title={collapsed ? 'Mở rộng bảng người chơi' : 'Thu gọn bảng người chơi'}
             >
-              {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+              <ChevronDown
+                size={14}
+                className={`transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
+              />
               {collapsed ? `Mở ${playerCount} người chơi` : 'Thu gọn'}
             </button>
           )}

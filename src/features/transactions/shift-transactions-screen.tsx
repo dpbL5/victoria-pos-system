@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Label, Select } from '@/components/ui/input'
@@ -136,14 +137,16 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
   if (shiftsLoading) {
     return (
       <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-2xl space-y-4">
+        <div className="mx-auto max-w-5xl space-y-4">
           <Skeleton className="h-9 w-24" />
-          <Skeleton className="h-20 w-full" />
-          <div className="grid grid-cols-2 gap-3">
+          <Skeleton className="h-28 w-full" />
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
             <Skeleton className="h-20" />
             <Skeleton className="h-20" />
           </div>
-          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-64 w-full" />
         </div>
       </div>
     )
@@ -153,7 +156,8 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
   if (shiftsError) {
     return (
       <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-2xl space-y-4">
+        <div className="mx-auto max-w-5xl space-y-4">
+          <PageHeader onBack={() => router.back()} title="Giao dịch trong ca" />
           <NoticeCard
             tone="danger"
             title="Không tải được dữ liệu"
@@ -173,10 +177,8 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
   if (shifts.length === 0) {
     return (
       <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-2xl space-y-4">
-          <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.back()}>
-            Quay lại
-          </Button>
+        <div className="mx-auto max-w-5xl space-y-4">
+          <PageHeader onBack={() => router.back()} title="Giao dịch trong ca" />
           <EmptyState
             icon={CalendarClock}
             message="Chưa có ca làm"
@@ -194,251 +196,407 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-2xl space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.back()}>
-              Quay lại
-            </Button>
-            <h1 className="hidden text-lg font-bold text-zinc-950 dark:text-white md:block">
-              Giao dịch trong ca
-            </h1>
+      <div className="mx-auto max-w-5xl space-y-4">
+        <PageHeader
+          onBack={() => router.back()}
+          title="Giao dịch trong ca"
+          onRefresh={() => {
+            void loadShifts()
+            if (selectedShiftId) void loadTransactions(selectedShiftId)
+          }}
+        />
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[18rem_1fr] md:items-start">
+          {/* ── Left rail: shift selector ── */}
+          <div className="md:sticky md:top-4">
+            <ShiftPickerCard
+              shifts={shifts}
+              selectedShiftId={selectedShiftId}
+              onChange={handlePickerChange}
+            />
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={RefreshCw}
-            aria-label="Làm mới"
-            onClick={() => {
-              void loadShifts()
-              if (selectedShiftId) void loadTransactions(selectedShiftId)
-            }}
-          />
-        </div>
 
-        {/* Chọn ca */}
-        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <Label htmlFor="shift-picker">Chọn ca</Label>
-          <Select
-            id="shift-picker"
-            value={selectedShiftId ?? ''}
-            onChange={(event) => handlePickerChange(event.target.value)}
-          >
-            <option value="" disabled>
-              Chọn ca...
-            </option>
-            {shifts.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'} · {formatDay(s.openedAt)}{' '}
-                {formatClock(s.openedAt)} · {s.staff?.fullName ?? '—'}
-              </option>
-            ))}
-          </Select>
-          {selectedShift && (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-              <Badge
-                variant={selectedShift.status === 'OPEN' ? 'success' : 'default'}
-                size="sm"
-              >
-                {selectedShift.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}
-              </Badge>
-              <span>
-                {formatDay(selectedShift.openedAt)} {formatClock(selectedShift.openedAt)}
-              </span>
-              {selectedShift.closedAt && <span>→ {formatClock(selectedShift.closedAt)}</span>}
-              <span>· {selectedShift.staff?.fullName ?? '—'}</span>
-            </div>
-          )}
-        </section>
-
-        {/* Tổng hợp thu chi */}
-        {summary && (
-          <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
-              Tổng hợp thu chi
-            </h2>
-            <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
-              <SummaryTile
-                icon={Banknote}
-                label="Tổng thu"
-                value={money(summary.totalAmount)}
-                highlight
-              />
-              <SummaryTile
-                icon={ReceiptText}
-                label="Số giao dịch"
-                value={String(summary.totalCount)}
-                sub={`${summary.paymentCount} TT · ${summary.membershipCount} HV`}
-              />
-              <SummaryTile
-                icon={Banknote}
-                label="Tiền mặt"
-                value={money(summary.cashAmount)}
-              />
-              <SummaryTile
-                icon={CreditCard}
-                label="Chuyển khoản"
-                value={money(summary.transferAmount)}
-              />
-              <SummaryTile icon={CreditCard} label="Thẻ" value={money(summary.cardAmount)} />
-              <SummaryTile icon={Users} label="Hội viên" value={money(summary.memberAmount)} />
-            </div>
-          </section>
-        )}
-
-        {/* Bộ lọc loại giao dịch */}
-        <div className="flex items-center gap-2">
-          <FilterButton active={typeFilter === 'ALL'} onClick={() => setTypeFilter('ALL')}>
-            Tất cả
-          </FilterButton>
-          <FilterButton
-            active={typeFilter === 'payment'}
-            onClick={() => setTypeFilter('payment')}
-          >
-            Thanh toán
-          </FilterButton>
-          <FilterButton
-            active={typeFilter === 'membership'}
-            onClick={() => setTypeFilter('membership')}
-          >
-            Hội viên
-          </FilterButton>
-        </div>
-
-        {/* Danh sách giao dịch */}
-        <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-            <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
-              Giao dịch ({filteredTransactions.length})
-            </h2>
-            {transactionsLoading && (
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">Đang tải...</span>
+          {/* ── Main: summary + ledger ── */}
+          <div className="space-y-4">
+            {summary && selectedShift && (
+              <ShiftSummaryHero summary={summary} shift={selectedShift} />
             )}
-          </div>
 
-          {transactionsLoading && transactions.length === 0 ? (
-            <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-              Đang tải giao dịch...
-            </div>
-          ) : transactionsError ? (
-            <div className="p-4">
-              <NoticeCard
-                tone="danger"
-                title="Không tải được giao dịch"
-                description={transactionsError}
-                action={
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => selectedShiftId && void loadTransactions(selectedShiftId)}
-                  >
-                    Thử lại
-                  </Button>
-                }
-              />
-            </div>
-          ) : filteredTransactions.length === 0 ? (
-            <div className="p-4">
-              <EmptyState
-                icon={ReceiptText}
-                message="Chưa có giao dịch"
-                description="Giao dịch của ca này sẽ hiện ở đây."
-              />
-            </div>
-          ) : (
-            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {filteredTransactions.map((tx) => (
-                <button
-                  key={`${tx.type}-${tx.id}`}
-                  type="button"
-                  disabled={!tx.invoiceId}
-                  onClick={() => {
-                    if (tx.invoiceId) router.push(`/invoices/${tx.invoiceId}`)
-                  }}
-                  className="grid w-full grid-cols-[1fr_auto] gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent dark:hover:bg-zinc-800/50"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
-                        {tx.customerName}
-                      </p>
-                      {tx.type === 'membership' ? (
-                        <Badge variant="purple" size="sm">
-                          Hội viên
-                        </Badge>
-                      ) : tx.customerType === 'MEMBER' ? (
-                        <Badge variant="purple" size="sm">
-                          HV
-                        </Badge>
-                      ) : (
-                        <Badge variant="default" size="sm">
-                          VL
-                        </Badge>
-                      )}
-                      {tx.invoiceStatus === 'CANCELLED' && (
-                        <Badge variant="danger" size="sm">
-                          Đã hủy
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                      {formatClock(tx.paidAt)}
-                      {tx.invoiceNo ? ` · ${tx.invoiceNo}` : ''}
-                      {tx.type === 'membership' && tx.planName ? ` · ${tx.planName}` : ''}
-                      {' · '}
-                      {tx.type === 'membership'
-                        ? 'Phí hội viên'
-                        : tx.paymentMethod
-                          ? paymentMethodLabel(tx.paymentMethod)
-                          : ''}
-                    </p>
-                  </div>
-                  <p className="self-center text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
-                    {money(tx.amount)}
-                  </p>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+            {summary && (
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                <MethodTile
+                  icon={Banknote}
+                  label="Tiền mặt"
+                  value={money(summary.cashAmount)}
+                />
+                <MethodTile
+                  icon={CreditCard}
+                  label="Chuyển khoản"
+                  value={money(summary.transferAmount)}
+                />
+                <MethodTile
+                  icon={CreditCard}
+                  label="Thẻ"
+                  value={money(summary.cardAmount)}
+                />
+                <MethodTile
+                  icon={Users}
+                  label="Hội viên"
+                  value={money(summary.memberAmount)}
+                  accent="purple"
+                />
+              </div>
+            )}
+
+            <TransactionLedger
+              loading={transactionsLoading}
+              error={transactionsError}
+              filter={typeFilter}
+              onFilterChange={setTypeFilter}
+              totalCount={transactions.length}
+              filteredCount={filteredTransactions.length}
+              transactions={filteredTransactions}
+              onRetry={() => {
+                if (selectedShiftId) void loadTransactions(selectedShiftId)
+              }}
+              onOpenInvoice={(invoiceId) => router.push(`/invoices/${invoiceId}`)}
+            />
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
-function SummaryTile({
+// ─── Page header ──────────────────────────────────────────────────────────────
+function PageHeader({
+  title,
+  onBack,
+  onRefresh,
+}: {
+  title: string
+  onBack: () => void
+  onRefresh?: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={onBack}>
+          Quay lại
+        </Button>
+        <h1 className="text-base font-semibold text-zinc-950 dark:text-white md:text-lg">
+          {title}
+        </h1>
+      </div>
+      {onRefresh && (
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={RefreshCw}
+          aria-label="Làm mới"
+          onClick={onRefresh}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Shift picker card (left rail) ───────────────────────────────────────────
+function ShiftPickerCard({
+  shifts,
+  selectedShiftId,
+  onChange,
+}: {
+  shifts: Shift[]
+  selectedShiftId: string | null
+  onChange: (id: string) => void
+}) {
+  return (
+    <Card padding="md">
+      <Label htmlFor="shift-picker" className="text-xs uppercase tracking-wide text-zinc-500">
+        Ca làm
+      </Label>
+      <Select
+        id="shift-picker"
+        value={selectedShiftId ?? ''}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2"
+      >
+        {shifts.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'} · {formatDay(s.openedAt)} ·{' '}
+            {formatClock(s.openedAt)} · {s.staff?.fullName ?? '—'}
+          </option>
+        ))}
+      </Select>
+      <p className="mt-2 text-[11px] text-zinc-400 dark:text-zinc-500">
+        {shifts.length} ca gần đây
+      </p>
+    </Card>
+  )
+}
+
+// ─── Hero: Tổng thu + trạng thái ─────────────────────────────────────────────
+function ShiftSummaryHero({
+  summary,
+  shift,
+}: {
+  summary: ShiftTransactionsResponse['summary']
+  shift: Shift
+}) {
+  const isOpen = shift.status === 'OPEN'
+  return (
+    <Card padding="md" className="bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-500/10 dark:via-zinc-900 dark:to-zinc-900">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Tổng thu trong ca
+            </p>
+            <Badge variant={isOpen ? 'success' : 'default'} size="sm">
+              {isOpen ? 'Đang mở' : 'Đã đóng'}
+            </Badge>
+          </div>
+          <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-white md:text-4xl">
+            {money(summary.totalAmount)}
+          </p>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            {formatDay(shift.openedAt)} {formatClock(shift.openedAt)}
+            {shift.closedAt && ` → ${formatClock(shift.closedAt)}`}
+            {' · '}
+            {shift.staff?.fullName ?? '—'}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Giao dịch
+          </p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-zinc-900 dark:text-white">
+            {summary.totalCount}
+          </p>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+            {summary.paymentCount} TT · {summary.membershipCount} HV
+          </p>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+// ─── Method tile (compact band) ──────────────────────────────────────────────
+function MethodTile({
   icon: Icon,
   label,
   value,
-  sub,
-  highlight,
+  accent,
 }: {
   icon: LucideIcon
   label: string
   value: string
-  sub?: string
-  highlight?: boolean
+  accent?: 'green' | 'purple' | 'blue'
+}) {
+  const accentClass =
+    accent === 'green'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : accent === 'purple'
+        ? 'text-purple-600 dark:text-purple-400'
+        : accent === 'blue'
+          ? 'text-blue-600 dark:text-blue-400'
+          : 'text-zinc-900 dark:text-white'
+  return (
+    <div className="rounded-lg border border-zinc-100 bg-white px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex items-center gap-1.5">
+        <Icon size={12} className="text-zinc-400 dark:text-zinc-500" aria-hidden />
+        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          {label}
+        </p>
+      </div>
+      <p className={`mt-1 text-base font-semibold tabular-nums ${accentClass}`}>{value}</p>
+    </div>
+  )
+}
+
+// ─── Ledger (filters + transaction list) ─────────────────────────────────────
+function TransactionLedger({
+  loading,
+  error,
+  filter,
+  onFilterChange,
+  totalCount,
+  filteredCount,
+  transactions,
+  onRetry,
+  onOpenInvoice,
+}: {
+  loading: boolean
+  error: string
+  filter: TypeFilter
+  onFilterChange: (f: TypeFilter) => void
+  totalCount: number
+  filteredCount: number
+  transactions: TransactionItem[]
+  onRetry: () => void
+  onOpenInvoice: (id: string) => void
 }) {
   return (
-    <div className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950">
-      <div className="flex items-center gap-1.5">
-        {Icon && (
-          <Icon
-            size={12}
-            className={highlight ? 'text-emerald-500' : 'text-zinc-400 dark:text-zinc-500'}
-          />
-        )}
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
+    <Card padding="none">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
+          Giao dịch{' '}
+          <span className="text-zinc-400 dark:text-zinc-500">
+            ({filter === 'ALL' ? totalCount : `${filteredCount}/${totalCount}`})
+          </span>
+        </h2>
+        <div className="flex items-center gap-1.5">
+          <FilterButton active={filter === 'ALL'} onClick={() => onFilterChange('ALL')}>
+            Tất cả
+          </FilterButton>
+          <FilterButton
+            active={filter === 'payment'}
+            onClick={() => onFilterChange('payment')}
+          >
+            Thanh toán
+          </FilterButton>
+          <FilterButton
+            active={filter === 'membership'}
+            onClick={() => onFilterChange('membership')}
+          >
+            Hội viên
+          </FilterButton>
+        </div>
       </div>
-      <p
-        className={`mt-0.5 text-lg font-semibold tabular-nums ${
-          highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-950 dark:text-white'
-        }`}
+
+      {loading && transactions.length === 0 ? (
+        <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+          Đang tải giao dịch...
+        </div>
+      ) : error ? (
+        <div className="p-4">
+          <NoticeCard
+            tone="danger"
+            title="Không tải được giao dịch"
+            description={error}
+            action={
+              <Button variant="secondary" size="sm" onClick={onRetry}>
+                Thử lại
+              </Button>
+            }
+          />
+        </div>
+      ) : filteredCount === 0 ? (
+        <div className="p-4">
+          <EmptyState
+            icon={ReceiptText}
+            message={filter === 'ALL' ? 'Chưa có giao dịch' : 'Không có giao dịch thuộc loại này'}
+            description={
+              filter === 'ALL'
+                ? 'Giao dịch của ca này sẽ hiện ở đây.'
+                : 'Bỏ chọn bộ lọc để xem tất cả giao dịch.'
+            }
+          />
+        </div>
+      ) : (
+        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          {transactions.map((tx) => (
+            <TransactionRow
+              key={`${tx.type}-${tx.id}`}
+              tx={tx}
+              onOpen={onOpenInvoice}
+            />
+          ))}
+        </ul>
+      )}
+
+      {loading && transactions.length > 0 && (
+        <div className="border-t border-zinc-200 px-4 py-2 text-center text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+          Đang cập nhật...
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ─── Transaction row ──────────────────────────────────────────────────────────
+function TransactionRow({
+  tx,
+  onOpen,
+}: {
+  tx: TransactionItem
+  onOpen: (invoiceId: string) => void
+}) {
+  const isMembership = tx.type === 'membership'
+  const isCancelled = tx.invoiceStatus === 'CANCELLED'
+  const canOpen = !!tx.invoiceId
+  const methodLabel = isMembership
+    ? 'Phí hội viên'
+    : tx.paymentMethod
+      ? paymentMethodLabel(tx.paymentMethod)
+      : ''
+
+  const amountClass = isCancelled
+    ? 'text-zinc-400 line-through dark:text-zinc-500'
+    : 'text-zinc-950 dark:text-white'
+
+  return (
+    <li>
+      <button
+        type="button"
+        disabled={!canOpen}
+        onClick={() => {
+          if (canOpen) onOpen(tx.invoiceId!)
+        }}
+        className="grid w-full grid-cols-1 gap-2 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent sm:grid-cols-[7rem_1fr_auto] sm:items-center sm:gap-4 dark:hover:bg-zinc-800/50"
       >
-        {value}
-      </p>
-      {sub && <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">{sub}</p>}
-    </div>
+        {/* Time + invoice no — primary identifier */}
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 sm:flex-col sm:items-start sm:gap-0">
+          <span className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
+            {formatClock(tx.paidAt)}
+          </span>
+          {tx.invoiceNo && (
+            <span className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
+              {tx.invoiceNo}
+            </span>
+          )}
+        </div>
+
+        {/* Customer + badges */}
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
+              {tx.customerName}
+            </p>
+            {isMembership ? (
+              <Badge variant="purple" size="sm">
+                Hội viên
+              </Badge>
+            ) : tx.customerType === 'MEMBER' ? (
+              <Badge variant="purple" size="sm">
+                HV
+              </Badge>
+            ) : (
+              <Badge variant="default" size="sm">
+                VL
+              </Badge>
+            )}
+            {isCancelled && (
+              <Badge variant="danger" size="sm">
+                Đã hủy
+              </Badge>
+            )}
+          </div>
+          <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+            {methodLabel}
+            {tx.planName ? ` · ${tx.planName}` : ''}
+          </p>
+        </div>
+
+        {/* Amount — anchored right */}
+        <p
+          className={`self-end text-base font-bold tabular-nums sm:self-center sm:text-lg ${amountClass}`}
+        >
+          {money(tx.amount)}
+        </p>
+      </button>
+    </li>
   )
 }

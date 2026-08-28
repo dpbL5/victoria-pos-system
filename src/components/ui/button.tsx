@@ -52,7 +52,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={isDisabled}
-        className={`inline-flex items-center justify-center rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+        className={`inline-flex items-center justify-center rounded-lg font-medium transition-colors active:scale-[0.97] motion-safe:transition-transform disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 ${
           variantClasses[variant]
         } ${
           isIconOnly ? iconOnlyClasses[size] : sizeClasses[size]

@@ -106,16 +106,17 @@ export function TransactionDetailScreen({ id }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-2xl space-y-4">
+      <div className="min-h-full bg-[var(--color-surface-secondary)] px-4 py-6 dark:bg-black md:px-8 md:py-10">
+        <div className="mx-auto max-w-6xl space-y-6">
           <Skeleton className="h-9 w-24" />
-          <Skeleton className="h-32 w-full" />
-          <div className="grid grid-cols-2 gap-3">
-            <Skeleton className="h-24" />
-            <Skeleton className="h-24" />
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <Skeleton className="h-[600px]" />
+            <div className="space-y-6">
+              <Skeleton className="h-32" />
+              <Skeleton className="h-32" />
+              <Skeleton className="h-24" />
+            </div>
           </div>
-          <Skeleton className="h-48 w-full" />
-          <Skeleton className="h-32 w-full" />
         </div>
       </div>
     )
@@ -123,37 +124,45 @@ export function TransactionDetailScreen({ id }: Props) {
 
   if (error || !invoice) {
     return (
-      <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.back()}>
-          Quay lại
-        </Button>
-        <div className="mt-12">
-          <EmptyState
-            icon={ReceiptText}
-            message={error || 'Không tìm thấy hoá đơn'}
-            description="Hoá đơn không tồn tại hoặc bạn không có quyền xem."
-          />
+      <div className="min-h-full bg-[var(--color-surface-secondary)] px-4 py-6 dark:bg-black md:px-8 md:py-10">
+        <div className="mx-auto max-w-6xl space-y-6">
+          <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.back()}>
+            Quay lại
+          </Button>
+          <div className="mt-12">
+            <EmptyState
+              icon={ReceiptText}
+              message={error || 'Không tìm thấy hoá đơn'}
+              description="Hoá đơn không tồn tại hoặc bạn không có quyền xem."
+            />
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.back()}>
+    <div className="min-h-full bg-[var(--color-surface-secondary)] px-4 py-6 dark:bg-black md:px-8 md:py-10">
+      <div className="mx-auto max-w-6xl space-y-6">
+        {/* ── Folio chrome ── */}
+        <div className="flex items-center justify-between gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={ArrowLeft}
+            onClick={() => router.back()}
+          >
             Quay lại
           </Button>
-          {isAdmin && invoice && (
-            <>
+
+          {isAdmin && (
+            <div className="flex items-center gap-2">
               {invoice.status === 'PAID' && (
                 <>
                   <Button
-                    variant="ghost"
+                    variant="secondary"
                     size="sm"
                     icon={Pencil}
-                    title="Sửa hoá đơn"
                     onClick={() => setEditOpen(true)}
                   >
                     Sửa
@@ -162,10 +171,9 @@ export function TransactionDetailScreen({ id }: Props) {
                     variant="outline-danger"
                     size="sm"
                     icon={XCircle}
-                    title="Huỷ hoá đơn"
                     onClick={() => setConfirmVoidOpen(true)}
                   >
-                    Huỷ
+                    Huỷ hoá đơn
                   </Button>
                 </>
               )}
@@ -174,15 +182,16 @@ export function TransactionDetailScreen({ id }: Props) {
                   variant="outline-danger"
                   size="sm"
                   icon={Trash2}
-                  title="Xoá hoá đơn"
                   onClick={() => setConfirmDeleteOpen(true)}
                 >
                   Xoá
                 </Button>
               )}
-            </>
+            </div>
           )}
         </div>
+
+        {/* ── Receipt folio + spine ── */}
         <InvoiceDetailContent invoice={invoice} />
       </div>
 
@@ -192,7 +201,7 @@ export function TransactionDetailScreen({ id }: Props) {
         title="Xoá hoá đơn"
         description={invoice ? `Bạn có chắc muốn xoá hoá đơn "${invoice.invoiceNo}" không?` : undefined}
         body={
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="text-sm text-[var(--color-text-secondary)]">
             Hành động này không thể hoàn tác. Chỉ xoá được hoá đơn chưa có thanh toán, phí hội viên
             hoặc biến động tồn kho liên quan.
           </p>

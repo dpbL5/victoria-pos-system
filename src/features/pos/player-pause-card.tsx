@@ -94,8 +94,8 @@ export function PlayerPauseCard({
             <p
               className={
                 isPaused
-                  ? 'truncate text-base font-semibold text-amber-600 dark:text-amber-400'
-                  : 'truncate text-base font-semibold text-zinc-950 dark:text-white'
+                  ? 'truncate text-base font-semibold text-amber-600 transition-colors duration-200 dark:text-amber-400'
+                  : 'truncate text-base font-semibold text-zinc-950 transition-colors duration-200 dark:text-white'
               }
             >
               {displayName}
@@ -112,7 +112,7 @@ export function PlayerPauseCard({
         )}
         <span
           aria-hidden={!hasPaused}
-          className={`inline-flex items-center gap-1 text-xs tabular-nums ${
+          className={`inline-flex items-center gap-1 text-xs tabular-nums transition-colors duration-200 ${
             hasPaused
               ? isPaused
                 ? 'text-amber-600 dark:text-amber-400'
