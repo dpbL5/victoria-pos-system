@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { isManagerOrAdmin } from '@/lib/shared/roles'
 import { apiJson, jsonRequest } from '@/lib/api'
+import { shortInvoiceNo } from '@/lib/shared/utils'
 import { money, formatDay } from '@/features/pos/format'
 import { RenewMemberDialog, type RenewMemberInput, type MemberStatus } from './renew-member-dialog'
 import type { Membership, MembershipPlan, Shift, UserSession } from '@/features/pos/types'
@@ -730,7 +731,7 @@ function InvoiceHistoryRow({ invoice }: { invoice: CustomerHistoryInvoice }) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="font-mono text-sm font-semibold text-zinc-950 dark:text-white">
-                {invoice.invoiceNo}
+                {shortInvoiceNo(invoice.invoiceNo)}
               </span>
               <Badge variant={statusVariant as 'success' | 'danger' | 'default'} size="sm">
                 {statusLabel}

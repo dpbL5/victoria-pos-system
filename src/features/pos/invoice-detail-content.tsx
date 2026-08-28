@@ -3,7 +3,6 @@
 import {
   Banknote,
   Car,
-  Check,
   Clock,
   CreditCard,
   ReceiptText,
@@ -14,9 +13,10 @@ import {
   Timer,
   User,
   Users,
-  X,
   type LucideIcon,
 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 import { formatVND } from '@/lib/shared/utils'
 import { formatPausedHMS } from './format'
 
@@ -88,7 +88,7 @@ const itemTypeLabels: Record<string, string> = {
   PRODUCT: 'Hàng hoá',
   SERVICE: 'Dịch vụ',
   DISCOUNT: 'Giảm giá',
-  SURCHARGE: 'Phí gửi xe',
+  SURCHARGE: 'Giảm phí gửi xe',
 }
 const itemTypeIcons: Record<string, LucideIcon> = {
   PLAY_TIME: Timer,
@@ -99,9 +99,26 @@ const itemTypeIcons: Record<string, LucideIcon> = {
   SURCHARGE: Car,
 }
 
+const statusVariant: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
+  PAID: 'success',
+  ACTIVE: 'warning',
+  COMPLETED: 'success',
+  CANCELED: 'danger',
+  CANCELLED: 'danger',
+  DRAFT: 'default',
+}
+
+const statusLabel: Record<string, string> = {
+  PAID: 'Đã thanh toán',
+  ACTIVE: 'Đang chơi',
+  COMPLETED: 'Hoàn tất',
+  CANCELED: 'Đã huỷ',
+  CANCELLED: 'Đã huỷ',
+  DRAFT: 'Bản nháp',
+}
+
 // ─── Entry ──────────────────────────────────────────────────────────────────
 export function InvoiceDetailContent({ invoice }: { invoice: InvoiceDetail }) {
-  const isPaid = invoice.status === 'PAID'
   const isCancelled = invoice.status === 'CANCELED' || invoice.status === 'CANCELLED'
 
   const parkingFeeTotal = invoice.items
@@ -118,48 +135,86 @@ export function InvoiceDetailContent({ invoice }: { invoice: InvoiceDetail }) {
   const pausedSeconds = playMeta.pausedSeconds ?? invoice.session?.totalPausedSeconds ?? 0
   const playerPauses = playMeta.playerPauses ?? []
 
+  const invoiceStatusVariant = statusVariant[invoice.status] ?? 'default'
+  const invoiceStatusLabel = statusLabel[invoice.status] ?? invoice.status
+
+  // Chuẩn hoá danh sách hàng của bảng: mỗi người chơi trong PLAY_TIME là 1 hàng
+  // riêng (Tên (Bảng giá) | Số giờ | Thành tiền). Các loại khác giữ nguyên 1 hàng.
+  const tableRows = flattenInvoiceItems(invoice.items)
+
   return (
-    <div className="grid grid-cols-1 gap-6 md:gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      {/* ── Receipt folio ──────────────────────────────────────────── */}
-      <article
-        className={[
-          'relative overflow-hidden rounded-[2px] border border-[var(--color-border-default)]',
-          'bg-[color-mix(in_oklab,var(--color-surface-primary)_96%,var(--color-gold)_4%)]',
-          'shadow-[0_1px_0_rgba(15,23,42,0.04),0_24px_60px_-32px_rgba(15,23,42,0.18)]',
-          'dark:bg-[color-mix(in_oklab,var(--color-surface-primary)_94%,var(--color-gold)_6%)]',
-          'dark:shadow-[0_1px_0_rgba(0,0,0,0.5),0_30px_80px_-32px_rgba(0,0,0,0.7)]',
-        ].join(' ')}
-      >
-        {/* Perforated top edge — receipt feel */}
-        <div
-          aria-hidden
-          className="h-1.5 w-full bg-[radial-gradient(circle_at_4px_0,var(--color-surface-secondary)_2px,transparent_2.5px)] bg-[length:8px_4px]"
-        />
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      {/* ── Receipt body ───────────────────────────────────────────── */}
+      <Card padding="none" className="overflow-hidden">
+        {/* Cancelled banner — replaces the old rotated watermark */}
+        {isCancelled && (
+          <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
+            Hoá đơn đã huỷ — tiền và tồn kho đã được hoàn trả
+          </div>
+        )}
 
-        {/* VOIDED watermark */}
-        {isCancelled && <VoidedWatermark />}
+        {/* Masthead */}
+        <header className="flex flex-col gap-2 border-b border-zinc-200 px-4 py-5 sm:px-6 sm:py-6 dark:border-zinc-800">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              Mã hoá đơn: <span className="font-semibold text-zinc-900 dark:text-white">{invoice.invoiceNo}</span>
+            </h1>
+            <Badge variant={invoiceStatusVariant} size="sm">
+              {invoiceStatusLabel}
+            </Badge>
+            {earlyCollectionSequence !== undefined && (
+              <div className="inline-flex items-center gap-1.5 border-l-2 border-amber-500 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                <Timer size={12} aria-hidden />
+                Thu trước — lần {earlyCollectionSequence}
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            {invoice.paidAt
+              ? `Thanh toán ${formatDateTime(invoice.paidAt)}`
+              : `Lập ${formatDateTime(invoice.createdAt)}`}
+          </p>
+        </header>
 
-        {/* Folio masthead */}
-        <FolioMasthead
-          invoice={invoice}
-          earlyCollectionSequence={earlyCollectionSequence}
-          isPaid={isPaid}
-          isCancelled={isCancelled}
-        />
+        {/* Itemized lines — table */}
+        <section className="px-4 py-5 sm:px-6 sm:py-6">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Chi tiết dịch vụ
+          </h2>
 
-        {/* Itemized lines */}
-        <ItemSection items={invoice.items} />
+          {invoice.items.length === 0 ? (
+            <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+              Chưa có mục nào được ghi nhận.
+            </p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-200 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                    <th scope="col" className="py-2 pr-3 font-medium">Nội dung</th>
+                    <th scope="col" className="w-20 py-2 px-3 text-right font-medium">Số lượng</th>
+                    <th scope="col" className="w-32 py-2 pl-3 text-right font-medium">Thành tiền</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {tableRows.map((row) => (
+                    <ItemRow key={row.key} row={row} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
-        {/* Totals block — heavy rule language */}
+        {/* Totals */}
         <TotalsBlock
-          subtotal={invoice.subtotal}
           discountTotal={invoice.discountTotal}
           parkingFeeTotal={parkingFeeTotal}
           grandTotal={invoice.grandTotal}
           isCancelled={isCancelled}
         />
 
-        {/* Payment timeline */}
+        {/* Payment history */}
         {(invoice.payments.length > 0 || invoice.membershipPayments.length > 0) && (
           <PaymentTimeline
             payments={invoice.payments}
@@ -168,85 +223,79 @@ export function InvoiceDetailContent({ invoice }: { invoice: InvoiceDetail }) {
         )}
 
         {/* Notes */}
-        {invoice.notes && <FolioNotes notes={invoice.notes} />}
-
-        {/* Folio footer — paper tear */}
-        <FolioFooter invoice={invoice} />
-      </article>
+        {invoice.notes && (
+          <section className="border-t border-zinc-200 px-4 py-4 sm:px-6 dark:border-zinc-800">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Ghi chú
+            </h2>
+            <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{invoice.notes}</p>
+          </section>
+        )}
+      </Card>
 
       {/* ── Metadata spine ─────────────────────────────────────────── */}
-      <aside className="space-y-6">
-        <SpineSection number="01" label="Khách hàng" icon={User}>
+      <aside className="space-y-4">
+        <SpineCard icon={User} label="Khách hàng">
           {invoice.customer ? (
-            <div className="space-y-1.5">
-              <p className="font-mono text-sm uppercase tracking-wide text-[var(--color-text-primary)]">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-zinc-900 dark:text-white">
                 {invoice.customer.fullName}
               </p>
               {invoice.customer.phone && (
-                <p className="font-mono text-xs text-[var(--color-text-secondary)] tabular-nums">
-                  {invoice.customer.phone}
-                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">{invoice.customer.phone}</p>
               )}
-              <p className="pt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-gold-dark)] dark:text-[var(--color-gold)]">
-                {invoice.customer.type === 'MEMBER' ? 'Hội viên' : 'Vãng lai'}
-              </p>
+              <div className="pt-1">
+                <Badge
+                  variant={invoice.customer.type === 'MEMBER' ? 'purple' : 'default'}
+                  size="sm"
+                >
+                  {invoice.customer.type === 'MEMBER' ? 'Hội viên' : 'Vãng lai'}
+                </Badge>
+              </div>
               {invoice.customer.id === null && (
-                <p className="text-[10px] text-[var(--color-text-tertiary)]">
+                <p className="pt-1 text-xs text-zinc-400 dark:text-zinc-500">
                   Khách vãng lai — không lưu hồ sơ
                 </p>
               )}
             </div>
           ) : (
-            <p className="text-xs text-[var(--color-text-tertiary)]">—</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">—</p>
           )}
-        </SpineSection>
+        </SpineCard>
 
-        <SpineSection number="02" label="Phiên chơi" icon={Clock}>
+        <SpineCard icon={Clock} label="Phiên chơi">
           {invoice.session ? (
             <div className="space-y-2">
-              <div className="flex items-baseline gap-1.5 font-mono text-sm tabular-nums text-[var(--color-text-primary)]">
-                <span>{formatTime(invoice.session.startTime)}</span>
-                <span className="text-[var(--color-text-tertiary)]">—</span>
-                <span>
-                  {invoice.session.endTime
-                    ? formatTime(invoice.session.endTime)
-                    : 'đang chơi'}
-                </span>
-              </div>
-              <StatusMark
-                tone={
-                  invoice.session.status === 'COMPLETED'
-                    ? 'paid'
-                    : invoice.session.status === 'ACTIVE'
-                      ? 'pending'
-                      : 'voided'
-                }
+              <p className="text-sm text-zinc-900 dark:text-white">
+                {formatTime(invoice.session.startTime)}
+                <span className="mx-1 text-zinc-300 dark:text-zinc-600">—</span>
+                {invoice.session.endTime ? formatTime(invoice.session.endTime) : 'đang chơi'}
+              </p>
+              <Badge
+                variant={statusVariant[invoice.session.status] ?? 'default'}
+                size="sm"
               >
-                {invoice.session.status === 'COMPLETED'
-                  ? 'Hoàn tất'
-                  : invoice.session.status === 'ACTIVE'
-                    ? 'Đang chơi'
-                    : 'Đã huỷ'}
-              </StatusMark>
+                {statusLabel[invoice.session.status] ?? invoice.session.status}
+              </Badge>
               {pausedSeconds > 0 && (
-                <div className="space-y-1 border-t border-dashed border-[var(--color-border-default)] pt-2 text-[11px] text-[var(--color-text-secondary)]">
+                <div className="space-y-1 border-t border-zinc-100 pt-2 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
                   <p className="flex items-center justify-between gap-2">
-                    <span className="uppercase tracking-wide">Nghỉ</span>
-                    <span className="font-mono tabular-nums text-[var(--color-text-primary)]">
+                    <span>Nghỉ</span>
+                    <span className="text-zinc-900 dark:text-white">
                       {formatPausedHMS(pausedSeconds)}
                     </span>
                   </p>
                   {playerPauses.length > 0 && (
-                    <ul className="space-y-0.5 pl-2">
+                    <ul className="space-y-0.5 pl-3">
                       {playerPauses.map((p) => (
                         <li
                           key={p.id}
-                          className="flex items-center justify-between gap-2 font-mono tabular-nums"
+                          className="flex items-center justify-between gap-2 text-xs"
                         >
                           <span className="truncate">
                             {p.name?.trim() || 'Người chơi'}
                           </span>
-                          <span className="text-[var(--color-text-secondary)]">
+                          <span className="text-zinc-500 dark:text-zinc-400">
                             {formatPausedHMS(p.pausedSeconds)}
                           </span>
                         </li>
@@ -257,17 +306,15 @@ export function InvoiceDetailContent({ invoice }: { invoice: InvoiceDetail }) {
               )}
             </div>
           ) : (
-            <p className="text-xs text-[var(--color-text-tertiary)]">—</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">—</p>
           )}
-        </SpineSection>
+        </SpineCard>
 
-        <SpineSection number="03" label="Ca & nhân viên" icon={Users}>
-          <div className="space-y-1.5">
-            <p className="font-mono text-sm text-[var(--color-text-primary)]">
-              {invoice.staff.fullName}
-            </p>
+        <SpineCard icon={Users} label="Ca & nhân viên">
+          <div className="space-y-1">
+            <p className="text-sm text-zinc-900 dark:text-white">{invoice.staff.fullName}</p>
             {invoice.shift && (
-              <p className="font-mono text-[11px] text-[var(--color-text-secondary)] tabular-nums">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 Ca mở {formatTime(invoice.shift.openedAt)}
                 {invoice.shift.closedAt
                   ? ` · đóng ${formatTime(invoice.shift.closedAt)}`
@@ -275,184 +322,210 @@ export function InvoiceDetailContent({ invoice }: { invoice: InvoiceDetail }) {
               </p>
             )}
           </div>
-        </SpineSection>
+        </SpineCard>
       </aside>
     </div>
   )
 }
 
-// ─── Folio masthead ─────────────────────────────────────────────────────────
-function FolioMasthead({
-  invoice,
-  earlyCollectionSequence,
-  isPaid,
-  isCancelled,
-}: {
-  invoice: InvoiceDetail
-  earlyCollectionSequence: number | undefined
-  isPaid: boolean
-  isCancelled: boolean
-}) {
-  return (
-    <header className="relative border-b border-[var(--color-border-default)] px-6 pb-6 pt-7 md:px-10 md:pt-10">
-      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
-        <span>Hệ thống POS · Victoria Archery Club</span>
-        <span>Hoá đơn bán hàng</span>
-      </div>
-
-      <div className="mt-5 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-        <div className="space-y-1.5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-gold-dark)] dark:text-[var(--color-gold)]">
-            Số hoá đơn
-          </p>
-          <h1 className="font-mono text-2xl font-bold tracking-tight text-[var(--color-text-primary)] md:text-3xl">
-            {invoice.invoiceNo}
-          </h1>
-          <p className="font-mono text-xs text-[var(--color-text-secondary)] tabular-nums">
-            Lập {formatDateTime(invoice.createdAt)}
-            {invoice.paidAt && (
-              <>
-                <span className="mx-1.5 text-[var(--color-text-tertiary)]">·</span>
-                Thanh toán {formatDateTime(invoice.paidAt)}
-              </>
-            )}
-          </p>
-          {earlyCollectionSequence !== undefined && (
-            <p className="mt-2 inline-flex items-center gap-1.5 border-l-2 border-[var(--color-warning)] bg-[var(--color-warning-bg)] px-2 py-1 text-[11px] font-medium text-[var(--color-warning)]">
-              <Timer size={12} aria-hidden />
-              Thu trước — lần {earlyCollectionSequence}
-            </p>
-          )}
-        </div>
-
-        <div className="md:text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
-            Tổng thanh toán
-          </p>
-          <p
-            className={[
-              'mt-1 font-mono text-4xl font-bold tabular-nums leading-none tracking-tight md:text-5xl',
-              isCancelled
-                ? 'text-[var(--color-text-tertiary)] line-through decoration-2'
-                : 'text-[var(--color-gold-dark)] dark:text-[var(--color-gold)]',
-            ].join(' ')}
-          >
-            {formatVND(invoice.grandTotal)}
-          </p>
-          <div className="mt-3 md:flex md:justify-end">
-            <StatusMark
-              tone={isPaid ? 'paid' : isCancelled ? 'voided' : 'pending'}
-            >
-              {isPaid ? 'Đã thanh toán' : isCancelled ? 'Đã huỷ' : 'Bản nháp'}
-            </StatusMark>
-          </div>
-        </div>
-      </div>
-    </header>
-  )
+// ─── Itemized row (table) ───────────────────────────────────────────────────
+type PlayerPricing = {
+  id?: string
+  name?: string
+  totalHours?: number
+  subtotal?: number
+  discountAmount?: number
+  total?: number
+  pricingRuleName?: string
 }
 
-// ─── Itemized lines ─────────────────────────────────────────────────────────
-function ItemSection({ items }: { items: InvoiceItem[] }) {
-  return (
-    <section className="px-6 py-6 md:px-10 md:py-8">
-      <SectionLabel index="I" label="Chi tiết dịch vụ" />
+type TableRow =
+  | {
+      key: string
+      kind: 'item'
+      item: InvoiceItem
+    }
+  | {
+      key: string
+      kind: 'player'
+      player: PlayerPricing
+      itemType: string
+      isMultiPlayer: boolean
+    }
 
-      {items.length === 0 ? (
-        <p className="mt-5 text-sm italic text-[var(--color-text-tertiary)]">
-          Chưa có mục nào được ghi nhận.
-        </p>
-      ) : (
-        <ul className="mt-5 divide-y divide-dashed divide-[var(--color-border-default)]">
-          {items.map((item) => (
-            <ItemLine key={item.id} item={item} />
-          ))}
-        </ul>
-      )}
-    </section>
-  )
+function flattenInvoiceItems(items: InvoiceItem[]): TableRow[] {
+  const rows: TableRow[] = []
+  for (const item of items) {
+    // Phí gửi xe đã gom vào dòng tổng kết bên dưới — không hiển thị trong bảng.
+    if (item.type === 'SURCHARGE') continue
+    if (item.type === 'PLAY_TIME') {
+      const metadata = (item.metadata ?? {}) as Record<string, unknown>
+      const playerPricing = Array.isArray(metadata.playerPricing)
+        ? (metadata.playerPricing as PlayerPricing[])
+        : null
+      if (playerPricing && playerPricing.length > 0) {
+        const isMultiPlayer = playerPricing.length > 1
+        for (let i = 0; i < playerPricing.length; i++) {
+          const p = playerPricing[i]
+          rows.push({
+            key: `${item.id}-p${i}`,
+            kind: 'player',
+            player: p,
+            itemType: item.type,
+            isMultiPlayer,
+          })
+        }
+        continue
+      }
+    }
+    rows.push({ key: item.id, kind: 'item', item })
+  }
+  return rows
 }
 
-function ItemLine({ item }: { item: InvoiceItem }) {
+function ItemRow({ row }: { row: TableRow }) {
+  if (row.kind === 'player') {
+    return <PlayerRow row={row} />
+  }
+  return <ItemRowGeneric item={row.item} />
+}
+
+function ItemRowGeneric({ item }: { item: InvoiceItem }) {
   const Icon = itemTypeIcons[item.type] ?? ReceiptText
   const isNegative = item.total < 0
   const isDiscount = item.type === 'DISCOUNT' || item.type === 'SURCHARGE'
   const promotionName = getPromotionName(item.metadata)
 
   return (
-    <li className="grid grid-cols-[1.5rem_1fr_auto] items-start gap-3 py-3 first:pt-0 last:pb-0">
-      <Icon
-        size={16}
-        className={[
-          'mt-0.5 shrink-0',
-          isNegative
-            ? 'text-[var(--color-danger)]'
-            : 'text-[var(--color-text-tertiary)]',
-        ].join(' ')}
-        aria-hidden
-      />
-
-      <div className="min-w-0 space-y-1">
-        <p className="truncate text-sm font-medium text-[var(--color-text-primary)]">
-          {item.description}
-        </p>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-text-secondary)]">
-          <span className="inline-flex items-center rounded-[2px] border border-[var(--color-border-default)] bg-[var(--color-surface-secondary)] px-1.5 py-px font-mono text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)]">
-            {itemTypeLabels[item.type] ?? item.type}
-          </span>
-          {item.type === 'PLAY_TIME' ? (
-            <PlayTimePricing item={item} />
-          ) : (
-            <span className="font-mono tabular-nums">
-              {item.quantity} × {formatVND(item.unitPrice)}
-            </span>
-          )}
-          {item.discountAmount > 0 && (
-            <span className="font-mono tabular-nums text-[var(--color-danger)]">
-              −{formatVND(item.discountAmount)}
-            </span>
-          )}
-          {promotionName && (
-            <span className="truncate italic text-[var(--color-gold-dark)] dark:text-[var(--color-gold)]">
-              KM: {promotionName}
-            </span>
-          )}
+    <tr className="align-top">
+      {/* Nội dung */}
+      <td className="py-3 pr-3">
+        <div className="flex items-start gap-2">
+          <Icon
+            size={16}
+            className={[
+              'mt-0.5 shrink-0',
+              isNegative ? 'text-red-500' : 'text-zinc-400 dark:text-zinc-500',
+            ].join(' ')}
+            aria-hidden
+          />
+          <div className="min-w-0 space-y-1">
+            <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">
+              {item.description}
+            </p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                {itemTypeLabels[item.type] ?? item.type}
+              </span>
+              {item.type !== 'PLAY_TIME' && (
+                <span>
+                  {item.quantity} × {formatVND(item.unitPrice)}
+                </span>
+              )}
+              {item.discountAmount > 0 && (
+                <span className="text-red-600 dark:text-red-400">
+                  −{formatVND(item.discountAmount)}
+                </span>
+              )}
+              {promotionName && (
+                <span className="truncate text-xs italic text-zinc-500 dark:text-zinc-400">
+                  KM: {promotionName}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      </td>
 
-      <p
+      {/* Số lượng */}
+      <td className="w-20 py-3 px-3 text-right text-sm text-zinc-700 dark:text-zinc-300">
+        {item.quantity}
+      </td>
+
+      {/* Thành tiền */}
+      <td
         className={[
-          'whitespace-nowrap font-mono text-sm font-semibold tabular-nums',
+          'w-32 py-3 pl-3 text-right text-sm font-semibold whitespace-nowrap',
           isNegative || isDiscount
-            ? 'text-[var(--color-danger)]'
-            : 'text-[var(--color-text-primary)]',
+            ? 'text-red-600 dark:text-red-400'
+            : 'text-zinc-900 dark:text-white',
         ].join(' ')}
       >
         {isNegative ? '−' : ''}
         {formatVND(Math.abs(item.total))}
-      </p>
-    </li>
+      </td>
+    </tr>
+  )
+}
+
+function PlayerRow({ row }: { row: Extract<TableRow, { kind: 'player' }> }) {
+  const { player, isMultiPlayer } = row
+  const total = player.total ?? 0
+  const isNegative = total < 0
+  const discount = player.discountAmount ?? 0
+  const name = (player.name ?? '').trim()
+  const ruleName = player.pricingRuleName ?? ''
+
+  return (
+    <tr className="align-top">
+      {/* Nội dung: [Tên] (Bảng giá) */}
+      <td className="py-3 pr-3">
+        <div className="flex items-start gap-2">
+          <Timer
+            size={16}
+            className="mt-0.5 shrink-0 text-zinc-400 dark:text-zinc-500"
+            aria-hidden
+          />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">
+              {isMultiPlayer && name ? `${name} ` : ''}
+              {ruleName && (
+                <span className="text-zinc-600 dark:text-zinc-400">({ruleName})</span>
+              )}
+            </p>
+            {discount > 0 && (
+              <p className="mt-0.5 text-xs text-red-600 dark:text-red-400">
+                −{formatVND(discount)}
+              </p>
+            )}
+          </div>
+        </div>
+      </td>
+
+      {/* Số lượng: số giờ chơi */}
+      <td className="w-20 py-3 px-3 text-right text-sm text-zinc-700 dark:text-zinc-300">
+        {formatHours(player.totalHours ?? 0)}h
+      </td>
+
+      {/* Thành tiền */}
+      <td
+        className={[
+          'w-32 py-3 pl-3 text-right text-sm font-semibold whitespace-nowrap',
+          isNegative ? 'text-red-600 dark:text-red-400' : 'text-zinc-900 dark:text-white',
+        ].join(' ')}
+      >
+        {isNegative ? '−' : ''}
+        {formatVND(Math.abs(total))}
+      </td>
+    </tr>
   )
 }
 
 // ─── Totals block ───────────────────────────────────────────────────────────
 function TotalsBlock({
-  subtotal,
   discountTotal,
   parkingFeeTotal,
   grandTotal,
   isCancelled,
 }: {
-  subtotal: number
   discountTotal: number
   parkingFeeTotal: number
   grandTotal: number
   isCancelled: boolean
 }) {
   return (
-    <section className="border-y-2 border-double border-[var(--color-border-default)] bg-[color-mix(in_oklab,var(--color-surface-primary)_92%,var(--color-gold)_8%)] px-6 py-5 md:px-10 dark:bg-[color-mix(in_oklab,var(--color-surface-primary)_85%,var(--color-gold)_15%)]">
+    <section className="border-y border-zinc-200 bg-zinc-50 px-4 py-4 sm:px-6 dark:border-zinc-800 dark:bg-zinc-900/50">
       <dl className="space-y-1.5 text-sm">
-        <SummaryRow label="Tạm tính" value={formatVND(subtotal)} />
         {discountTotal > 0 && (
           <SummaryRow
             label="Giảm giá"
@@ -462,23 +535,23 @@ function TotalsBlock({
         )}
         {parkingFeeTotal > 0 && (
           <SummaryRow
-            label="Phí gửi xe"
+            label="Giảm phí gửi xe"
             value={`− ${formatVND(parkingFeeTotal)}`}
             tone="deduction"
           />
         )}
       </dl>
 
-      <div className="mt-4 flex items-baseline justify-between border-t border-[var(--color-border-default)] pt-4">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+      <div className="mt-3 flex items-baseline justify-between border-t border-zinc-200 pt-3 dark:border-zinc-800">
+        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
           Tổng cộng
         </span>
         <span
           className={[
-            'font-mono text-2xl font-bold tabular-nums leading-none tracking-tight md:text-3xl',
+            'text-2xl font-bold tracking-tight sm:text-3xl',
             isCancelled
-              ? 'text-[var(--color-text-tertiary)] line-through decoration-2'
-              : 'text-[var(--color-gold-dark)] dark:text-[var(--color-gold)]',
+              ? 'text-zinc-400 line-through dark:text-zinc-500'
+              : 'text-zinc-900 dark:text-white',
           ].join(' ')}
         >
           {formatVND(grandTotal)}
@@ -497,14 +570,20 @@ function SummaryRow({
   value: string
   tone?: 'deduction'
 }) {
-  const accent = tone === 'deduction' ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-secondary)]'
   return (
-    <div className="flex items-baseline justify-between gap-3 font-mono tabular-nums">
-      <dt className={`text-[11px] uppercase tracking-[0.18em] ${accent}`}>{label}</dt>
+    <div className="flex items-baseline justify-between gap-3">
+      <dt
+        className={[
+          'text-xs uppercase tracking-wide',
+          tone === 'deduction' ? 'text-red-600 dark:text-red-400' : 'text-zinc-500 dark:text-zinc-400',
+        ].join(' ')}
+      >
+        {label}
+      </dt>
       <dd
         className={[
           'text-sm font-medium',
-          tone === 'deduction' ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-primary)]',
+          tone === 'deduction' ? 'text-red-600 dark:text-red-400' : 'text-zinc-900 dark:text-white',
         ].join(' ')}
       >
         {value}
@@ -522,14 +601,15 @@ function PaymentTimeline({
   membershipPayments: InvoiceMembershipPayment[]
 }) {
   return (
-    <section className="px-6 py-6 md:px-10 md:py-8">
-      <SectionLabel
-        index="II"
-        label="Lịch sử thanh toán"
-        meta={`${payments.length + membershipPayments.length} khoản`}
-      />
+    <section className="px-4 py-5 sm:px-6 sm:py-6">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        Phương thức thanh toán{' '}
+        <span className="ml-1 text-zinc-400 dark:text-zinc-500">
+          {payments.length + membershipPayments.length} khoản
+        </span>
+      </h2>
 
-      <ol className="mt-5 space-y-4">
+      <ul className="mt-4 space-y-3">
         {payments.map((p) => (
           <TimelinePayment
             key={p.id}
@@ -553,7 +633,7 @@ function PaymentTimeline({
             memberOnly
           />
         ))}
-      </ol>
+      </ul>
     </section>
   )
 }
@@ -575,60 +655,49 @@ function TimelinePayment({
   notes: string | null
   memberOnly?: boolean
 }) {
-  const MethodIcon =
-    method === 'CASH' ? Banknote : method === 'MEMBER' ? ShieldCheck : CreditCard
+  const MethodIcon = method === 'CASH' ? Banknote : method === 'MEMBER' ? ShieldCheck : CreditCard
   return (
-    <li className="relative grid grid-cols-[1.25rem_1fr_auto] items-start gap-3">
-      {/* Bullet + dotted line */}
-      <div className="relative flex justify-center">
-        <span
-          aria-hidden
-          className={[
-            'z-10 mt-1 grid h-5 w-5 place-items-center rounded-full border-2 border-[var(--color-surface-primary)]',
-            memberOnly
-              ? 'bg-[var(--color-accent-purple)]'
-              : 'bg-[var(--color-gold-dark)] dark:bg-[var(--color-gold)]',
-          ].join(' ')}
-        >
-          <MethodIcon size={10} className="text-white" aria-hidden />
-        </span>
-        <span
-          aria-hidden
-          className="absolute left-1/2 top-6 h-full w-px -translate-x-1/2 border-l border-dashed border-[var(--color-border-default)]"
-        />
+    <li className="flex items-start gap-3">
+      <div
+        className={[
+          'grid h-8 w-8 shrink-0 place-items-center rounded-lg',
+          memberOnly
+            ? 'bg-purple-50 text-purple-600 dark:bg-purple-500/15 dark:text-purple-300'
+            : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
+        ].join(' ')}
+      >
+        <MethodIcon size={16} aria-hidden />
       </div>
 
-      <div className="min-w-0 space-y-0.5 pb-1">
-        <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-          {label}
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-zinc-900 dark:text-white">
+          <span>{label}</span>
           {memberOnly && (
-            <span className="ml-1.5 inline-block rounded-[2px] border border-[var(--color-accent-purple-border)] bg-[var(--color-accent-purple-bg)] px-1.5 py-px text-[9px] font-mono uppercase tracking-wider text-[var(--color-accent-purple)]">
+            <Badge variant="purple" size="sm">
               Hội viên
-            </span>
+            </Badge>
           )}
         </p>
-        <p className="font-mono text-[11px] tabular-nums text-[var(--color-text-secondary)]">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
           {formatDateTime(at)}
           {staffName && (
             <>
-              <span className="mx-1.5 text-[var(--color-text-tertiary)]">·</span>
+              <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">·</span>
               {staffName}
             </>
           )}
         </p>
         {notes && (
-          <p className="text-[11px] italic text-[var(--color-text-tertiary)]">
-            “{notes}”
-          </p>
+          <p className="text-xs italic text-zinc-500 dark:text-zinc-400">“{notes}”</p>
         )}
       </div>
 
       <p
         className={[
-          'whitespace-nowrap font-mono text-sm font-semibold tabular-nums',
+          'whitespace-nowrap text-sm font-semibold',
           memberOnly
-            ? 'text-[var(--color-accent-purple)]'
-            : 'text-[var(--color-text-primary)]',
+            ? 'text-purple-600 dark:text-purple-300'
+            : 'text-zinc-900 dark:text-white',
         ].join(' ')}
       >
         {formatVND(amount)}
@@ -637,136 +706,24 @@ function TimelinePayment({
   )
 }
 
-// ─── Folio notes ────────────────────────────────────────────────────────────
-function FolioNotes({ notes }: { notes: string }) {
-  return (
-    <section className="border-t border-dashed border-[var(--color-border-default)] px-6 py-5 md:px-10">
-      <SectionLabel index="III" label="Ghi chú" />
-      <p className="mt-3 max-w-prose text-sm italic text-[var(--color-text-secondary)]">
-        “{notes}”
-      </p>
-    </section>
-  )
-}
-
-// ─── Folio footer ───────────────────────────────────────────────────────────
-function FolioFooter({ invoice }: { invoice: InvoiceDetail }) {
-  return (
-    <footer className="border-t border-[var(--color-border-default)] px-6 py-5 md:px-10">
-      <div className="flex flex-col items-start gap-2 text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-tertiary)] md:flex-row md:items-center md:justify-between">
-        <span>Hoá đơn lưu trên hệ thống · {invoice.id.slice(0, 8)}</span>
-        <span>Cảm ơn quý khách</span>
-      </div>
-      {/* Perforated bottom edge — the tear */}
-      <div
-        aria-hidden
-        className="mt-5 h-1.5 w-full bg-[radial-gradient(circle_at_4px_4px,var(--color-surface-secondary)_2px,transparent_2.5px)] bg-[length:8px_4px]"
-      />
-    </footer>
-  )
-}
-
-// ─── Voided watermark ───────────────────────────────────────────────────────
-function VoidedWatermark() {
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
-    >
-      <div className="flex items-center gap-3 -rotate-12 rounded-[2px] border-4 border-[var(--color-danger)] px-8 py-3 text-[var(--color-danger)] opacity-70 mix-blend-multiply dark:mix-blend-screen">
-        <X size={28} strokeWidth={3} />
-        <span className="font-mono text-2xl font-black uppercase tracking-[0.4em]">
-          Đã huỷ
-        </span>
-      </div>
-    </div>
-  )
-}
-
-// ─── Spine section (right column) ───────────────────────────────────────────
-function SpineSection({
-  number,
-  label,
+// ─── Metadata card (right column) ───────────────────────────────────────────
+function SpineCard({
   icon: Icon,
-  children,
-}: {
-  number: string
-  label: string
-  icon: LucideIcon
-  children: React.ReactNode
-}) {
-  return (
-    <section>
-      <div className="flex items-center gap-2 border-b border-[var(--color-border-default)] pb-2">
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-gold-dark)] dark:text-[var(--color-gold)]">
-          §{number}
-        </span>
-        <Icon
-          size={12}
-          className="text-[var(--color-text-tertiary)]"
-          aria-hidden
-        />
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-          {label}
-        </h2>
-      </div>
-      <div className="pt-3">{children}</div>
-    </section>
-  )
-}
-
-// ─── Shared atoms ───────────────────────────────────────────────────────────
-function SectionLabel({
-  index,
   label,
-  meta,
-}: {
-  index: string
-  label: string
-  meta?: string
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <h2 className="flex items-baseline gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-        <span className="font-mono text-[var(--color-gold-dark)] dark:text-[var(--color-gold)]">
-          §{index}
-        </span>
-        {label}
-      </h2>
-      {meta && (
-        <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-text-tertiary)]">
-          {meta}
-        </span>
-      )}
-    </div>
-  )
-}
-
-function StatusMark({
-  tone,
   children,
 }: {
-  tone: 'paid' | 'pending' | 'voided'
+  icon: LucideIcon
+  label: string
   children: React.ReactNode
 }) {
-  const style =
-    tone === 'paid'
-      ? 'border-[var(--color-success-border)] bg-[var(--color-success-bg)] text-[var(--color-success)]'
-      : tone === 'pending'
-        ? 'border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
-        : 'border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] text-[var(--color-danger)]'
-  const Icon = tone === 'paid' ? Check : tone === 'pending' ? Clock : X
   return (
-    <span
-      className={[
-        'inline-flex items-center gap-1 rounded-[2px] border px-2 py-0.5',
-        'text-[10px] font-semibold uppercase tracking-[0.18em]',
-        style,
-      ].join(' ')}
-    >
-      <Icon size={10} aria-hidden />
-      {children}
-    </span>
+    <Card padding="md">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        <Icon size={14} aria-hidden />
+        <span>{label}</span>
+      </div>
+      <div className="mt-3">{children}</div>
+    </Card>
   )
 }
 
@@ -782,50 +739,6 @@ function getPromotionName(metadata: unknown): string | null {
   return typeof record.promotionName === 'string' && record.promotionName.trim()
     ? record.promotionName
     : null
-}
-
-function PlayTimePricing({ item }: { item: InvoiceItem }) {
-  const metadata = (item.metadata ?? {}) as Record<string, unknown>
-  const playerPricing = Array.isArray(metadata.playerPricing)
-    ? (metadata.playerPricing as Array<{
-        name?: string
-        totalHours?: number
-        subtotal?: number
-        discountAmount?: number
-        total?: number
-        pricingRuleName?: string
-      }>)
-    : null
-  if (!playerPricing || playerPricing.length === 0) {
-    const checkoutCount =
-      typeof metadata.checkoutCount === 'number' && metadata.checkoutCount > 0
-        ? metadata.checkoutCount
-        : null
-    const perPersonSubtotal =
-      typeof metadata.perPersonSubtotal === 'number' ? metadata.perPersonSubtotal : null
-    return (
-      <span className="font-mono tabular-nums">
-        {perPersonSubtotal !== null && perPersonSubtotal >= 0
-          ? `${formatVND(perPersonSubtotal)}/người${checkoutCount ? ` × ${checkoutCount} người` : ''}`
-          : `${item.quantity} × ${formatVND(item.unitPrice)}`}
-      </span>
-    )
-  }
-  return (
-    <ul className="w-full space-y-0.5 font-mono tabular-nums">
-      {playerPricing.map((p, index) => (
-        <li key={index} className="flex items-baseline justify-between gap-2">
-          <span className="truncate">
-            Người {index + 1}: {formatHours(p.totalHours ?? 0)}h
-            {p.pricingRuleName ? ` · ${p.pricingRuleName}` : ''}
-          </span>
-          <span className="shrink-0 font-semibold text-[var(--color-text-primary)]">
-            = {formatVND(p.total ?? 0)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  )
 }
 
 function formatHours(hours: number): string {

@@ -21,6 +21,7 @@ import { Label, Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
+import { shortInvoiceNo } from '@/lib/shared/utils'
 import { formatClock, formatDay, money, paymentMethodLabel } from '@/features/pos/format'
 import type { Shift } from '@/features/pos/types'
 import type { TransactionItem } from '@/types'
@@ -554,7 +555,7 @@ function TransactionRow({
           </span>
           {tx.invoiceNo && (
             <span className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
-              {tx.invoiceNo}
+              {shortInvoiceNo(tx.invoiceNo)}
             </span>
           )}
         </div>
