@@ -3,10 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Loader2, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/input";
+import { Input, Label, Select } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { apiJson, jsonRequest } from "@/lib/api";
+import {
+  cashInputToNumber,
+  formatCashInput,
+  getCashInputSuggestions,
+  normalizeCashInput,
+} from "@/lib/shared/cash-input";
 import {
   calcElapsedHMS,
   formatPausedHMS,
@@ -23,6 +29,10 @@ import {
   type PickerGroup,
   type PickerMemberStat,
 } from "./checkout-player-picker";
+import {
+  InlineProductEditor,
+} from "./invoice-detail-content";
+import type { InvoiceEditorLine } from "./invoice-edit-logic";
 import type { PlayTimeQuote, PromotionSnapshot } from "@/types";
 import type { PaymentMethod, Product, SessionRow } from "./types";
 
@@ -157,11 +167,6 @@ const stepperMinus =
   "flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 dark:border-zinc-700 dark:text-zinc-300";
 const stepperPlus =
   "flex h-11 w-11 items-center justify-center rounded-lg bg-zinc-950 text-white active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 dark:bg-white dark:text-zinc-950";
-const productMinus =
-  "flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 dark:border-zinc-700 dark:text-zinc-300";
-const productPlus =
-  "flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-950 text-white active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 dark:bg-white dark:text-zinc-950";
-
 interface CheckoutResponse {
   grandTotal: number;
 }
@@ -194,6 +199,8 @@ export function CheckoutDrawer({
 }) {
   const { success: notifySuccess, error: notifyError } = useToast();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
+  const [cashReceived, setCashReceived] = useState("");
+  const cashReceivedRef = useRef<HTMLInputElement>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [playQuote, setPlayQuote] = useState<PlayTimeQuote | null>(null);
   const [promotions, setPromotions] = useState<PromotionSnapshot[]>([]);
@@ -213,8 +220,6 @@ export function CheckoutDrawer({
   // Legacy: session cũ không có player rows — giữ stepper số người như trước
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [checkoutPlayerCount, setCheckoutPlayerCount] = useState(1);
-  // Modal chọn đồ uống/dịch vụ thêm vào hoá đơn
-  const [productPickerOpen, setProductPickerOpen] = useState(false);
   // Dòng bán kèm đang gọi API bỏ khỏi phiên
   const [removingSellItemId, setRemovingSellItemId] = useState("");
   const [quoteReloadKey, setQuoteReloadKey] = useState(0);
@@ -260,6 +265,7 @@ export function CheckoutDrawer({
     if (session) {
       /* eslint-disable react-hooks/set-state-in-effect */
       setPaymentMethod("CASH");
+      setCashReceived("");
       setCart({});
       setPromotionRuleId("");
       setPromotions([]);
@@ -270,7 +276,6 @@ export function CheckoutDrawer({
       nextGroupKey.current = 0;
       setSelectedGroupId("");
       setCheckoutPlayerCount(1);
-      setProductPickerOpen(false);
       setRemovingSellItemId("");
 
       if (!isMember && !needsPricing && sessionHasPlayers) {
@@ -634,10 +639,21 @@ export function CheckoutDrawer({
       total: (cart[product.id] ?? 0) * toNumber(product.price),
     }))
     .filter((line) => line.quantity > 0);
+  const cartEditorLines: InvoiceEditorLine[] = cartLines.map((line) => ({
+    productId: line.product.id,
+    name: line.product.name,
+    type: line.product.type,
+    stockQuantity: line.product.stockQuantity,
+    quantity: line.quantity,
+    unitPrice: toNumber(line.product.price),
+  }));
 
   const productSubtotal = cartLines.reduce((sum, line) => sum + line.total, 0);
   const sellableTotal = pendingSellTotal + productSubtotal;
   const grandTotal = Math.max(0, playTotal + sellableTotal - parkingFeeTotal);
+  const cashReceivedAmount = cashInputToNumber(cashReceived);
+  const hasCashReceived = cashReceived.trim() !== "" && Number.isFinite(cashReceivedAmount);
+  const changeAmount = cashReceivedAmount - grandTotal;
 
   const pricingBlocked = needsPricing && applicablePricingRules.length === 0;
   // Chọn ít nhất 1 người khi dùng picker
@@ -791,8 +807,8 @@ export function CheckoutDrawer({
         variant="fullscreen"
         title={
           session
-            ? `Thông tin thanh toán - ${session.customerName ?? session.customer?.fullName ?? "Khách lẻ"}`
-            : "Thông tin thanh toán"
+            ? `Chi tiết hoá đơn - ${session.customerName ?? session.customer?.fullName ?? "Khách lẻ"}`
+            : "Chi tiết hoá đơn"
         }
         description={
           session
@@ -832,7 +848,7 @@ export function CheckoutDrawer({
             <div className="overflow-hidden rounded-xl border-2 border-zinc-950 dark:border-white">
               <div className="flex items-end justify-between gap-3 bg-zinc-100 px-4 py-3 dark:bg-zinc-800">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
-                  Tổng thanh toán
+                  Tổng cộng
                 </span>
                 <span className="text-[26px] font-extrabold leading-none tabular-nums text-zinc-950 dark:text-white">
                   {quoteError ? "—" : money(grandTotal)}
@@ -1028,27 +1044,15 @@ export function CheckoutDrawer({
                 </LedgerGroup>
               )}
 
-            {/* ══ CHI TIẾT — đồ uống / dịch vụ ══ */}
-            <LedgerGroup
-              title="Đồ uống / dịch vụ"
-              action={
-                <button
-                  type="button"
-                  onClick={() => setProductPickerOpen(true)}
-                  className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 dark:text-blue-300"
-                >
-                  <Plus size={14} />
-                  Thêm món
-                </button>
-              }
-            >
-              {pendingSellItems.length > 0 || cartLines.length > 0 ? (
+            {/* ══ CHI TIẾT — hàng hoá / dịch vụ ══ */}
+            <LedgerGroup title="Chi tiết dịch vụ">
+              {pendingSellItems.length > 0 ? (
                 <ul className="divide-y divide-zinc-100 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
                   {pendingSellItems.map((item) => (
                     <li key={item.sessionSellItemId}>
                       <LedgerRow
-                        label={`${item.productName} x${item.quantity}`}
-                        meta="đã thêm vào phiên"
+                        label={item.productName}
+                        meta={`Số lượng ${item.quantity} · đã thêm vào phiên`}
                         amount={money(item.subtotal)}
                         busy={removingSellItemId === item.sessionSellItemId}
                         onUncheck={() =>
@@ -1057,57 +1061,46 @@ export function CheckoutDrawer({
                       />
                     </li>
                   ))}
-                  {cartLines.map((line) => (
-                    <li key={line.product.id}>
-                      <LedgerRow
-                        label={`${line.product.name} x${line.quantity}`}
-                        meta="thêm lần thu này"
-                        amount={money(line.total)}
-                        onUncheck={() =>
-                          setCart((current) => {
-                            const next = { ...current };
-                            delete next[line.product.id];
-                            return next;
-                          })
-                        }
-                      />
-                    </li>
-                  ))}
                 </ul>
-              ) : (
-                <p className="border-t border-zinc-200 py-2 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                  Chưa có món nào. Chọn “Thêm món” nếu khách dùng thêm.
-                </p>
-              )}
+              ) : null}
               {pendingSellItems.length > 0 ? (
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
                   Bỏ chọn món đã thêm vào phiên sẽ xoá dòng khỏi phiên và hoàn
                   kho.
                 </p>
               ) : null}
+
+              <InlineProductEditor
+                lines={cartEditorLines}
+                products={products.filter(
+                  (product) => product.type === "SERVICE" || product.stockQuantity > 0,
+                )}
+                loading={false}
+                onAdd={(product) => changeCart(product, 1)}
+                onDecrease={(productId) => {
+                  const product = products.find((item) => item.id === productId);
+                  if (product) changeCart(product, -1);
+                }}
+                onIncrease={(productId) => {
+                  const product = products.find((item) => item.id === productId);
+                  if (product) changeCart(product, 1);
+                }}
+                onRemove={(productId) =>
+                  setCart((current) => {
+                    const next = { ...current };
+                    delete next[productId];
+                    return next;
+                  })
+                }
+              />
             </LedgerGroup>
 
-            {/* ══ TỔNG HỢP — điều chỉnh ngay trên dòng tiền bị ảnh hưởng ══ */}
+            {/* ══ TỔNG HỢP — các khoản ngoài dòng giờ chơi đã hiển thị ở trên ══ */}
             <section>
-              <h3 className={GROUP_LABEL}>Tổng hợp</h3>
+              <h3 className={GROUP_LABEL}>Tổng tiền</h3>
               <div className="mt-2 divide-y divide-zinc-100 border-t border-zinc-300 dark:divide-zinc-800 dark:border-zinc-700">
                 <SumRow
-                  label="Giờ chơi"
-                  hint={
-                    isMember
-                      ? "hội viên"
-                      : `${pickerActive ? selectedCount : checkoutPlayerCount} người`
-                  }
-                  amount={
-                    quoteLoading
-                      ? "—"
-                      : isMember
-                        ? "Miễn phí"
-                        : money(playSubtotal)
-                  }
-                />
-                <SumRow
-                  label="Đồ uống / dịch vụ"
+                  label="Hàng hoá / dịch vụ"
                   hint={
                     pendingSellItems.length + cartLines.length > 0
                       ? `${pendingSellItems.length + cartLines.length} món`
@@ -1205,9 +1198,11 @@ export function CheckoutDrawer({
               <Select
                 id="payment-method"
                 value={paymentMethod}
-                onChange={(event) =>
-                  setPaymentMethod(event.target.value as PaymentMethod)
-                }
+                onChange={(event) => {
+                  const nextMethod = event.target.value as PaymentMethod;
+                  setPaymentMethod(nextMethod);
+                  if (nextMethod !== "CASH") setCashReceived("");
+                }}
               >
                 <option value="CASH">{paymentMethodLabel("CASH")}</option>
                 <option value="TRANSFER">{paymentMethodLabel("TRANSFER")}</option>
@@ -1227,86 +1222,59 @@ export function CheckoutDrawer({
                   />
                 </div>
               )}
+              {paymentMethod === "CASH" && (
+                <div className="mt-4 grid gap-3 border-t border-zinc-200 pt-4 sm:grid-cols-2 dark:border-zinc-800">
+                  <div>
+                    <Label htmlFor="cash-received">Tiền khách đưa</Label>
+                    <Input
+                      id="cash-received"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="Ví dụ: 100"
+                      value={cashReceived}
+                      onChange={(event) => {
+                        const next = normalizeCashInput(
+                          event.target.value,
+                          event.target.selectionStart ?? event.target.value.length,
+                        );
+                        setCashReceived(next.value);
+                        requestAnimationFrame(() =>
+                          cashReceivedRef.current?.setSelectionRange(next.caret, next.caret),
+                        );
+                      }}
+                    />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {getCashInputSuggestions(cashReceived).map((suggestion) => (
+                        <button
+                          key={suggestion.value}
+                          type="button"
+                          onClick={() => setCashReceived(formatCashInput(suggestion.value))}
+                          className="rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        >
+                          {suggestion.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/70">
+                    <span className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                      {hasCashReceived && changeAmount >= 0
+                        ? "Tiền trả lại"
+                        : "Còn thiếu"}
+                    </span>
+                    <span className="mt-1 block text-lg font-bold tabular-nums text-zinc-950 dark:text-white">
+                      {hasCashReceived
+                        ? money(Math.abs(changeAmount))
+                        : "—"}
+                    </span>
+                  </div>
+                </div>
+              )}
             </LedgerGroup>
           </div>
         )}
       </Modal>
 
-      {/* ── Modal phụ: chọn đồ uống / dịch vụ thêm vào hoá đơn ── */}
-      <Modal
-        open={productPickerOpen}
-        onClose={() => setProductPickerOpen(false)}
-        variant="sheet"
-        title="Thêm đồ uống / dịch vụ"
-        size="md"
-        footer={
-          <Button variant="inverse" fullWidth onClick={() => setProductPickerOpen(false)}>
-            Xong
-          </Button>
-        }
-      >
-        <div>
-          {products.length === 0 ? (
-            <p className="py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-              Chưa có sản phẩm hoặc dịch vụ nào trong kho.
-            </p>
-          ) : (
-            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {products.map((product) => {
-                const quantity = cart[product.id] ?? 0;
-                const outOfStock =
-                  product.type === "PRODUCT" && product.stockQuantity <= 0;
-                return (
-                  <li
-                    key={product.id}
-                    className="flex items-center justify-between gap-3 py-2.5"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[15px] leading-tight text-zinc-950 dark:text-white">
-                        {product.name}
-                      </span>
-                      <span className="block text-[11px] text-zinc-500 dark:text-zinc-400">
-                        {money(product.price)}
-                        {product.type === "PRODUCT"
-                          ? quantity > 0
-                            ? ` · còn ${product.stockQuantity - quantity}`
-                            : ` · còn ${product.stockQuantity}`
-                          : " · dịch vụ"}
-                      </span>
-                    </span>
-                    <span className={`${MONEY_RAIL} text-[15px] font-medium tabular-nums text-zinc-950 dark:text-white`}>
-                      {quantity > 0 ? money(toNumber(product.price) * quantity) : "—"}
-                    </span>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => changeCart(product, -1)}
-                        disabled={quantity === 0}
-                        aria-label={`Bớt ${product.name}`}
-                        className={productMinus}
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <span className="w-5 text-center text-sm tabular-nums text-zinc-950 dark:text-white">
-                        {quantity}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => changeCart(product, 1)}
-                        disabled={outOfStock}
-                        aria-label={`Thêm ${product.name}`}
-                        className={productPlus}
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </Modal>
     </>
   );
 }

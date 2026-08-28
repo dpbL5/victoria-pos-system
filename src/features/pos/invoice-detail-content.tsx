@@ -1,24 +1,29 @@
 'use client'
 
 import {
-  Banknote,
   Car,
   Clock,
-  CreditCard,
+  Minus,
+  Plus,
   ReceiptText,
   ScrollText,
   ShieldCheck,
   ShoppingBag,
   Tag,
   Timer,
+  Trash2,
   User,
   Users,
   type LucideIcon,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Label, Select, Textarea } from '@/components/ui/input'
 import { formatVND } from '@/lib/shared/utils'
-import { formatPausedHMS } from './format'
+import { paymentMethodLabel } from './format'
+import { useInvoiceEditLogic, type InvoiceEditorLine } from './invoice-edit-logic'
+import type { Product } from './types'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface InvoiceItem {
@@ -82,14 +87,6 @@ export interface InvoiceDetail {
 }
 
 // ─── Item-type vocab ────────────────────────────────────────────────────────
-const itemTypeLabels: Record<string, string> = {
-  PLAY_TIME: 'Giờ chơi',
-  MEMBERSHIP_FEE: 'Phí hội viên',
-  PRODUCT: 'Hàng hoá',
-  SERVICE: 'Dịch vụ',
-  DISCOUNT: 'Giảm giá',
-  SURCHARGE: 'Giảm phí gửi xe',
-}
 const itemTypeIcons: Record<string, LucideIcon> = {
   PLAY_TIME: Timer,
   MEMBERSHIP_FEE: ShieldCheck,
@@ -118,7 +115,21 @@ const statusLabel: Record<string, string> = {
 }
 
 // ─── Entry ──────────────────────────────────────────────────────────────────
-export function InvoiceDetailContent({ invoice }: { invoice: InvoiceDetail }) {
+export function InvoiceDetailContent({
+  invoice,
+  editOpen,
+  editing,
+  setEditing,
+  onCloseEdit,
+  onSaved,
+}: {
+  invoice: InvoiceDetail
+  editOpen?: boolean
+  editing?: boolean
+  setEditing?: (value: boolean) => void
+  onCloseEdit?: () => void
+  onSaved?: () => void
+}) {
   const isCancelled = invoice.status === 'CANCELED' || invoice.status === 'CANCELLED'
 
   const parkingFeeTotal = invoice.items
@@ -128,22 +139,29 @@ export function InvoiceDetailContent({ invoice }: { invoice: InvoiceDetail }) {
   const playItem = invoice.items.find((item) => item.type === 'PLAY_TIME')
   const playMeta = (playItem?.metadata ?? {}) as {
     earlyCollection?: { sequence?: number }
-    pausedSeconds?: number
-    playerPauses?: Array<{ id: string; name: string; pausedSeconds: number }>
   }
   const earlyCollectionSequence = playMeta.earlyCollection?.sequence
-  const pausedSeconds = playMeta.pausedSeconds ?? invoice.session?.totalPausedSeconds ?? 0
-  const playerPauses = playMeta.playerPauses ?? []
 
   const invoiceStatusVariant = statusVariant[invoice.status] ?? 'default'
   const invoiceStatusLabel = statusLabel[invoice.status] ?? invoice.status
 
+  const noop = () => undefined
+  const editor = useInvoiceEditLogic({
+    invoice,
+    active: Boolean(editOpen),
+    setSubmitting: setEditing ?? noop,
+    onSaved: onSaved ?? noop,
+  })
+
   // Chuẩn hoá danh sách hàng của bảng: mỗi người chơi trong PLAY_TIME là 1 hàng
   // riêng (Tên (Bảng giá) | Số giờ | Thành tiền). Các loại khác giữ nguyên 1 hàng.
-  const tableRows = flattenInvoiceItems(invoice.items)
+  const tableRows = flattenInvoiceItems(invoice.items).filter((row) => {
+    if (!editOpen || row.kind !== 'item' || !isEditableItem(row.item)) return true
+    return editor.lines.some((line) => line.productId === row.item.product?.id)
+  })
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="mx-auto w-full max-w-3xl">
       {/* ── Receipt body ───────────────────────────────────────────── */}
       <Card padding="none" className="overflow-hidden">
         {/* Cancelled banner — replaces the old rotated watermark */}
@@ -154,7 +172,7 @@ export function InvoiceDetailContent({ invoice }: { invoice: InvoiceDetail }) {
         )}
 
         {/* Masthead */}
-        <header className="flex flex-col gap-2 border-b border-zinc-200 px-4 py-5 sm:px-6 sm:py-6 dark:border-zinc-800">
+        <header className="border-b border-zinc-200 px-4 py-4 sm:px-6 dark:border-zinc-800">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
               Mã hoá đơn: <span className="font-semibold text-zinc-900 dark:text-white">{invoice.invoiceNo}</span>
@@ -169,12 +187,66 @@ export function InvoiceDetailContent({ invoice }: { invoice: InvoiceDetail }) {
               </div>
             )}
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+
+          {/* Dòng ngày thanh toán */}
+          <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
             {invoice.paidAt
               ? `Thanh toán ${formatDateTime(invoice.paidAt)}`
               : `Lập ${formatDateTime(invoice.createdAt)}`}
           </p>
+
+          {/* Metadata row: Khách hàng · Phiên chơi · Ca & nhân viên */}
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 border-t border-zinc-100 pt-3 text-xs dark:border-zinc-800">
+            <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+              <User size={12} />
+              <span>Khách hàng: </span>
+              {invoice.customer ? (
+                <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                  {invoice.customer.fullName}
+                  {invoice.customer.phone && (
+                    <span className="ml-1 font-normal text-zinc-400 dark:text-zinc-500">
+                      · {invoice.customer.phone}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className="text-zinc-400 dark:text-zinc-500">—</span>
+              )}
+            </div>
+
+            {invoice.session && (
+              <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+                <Clock size={12} />
+                <span>Phiên: </span>
+                <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                  {formatTime(invoice.session.startTime)}
+                  <span className="mx-1 font-normal text-zinc-400 dark:text-zinc-500">—</span>
+                  {invoice.session.endTime ? formatTime(invoice.session.endTime) : 'đang chơi'}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+              <Users size={12} />
+              <span>Nhân viên: </span>
+              <span className="font-medium text-zinc-700 dark:text-zinc-200">{invoice.staff.fullName}</span>
+            </div>
+          </div>
         </header>
+
+        {editOpen && setEditing && onCloseEdit && (
+          <div className="flex items-center justify-between gap-3 border-b border-blue-200 bg-blue-50 px-4 py-3 sm:px-6 dark:border-blue-500/30 dark:bg-blue-500/10">
+            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Đang sửa hoá đơn</p>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={onCloseEdit} disabled={editing}>
+                Huỷ
+              </Button>
+              <Button variant="inverse" size="sm" onClick={editor.handleSave} disabled={editing}>
+                {editing ? 'Đang lưu...' : 'Lưu'}
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Itemized lines — table */}
         <section className="px-4 py-5 sm:px-6 sm:py-6">
@@ -198,11 +270,31 @@ export function InvoiceDetailContent({ invoice }: { invoice: InvoiceDetail }) {
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {tableRows.map((row) => (
-                    <ItemRow key={row.key} row={row} />
+                    <ItemRow
+                      key={row.key}
+                      row={row}
+                      editing={Boolean(editOpen)}
+                      lines={editor.lines}
+                      onDecrease={editor.updateQuantity}
+                      onIncrease={editor.updateQuantity}
+                      onRemove={editor.removeLine}
+                    />
                   ))}
                 </tbody>
               </table>
             </div>
+          )}
+
+          {editOpen && (
+            <InlineProductEditor
+              lines={editor.lines.filter((line) => !invoice.items.some((item) => item.product?.id === line.productId))}
+              products={editor.availableProducts}
+              loading={editor.productsLoading}
+              onAdd={editor.addProduct}
+              onDecrease={editor.updateQuantity}
+              onIncrease={editor.updateQuantity}
+              onRemove={editor.removeLine}
+            />
           )}
         </section>
 
@@ -210,120 +302,42 @@ export function InvoiceDetailContent({ invoice }: { invoice: InvoiceDetail }) {
         <TotalsBlock
           discountTotal={invoice.discountTotal}
           parkingFeeTotal={parkingFeeTotal}
-          grandTotal={invoice.grandTotal}
+          grandTotal={editOpen ? editor.grandTotal : invoice.grandTotal}
           isCancelled={isCancelled}
         />
 
         {/* Payment history */}
-        {(invoice.payments.length > 0 || invoice.membershipPayments.length > 0) && (
+        {(invoice.payments.length > 0 || invoice.membershipPayments.length > 0 || editOpen) && (
           <PaymentTimeline
             payments={invoice.payments}
             membershipPayments={invoice.membershipPayments}
+            editing={Boolean(editOpen)}
+            paymentMethod={editor.paymentMethod}
+            onPaymentMethodChange={(value) => editor.setPaymentMethod(value as typeof editor.paymentMethod)}
+            allowMember={invoice.customer?.type === 'MEMBER'}
           />
         )}
 
         {/* Notes */}
-        {invoice.notes && (
+        {(invoice.notes || editOpen) && (
           <section className="border-t border-zinc-200 px-4 py-4 sm:px-6 dark:border-zinc-800">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Ghi chú
             </h2>
-            <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{invoice.notes}</p>
+            {editOpen ? (
+              <Textarea
+                className="mt-2"
+                value={editor.notes}
+                onChange={(event) => editor.setNotes(event.target.value)}
+                maxLength={500}
+                placeholder="Ghi chú cho hoá đơn"
+              />
+            ) : (
+              <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{invoice.notes}</p>
+            )}
           </section>
         )}
       </Card>
-
-      {/* ── Metadata spine ─────────────────────────────────────────── */}
-      <aside className="space-y-4">
-        <SpineCard icon={User} label="Khách hàng">
-          {invoice.customer ? (
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-zinc-900 dark:text-white">
-                {invoice.customer.fullName}
-              </p>
-              {invoice.customer.phone && (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">{invoice.customer.phone}</p>
-              )}
-              <div className="pt-1">
-                <Badge
-                  variant={invoice.customer.type === 'MEMBER' ? 'purple' : 'default'}
-                  size="sm"
-                >
-                  {invoice.customer.type === 'MEMBER' ? 'Hội viên' : 'Vãng lai'}
-                </Badge>
-              </div>
-              {invoice.customer.id === null && (
-                <p className="pt-1 text-xs text-zinc-400 dark:text-zinc-500">
-                  Khách vãng lai — không lưu hồ sơ
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="text-xs text-zinc-400 dark:text-zinc-500">—</p>
-          )}
-        </SpineCard>
-
-        <SpineCard icon={Clock} label="Phiên chơi">
-          {invoice.session ? (
-            <div className="space-y-2">
-              <p className="text-sm text-zinc-900 dark:text-white">
-                {formatTime(invoice.session.startTime)}
-                <span className="mx-1 text-zinc-300 dark:text-zinc-600">—</span>
-                {invoice.session.endTime ? formatTime(invoice.session.endTime) : 'đang chơi'}
-              </p>
-              <Badge
-                variant={statusVariant[invoice.session.status] ?? 'default'}
-                size="sm"
-              >
-                {statusLabel[invoice.session.status] ?? invoice.session.status}
-              </Badge>
-              {pausedSeconds > 0 && (
-                <div className="space-y-1 border-t border-zinc-100 pt-2 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
-                  <p className="flex items-center justify-between gap-2">
-                    <span>Nghỉ</span>
-                    <span className="text-zinc-900 dark:text-white">
-                      {formatPausedHMS(pausedSeconds)}
-                    </span>
-                  </p>
-                  {playerPauses.length > 0 && (
-                    <ul className="space-y-0.5 pl-3">
-                      {playerPauses.map((p) => (
-                        <li
-                          key={p.id}
-                          className="flex items-center justify-between gap-2 text-xs"
-                        >
-                          <span className="truncate">
-                            {p.name?.trim() || 'Người chơi'}
-                          </span>
-                          <span className="text-zinc-500 dark:text-zinc-400">
-                            {formatPausedHMS(p.pausedSeconds)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-xs text-zinc-400 dark:text-zinc-500">—</p>
-          )}
-        </SpineCard>
-
-        <SpineCard icon={Users} label="Ca & nhân viên">
-          <div className="space-y-1">
-            <p className="text-sm text-zinc-900 dark:text-white">{invoice.staff.fullName}</p>
-            {invoice.shift && (
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Ca mở {formatTime(invoice.shift.openedAt)}
-                {invoice.shift.closedAt
-                  ? ` · đóng ${formatTime(invoice.shift.closedAt)}`
-                  : ' · đang mở'}
-              </p>
-            )}
-          </div>
-        </SpineCard>
-      </aside>
     </div>
   )
 }
@@ -341,17 +355,17 @@ type PlayerPricing = {
 
 type TableRow =
   | {
-      key: string
-      kind: 'item'
-      item: InvoiceItem
-    }
+    key: string
+    kind: 'item'
+    item: InvoiceItem
+  }
   | {
-      key: string
-      kind: 'player'
-      player: PlayerPricing
-      itemType: string
-      isMultiPlayer: boolean
-    }
+    key: string
+    kind: 'player'
+    player: PlayerPricing
+    itemType: string
+    isMultiPlayer: boolean
+  }
 
 function flattenInvoiceItems(items: InvoiceItem[]): TableRow[] {
   const rows: TableRow[] = []
@@ -383,18 +397,61 @@ function flattenInvoiceItems(items: InvoiceItem[]): TableRow[] {
   return rows
 }
 
-function ItemRow({ row }: { row: TableRow }) {
+function isEditableItem(item: InvoiceItem) {
+  return Boolean(item.product) && (item.type === 'PRODUCT' || item.type === 'SERVICE')
+}
+
+function ItemRow({
+  row,
+  editing,
+  lines,
+  onDecrease,
+  onIncrease,
+  onRemove,
+}: {
+  row: TableRow
+  editing: boolean
+  lines: InvoiceEditorLine[]
+  onDecrease: (productId: string, delta: number) => void
+  onIncrease: (productId: string, delta: number) => void
+  onRemove: (productId: string) => void
+}) {
   if (row.kind === 'player') {
     return <PlayerRow row={row} />
   }
-  return <ItemRowGeneric item={row.item} />
+  return (
+    <ItemRowGeneric
+      item={row.item}
+      editing={editing}
+      line={lines.find((candidate) => candidate.productId === row.item.product?.id)}
+      onDecrease={onDecrease}
+      onIncrease={onIncrease}
+      onRemove={onRemove}
+    />
+  )
 }
 
-function ItemRowGeneric({ item }: { item: InvoiceItem }) {
+function ItemRowGeneric({
+  item,
+  editing,
+  line,
+  onDecrease,
+  onIncrease,
+  onRemove,
+}: {
+  item: InvoiceItem
+  editing: boolean
+  line?: InvoiceEditorLine
+  onDecrease: (productId: string, delta: number) => void
+  onIncrease: (productId: string, delta: number) => void
+  onRemove: (productId: string) => void
+}) {
   const Icon = itemTypeIcons[item.type] ?? ReceiptText
   const isNegative = item.total < 0
   const isDiscount = item.type === 'DISCOUNT' || item.type === 'SURCHARGE'
-  const promotionName = getPromotionName(item.metadata)
+  const editable = editing && line && isEditableItem(item)
+  const quantity = line?.quantity ?? item.quantity
+  const total = line ? line.quantity * line.unitPrice : item.total
 
   return (
     <tr className="align-top">
@@ -414,22 +471,9 @@ function ItemRowGeneric({ item }: { item: InvoiceItem }) {
               {item.description}
             </p>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-              <span className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                {itemTypeLabels[item.type] ?? item.type}
-              </span>
-              {item.type !== 'PLAY_TIME' && (
-                <span>
-                  {item.quantity} × {formatVND(item.unitPrice)}
-                </span>
-              )}
               {item.discountAmount > 0 && (
                 <span className="text-red-600 dark:text-red-400">
                   −{formatVND(item.discountAmount)}
-                </span>
-              )}
-              {promotionName && (
-                <span className="truncate text-xs italic text-zinc-500 dark:text-zinc-400">
-                  KM: {promotionName}
                 </span>
               )}
             </div>
@@ -438,8 +482,40 @@ function ItemRowGeneric({ item }: { item: InvoiceItem }) {
       </td>
 
       {/* Số lượng */}
-      <td className="w-20 py-3 px-3 text-right text-sm text-zinc-700 dark:text-zinc-300">
-        {item.quantity}
+      <td className="w-28 py-3 px-3 text-right text-sm text-zinc-700 dark:text-zinc-300">
+        {editable ? (
+          <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              aria-label="Giảm số lượng"
+              onClick={() => onDecrease(line.productId, -1)}
+              disabled={quantity <= 1}
+              className="flex h-7 w-7 items-center justify-center rounded border border-zinc-200 text-zinc-600 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
+            >
+              <Minus size={12} aria-hidden />
+            </button>
+            <span className="w-5 text-center tabular-nums">{quantity}</span>
+            <button
+              type="button"
+              aria-label="Tăng số lượng"
+              onClick={() => onIncrease(line.productId, 1)}
+              disabled={line.type === 'PRODUCT' && quantity >= line.stockQuantity}
+              className="flex h-7 w-7 items-center justify-center rounded bg-zinc-950 text-white disabled:opacity-40 dark:bg-white dark:text-zinc-950"
+            >
+              <Plus size={12} aria-hidden />
+            </button>
+            <button
+              type="button"
+              aria-label="Xoá mặt hàng"
+              onClick={() => onRemove(line.productId)}
+              className="ml-1 flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+            >
+              <Trash2 size={13} aria-hidden />
+            </button>
+          </div>
+        ) : (
+          quantity
+        )}
       </td>
 
       {/* Thành tiền */}
@@ -452,14 +528,98 @@ function ItemRowGeneric({ item }: { item: InvoiceItem }) {
         ].join(' ')}
       >
         {isNegative ? '−' : ''}
-        {formatVND(Math.abs(item.total))}
+        {formatVND(Math.abs(total))}
       </td>
     </tr>
   )
 }
 
+export function InlineProductEditor({
+  lines,
+  products,
+  loading,
+  onAdd,
+  onDecrease,
+  onIncrease,
+  onRemove,
+}: {
+  lines: InvoiceEditorLine[]
+  products: Product[]
+  loading: boolean
+  onAdd: (product: Product) => void
+  onDecrease: (productId: string, delta: number) => void
+  onIncrease: (productId: string, delta: number) => void
+  onRemove: (productId: string) => void
+}) {
+  return (
+    <div className="mt-5 space-y-3 border-t border-dashed border-zinc-200 pt-4 dark:border-zinc-800">
+      <Label>Thêm hàng hoá / dịch vụ</Label>
+
+      {lines.length > 0 && (
+        <div className="space-y-2">
+          {lines.map((line) => (
+            <div key={line.productId} className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-500/10">
+              <span className="min-w-0 flex-1 truncate text-sm text-zinc-900 dark:text-white">{line.name}</span>
+              <button
+                type="button"
+                aria-label="Giảm số lượng"
+                onClick={() => onDecrease(line.productId, -1)}
+                disabled={line.quantity <= 1}
+                className="flex h-7 w-7 items-center justify-center rounded border border-zinc-200 bg-white text-zinc-600 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+              >
+                <Minus size={12} aria-hidden />
+              </button>
+              <span className="w-5 text-center text-sm tabular-nums text-zinc-900 dark:text-white">{line.quantity}</span>
+              <button
+                type="button"
+                aria-label="Tăng số lượng"
+                onClick={() => onIncrease(line.productId, 1)}
+                disabled={line.type === 'PRODUCT' && line.quantity >= line.stockQuantity}
+                className="flex h-7 w-7 items-center justify-center rounded bg-zinc-950 text-white disabled:opacity-40 dark:bg-white dark:text-zinc-950"
+              >
+                <Plus size={12} aria-hidden />
+              </button>
+              <span className="w-24 text-right text-sm font-semibold tabular-nums text-zinc-900 dark:text-white">
+                {formatVND(line.quantity * line.unitPrice)}
+              </span>
+              <button
+                type="button"
+                aria-label="Xoá mặt hàng"
+                onClick={() => onRemove(line.productId)}
+                className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+              >
+                <Trash2 size={13} aria-hidden />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">Đang tải danh sách hàng hoá...</p>
+      ) : products.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {products.map((product) => (
+            <button
+              key={product.id}
+              type="button"
+              onClick={() => onAdd(product)}
+              className="rounded-lg border border-zinc-200 px-3 py-2 text-left text-sm transition-colors hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
+              <span className="block font-medium text-zinc-900 dark:text-white">{product.name}</span>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">{formatVND(product.price)}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">Không còn hàng hoá hoặc dịch vụ để thêm.</p>
+      )}
+    </div>
+  )
+}
+
 function PlayerRow({ row }: { row: Extract<TableRow, { kind: 'player' }> }) {
-  const { player, isMultiPlayer } = row
+  const { player } = row
   const total = player.total ?? 0
   const isNegative = total < 0
   const discount = player.discountAmount ?? 0
@@ -468,7 +628,7 @@ function PlayerRow({ row }: { row: Extract<TableRow, { kind: 'player' }> }) {
 
   return (
     <tr className="align-top">
-      {/* Nội dung: [Tên] (Bảng giá) */}
+      {/* Nội dung: Giờ chơi: [Tên] (Bảng giá) */}
       <td className="py-3 pr-3">
         <div className="flex items-start gap-2">
           <Timer
@@ -478,7 +638,8 @@ function PlayerRow({ row }: { row: Extract<TableRow, { kind: 'player' }> }) {
           />
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">
-              {isMultiPlayer && name ? `${name} ` : ''}
+              <span className="text-zinc-500 dark:text-zinc-400">Giờ chơi:</span>
+              {name ? ` ${name}` : ''}
               {ruleName && (
                 <span className="text-zinc-600 dark:text-zinc-400">({ruleName})</span>
               )}
@@ -596,9 +757,17 @@ function SummaryRow({
 function PaymentTimeline({
   payments,
   membershipPayments,
+  editing,
+  paymentMethod,
+  onPaymentMethodChange,
+  allowMember,
 }: {
   payments: InvoicePayment[]
   membershipPayments: InvoiceMembershipPayment[]
+  editing: boolean
+  paymentMethod: string
+  onPaymentMethodChange: (value: string) => void
+  allowMember: boolean
 }) {
   return (
     <section className="px-4 py-5 sm:px-6 sm:py-6">
@@ -609,148 +778,54 @@ function PaymentTimeline({
         </span>
       </h2>
 
+      {editing ? (
+        <div className="mt-3">
+          <Label htmlFor="invoice-payment-method">Phương thức thanh toán</Label>
+          <Select
+            id="invoice-payment-method"
+            value={paymentMethod}
+            onChange={(event) => onPaymentMethodChange(event.target.value)}
+          >
+            <option value="CASH">{paymentMethodLabel('CASH')}</option>
+            <option value="TRANSFER">{paymentMethodLabel('TRANSFER')}</option>
+            <option value="CARD">{paymentMethodLabel('CARD')}</option>
+            {allowMember && <option value="MEMBER">{paymentMethodLabel('MEMBER')}</option>}
+          </Select>
+        </div>
+      ) : (
       <ul className="mt-4 space-y-3">
         {payments.map((p) => (
           <TimelinePayment
             key={p.id}
-            method={p.paymentMethod}
             label={paymentMethodLabel(p.paymentMethod)}
-            amount={p.grandTotal}
-            at={p.paidAt}
-            staffName={p.staff.fullName}
-            notes={p.notes}
           />
         ))}
         {membershipPayments.map((mp) => (
           <TimelinePayment
             key={mp.id}
-            method="MEMBER"
-            label={mp.planName ?? 'Phí hội viên'}
-            amount={mp.amount}
-            at={mp.paidAt}
-            staffName={null}
-            notes={null}
-            memberOnly
+            label={paymentMethodLabel('MEMBER')}
           />
         ))}
       </ul>
+      )}
     </section>
   )
 }
 
 function TimelinePayment({
-  method,
   label,
-  amount,
-  at,
-  staffName,
-  notes,
-  memberOnly,
 }: {
-  method: string
   label: string
-  amount: number
-  at: string
-  staffName: string | null
-  notes: string | null
-  memberOnly?: boolean
 }) {
-  const MethodIcon = method === 'CASH' ? Banknote : method === 'MEMBER' ? ShieldCheck : CreditCard
   return (
-    <li className="flex items-start gap-3">
-      <div
-        className={[
-          'grid h-8 w-8 shrink-0 place-items-center rounded-lg',
-          memberOnly
-            ? 'bg-purple-50 text-purple-600 dark:bg-purple-500/15 dark:text-purple-300'
-            : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
-        ].join(' ')}
-      >
-        <MethodIcon size={16} aria-hidden />
-      </div>
-
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-zinc-900 dark:text-white">
-          <span>{label}</span>
-          {memberOnly && (
-            <Badge variant="purple" size="sm">
-              Hội viên
-            </Badge>
-          )}
-        </p>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          {formatDateTime(at)}
-          {staffName && (
-            <>
-              <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">·</span>
-              {staffName}
-            </>
-          )}
-        </p>
-        {notes && (
-          <p className="text-xs italic text-zinc-500 dark:text-zinc-400">“{notes}”</p>
-        )}
-      </div>
-
-      <p
-        className={[
-          'whitespace-nowrap text-sm font-semibold',
-          memberOnly
-            ? 'text-purple-600 dark:text-purple-300'
-            : 'text-zinc-900 dark:text-white',
-        ].join(' ')}
-      >
-        {formatVND(amount)}
-      </p>
+    <li>
+      <p className="text-sm font-medium text-zinc-900 dark:text-white">{label}</p>
     </li>
   )
 }
 
-// ─── Metadata card (right column) ───────────────────────────────────────────
-function SpineCard({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: LucideIcon
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <Card padding="md">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-        <Icon size={14} aria-hidden />
-        <span>{label}</span>
-      </div>
-      <div className="mt-3">{children}</div>
-    </Card>
-  )
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-function getPromotionName(metadata: unknown): string | null {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
-  const record = metadata as Record<string, unknown>
-  const promotion = record.promotion
-  if (promotion && typeof promotion === 'object' && !Array.isArray(promotion)) {
-    const name = (promotion as Record<string, unknown>).name
-    if (typeof name === 'string' && name.trim()) return name
-  }
-  return typeof record.promotionName === 'string' && record.promotionName.trim()
-    ? record.promotionName
-    : null
-}
-
 function formatHours(hours: number): string {
   return (Math.round(hours * 10) / 10).toString()
-}
-
-function paymentMethodLabel(method: string): string {
-  if (method === 'CASH') return 'Tiền mặt'
-  if (method === 'TRANSFER') return 'Chuyển khoản'
-  if (method === 'CARD') return 'Thẻ'
-  if (method === 'MEMBER') return 'Phí hội viên'
-  return method
 }
 
 function formatTime(date: string): string {

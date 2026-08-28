@@ -13,7 +13,6 @@ import { isAdminOnly } from '@/lib/shared/roles'
 import { apiJson, jsonRequest } from '@/lib/api'
 import type { UserSession } from '@/features/pos/types'
 import { InvoiceDetailContent, type InvoiceDetail } from './invoice-detail-content'
-import { InvoiceEditDialog } from './invoice-edit-dialog'
 
 interface Props {
   id: string
@@ -192,7 +191,17 @@ export function TransactionDetailScreen({ id }: Props) {
         </div>
 
         {/* ── Receipt folio + spine ── */}
-        <InvoiceDetailContent invoice={invoice} />
+        <InvoiceDetailContent
+          invoice={invoice}
+          editOpen={editOpen}
+          editing={editing}
+          setEditing={setEditing}
+          onCloseEdit={() => setEditOpen(false)}
+          onSaved={() => {
+            setEditOpen(false)
+            void loadData()
+          }}
+        />
       </div>
 
       <ConfirmDialog
@@ -239,17 +248,6 @@ export function TransactionDetailScreen({ id }: Props) {
         onConfirm={handleVoidConfirm}
       />
 
-      <InvoiceEditDialog
-        invoice={invoice}
-        open={editOpen}
-        submitting={editing}
-        setSubmitting={setEditing}
-        onClose={() => setEditOpen(false)}
-        onSaved={() => {
-          setEditOpen(false)
-          void loadData()
-        }}
-      />
     </div>
   )
 }
