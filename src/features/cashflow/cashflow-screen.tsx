@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRightLeft,
   Edit3,
@@ -18,12 +18,18 @@ import { Input, Label } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/lib/api'
+import {
+  cashInputToNumber,
+  formatCashInput,
+  getCashInputSuggestions,
+  normalizeCashInput,
+} from '@/lib/shared/cash-input'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { formatDay, formatClock, money } from '@/features/pos/format'
 import type { UserSession } from '@/features/pos/types'
@@ -461,11 +467,12 @@ function CashflowFormDialog({
 }) {
   const isEdit = !!initial
   const [type, setType] = useState<'INCOME' | 'EXPENSE'>(initial?.type ?? 'INCOME')
-  const [amount, setAmount] = useState(initial ? String(initial.amount) : '')
+  const [amount, setAmount] = useState(initial ? formatCashInput(initial.amount) : '')
   const [reason, setReason] = useState(initial?.reason ?? '')
+  const amountRef = useRef<HTMLInputElement>(null)
 
   const canSubmit =
-    Number(amount) > 0 &&
+    cashInputToNumber(amount) > 0 &&
     reason.trim().length > 0 &&
     !submitting
 
@@ -474,7 +481,7 @@ function CashflowFormDialog({
     const ok = await onSubmit({
       type,
       personName: adminName,
-      amount: Number(amount),
+      amount: cashInputToNumber(amount),
       reason: reason.trim(),
     })
     if (ok) {
@@ -536,15 +543,31 @@ function CashflowFormDialog({
             pattern="[0-9]*"
             value={amount}
             onChange={(e) => {
-              const v = e.target.value.replace(/\D/g, '')
-              setAmount(v)
+              const next = normalizeCashInput(
+                e.target.value,
+                e.target.selectionStart ?? e.target.value.length,
+              )
+              setAmount(next.value)
+              requestAnimationFrame(() => amountRef.current?.setSelectionRange(next.caret, next.caret))
             }}
             placeholder="0"
             className="mt-1.5"
           />
-          {amount && Number(amount) > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {getCashInputSuggestions(amount).map((suggestion) => (
+              <button
+                key={suggestion.value}
+                type="button"
+                onClick={() => setAmount(formatCashInput(suggestion.value))}
+                className="rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                {suggestion.label}
+              </button>
+            ))}
+          </div>
+          {amount && cashInputToNumber(amount) > 0 && (
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {Number(amount)}
+              {formatCashInput(cashInputToNumber(amount))}
             </p>
           )}
         </div>
@@ -585,17 +608,11 @@ function CashflowFormDialog({
 
 function CashflowSkeleton() {
   return (
-    <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-5xl space-y-4">
+    <SkeletonPage maxWidth="max-w-5xl">
         <Skeleton className="h-12 w-48" />
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <Skeleton className="h-20" />
-          <Skeleton className="h-20" />
-          <Skeleton className="h-20" />
-        </div>
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    </div>
+        <SkeletonStats count={3} className="grid grid-cols-1 gap-3 md:grid-cols-3" />
+        <SkeletonPanel><Skeleton className="h-10 w-48" /></SkeletonPanel>
+        <SkeletonPanel><Skeleton className="h-64 w-full" /></SkeletonPanel>
+    </SkeletonPage>
   )
 }

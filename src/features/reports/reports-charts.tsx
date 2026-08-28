@@ -160,63 +160,61 @@ export function DonutChart({
   const total = data.reduce((sum, d) => sum + d.value, 0)
   const visible = data.filter((d) => d.value > 0)
   const radius = (size - thickness) / 2
-  const innerRadius = radius
+  const innerRadius = radius - thickness
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-col items-center gap-3">
       <div className="relative shrink-0" style={{ width: size, height: size }}>
-        <ResponsiveContainer width={size} height={size}>
-          <RechartsPieChart>
-            <Pie
-              data={visible}
-              dataKey="value"
-              nameKey="label"
-              innerRadius={innerRadius}
-              outerRadius={radius}
-              strokeWidth={0}
-              paddingAngle={1}
-              isAnimationActive
-              animationDuration={400}
-            >
-              {visible.map((entry) => (
-                <Cell key={entry.label} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload || payload.length === 0) return null
-                const item = payload[0]
-                const value = Number(item.value)
-                const pct = total > 0 ? Math.round((value / total) * 100) : 0
-                return (
-                  <div className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-                    <div className="font-semibold text-zinc-950 dark:text-white">
-                      {item.name}
-                    </div>
-                    <div className="text-zinc-600 dark:text-zinc-300">
-                      <span className="font-medium tabular-nums text-zinc-950 dark:text-white">
-                        {money(value)}
-                      </span>
-                      <span className="ml-1.5 text-zinc-500 dark:text-zinc-400">
-                        {pct}%
-                      </span>
-                    </div>
+        <RechartsPieChart width={size} height={size}>
+          <Pie
+            data={visible}
+            dataKey="value"
+            nameKey="label"
+            innerRadius={innerRadius}
+            outerRadius={radius}
+            strokeWidth={0}
+            paddingAngle={1}
+            isAnimationActive
+            animationDuration={400}
+          >
+            {visible.map((entry) => (
+              <Cell key={entry.label} fill={entry.color} />
+            ))}
+          </Pie>
+          <Tooltip
+            content={({ active, payload }) => {
+              if (!active || !payload || payload.length === 0) return null
+              const item = payload[0]
+              const value = Number(item.value)
+              const pct = total > 0 ? Math.round((value / total) * 100) : 0
+              return (
+                <div className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+                  <div className="font-semibold text-zinc-950 dark:text-white">
+                    {item.name}
                   </div>
-                )
-              }}
-            />
-          </RechartsPieChart>
-        </ResponsiveContainer>
+                  <div className="text-zinc-600 dark:text-zinc-300">
+                    <span className="font-medium tabular-nums text-zinc-950 dark:text-white">
+                      {money(value)}
+                    </span>
+                    <span className="ml-1.5 text-zinc-500 dark:text-zinc-400">
+                      {pct}%
+                    </span>
+                  </div>
+                </div>
+              )
+            }}
+          />
+        </RechartsPieChart>
         {total > 0 && centerValue ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <span className="text-base font-bold tabular-nums text-zinc-950 dark:text-white">
+            <span className="text-sm font-bold tabular-nums text-zinc-950 dark:text-white sm:text-base">
               {centerValue}
             </span>
           </div>
         ) : null}
       </div>
 
-      <div className="min-w-0 flex-1 space-y-2">
+      <div className="min-w-0 flex-1 space-y-2 self-stretch sm:self-center">
         {visible.length === 0 ? (
           <p className="text-xs text-zinc-400 dark:text-zinc-500">Chưa có dữ liệu</p>
         ) : (
@@ -318,7 +316,17 @@ export function DailyVolumeChart({
 }) {
   if (data.length === 0) return null
   return (
-    <div>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-zinc-500 dark:text-zinc-400 sm:hidden">
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ background: COLORS.emerald }} />
+          Người chơi
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ background: COLORS.blue }} />
+          Phiên
+        </div>
+      </div>
       <div className="flex items-start gap-3">
         <div className="flex-1">
           <ResponsiveContainer width="100%" height={height}>
@@ -372,7 +380,7 @@ export function DailyVolumeChart({
             </RechartsBarChart>
           </ResponsiveContainer>
         </div>
-        <div className="space-y-2 pt-6 text-[10px] text-zinc-500 dark:text-zinc-400">
+        <div className="hidden shrink-0 space-y-2 pt-6 text-[10px] text-zinc-500 dark:text-zinc-400 sm:block">
           <div className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-sm" style={{ background: COLORS.emerald }} />
             Người chơi

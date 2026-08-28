@@ -434,7 +434,8 @@ async function getTrends(store: ReportingStore, input: RevenueInput): Promise<Tr
     ...scopeWhere(input.scope, input.staffId),
   }
   const sessionWhere = {
-    startTime: { gte: input.from, lte: input.to },
+    status: 'COMPLETED' as const,
+    endTime: { gte: input.from, lte: input.to },
     ...scopeWhere(input.scope, input.staffId),
   }
   const itemWhere = {
@@ -455,7 +456,8 @@ async function getTrends(store: ReportingStore, input: RevenueInput): Promise<Tr
     ...scopeWhere(input.scope, input.staffId),
   }
   const prevSessionWhere = {
-    startTime: { gte: prevFrom, lt: prevTo },
+    status: 'COMPLETED' as const,
+    endTime: { gte: prevFrom, lt: prevTo },
     ...scopeWhere(input.scope, input.staffId),
   }
 
@@ -476,7 +478,13 @@ async function getTrends(store: ReportingStore, input: RevenueInput): Promise<Tr
     payment(store).aggregate({ where: prevWhere, _sum: { grandTotal: true } }),
     session(store).findMany({
       where: sessionWhere,
-      select: { startTime: true, playerCount: true, totalHours: true },
+      select: {
+        startTime: true,
+        endTime: true,
+        playerCount: true,
+        totalHours: true,
+        pricingGroups: { select: { playerCount: true } },
+      },
     }),
     session(store).count({ where: prevSessionWhere }),
   ])
@@ -512,17 +520,18 @@ async function getTrends(store: ReportingStore, input: RevenueInput): Promise<Tr
     .map(([hour, { revenue, count }]) => ({ hour, revenue, count }))
     .sort((a, b) => a.hour - b.hour)
 
-  // ── byDay (sessions + players, gộp doanh thu theo ngày) ──
+  // ── byDay (chỉ phiên đã hoàn tất: sessions + players, gộp doanh thu theo ngày) ──
   const daySessionMap = new Map<string, { sessions: number; players: number }>()
   let totalPlayers = 0
   let totalHours = 0
   for (const s of sessionRows) {
-    totalPlayers += s.playerCount
+    const sessionPlayers = s.pricingGroups.reduce((sum, group) => sum + group.playerCount, 0) || s.playerCount
+    totalPlayers += sessionPlayers
     totalHours += Number(s.totalHours ?? 0)
-    const dayKey = toInputDate(s.startTime)
+    const dayKey = toInputDate(s.endTime ?? s.startTime)
     const entry = daySessionMap.get(dayKey) ?? { sessions: 0, players: 0 }
     entry.sessions += 1
-    entry.players += s.playerCount
+    entry.players += sessionPlayers
     daySessionMap.set(dayKey, entry)
   }
   const byDay: TrendDayRow[] = Array.from(daySessionMap.entries())

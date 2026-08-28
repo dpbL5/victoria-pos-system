@@ -23,7 +23,7 @@ import { Input, Label } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
@@ -324,15 +324,13 @@ export function PromotionScreen() {
 
 function PromotionSkeleton() {
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <SkeletonPage>
       <Skeleton className="h-10 w-52" />
-      <Skeleton className="h-24 w-full" />
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        {[0, 1, 2, 3].map((item) => <Skeleton key={item} className="h-20" />)}
-      </div>
-      <Skeleton className="h-12 w-full" />
-      <Skeleton className="h-72 w-full" />
-    </div>
+      <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
+      <SkeletonStats />
+      <SkeletonPanel><Skeleton className="h-12 w-full" /></SkeletonPanel>
+      <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
+    </SkeletonPage>
   )
 }
 

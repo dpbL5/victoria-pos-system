@@ -19,7 +19,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Label, Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
 import { shortInvoiceNo } from '@/lib/shared/utils'
 import { formatClock, formatDay, money, paymentMethodLabel } from '@/features/pos/format'
@@ -137,19 +137,12 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
   // ── Đang tải danh sách ca ──
   if (shiftsLoading) {
     return (
-      <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-5xl space-y-4">
+      <SkeletonPage maxWidth="max-w-5xl">
           <Skeleton className="h-9 w-24" />
-          <Skeleton className="h-28 w-full" />
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Skeleton className="h-20" />
-            <Skeleton className="h-20" />
-            <Skeleton className="h-20" />
-            <Skeleton className="h-20" />
-          </div>
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </div>
+          <SkeletonPanel><Skeleton className="h-28 w-full" /></SkeletonPanel>
+          <SkeletonStats />
+          <SkeletonPanel><Skeleton className="h-64 w-full" /></SkeletonPanel>
+      </SkeletonPage>
     )
   }
 
@@ -546,10 +539,10 @@ function TransactionRow({
         onClick={() => {
           if (canOpen) onOpen(tx.invoiceId!)
         }}
-        className="grid w-full grid-cols-1 gap-2 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent sm:grid-cols-[7rem_1fr_auto] sm:items-center sm:gap-4 dark:hover:bg-zinc-800/50"
+        className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent sm:grid-cols-[7rem_1fr_auto] sm:gap-4 dark:hover:bg-zinc-800/50"
       >
         {/* Time + invoice no — primary identifier */}
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 sm:flex-col sm:items-start sm:gap-0">
+        <div className="flex flex-col items-start gap-0">
           <span className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
             {formatClock(tx.paidAt)}
           </span>
@@ -593,7 +586,7 @@ function TransactionRow({
 
         {/* Amount — anchored right */}
         <p
-          className={`self-end text-base font-bold tabular-nums sm:self-center sm:text-lg ${amountClass}`}
+          className={`self-center text-sm font-bold tabular-nums sm:text-lg ${amountClass}`}
         >
           {money(tx.amount)}
         </p>

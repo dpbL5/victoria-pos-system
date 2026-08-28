@@ -9,7 +9,6 @@ import {
   ArrowRight,
   ArrowRightLeft,
   Banknote,
-  BarChart3,
   CalendarClock,
   Car,
   CheckCircle2,
@@ -18,7 +17,6 @@ import {
   Monitor,
   Moon,
   Package,
-  RefreshCw,
   Settings,
   ShieldCheck,
   Sun,
@@ -32,13 +30,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
 import { formatClock, money } from '@/features/pos/format'
-import type { Product, Shift, UserSession } from '@/features/pos/types'
+import type { Shift, UserSession } from '@/features/pos/types'
 import { useTheme, type Theme } from '@/hooks/use-theme'
 
 interface PricingStatus {
@@ -69,20 +67,27 @@ export function MoreScreen() {
 
   const PARKING_FEE_KEY = 'PARKING_FEE_UNIT_PRICE'
 
-  const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
-  const { data: shiftData, isLoading: shiftLoading } = useApi<Shift | null>('/api/shifts?current=true', { dedupingInterval: 60_000 })
-  const { data: pricingData } = useApi<PricingStatus>('/api/pricing/status', { dedupingInterval: 300_000 })
-  const { data: productData } = useApi<Product[]>('/api/products?isActive=true', { dedupingInterval: 300_000 })
+  const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', {
+    dedupingInterval: 600_000,
+    revalidateOnFocus: false,
+  })
+  const { data: shiftData, isLoading: shiftLoading } = useApi<Shift | null>('/api/shifts?current=true', {
+    dedupingInterval: 60_000,
+    revalidateOnFocus: false,
+  })
+  const { data: pricingData } = useApi<PricingStatus>('/api/pricing/status', {
+    dedupingInterval: 300_000,
+    revalidateOnFocus: false,
+  })
   const { data: parkingFeeData } = useApi<{ key: string; value: string; label: string | null }>(
     `/api/settings?key=${PARKING_FEE_KEY}`,
-    { dedupingInterval: 300_000 }
+    { dedupingInterval: 300_000, revalidateOnFocus: false }
   )
 
   const user = userData?.data ?? null
   const shift = shiftData?.data ?? null
   const pricingCount = pricingData?.data?.count ?? 0
   const activePricingCount = pricingData?.data?.activeCount ?? pricingData?.data?.count ?? 0
-  const products = productData?.data ?? []
   const loading = userLoading || shiftLoading
   const error = !userData?.success ? (userData?.error as string ?? '') : ''
 
@@ -91,27 +96,34 @@ export function MoreScreen() {
     setMounted(true)
   }, [])
 
+  useEffect(() => {
+    if (parkingFeeData?.data && !parkingFeeValue) {
+      setParkingFeeValue(parkingFeeData.data.value)
+    }
+  }, [parkingFeeData, parkingFeeValue])
+
   const isAdmin = isAdminOnly(user?.role)
   const canViewShifts = isManagerOrAdmin(user?.role)
   const coreLinks = [
     ...(canViewShifts
-      ? [{ href: '/shifts', label: 'Ca làm', description: 'Lịch sử và nhân viên ca', Icon: CalendarClock, tone: 'blue' as const }]
+      ? [{ href: '/shifts', label: 'Ca làm', Icon: CalendarClock, tone: 'blue' as const }]
       : []),
-    { href: '/customers', label: 'Hội viên', description: 'Đăng ký và gia hạn', Icon: ShieldCheck, tone: 'purple' },
-    { href: '/insventory', label: 'Kho quầy', description: 'Xem tồn và hàng sắp hết', Icon: Package, tone: 'amber' },
-    ...(isAdmin
-      ? [{ href: '/reports', label: 'Báo cáo', description: 'Đối soát ca và ngày', Icon: BarChart3, tone: 'blue' as const }]
+    { href: '/customers', label: 'Hội viên', Icon: ShieldCheck, tone: 'purple' },
+    ...(!canViewShifts
+      ? [{ href: '/inventory', label: 'Kho quầy', Icon: Package, tone: 'amber' as const }]
       : []),
   ] as const
 
   const adminLinks = [
-    { href: '/pricing', label: 'Bảng giá', description: 'Giá giờ chơi vãng lai', Icon: Banknote },
-    { href: '/promotions', label: 'Khuyến mại', description: 'Giảm giá giờ chơi vãng lai', Icon: Tag },
-    { href: '/membership-plans', label: 'Gói hội viên', description: 'Phí tháng và thời hạn gói', Icon: Ticket },
-    { href: '/students', label: 'Học viên', description: 'Quản lý học viên và lịch học', Icon: GraduationCap },
-    { href: '/staff', label: 'Nhân viên', description: 'Tài khoản và phân quyền', Icon: UserCog },
-    { href: '/tools', label: 'Dụng cụ', description: 'Công cụ hệ thống', Icon: Wrench },
-    { href: '/cashflow', label: 'Thu chi', description: 'Theo dõi thu nhập và chi phí', Icon: ArrowRightLeft },
+    { href: '/customers', label: 'Hội viên', Icon: ShieldCheck, tone: 'purple' as const },
+    { href: '/membership-plans', label: 'Gói hội viên', Icon: Ticket, tone: 'purple' as const },
+    { href: '/promotions', label: 'Khuyến mại', Icon: Tag, tone: 'purple' as const },
+    { href: '/shifts', label: 'Ca làm', Icon: CalendarClock, tone: 'blue' as const },
+    { href: '/staff', label: 'Nhân viên', Icon: UserCog, tone: 'blue' as const },
+    { href: '/pricing', label: 'Bảng giá', Icon: Banknote, tone: 'blue' as const },
+    { href: '/tools', label: 'Dụng cụ', Icon: Wrench, tone: 'amber' as const },
+    { href: '/students', label: 'Học viên', Icon: GraduationCap, tone: 'emerald' as const },
+    { href: '/cashflow', label: 'Thu chi', Icon: ArrowRightLeft, tone: 'emerald' as const },
   ] as const
 
   const handleLogout = async () => {
@@ -171,13 +183,6 @@ export function MoreScreen() {
               Thêm
             </h1>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={RefreshCw}
-            onClick={() => { /* SWR auto-refresh on focus */ }}
-            title="Làm mới"
-          />
         </header>
 
         {error && (
@@ -188,48 +193,36 @@ export function MoreScreen() {
           />
         )}
 
-        <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="grid grid-cols-[6px_1fr]">
-            <div className={shift ? 'bg-emerald-500' : 'bg-amber-500'} />
-            <div className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
-                    {user?.fullName ?? 'Tài khoản'}
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    {user?.username ?? ''}
-                    {user ? ` · ${user.role === 'ADMIN' ? 'Quản trị viên' : user.role === 'MANAGER' ? 'Quản lý' : 'Nhân viên'}` : ''}
-                  </p>
-                </div>
-                <Badge variant={isAdmin ? 'purple' : 'default'}>
-                  {user?.role === 'ADMIN' ? 'Admin' : user?.role === 'MANAGER' ? 'QL' : 'Staff'}
-                </Badge>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <MiniStatus
-                  label={shift ? 'Ca đang mở' : 'Chưa mở ca'}
-                  value={shift ? formatClock(shift.openedAt) : 'Cần mở ca'}
-                  tone={shift ? 'success' : 'warning'}
-                />
-                <MiniStatus
-                  label="Tiền đầu ca"
-                  value={shift ? money(shift.openingCash) : money(0)}
-                  tone="default"
-                />
-              </div>
+        <section className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
+                {user?.fullName ?? 'Tài khoản'}
+              </p>
+              <p className="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                {user?.username ?? ''}
+                {user ? ` · ${user.role === 'ADMIN' ? 'Quản trị viên' : user.role === 'MANAGER' ? 'Quản lý' : 'Nhân viên'}` : ''}
+              </p>
             </div>
+            <Badge variant={isAdmin ? 'purple' : 'default'}>
+              {user?.role === 'ADMIN' ? 'Admin' : user?.role === 'MANAGER' ? 'QL' : 'Staff'}
+            </Badge>
+          </div>
+          <p className={`mt-3 text-xs font-medium ${shift ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300'}`}>
+            {shift ? `Ca đang mở · ${formatClock(shift.openedAt)}` : 'Chưa mở ca'}
+          </p>
+        </section>
+
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <SectionTitle title="Lối tắt" />
+          <div className="motion-stagger mt-3 grid grid-cols-3 gap-2">
+            {(isAdmin ? adminLinks : coreLinks).map((item) => (
+              <ShortcutCard key={item.href} {...item} />
+            ))}
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <HealthCard
-            good={!!shift}
-            title={shift ? 'Ca làm sẵn sàng' : 'Chưa mở ca'}
-            description={shift ? 'POS có thể check-in và thu tiền.' : 'Nhân viên cần mở ca trước khi vận hành POS.'}
-            href="/sessions"
-          />
+        <section>
           <HealthCard
             good={activePricingCount > 0}
             title={activePricingCount > 0 ? 'Đã có giá hiệu lực' : 'Thiếu giá hiệu lực'}
@@ -244,13 +237,7 @@ export function MoreScreen() {
 
         {isAdmin && (
           <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <SectionTitle title="Quản trị" />
-            <div className="mt-3 space-y-2">
-              {adminLinks.map((item) => (
-                <AdminLink key={item.href} {...item} />
-              ))}
-            </div>
-
+            <SectionTitle title="Cấu hình hệ thống" />
             <ParkingFeeConfig
               value={parkingFeeValue}
               saving={parkingFeeSaving}
@@ -259,15 +246,6 @@ export function MoreScreen() {
             />
           </section>
         )}
-
-        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <SectionTitle title="Lối tắt vận hành" />
-          <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-5">
-            {coreLinks.map((item) => (
-              <ShortcutCard key={item.href} {...item} />
-            ))}
-          </div>
-        </section>
 
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <SectionTitle title="Giao diện" />
@@ -322,15 +300,18 @@ export function MoreScreen() {
 
 function MoreSkeleton() {
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <SkeletonPage maxWidth="max-w-5xl">
       <Skeleton className="h-10 w-32" />
-      <Skeleton className="h-32 w-full" />
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-      </div>
-      <Skeleton className="h-48 w-full" />
-    </div>
+      <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
+      <SkeletonPanel>
+        <div className="grid grid-cols-3 gap-2">
+          {Array.from({ length: 9 }, (_, index) => <Skeleton key={index} className="h-20" />)}
+        </div>
+      </SkeletonPanel>
+      <Skeleton className="h-16 w-full" />
+      <SkeletonPanel><Skeleton className="h-48 w-full" /></SkeletonPanel>
+      <SkeletonPanel><Skeleton className="h-11 w-full" /></SkeletonPanel>
+    </SkeletonPage>
   )
 }
 
@@ -339,31 +320,6 @@ function SectionTitle({ title }: { title: string }) {
     <div className="flex items-center gap-2">
       <Settings size={16} className="text-zinc-400" />
       <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">{title}</h2>
-    </div>
-  )
-}
-
-function MiniStatus({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: string
-  tone: 'success' | 'warning' | 'default'
-}) {
-  const valueClass = tone === 'success'
-    ? 'text-emerald-600 dark:text-emerald-300'
-    : tone === 'warning'
-      ? 'text-amber-600 dark:text-amber-300'
-      : 'text-zinc-950 dark:text-white'
-
-  return (
-    <div className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className={`mt-1 text-sm font-semibold tabular-nums ${valueClass}`}>
-        {value}
-      </p>
     </div>
   )
 }
@@ -401,13 +357,11 @@ function HealthCard({
 function ShortcutCard({
   href,
   label,
-  description,
   Icon,
   tone,
 }: {
   href: string
   label: string
-  description: string
   Icon: LucideIcon
   tone: 'emerald' | 'purple' | 'amber' | 'blue'
 }) {
@@ -421,43 +375,12 @@ function ShortcutCard({
   return (
     <Link
       href={href}
-      className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 transition-colors hover:bg-white dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+      className="motion-hover-lift flex min-h-24 flex-col items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-center hover:bg-white dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900"
     >
       <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${toneClasses}`}>
         <Icon size={18} />
       </div>
-      <p className="mt-3 text-sm font-semibold text-zinc-950 dark:text-white">{label}</p>
-      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{description}</p>
-    </Link>
-  )
-}
-
-function AdminLink({
-  href,
-  label,
-  description,
-  Icon,
-}: {
-  href: string
-  label: string
-  description: string
-  Icon: LucideIcon
-}) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-3 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800"
-    >
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-          <Icon size={17} />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-zinc-950 dark:text-white">{label}</p>
-          <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{description}</p>
-        </div>
-      </div>
-      <ArrowRight size={16} className="shrink-0 text-zinc-400" />
+      <p className="mt-2 text-xs font-semibold text-zinc-950 dark:text-white">{label}</p>
     </Link>
   )
 }

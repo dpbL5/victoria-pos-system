@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Modal } from '@/components/ui/modal'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPanel } from '@/components/ui/skeleton'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -58,13 +58,13 @@ export function InvoiceDetailModal({ invoiceId, open, onClose }: InvoiceDetailMo
     >
       {loading ? (
         <div className="space-y-4">
-          <Skeleton className="h-32 w-full" />
+          <SkeletonPanel><Skeleton className="h-32 w-full" /></SkeletonPanel>
           <div className="grid grid-cols-2 gap-3">
-            <Skeleton className="h-24" />
-            <Skeleton className="h-24" />
+            <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
+            <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
           </div>
-          <Skeleton className="h-48 w-full" />
-          <Skeleton className="h-32 w-full" />
+          <SkeletonPanel><Skeleton className="h-48 w-full" /></SkeletonPanel>
+          <SkeletonPanel><Skeleton className="h-32 w-full" /></SkeletonPanel>
         </div>
       ) : error ? (
         <NoticeCard

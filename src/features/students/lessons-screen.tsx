@@ -10,7 +10,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonRows } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
@@ -95,13 +95,10 @@ export function LessonsScreen() {
 
   if (loading && lessons.length === 0) {
     return (
-      <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-3xl space-y-4">
+      <SkeletonPage maxWidth="max-w-3xl">
           <Skeleton className="h-10 w-48" />
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-20 w-full" />
-        </div>
-      </div>
+          <SkeletonRows count={2} />
+      </SkeletonPage>
     )
   }
 

@@ -35,7 +35,7 @@ export function Card({
         paddingClasses[padding]
       } ${
         interactive
-          ? "transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+          ? "motion-hover-lift cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
           : ""
       } ${className}`}
       {...props}

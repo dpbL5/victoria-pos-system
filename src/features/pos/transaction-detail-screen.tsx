@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, Pencil, ReceiptText, Trash2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPanel } from '@/components/ui/skeleton'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label, Textarea } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
@@ -13,7 +13,6 @@ import { isAdminOnly } from '@/lib/shared/roles'
 import { apiJson, jsonRequest } from '@/lib/api'
 import type { UserSession } from '@/features/pos/types'
 import { InvoiceDetailContent, type InvoiceDetail } from './invoice-detail-content'
-import { InvoiceEditDialog } from './invoice-edit-dialog'
 
 interface Props {
   id: string
@@ -110,11 +109,11 @@ export function TransactionDetailScreen({ id }: Props) {
         <div className="mx-auto max-w-6xl space-y-6">
           <Skeleton className="h-9 w-24" />
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-            <Skeleton className="h-[600px]" />
+            <SkeletonPanel><Skeleton className="h-[600px] w-full" /></SkeletonPanel>
             <div className="space-y-6">
-              <Skeleton className="h-32" />
-              <Skeleton className="h-32" />
-              <Skeleton className="h-24" />
+              <SkeletonPanel><Skeleton className="h-32 w-full" /></SkeletonPanel>
+              <SkeletonPanel><Skeleton className="h-32 w-full" /></SkeletonPanel>
+              <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
             </div>
           </div>
         </div>
@@ -192,7 +191,17 @@ export function TransactionDetailScreen({ id }: Props) {
         </div>
 
         {/* ── Receipt folio + spine ── */}
-        <InvoiceDetailContent invoice={invoice} />
+        <InvoiceDetailContent
+          invoice={invoice}
+          editOpen={editOpen}
+          editing={editing}
+          setEditing={setEditing}
+          onCloseEdit={() => setEditOpen(false)}
+          onSaved={() => {
+            setEditOpen(false)
+            void loadData()
+          }}
+        />
       </div>
 
       <ConfirmDialog
@@ -239,17 +248,6 @@ export function TransactionDetailScreen({ id }: Props) {
         onConfirm={handleVoidConfirm}
       />
 
-      <InvoiceEditDialog
-        invoice={invoice}
-        open={editOpen}
-        submitting={editing}
-        setSubmitting={setEditing}
-        onClose={() => setEditOpen(false)}
-        onSaved={() => {
-          setEditOpen(false)
-          void loadData()
-        }}
-      />
     </div>
   )
 }

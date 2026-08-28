@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Download,
   ReceiptText,
-  Target,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
@@ -16,11 +15,11 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label, Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
 import { formatClock, money, paymentMethodLabel } from '@/features/pos/format'
 import type { PaymentMethod, UserSession } from '@/features/pos/types'
-import { toInputDate } from '@/lib/shared/utils'
+import { shortInvoiceNo, toInputDate } from '@/lib/shared/utils'
 import { AreaChart, DonutChart, HourlyBarChart, DailyVolumeChart } from './reports-charts'
 import { isAdminOnly } from '@/lib/shared/roles'
 
@@ -52,19 +51,6 @@ interface ReportDashboard {
     activeSessions: number
     newCustomers: number
     averagePayment: number
-    byPaymentMethod: PaymentBreakdown
-    byItemType: ItemBreakdown
-  }
-  currentShift: null | {
-    id: string
-    openedAt: string
-    openingCash: number
-    revenue: number
-    cashRevenue: number
-    expectedCash: number
-    paymentCount: number
-    activeSessions: number
-    completedSessions: number
     byPaymentMethod: PaymentBreakdown
     byItemType: ItemBreakdown
   }
@@ -153,6 +139,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
   const [revenueSummary, setRevenueSummary] = useState<RevenueSummary | null>(null)
   const [recentPayments, setRecentPayments] = useState<RevenuePayment[]>([])
   const [trends, setTrends] = useState<TrendData | null>(null)
+  const [trendsLoading, setTrendsLoading] = useState(false)
   const [from, setFrom] = useState(() => toInputDate(new Date()))
   const [to, setTo] = useState(() => toInputDate(new Date()))
   const [exportType, setExportType] = useState('revenue')
@@ -198,6 +185,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
   }, [])
 
   const loadTrends = useCallback(async (nextFrom: string, nextTo: string) => {
+    setTrendsLoading(true)
     try {
       const response = await fetch(`/api/reports/trends?from=${nextFrom}&to=${nextTo}`)
       const data = await response.json() as TrendResponse
@@ -206,6 +194,8 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
       setTrends(data.data ?? null)
     } catch {
       // Trends là bổ trợ — không chặn toàn màn nếu lỗi
+    } finally {
+      setTrendsLoading(false)
     }
   }, [])
 
@@ -231,7 +221,6 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
   }, [from, to, loadRevenue, loadTrends])
 
   const canExport = isAdminOnly(user?.role)
-  const currentShift = dashboard?.currentShift ?? null
   const today = dashboard?.today
   // Khoảng 1 ngày lịch → hero chart chuyển sang granularity giờ (HourlyBarChart).
   const singleDay = isSingleDay(from, to)
@@ -312,9 +301,13 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
         {/* ── Main column (2/3) — monitor focal ── */}
         <div className="space-y-4 md:col-span-2">
           {/* Hero scoreboard — doanh thu là focal point */}
-          {today && <HeroScoreboard today={today} trends={trends} />}
-
-          {currentShift && <ShiftReportPanel shift={currentShift} />}
+          {today && (
+            <HeroScoreboard
+              today={today}
+              trends={trends}
+              trendsLoading={trendsLoading}
+            />
+          )}
 
           {/* Hero chart: 1 ngày → doanh thu theo giờ; nhiều ngày → doanh thu theo ngày */}
           <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -456,7 +449,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               {canExport ? 'Tải CSV cho khoảng ngày đã chọn' : 'Chỉ quản trị viên được tải file báo cáo'}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Select
                 value={exportType}
                 onChange={(event) => setExportType(event.target.value)}
@@ -469,7 +462,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
               {canExport ? (
                 <a
                   href={`/api/reports/export?type=${exportType}&from=${from}&to=${to}`}
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white sm:w-auto"
                 >
                   <Download size={16} />
                   CSV
@@ -478,7 +471,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
                 <button
                   type="button"
                   disabled
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-zinc-200 px-3 py-2 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-zinc-200 px-3 py-2 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500 sm:w-auto"
                 >
                   <Download size={16} />
                   CSV
@@ -506,14 +499,9 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
 function ReportsOverviewSkeleton() {
   return (
     <div className="space-y-4">
-      <Skeleton className="h-16 w-full" />
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <Skeleton className="h-24" />
-        <Skeleton className="h-24" />
-        <Skeleton className="h-24" />
-        <Skeleton className="h-24" />
-      </div>
-      <Skeleton className="h-72 w-full" />
+      <SkeletonPanel><Skeleton className="h-16 w-full" /></SkeletonPanel>
+      <SkeletonStats />
+      <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
     </div>
   )
 }
@@ -540,19 +528,20 @@ function RangeTabs({ range, onChange }: { range: Range; onChange: (range: Range)
   )
 }
 
-// ── HeroScoreboard: 1 doanh thu focal (số to + growth badge) + 3 chỉ số phụ ──
+// ── HeroScoreboard: 1 doanh thu focal (số to + growth badge) + 2 chỉ số phụ ──
 function HeroScoreboard({
   today,
   trends,
+  trendsLoading,
 }: {
   today: NonNullable<ReportDashboard['today']>
   trends: TrendData | null
+  trendsLoading: boolean
 }) {
-  // Ưu tiên số liệu kỳ (trends) nếu có; fallback hôm nay (dashboard)
+  // Trends là nguồn chính cho các số theo kỳ (revenue/players/revPerPlayer).
   const revenue = trends?.totals.revenue ?? today.revenue
-  const players = trends?.totals.players ?? today.sessionsCreated
-  const sessions = trends?.totals.sessions ?? today.sessionsCreated
-  const revPerPlayer = trends?.totals.revenuePerPlayer ?? today.averagePayment
+  const players = trends?.totals.players ?? 0
+  const revPerPlayer = trends?.totals.revenuePerPlayer ?? 0
 
   // % tăng trưởng so với kỳ trước
   const revenueGrowth = trends && trends.comparison.previousRevenue > 0
@@ -562,9 +551,9 @@ function HeroScoreboard({
   return (
     <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       {/* Focal: doanh thu — số to, growth badge, dải emerald */}
-      <div className="relative overflow-hidden p-5 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-emerald-500">
-        <div className="flex items-start justify-between gap-3">
-          <div>
+      <div className="relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-emerald-500 sm:p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               Doanh thu kỳ
             </p>
@@ -574,7 +563,7 @@ function HeroScoreboard({
           </div>
           {revenueGrowth != null && (
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+              className={`inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
                 revenueGrowth >= 0
                   ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
                   : 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300'
@@ -591,99 +580,48 @@ function HeroScoreboard({
         </p>
       </div>
 
-      {/* Các chỉ số phụ — Người chơi (focal phụ) + Phiên + TB/người */}
-      <div className="grid grid-cols-3 divide-x divide-zinc-200 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+      {/* Các chỉ số theo đúng khoảng thời gian đang chọn */}
+      <div className="grid grid-cols-2 divide-x divide-zinc-200 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
         <SupportStat
           label="Người chơi"
-          value={String(players)}
-          hint={today.completedSessions > 0 ? `${today.completedSessions} phiên đã checkout` : undefined}
+          value={players}
+          loading={trendsLoading || !trends}
         />
         <SupportStat
-          label="Phiên"
-          value={String(sessions)}
-        />
-        <SupportStat
-          label="TB / người"
-          value={money(revPerPlayer)}
+          label="TB chi / người"
+          value={revPerPlayer}
+          loading={trendsLoading || !trends}
+          moneyFormat
         />
       </div>
     </section>
   )
 }
 
-function SupportStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function SupportStat({
+  label,
+  value,
+  loading = false,
+  moneyFormat = false,
+}: {
+  label: string
+  value: number | string
+  loading?: boolean
+  moneyFormat?: boolean
+}) {
+  const display = loading
+    ? '—'
+    : moneyFormat
+      ? money(value)
+      : String(value)
+
   return (
     <div className="px-3 py-3 text-center">
       <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         {label}
       </p>
-      <p className="mt-0.5 text-lg font-bold tabular-nums text-zinc-950 dark:text-white">
-        {value}
-      </p>
-      {hint ? (
-        <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">{hint}</p>
-      ) : null}
-    </div>
-  )
-}
-
-function ShiftReportPanel({
-  shift,
-}: {
-  shift: NonNullable<ReportDashboard['currentShift']>
-}) {
-  return (
-    <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="grid grid-cols-[6px_1fr]">
-        <div className="bg-emerald-500" />
-        <div className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
-                <Target size={17} className="text-emerald-500" />
-                Đối soát ca hiện tại
-              </h2>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                Mở lúc {formatClock(shift.openedAt)}
-              </p>
-            </div>
-            <Badge variant="success">Đang mở</Badge>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <MiniMetric label="Tiền đầu ca" value={money(shift.openingCash)} />
-            <MiniMetric label="Tiền mặt thu" value={money(shift.cashRevenue)} />
-            <MiniMetric label="Tiền mặt dự kiến" value={money(shift.expectedCash)} strong />
-            <MiniMetric label="Giao dịch" value={String(shift.paymentCount)} />
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <MiniMetric label="Đang chơi" value={String(shift.activeSessions)} />
-            <MiniMetric label="Đã checkout" value={String(shift.completedSessions)} />
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function MiniMetric({
-  label,
-  value,
-  strong,
-}: {
-  label: string
-  value: string
-  strong?: boolean
-}) {
-  return (
-    <div className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className={`mt-1 text-sm font-semibold tabular-nums ${
-        strong ? 'text-emerald-600 dark:text-emerald-300' : 'text-zinc-950 dark:text-white'
-      }`}
-      >
-        {value}
+      <p className={`mt-0.5 text-lg font-bold tabular-nums ${loading ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-950 dark:text-white'}`}>
+        {display}
       </p>
     </div>
   )
@@ -702,21 +640,30 @@ function RecentPaymentRow({
         if (payment.invoiceId) router.push(`/invoices/${payment.invoiceId}`)
       }}
       disabled={!payment.invoiceId}
-      className="grid w-full grid-cols-[1fr_auto] gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50 disabled:cursor-default disabled:hover:bg-transparent"
+      className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent sm:grid-cols-[7rem_1fr_auto] sm:gap-4 dark:hover:bg-zinc-800/50"
     >
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
-            {payment.customerName}
-          </p>
-          <Badge variant="outline" size="sm">{paymentMethodLabel(payment.paymentMethod)}</Badge>
-        </div>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+      <div className="flex flex-col items-start gap-0">
+        <span className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
           {formatClock(payment.paidAt)}
-          {payment.invoiceNo ? ` · ${payment.invoiceNo}` : ''}
+        </span>
+        {payment.invoiceNo && (
+          <span className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
+            {shortInvoiceNo(payment.invoiceNo)}
+          </span>
+        )}
+      </div>
+
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
+          {payment.customerName}
+        </p>
+        <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+          {paymentMethodLabel(payment.paymentMethod)}
+          {payment.staffName ? ` · ${payment.staffName}` : ''}
         </p>
       </div>
-      <p className="self-center text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
+
+      <p className="self-center text-sm font-bold tabular-nums text-zinc-950 dark:text-white sm:text-lg">
         {money(payment.grandTotal)}
       </p>
     </button>

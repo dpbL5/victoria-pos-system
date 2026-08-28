@@ -13,7 +13,7 @@ import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
@@ -414,17 +414,12 @@ export function InventoryScreen() {
 
 function InventorySkeleton() {
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <SkeletonPage>
       <Skeleton className="h-10 w-40" />
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-      </div>
-      <Skeleton className="h-24 w-full" />
-      <Skeleton className="h-80 w-full" />
-    </div>
+      <SkeletonStats />
+      <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
+      <SkeletonPanel><Skeleton className="h-80 w-full" /></SkeletonPanel>
+    </SkeletonPage>
   )
 }
 

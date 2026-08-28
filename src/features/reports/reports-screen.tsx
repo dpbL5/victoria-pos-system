@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { BarChart3, Package } from 'lucide-react'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
 import type { UserSession } from '@/features/pos/types'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
@@ -43,19 +43,12 @@ export function ReportsScreen() {
 
   if (loading) {
     return (
-      <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-5xl space-y-4">
+      <SkeletonPage maxWidth="max-w-5xl">
           <Skeleton className="h-10 w-36" />
-          <Skeleton className="h-16 w-full" />
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            <Skeleton className="h-24" />
-            <Skeleton className="h-24" />
-            <Skeleton className="h-24" />
-            <Skeleton className="h-24" />
-          </div>
-          <Skeleton className="h-72 w-full" />
-        </div>
-      </div>
+          <SkeletonPanel><Skeleton className="h-16 w-full" /></SkeletonPanel>
+          <SkeletonStats />
+          <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
+      </SkeletonPage>
     )
   }
 

@@ -22,7 +22,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label, Textarea } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { isManagerOrAdmin } from '@/lib/shared/roles'
 import { apiJson, jsonRequest } from '@/lib/api'
@@ -803,20 +803,18 @@ function InvoiceHistoryRow({ invoice }: { invoice: CustomerHistoryInvoice }) {
 
 function CustomerDetailSkeleton() {
   return (
-    <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-5xl space-y-4">
+    <SkeletonPage maxWidth="max-w-5xl">
         <Skeleton className="h-6 w-24" />
         <div className="grid gap-4 md:grid-cols-5">
           <div className="md:col-span-2 space-y-3">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-16 w-full" />
+            <SkeletonPanel><Skeleton className="h-32 w-full" /></SkeletonPanel>
+            <SkeletonPanel><Skeleton className="h-16 w-full" /></SkeletonPanel>
           </div>
           <div className="md:col-span-3 space-y-4">
-            <Skeleton className="h-40 w-full" />
-            <Skeleton className="h-64 w-full" />
+            <SkeletonPanel><Skeleton className="h-40 w-full" /></SkeletonPanel>
+            <SkeletonPanel><Skeleton className="h-64 w-full" /></SkeletonPanel>
           </div>
         </div>
-      </div>
-    </div>
+    </SkeletonPage>
   )
 }
