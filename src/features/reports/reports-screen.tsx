@@ -62,9 +62,9 @@ export function ReportsScreen() {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-5xl space-y-4">
-        <header className="hidden items-center justify-between gap-3 md:flex">
+        <header className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
+            <h1 className="text-xl font-bold text-zinc-950 dark:text-white md:text-2xl">
               Báo cáo
             </h1>
           </div>

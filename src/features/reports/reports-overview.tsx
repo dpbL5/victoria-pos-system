@@ -456,7 +456,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               {canExport ? 'Tải CSV cho khoảng ngày đã chọn' : 'Chỉ quản trị viên được tải file báo cáo'}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Select
                 value={exportType}
                 onChange={(event) => setExportType(event.target.value)}
@@ -469,7 +469,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
               {canExport ? (
                 <a
                   href={`/api/reports/export?type=${exportType}&from=${from}&to=${to}`}
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white sm:w-auto"
                 >
                   <Download size={16} />
                   CSV
@@ -478,7 +478,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
                 <button
                   type="button"
                   disabled
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-zinc-200 px-3 py-2 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-zinc-200 px-3 py-2 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500 sm:w-auto"
                 >
                   <Download size={16} />
                   CSV
@@ -562,9 +562,9 @@ function HeroScoreboard({
   return (
     <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       {/* Focal: doanh thu — số to, growth badge, dải emerald */}
-      <div className="relative overflow-hidden p-5 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-emerald-500">
-        <div className="flex items-start justify-between gap-3">
-          <div>
+      <div className="relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-emerald-500 sm:p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               Doanh thu kỳ
             </p>
@@ -574,7 +574,7 @@ function HeroScoreboard({
           </div>
           {revenueGrowth != null && (
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+              className={`inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
                 revenueGrowth >= 0
                   ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
                   : 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300'

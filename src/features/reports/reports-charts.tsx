@@ -163,7 +163,7 @@ export function DonutChart({
   const innerRadius = radius
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:gap-4">
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <ResponsiveContainer width={size} height={size}>
           <RechartsPieChart>
@@ -209,14 +209,14 @@ export function DonutChart({
         </ResponsiveContainer>
         {total > 0 && centerValue ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <span className="text-base font-bold tabular-nums text-zinc-950 dark:text-white">
+            <span className="text-sm font-bold tabular-nums text-zinc-950 dark:text-white sm:text-base">
               {centerValue}
             </span>
           </div>
         ) : null}
       </div>
 
-      <div className="min-w-0 flex-1 space-y-2">
+      <div className="min-w-0 flex-1 space-y-2 self-stretch sm:self-center">
         {visible.length === 0 ? (
           <p className="text-xs text-zinc-400 dark:text-zinc-500">Chưa có dữ liệu</p>
         ) : (
@@ -318,7 +318,17 @@ export function DailyVolumeChart({
 }) {
   if (data.length === 0) return null
   return (
-    <div>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-zinc-500 dark:text-zinc-400 sm:hidden">
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ background: COLORS.emerald }} />
+          Người chơi
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ background: COLORS.blue }} />
+          Phiên
+        </div>
+      </div>
       <div className="flex items-start gap-3">
         <div className="flex-1">
           <ResponsiveContainer width="100%" height={height}>
@@ -372,7 +382,7 @@ export function DailyVolumeChart({
             </RechartsBarChart>
           </ResponsiveContainer>
         </div>
-        <div className="space-y-2 pt-6 text-[10px] text-zinc-500 dark:text-zinc-400">
+        <div className="hidden shrink-0 space-y-2 pt-6 text-[10px] text-zinc-500 dark:text-zinc-400 sm:block">
           <div className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-sm" style={{ background: COLORS.emerald }} />
             Người chơi

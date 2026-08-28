@@ -114,11 +114,11 @@ export function ReportsInventory() {
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-4 gap-2">
-          <Button variant="secondary" size="xs" onClick={() => applyQuickRange(1)}>Hôm nay</Button>
-          <Button variant="secondary" size="xs" onClick={() => applyQuickRange(7)}>7 ngày</Button>
-          <Button variant="secondary" size="xs" onClick={() => applyQuickRange(30)}>30 ngày</Button>
-          <Button variant="inverse" size="xs" disabled={loading} onClick={handleView}>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Button variant="secondary" size="sm" onClick={() => applyQuickRange(1)}>Hôm nay</Button>
+          <Button variant="secondary" size="sm" onClick={() => applyQuickRange(7)}>7 ngày</Button>
+          <Button variant="secondary" size="sm" onClick={() => applyQuickRange(30)}>30 ngày</Button>
+          <Button variant="inverse" size="sm" disabled={loading} onClick={handleView}>
             {loading ? 'Đang tải' : 'Xem'}
           </Button>
         </div>
@@ -169,7 +169,7 @@ export function ReportsInventory() {
             {items.map((item, index) => (
               <div
                 key={item.productId}
-                className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 px-4 py-3"
+                className="grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-3 px-4 py-3 sm:grid-cols-[2rem_minmax(0,1fr)_auto]"
               >
                 <span className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-semibold tabular-nums ${
                   index < 3
@@ -189,16 +189,21 @@ export function ReportsInventory() {
                     {item.quantitySold.toLocaleString('vi-VN')} bán
                     {item.unitCost != null ? ` · vốn ${money(item.unitCost)}` : ''}
                   </p>
-                  <p className={`text-xs font-medium tabular-nums ${
-                    item.profit >= 0
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-red-600 dark:text-red-400'
-                  }`}
-                  >
-                    Lợi nhuận: {money(item.profit)}
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                    <p className={`text-xs font-medium tabular-nums ${
+                      item.profit >= 0
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}
+                    >
+                      Lợi nhuận: {money(item.profit)}
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-white sm:hidden">
+                      {money(item.revenue)}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
+                <p className="hidden text-sm font-semibold tabular-nums text-zinc-950 dark:text-white sm:block">
                   {money(item.revenue)}
                 </p>
               </div>
