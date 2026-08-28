@@ -328,7 +328,7 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
                     className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-1 text-xs dark:border-zinc-700"
                   >
                     {p.staff.fullName}
-                    <Badge variant="outline" size="sm">{p.role === 'LEAD' ? 'Trưởng ca' : 'NV'}</Badge>
+                    <Badge variant="outline" size="sm">Nhân viên</Badge>
                   </span>
                 ))}
               </div>

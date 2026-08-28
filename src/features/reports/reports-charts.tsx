@@ -160,53 +160,51 @@ export function DonutChart({
   const total = data.reduce((sum, d) => sum + d.value, 0)
   const visible = data.filter((d) => d.value > 0)
   const radius = (size - thickness) / 2
-  const innerRadius = radius
+  const innerRadius = radius - thickness
 
   return (
-    <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:gap-4">
+    <div className="flex flex-col items-center gap-3">
       <div className="relative shrink-0" style={{ width: size, height: size }}>
-        <ResponsiveContainer width={size} height={size}>
-          <RechartsPieChart>
-            <Pie
-              data={visible}
-              dataKey="value"
-              nameKey="label"
-              innerRadius={innerRadius}
-              outerRadius={radius}
-              strokeWidth={0}
-              paddingAngle={1}
-              isAnimationActive
-              animationDuration={400}
-            >
-              {visible.map((entry) => (
-                <Cell key={entry.label} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload || payload.length === 0) return null
-                const item = payload[0]
-                const value = Number(item.value)
-                const pct = total > 0 ? Math.round((value / total) * 100) : 0
-                return (
-                  <div className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-                    <div className="font-semibold text-zinc-950 dark:text-white">
-                      {item.name}
-                    </div>
-                    <div className="text-zinc-600 dark:text-zinc-300">
-                      <span className="font-medium tabular-nums text-zinc-950 dark:text-white">
-                        {money(value)}
-                      </span>
-                      <span className="ml-1.5 text-zinc-500 dark:text-zinc-400">
-                        {pct}%
-                      </span>
-                    </div>
+        <RechartsPieChart width={size} height={size}>
+          <Pie
+            data={visible}
+            dataKey="value"
+            nameKey="label"
+            innerRadius={innerRadius}
+            outerRadius={radius}
+            strokeWidth={0}
+            paddingAngle={1}
+            isAnimationActive
+            animationDuration={400}
+          >
+            {visible.map((entry) => (
+              <Cell key={entry.label} fill={entry.color} />
+            ))}
+          </Pie>
+          <Tooltip
+            content={({ active, payload }) => {
+              if (!active || !payload || payload.length === 0) return null
+              const item = payload[0]
+              const value = Number(item.value)
+              const pct = total > 0 ? Math.round((value / total) * 100) : 0
+              return (
+                <div className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+                  <div className="font-semibold text-zinc-950 dark:text-white">
+                    {item.name}
                   </div>
-                )
-              }}
-            />
-          </RechartsPieChart>
-        </ResponsiveContainer>
+                  <div className="text-zinc-600 dark:text-zinc-300">
+                    <span className="font-medium tabular-nums text-zinc-950 dark:text-white">
+                      {money(value)}
+                    </span>
+                    <span className="ml-1.5 text-zinc-500 dark:text-zinc-400">
+                      {pct}%
+                    </span>
+                  </div>
+                </div>
+              )
+            }}
+          />
+        </RechartsPieChart>
         {total > 0 && centerValue ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <span className="text-sm font-bold tabular-nums text-zinc-950 dark:text-white sm:text-base">

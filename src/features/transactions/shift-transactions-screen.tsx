@@ -539,10 +539,10 @@ function TransactionRow({
         onClick={() => {
           if (canOpen) onOpen(tx.invoiceId!)
         }}
-        className="grid w-full grid-cols-1 gap-2 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent sm:grid-cols-[7rem_1fr_auto] sm:items-center sm:gap-4 dark:hover:bg-zinc-800/50"
+        className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent sm:grid-cols-[7rem_1fr_auto] sm:gap-4 dark:hover:bg-zinc-800/50"
       >
         {/* Time + invoice no — primary identifier */}
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 sm:flex-col sm:items-start sm:gap-0">
+        <div className="flex flex-col items-start gap-0">
           <span className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
             {formatClock(tx.paidAt)}
           </span>
@@ -586,7 +586,7 @@ function TransactionRow({
 
         {/* Amount — anchored right */}
         <p
-          className={`self-end text-base font-bold tabular-nums sm:self-center sm:text-lg ${amountClass}`}
+          className={`self-center text-sm font-bold tabular-nums sm:text-lg ${amountClass}`}
         >
           {money(tx.amount)}
         </p>
