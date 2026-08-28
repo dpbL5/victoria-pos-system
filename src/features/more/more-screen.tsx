@@ -30,7 +30,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
@@ -215,7 +215,7 @@ export function MoreScreen() {
 
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <SectionTitle title="Lối tắt" />
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="motion-stagger mt-3 grid grid-cols-3 gap-2">
             {(isAdmin ? adminLinks : coreLinks).map((item) => (
               <ShortcutCard key={item.href} {...item} />
             ))}
@@ -300,15 +300,18 @@ export function MoreScreen() {
 
 function MoreSkeleton() {
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <SkeletonPage maxWidth="max-w-5xl">
       <Skeleton className="h-10 w-32" />
-      <Skeleton className="h-32 w-full" />
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-      </div>
-      <Skeleton className="h-48 w-full" />
-    </div>
+      <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
+      <SkeletonPanel>
+        <div className="grid grid-cols-3 gap-2">
+          {Array.from({ length: 9 }, (_, index) => <Skeleton key={index} className="h-20" />)}
+        </div>
+      </SkeletonPanel>
+      <Skeleton className="h-16 w-full" />
+      <SkeletonPanel><Skeleton className="h-48 w-full" /></SkeletonPanel>
+      <SkeletonPanel><Skeleton className="h-11 w-full" /></SkeletonPanel>
+    </SkeletonPage>
   )
 }
 
@@ -372,7 +375,7 @@ function ShortcutCard({
   return (
     <Link
       href={href}
-      className="flex min-h-24 flex-col items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-center transition-colors hover:bg-white dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+      className="motion-hover-lift flex min-h-24 flex-col items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-center hover:bg-white dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900"
     >
       <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${toneClasses}`}>
         <Icon size={18} />

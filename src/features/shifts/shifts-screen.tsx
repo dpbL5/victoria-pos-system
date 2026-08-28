@@ -25,7 +25,7 @@ import { Input, Label, Select } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
 import { apiJson } from '@/lib/api'
@@ -325,11 +325,6 @@ export function ShiftsScreen() {
                 </Button>
               </div>
             </div>
-            <Link href="/sessions">
-              <Button variant="inverse" icon={ArrowRight}>
-                Mở ca hôm nay
-              </Button>
-            </Link>
           </div>
 
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
@@ -453,11 +448,10 @@ function DayGroupSection({
   })
 
   return (
-    <div className={`overflow-hidden rounded-xl border shadow-sm ${
-      isCurrentDay
+    <div className={`overflow-hidden rounded-xl border shadow-sm ${isCurrentDay
         ? 'border-blue-300 bg-blue-50/50 dark:border-blue-500/30 dark:bg-blue-500/5'
         : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
-    }`}>
+      }`}>
       <div className="border-b px-4 py-3 dark:border-zinc-800">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
@@ -654,9 +648,8 @@ function MoneyMini({
   return (
     <div className="rounded bg-zinc-50 px-2 py-1 dark:bg-zinc-950">
       <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className={`text-xs font-semibold tabular-nums ${
-        warning ? 'text-amber-600 dark:text-amber-300' : 'text-zinc-950 dark:text-white'
-      }`}>
+      <p className={`text-xs font-semibold tabular-nums ${warning ? 'text-amber-600 dark:text-amber-300' : 'text-zinc-950 dark:text-white'
+        }`}>
         {money(value ?? 0)}
       </p>
     </div>
@@ -811,18 +804,20 @@ function ShiftStat({
 
 function ShiftsSkeleton() {
   return (
-    <div className="min-h-full space-y-4 p-4 md:p-6">
+    <SkeletonPage>
       <Skeleton className="h-10 w-36" />
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-      </div>
-      <Skeleton className="h-28 w-full" />
-      <Skeleton className="h-64 w-full" />
-      <Skeleton className="h-64 w-full" />
-    </div>
+      <SkeletonStats />
+      <SkeletonPanel><Skeleton className="h-28 w-full" /></SkeletonPanel>
+      <SkeletonPanel className="space-y-3">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-20 w-full" />
+      </SkeletonPanel>
+      <SkeletonPanel className="space-y-3">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-20 w-full" />
+      </SkeletonPanel>
+    </SkeletonPage>
   )
 }
 

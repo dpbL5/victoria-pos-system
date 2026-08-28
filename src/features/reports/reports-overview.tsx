@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Download,
   ReceiptText,
-  Target,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
@@ -16,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label, Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
 import { formatClock, money, paymentMethodLabel } from '@/features/pos/format'
 import type { PaymentMethod, UserSession } from '@/features/pos/types'
@@ -52,19 +51,6 @@ interface ReportDashboard {
     activeSessions: number
     newCustomers: number
     averagePayment: number
-    byPaymentMethod: PaymentBreakdown
-    byItemType: ItemBreakdown
-  }
-  currentShift: null | {
-    id: string
-    openedAt: string
-    openingCash: number
-    revenue: number
-    cashRevenue: number
-    expectedCash: number
-    paymentCount: number
-    activeSessions: number
-    completedSessions: number
     byPaymentMethod: PaymentBreakdown
     byItemType: ItemBreakdown
   }
@@ -231,7 +217,6 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
   }, [from, to, loadRevenue, loadTrends])
 
   const canExport = isAdminOnly(user?.role)
-  const currentShift = dashboard?.currentShift ?? null
   const today = dashboard?.today
   // Khoảng 1 ngày lịch → hero chart chuyển sang granularity giờ (HourlyBarChart).
   const singleDay = isSingleDay(from, to)
@@ -313,8 +298,6 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
         <div className="space-y-4 md:col-span-2">
           {/* Hero scoreboard — doanh thu là focal point */}
           {today && <HeroScoreboard today={today} trends={trends} />}
-
-          {currentShift && <ShiftReportPanel shift={currentShift} />}
 
           {/* Hero chart: 1 ngày → doanh thu theo giờ; nhiều ngày → doanh thu theo ngày */}
           <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -506,14 +489,9 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
 function ReportsOverviewSkeleton() {
   return (
     <div className="space-y-4">
-      <Skeleton className="h-16 w-full" />
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <Skeleton className="h-24" />
-        <Skeleton className="h-24" />
-        <Skeleton className="h-24" />
-        <Skeleton className="h-24" />
-      </div>
-      <Skeleton className="h-72 w-full" />
+      <SkeletonPanel><Skeleton className="h-16 w-full" /></SkeletonPanel>
+      <SkeletonStats />
+      <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
     </div>
   )
 }
@@ -623,68 +601,6 @@ function SupportStat({ label, value, hint }: { label: string; value: string; hin
       {hint ? (
         <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">{hint}</p>
       ) : null}
-    </div>
-  )
-}
-
-function ShiftReportPanel({
-  shift,
-}: {
-  shift: NonNullable<ReportDashboard['currentShift']>
-}) {
-  return (
-    <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="grid grid-cols-[6px_1fr]">
-        <div className="bg-emerald-500" />
-        <div className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
-                <Target size={17} className="text-emerald-500" />
-                Đối soát ca hiện tại
-              </h2>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                Mở lúc {formatClock(shift.openedAt)}
-              </p>
-            </div>
-            <Badge variant="success">Đang mở</Badge>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <MiniMetric label="Tiền đầu ca" value={money(shift.openingCash)} />
-            <MiniMetric label="Tiền mặt thu" value={money(shift.cashRevenue)} />
-            <MiniMetric label="Tiền mặt dự kiến" value={money(shift.expectedCash)} strong />
-            <MiniMetric label="Giao dịch" value={String(shift.paymentCount)} />
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <MiniMetric label="Đang chơi" value={String(shift.activeSessions)} />
-            <MiniMetric label="Đã checkout" value={String(shift.completedSessions)} />
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function MiniMetric({
-  label,
-  value,
-  strong,
-}: {
-  label: string
-  value: string
-  strong?: boolean
-}) {
-  return (
-    <div className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className={`mt-1 text-sm font-semibold tabular-nums ${
-        strong ? 'text-emerald-600 dark:text-emerald-300' : 'text-zinc-950 dark:text-white'
-      }`}
-      >
-        {value}
-      </p>
     </div>
   )
 }

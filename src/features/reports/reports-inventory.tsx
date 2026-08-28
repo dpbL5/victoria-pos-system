@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPanel } from '@/components/ui/skeleton'
 import { money } from '@/features/pos/format'
 import { toInputDate } from '@/lib/shared/utils'
 
@@ -143,11 +143,11 @@ export function ReportsInventory() {
       )}
 
       {loading ? (
-        <div className="space-y-2">
+        <SkeletonPanel className="space-y-2">
           <Skeleton className="h-14 w-full" />
           <Skeleton className="h-14 w-full" />
           <Skeleton className="h-14 w-full" />
-        </div>
+        </SkeletonPanel>
       ) : loaded && items.length === 0 ? (
         <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <EmptyState

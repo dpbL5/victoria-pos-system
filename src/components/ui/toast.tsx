@@ -99,9 +99,11 @@ function ToastItem({ toast: t, onDismiss }: { toast: Toast; onDismiss: () => voi
 
   return (
     <div
-      className={`pointer-events-auto mx-auto flex w-full max-w-md items-center gap-3 rounded-xl border px-4 py-3 shadow-lg backdrop-blur-sm transition-all duration-300 origin-top ${
+      role="status"
+      aria-live="polite"
+      className={`pointer-events-auto mx-auto flex w-full max-w-md items-center gap-3 rounded-xl border px-4 py-3 shadow-lg backdrop-blur-sm origin-top ${
         t.exiting
-          ? "opacity-0 -translate-y-2 scale-90"
+          ? "animate-toast-exit"
           : "animate-toast-pop"
       } ${colorMap[t.type]}`}
     >

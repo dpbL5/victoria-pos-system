@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, Pencil, ReceiptText, Trash2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPanel } from '@/components/ui/skeleton'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label, Textarea } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
@@ -109,11 +109,11 @@ export function TransactionDetailScreen({ id }: Props) {
         <div className="mx-auto max-w-6xl space-y-6">
           <Skeleton className="h-9 w-24" />
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-            <Skeleton className="h-[600px]" />
+            <SkeletonPanel><Skeleton className="h-[600px] w-full" /></SkeletonPanel>
             <div className="space-y-6">
-              <Skeleton className="h-32" />
-              <Skeleton className="h-32" />
-              <Skeleton className="h-24" />
+              <SkeletonPanel><Skeleton className="h-32 w-full" /></SkeletonPanel>
+              <SkeletonPanel><Skeleton className="h-32 w-full" /></SkeletonPanel>
+              <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
             </div>
           </div>
         </div>

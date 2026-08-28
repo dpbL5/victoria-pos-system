@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPanel } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { formatClock, money } from '@/features/pos/format'
@@ -121,9 +121,9 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
       <Modal open onClose={onClose} title="Chi tiết ca" size="lg">
         <div className="space-y-4">
           <Skeleton className="h-6 w-48" />
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-64 w-full" />
+          <SkeletonPanel><Skeleton className="h-32 w-full" /></SkeletonPanel>
+          <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
+          <SkeletonPanel><Skeleton className="h-64 w-full" /></SkeletonPanel>
         </div>
       </Modal>
     )

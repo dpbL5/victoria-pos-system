@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
@@ -94,13 +94,11 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
 
   if (loading && !student) {
     return (
-      <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-3xl space-y-4">
+      <SkeletonPage maxWidth="max-w-3xl">
           <Skeleton className="h-10 w-48" />
-          <Skeleton className="h-40 w-full" />
-          <Skeleton className="h-40 w-full" />
-        </div>
-      </div>
+          <SkeletonPanel><Skeleton className="h-40 w-full" /></SkeletonPanel>
+          <SkeletonPanel><Skeleton className="h-40 w-full" /></SkeletonPanel>
+      </SkeletonPage>
     )
   }
 

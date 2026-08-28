@@ -58,7 +58,9 @@ export function DashboardClientLayout({ user, children }: { user: User; children
                 userFullName={user.fullName}
                 userRole={user.role}
               />
-              <main className="flex-1">{children}</main>
+              <main className="flex-1">
+                {children}
+              </main>
             </PageRefreshProvider>
           </div>
 

@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label, Select } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPanel } from '@/components/ui/skeleton'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { formatClock, money } from '@/features/pos/format'
 import { toInputDate } from '@/lib/shared/utils'
@@ -163,11 +163,11 @@ export function ReportsShifts({ user }: ReportsShiftsProps) {
       </div>
 
       {loading ? (
-        <div className="space-y-3">
+        <SkeletonPanel className="space-y-3">
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-32 w-full" />
-        </div>
+        </SkeletonPanel>
       ) : shifts.length === 0 ? (
         <EmptyState
           icon={Search}

@@ -1,8 +1,8 @@
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPanel, SkeletonPage } from '@/components/ui/skeleton'
 
 export function TodayShiftSkeleton() {
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <SkeletonPage maxWidth="max-w-5xl">
       {/* ShiftRail — header gọn + stats 3 cột + action bar 2 cột */}
       <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="grid grid-cols-[8px_1fr]">
@@ -26,9 +26,9 @@ export function TodayShiftSkeleton() {
 
       {/* QuickActions — 3 ô ngang hàng */}
       <div className="grid grid-cols-3 gap-2">
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
+        <SkeletonPanel><Skeleton className="h-14 w-full" /></SkeletonPanel>
+        <SkeletonPanel><Skeleton className="h-14 w-full" /></SkeletonPanel>
+        <SkeletonPanel><Skeleton className="h-14 w-full" /></SkeletonPanel>
       </div>
 
       {/* Sessions section — header + 2 dòng card */}
@@ -42,6 +42,6 @@ export function TodayShiftSkeleton() {
         <Skeleton className="h-16 w-full rounded-none" />
         <Skeleton className="h-16 w-full rounded-none" />
       </div>
-    </div>
+    </SkeletonPage>
   )
 }

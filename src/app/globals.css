@@ -230,6 +230,19 @@ body {
   border-radius: var(--radius-sm);
 }
 
+/* ── Animation tokens ─────────────────────────────────────
+   Dùng cubic-bezier(0.2, 0, 0, 1) — curve quint-out, chuẩn
+   product UI: enter nhanh, decelerate mượt, không bounce. */
+:root {
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-press: 120ms;
+  --dur-tactile: 150ms;
+  --dur-quick: 200ms;
+  --dur-menu: 250ms;
+  --dur-drawer: 300ms;
+}
+
 /* ── Animation utilities ────────────────────────────────── */
 @keyframes fade-in {
   from { opacity: 0; }
@@ -251,35 +264,151 @@ body {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
 }
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+/* Stagger nhẹ cho grid shortcut. */
+@keyframes stagger-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 /* Toast xuất hiện từ top: scale nhỏ (0.9) → đúng kích thước */
 @keyframes toast-pop {
   from { opacity: 0; transform: translateY(-8px) scale(0.9); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-
+@keyframes toast-exit {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(-8px) scale(0.92); }
+}
 /* Card list entry — dùng cho list item xuất hiện theo thứ tự.
    Stagger qua inline style `animationDelay`. */
 @keyframes card-enter {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+/* Shimmer overlay chạy ngang trên skeleton loader */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.animate-fade-in { animation: fade-in var(--dur-quick) var(--ease-out); }
+.animate-slide-up { animation: slide-up var(--dur-menu) var(--ease-out); }
+.animate-slide-down { animation: slide-down var(--dur-quick) var(--ease-out); }
+.animate-scale-in { animation: scale-in var(--dur-quick) var(--ease-out); }
+.animate-slide-in-right { animation: slide-in-right var(--dur-drawer) var(--ease-out); }
+.animate-toast-pop { animation: toast-pop var(--dur-menu) var(--ease-out); }
+.animate-toast-exit { animation: toast-exit var(--dur-quick) var(--ease-in-out) forwards; }
+.animate-card-enter { animation: card-enter 220ms var(--ease-out) both; }
 
-.animate-fade-in { animation: fade-in 0.2s ease-out; }
-.animate-slide-up { animation: slide-up 0.25s ease-out; }
-.animate-slide-down { animation: slide-down 0.2s ease-out; }
-.animate-scale-in { animation: scale-in 0.2s ease-out; }
-.animate-slide-in-right { animation: slide-in-right 0.3s ease-out; }
-.animate-toast-pop { animation: toast-pop 0.25s ease-out; }
-.animate-card-enter { animation: card-enter 0.22s ease-out both; }
+/* Grid stagger nhẹ cho các shortcut app. */
+.motion-stagger > * {
+  animation: stagger-enter 280ms var(--ease-out) both;
+}
+.motion-stagger > *:nth-child(1)  { animation-delay: 0ms; }
+.motion-stagger > *:nth-child(2)  { animation-delay: 35ms; }
+.motion-stagger > *:nth-child(3)  { animation-delay: 70ms; }
+.motion-stagger > *:nth-child(4)  { animation-delay: 105ms; }
+.motion-stagger > *:nth-child(5)  { animation-delay: 140ms; }
+.motion-stagger > *:nth-child(6)  { animation-delay: 175ms; }
+.motion-stagger > *:nth-child(7)  { animation-delay: 210ms; }
+.motion-stagger > *:nth-child(8)  { animation-delay: 245ms; }
+.motion-stagger > *:nth-child(9)  { animation-delay: 280ms; }
 
-/* ── Reduced motion ─────────────────────────────────────── */
+/* Hover lift — dùng cho Card, list row, summary tile. Tách transform
+   khỏi transition-colors để cả hai chạy độc lập. */
+.motion-hover-lift {
+  transition:
+    transform var(--dur-tactile) var(--ease-out),
+    box-shadow var(--dur-tactile) var(--ease-out),
+    background-color var(--dur-quick) var(--ease-out),
+    border-color var(--dur-quick) var(--ease-out);
+  will-change: transform;
+}
+.motion-hover-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -8px rgba(15, 23, 42, 0.12), 0 2px 4px rgba(15, 23, 42, 0.04);
+}
+.motion-hover-lift:active {
+  transform: translateY(0) scale(0.99);
+  transition-duration: var(--dur-press);
+}
+
+/* Press feedback — dùng cho icon button, list row, clickable tile. */
+.motion-press {
+  transition: transform var(--dur-press) var(--ease-out),
+              background-color var(--dur-quick) var(--ease-out),
+              color var(--dur-quick) var(--ease-out);
+}
+.motion-press:active {
+  transform: scale(0.97);
+}
+
+/* Skeleton shimmer — overlay chạy ngang, dùng cho loading placeholder. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface-tertiary);
+  border-radius: var(--radius-md);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 100%
+  );
+  animation: shimmer 1.4s var(--ease-in-out) infinite;
+  transform: translateX(-100%);
+}
+.dark .skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 100%
+  );
+}
+
+/* Active nav indicator — dot dưới icon, dùng absolute + scale-in. */
+.nav-dot {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%) scaleX(0);
+  height: 3px;
+  width: 16px;
+  border-radius: 9999px;
+  background: currentColor;
+  transition: transform var(--dur-tactile) var(--ease-out),
+              opacity var(--dur-tactile) var(--ease-out);
+  opacity: 0;
+}
+.nav-active .nav-dot {
+  transform: translateX(-50%) scaleX(1);
+  opacity: 1;
+}
+
+/* Focus ring transition — bám theo focus-visible, không bật khi click chuột. */
+*:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+  transition: outline-offset var(--dur-tactile) var(--ease-out);
+}
+
+/* ── Reduced motion ───────────────────────────────────────
+   Global kill switch — duration 0.01ms (không phải `none`) để
+   transitionend/animationend vẫn fire cho listeners phụ thuộc. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
+  .motion-stagger > * { animation: none !important; }
+  .motion-hover-lift:hover { transform: none !important; }
+  .motion-press:active { transform: none !important; }
+  .skeleton::after { animation: none !important; opacity: 0.4; }
 }

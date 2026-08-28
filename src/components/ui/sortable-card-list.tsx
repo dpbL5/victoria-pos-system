@@ -148,7 +148,7 @@ export function SortableCardList<T>({
                       onClick: () => onRowClick?.(item),
                     }
                   : {})}
-                className={`w-full px-4 py-3.5 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:hover:bg-zinc-800/50 ${
+                className={`motion-press w-full px-4 py-3.5 text-left hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:hover:bg-zinc-800/50 ${
                   interactive ? 'cursor-pointer' : ''
                 }`}
               >

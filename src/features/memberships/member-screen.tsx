@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
 import { useApi } from '@/hooks/use-api'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
@@ -370,17 +370,12 @@ export function MemberScreen() {
 
 function MemberScreenSkeleton() {
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <SkeletonPage>
       <Skeleton className="h-9 w-32" />
-      <div className="grid grid-cols-4 gap-2">
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-      </div>
-      <Skeleton className="h-12 w-full" />
-      <Skeleton className="h-72 w-full" />
-    </div>
+      <SkeletonStats className="grid grid-cols-2 gap-2 md:grid-cols-4" />
+      <SkeletonPanel><Skeleton className="h-12 w-full" /></SkeletonPanel>
+      <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
+    </SkeletonPage>
   )
 }
 

@@ -28,7 +28,7 @@ import { Input, Label, Select } from '@/components/ui/input'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
@@ -964,17 +964,12 @@ function StaffStat({
 
 function StaffSkeleton({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <SkeletonPage>
       {!compact && <Skeleton className="h-10 w-44" />}
-      <Skeleton className="h-12 w-full" />
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-        <Skeleton className="h-20" />
-      </div>
-      <Skeleton className="h-72 w-full" />
-    </div>
+      <SkeletonPanel><Skeleton className="h-12 w-full" /></SkeletonPanel>
+      <SkeletonStats />
+      <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
+    </SkeletonPage>
   )
 }
 

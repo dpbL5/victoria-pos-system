@@ -60,9 +60,10 @@ export function BottomNav({ userRole }: BottomNavProps) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex min-w-0 flex-col items-center justify-center gap-0.5 py-1 transition-colors ${
+              aria-current={active ? 'page' : undefined}
+              className={`motion-press relative flex min-w-0 flex-col items-center justify-center gap-0.5 py-1 ${
                 active
-                  ? 'text-blue-600 dark:text-blue-400'
+                  ? 'text-blue-600 dark:text-blue-400 nav-active'
                   : 'text-zinc-400 dark:text-zinc-500'
               }`}
             >
@@ -76,6 +77,7 @@ export function BottomNav({ userRole }: BottomNavProps) {
               <span className="max-w-16 truncate text-[10px] font-medium">
                 {item.label}
               </span>
+              <span className="nav-dot" aria-hidden="true" />
             </Link>
           )
         })}

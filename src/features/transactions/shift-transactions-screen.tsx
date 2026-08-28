@@ -19,7 +19,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Label, Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
 import { shortInvoiceNo } from '@/lib/shared/utils'
 import { formatClock, formatDay, money, paymentMethodLabel } from '@/features/pos/format'
@@ -137,19 +137,12 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
   // ── Đang tải danh sách ca ──
   if (shiftsLoading) {
     return (
-      <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-5xl space-y-4">
+      <SkeletonPage maxWidth="max-w-5xl">
           <Skeleton className="h-9 w-24" />
-          <Skeleton className="h-28 w-full" />
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Skeleton className="h-20" />
-            <Skeleton className="h-20" />
-            <Skeleton className="h-20" />
-            <Skeleton className="h-20" />
-          </div>
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </div>
+          <SkeletonPanel><Skeleton className="h-28 w-full" /></SkeletonPanel>
+          <SkeletonStats />
+          <SkeletonPanel><Skeleton className="h-64 w-full" /></SkeletonPanel>
+      </SkeletonPage>
     )
   }
 
