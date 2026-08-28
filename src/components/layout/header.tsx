@@ -49,6 +49,7 @@ export function Header({ userFullName, userRole }: HeaderProps) {
             width={28}
             height={28}
             className="h-full w-full object-contain"
+            loading='eager'
           />
         </div>
         {title && (

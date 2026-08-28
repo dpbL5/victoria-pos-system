@@ -261,12 +261,20 @@ body {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* Card list entry — dùng cho list item xuất hiện theo thứ tự.
+   Stagger qua inline style `animationDelay`. */
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .animate-fade-in { animation: fade-in 0.2s ease-out; }
 .animate-slide-up { animation: slide-up 0.25s ease-out; }
 .animate-slide-down { animation: slide-down 0.2s ease-out; }
 .animate-scale-in { animation: scale-in 0.2s ease-out; }
 .animate-slide-in-right { animation: slide-in-right 0.3s ease-out; }
 .animate-toast-pop { animation: toast-pop 0.25s ease-out; }
+.animate-card-enter { animation: card-enter 0.22s ease-out both; }
 
 /* ── Reduced motion ─────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {

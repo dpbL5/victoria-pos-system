@@ -15,8 +15,8 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   size?: "sm" | "md" | "lg" | "full";
-  /** center = modal giữa màn hình (mặc định); sheet = bottom-sheet trên mobile, center trên desktop */
-  variant?: "center" | "sheet";
+  /** center = modal giữa màn hình (mặc định); sheet = bottom-sheet trên mobile, center trên desktop; fullscreen = full màn hình trên mobile, modal giữa trên desktop */
+  variant?: "center" | "sheet" | "fullscreen";
   className?: string;
 }
 
@@ -26,6 +26,18 @@ const sizeClasses: Record<string, string> = {
   lg: "max-w-2xl",
   full: "max-w-full mx-4",
 };
+
+// Giới hạn chiều rộng áp dụng từ md trở lên — dùng cho variant fullscreen
+// (mobile chiếm trọn màn hình nên không giới hạn chiều rộng)
+const sizeMdClasses: Record<string, string> = {
+  sm: "md:max-w-sm",
+  md: "md:max-w-lg",
+  lg: "md:max-w-2xl",
+  full: "md:max-w-full",
+};
+
+// Số modal đang mở — modal phụ đóng không được mở khoá scroll của modal cha
+let openModalCount = 0;
 
 export function Modal({
   open,
@@ -43,16 +55,24 @@ export function Modal({
   // Lock body scroll when open
   useEffect(() => {
     if (open) {
+      openModalCount += 1;
       document.body.style.overflow = "hidden";
-      return () => { document.body.style.overflow = ""; };
+      return () => {
+        openModalCount = Math.max(0, openModalCount - 1);
+        if (openModalCount === 0) document.body.style.overflow = "";
+      };
     }
   }, [open]);
 
-  // Close on Escape
+  // Close on Escape — chỉ modal trên cùng (nằm cuối DOM) nhận phím này
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      const panels = document.querySelectorAll("[data-modal-panel]");
+      const top = panels[panels.length - 1];
+      if (top && contentRef.current && !top.contains(contentRef.current)) return;
+      onClose();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -93,20 +113,33 @@ export function Modal({
 
   if (!open) return null;
 
+  const isFullscreen = variant === "fullscreen";
+
   return (
     <div
-      className={`fixed inset-0 z-[60] flex p-4 pb-8 md:pb-4 animate-fade-in ${
-        variant === "sheet" ? "items-end justify-center md:items-center" : "items-center justify-center"
-      }`}
+      className={
+        isFullscreen
+          ? "fixed inset-0 z-[60] flex animate-fade-in md:items-center md:justify-center md:p-4"
+          : `fixed inset-0 z-[60] flex p-4 pb-8 md:pb-4 animate-fade-in ${
+              variant === "sheet"
+                ? "items-end justify-center md:items-center"
+                : "items-center justify-center"
+            }`
+      }
       style={{ background: "var(--color-surface-overlay)" }}
       onClick={onClose}
     >
       <div
         ref={contentRef}
-        className={`w-full ${sizeClasses[size]} max-h-[calc(100dvh-4rem)] md:max-h-[95vh] flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-xl animate-slide-up border border-zinc-200 dark:border-zinc-800 ${
-          variant === "sheet"
-            ? "max-h-[92dvh] rounded-b-none rounded-t-2xl self-end md:max-h-[95vh] md:rounded-2xl"
-            : ""
+        data-modal-panel
+        className={`${
+          isFullscreen
+            ? `h-full w-full ${sizeMdClasses[size]} flex flex-col overflow-hidden bg-white shadow-xl animate-slide-up dark:bg-zinc-900 md:h-auto md:max-h-[calc(100vh-2rem)] md:rounded-2xl md:border md:border-zinc-200 dark:md:border-zinc-800`
+            : `w-full ${sizeClasses[size]} max-h-[calc(100dvh-4rem)] md:max-h-[95vh] flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-xl animate-slide-up border border-zinc-200 dark:border-zinc-800 ${
+                variant === "sheet"
+                  ? "max-h-[92dvh] rounded-b-none rounded-t-2xl self-end md:max-h-[95vh] md:rounded-2xl"
+                  : ""
+              }`
         } ${className}`}
         onClick={(e) => e.stopPropagation()}
       >

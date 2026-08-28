@@ -30,23 +30,9 @@ import { useToast } from '@/components/ui/toast'
 import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
-import { formatClock, formatDay, money, paymentMethodLabel, toNumber } from '@/features/pos/format'
+import { formatClock, formatDay, money, toNumber } from '@/features/pos/format'
 import { getVnDay } from '@/lib/shared/utils'
-import type { PaymentMethod, ShiftParticipantRole, UserRole, UserSession } from '@/features/pos/types'
-
-interface TransactionItem {
-  id: string
-  type: 'payment' | 'membership'
-  amount: number
-  paymentMethod: string | null
-  paidAt: string
-  customerName: string
-  customerType: string | null
-  invoiceId: string | null
-  invoiceNo: string | null
-  staffName: string
-  planName: string | null
-}
+import type { ShiftParticipantRole, UserRole, UserSession } from '@/features/pos/types'
 
 type ShiftStatusFilter = 'ALL' | 'OPEN' | 'CLOSED'
 
@@ -125,6 +111,7 @@ interface DayGroupsResponse {
 }
 
 export function ShiftsScreen() {
+  const router = useRouter()
   const { success: notifySuccess, error: notifyError } = useToast()
   const [user, setUser] = useState<UserSession | null>(null)
   const [users, setUsers] = useState<UserRow[]>([])
@@ -138,10 +125,6 @@ export function ShiftsScreen() {
   const [submitting, setSubmitting] = useState(false)
   const [manageShift, setManageShift] = useState<ShiftRow | null>(null)
   const [removingParticipant, setRemovingParticipant] = useState<{ shift: ShiftRow; participant: ShiftParticipantRow } | null>(null)
-  const [txShift, setTxShift] = useState<ShiftRow | null>(null)
-  const [txDialogOpen, setTxDialogOpen] = useState(false)
-  const [txList, setTxList] = useState<TransactionItem[]>([])
-  const [txLoading, setTxLoading] = useState(false)
 
   const todayWeekday = getVnDay(new Date())
 
@@ -291,26 +274,6 @@ export function ShiftsScreen() {
     }
   }
 
-  const loadTransactions = async (shift: ShiftRow) => {
-    setTxShift(shift)
-    setTxDialogOpen(true)
-    setTxLoading(true)
-    try {
-      const data = await apiJson<{ transactions: TransactionItem[] }>(
-        `/api/shifts/${shift.id}/transactions`
-      )
-      if (!data.success) {
-        notifyError(data.error || 'Không tải được giao dịch')
-        return
-      }
-      setTxList(data.data?.transactions ?? [])
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setTxLoading(false)
-    }
-  }
-
   if (loading) return <ShiftsSkeleton />
 
   return (
@@ -428,7 +391,7 @@ export function ShiftsScreen() {
                 canManageParticipants={!!isAdmin}
                 submitting={submitting}
                 onManage={setManageShift}
-                onViewTransactions={(shift) => void loadTransactions(shift)}
+                onViewTransactions={(shift) => router.push(`/transactions?shiftId=${shift.id}`)}
                 onRoleChange={upsertParticipant}
                 onRemove={(shift, participant) => setRemovingParticipant({ shift, participant })}
               />
@@ -443,14 +406,6 @@ export function ShiftsScreen() {
         submitting={submitting}
         onClose={() => setManageShift(null)}
         onSubmit={upsertParticipant}
-      />
-
-      <TransactionsDialog
-        shift={txShift}
-        transactions={txList}
-        loading={txLoading}
-        onClose={() => setTxDialogOpen(false)}
-        open={txDialogOpen}
       />
 
       <ConfirmDialog
@@ -889,80 +844,4 @@ function formatShiftDuration(openedAt: string, closedAt?: string | null): string
   if (hours === 0) return `${minutes} phút`
   if (minutes === 0) return `${hours} giờ`
   return `${hours} giờ ${minutes} phút`
-}
-
-function TransactionsDialog({
-  shift,
-  transactions,
-  loading,
-  onClose,
-  open,
-}: {
-  shift: ShiftRow | null
-  transactions: TransactionItem[]
-  loading: boolean
-  onClose: () => void
-  open: boolean
-}) {
-  const router = useRouter()
-  const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={shift ? `Giao dịch ca ${formatDay(shift.openedAt)}` : 'Giao dịch trong ca'}
-      description={shift ? `Mở lúc ${formatClock(shift.openedAt)} · ${transactions.length} giao dịch · Tổng ${money(totalAmount)}` : undefined}
-      size="lg"
-    >
-      <div className="max-h-[60vh] divide-y divide-zinc-100 overflow-y-auto dark:divide-zinc-800">
-        {loading ? (
-          <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-            Đang tải giao dịch...
-          </div>
-        ) : transactions.length === 0 ? (
-          <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-            Chưa có giao dịch nào trong ca.
-          </div>
-        ) : (
-          transactions.map((tx) => (
-            <button
-              key={`${tx.type}-${tx.id}`}
-              type="button"
-              disabled={!tx.invoiceId}
-              onClick={() => {
-                if (tx.invoiceId) router.push(`/invoices/${tx.invoiceId}`)
-              }}
-              className="grid w-full grid-cols-[1fr_auto] gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent dark:hover:bg-zinc-800/50"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
-                    {tx.customerName}
-                  </p>
-                  {tx.type === 'membership' ? (
-                    <Badge variant="purple" size="sm">Hội viên</Badge>
-                  ) : tx.customerType === 'MEMBER' ? (
-                    <Badge variant="purple" size="sm">HV</Badge>
-                  ) : (
-                    <Badge variant="default" size="sm">VL</Badge>
-                  )}
-                </div>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  {formatClock(tx.paidAt)}
-                  {tx.invoiceNo ? ` · ${tx.invoiceNo}` : ''}
-                  {tx.type === 'membership' && tx.planName ? ` · ${tx.planName}` : ''}
-                  {' · '}
-                  {tx.type === 'membership' ? 'Phí hội viên' : tx.paymentMethod ? paymentMethodLabel(tx.paymentMethod as PaymentMethod) : ''}
-                </p>
-              </div>
-              <p className="self-center text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
-                {money(tx.amount)}
-              </p>
-            </button>
-          ))
-        )}
-      </div>
-    </Modal>
-  )
 }

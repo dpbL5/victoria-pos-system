@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { Pencil, Pause, Play } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { Pause, Pencil, Play, Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { calcElapsedHMS, pausedSecondsUntil } from './format'
+import { calcElapsedHMS, formatPausedHMS, pausedSecondsUntil } from './format'
 import { SessionTimer } from './session-timer'
 import type { SessionPlayerDTO } from '@/types'
 
@@ -33,6 +32,8 @@ export function PlayerPauseCard({
   onRename: (name: string) => Promise<boolean>
 }) {
   const isPaused = !!player.pausedAt
+  // Tên được gán cố định từ lúc check-in (createPlayersForGroup). Fallback chỉ
+  // dùng cho row cũ trong DB chưa có tên, hoặc user xoá tên về rỗng.
   const displayName = player.name?.trim() || `Người ${index + 1}`
 
   const [editing, setEditing] = useState(false)
@@ -62,52 +63,80 @@ export function PlayerPauseCard({
 
   // Thời gian đã tạm dừng: khi đang paused → tick live từ pausedAt
   const pausedSeconds = pausedSecondsUntil(player.pausedAt, player.totalPausedSeconds)
+  const hasPaused = pausedSeconds > 0
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          {editing ? (
-            <Input
-              autoFocus
-              value={draftName}
-              maxLength={100}
-              placeholder={`Người ${index + 1}`}
-              className="h-7 w-40 px-2 py-1 text-sm"
-              onChange={(e) => setDraftName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void commitRename()
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              onBlur={() => void commitRename()}
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={startEditing}
-              disabled={renaming}
-              className="flex min-w-0 items-center gap-1 rounded text-left"
-              title="Đổi tên người chơi"
+      {/* Trái — tên + dòng Nghỉ (reserve chỗ để tránh layout shift khi bấm Dừng) */}
+      <div className="flex min-w-0 flex-col gap-0.5">
+        {editing ? (
+          <Input
+            autoFocus
+            value={draftName}
+            maxLength={100}
+            placeholder={`Người ${index + 1}`}
+            className="h-7 w-40 px-2 py-1 text-sm"
+            onChange={(e) => setDraftName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void commitRename()
+              if (e.key === 'Escape') setEditing(false)
+            }}
+            onBlur={() => void commitRename()}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={startEditing}
+            disabled={renaming}
+            className="flex min-w-0 items-center gap-1 self-start rounded text-left"
+            title="Đổi tên người chơi"
+          >
+            <p
+              className={
+                isPaused
+                  ? 'truncate text-base font-semibold text-amber-600 transition-colors duration-200 dark:text-amber-400'
+                  : 'truncate text-base font-semibold text-zinc-950 transition-colors duration-200 dark:text-white'
+              }
             >
-              <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
-                {displayName}
-              </p>
-              <Pencil size={12} className="shrink-0 text-zinc-400" />
-            </button>
-          )}
-          {isPaused && (
-            <Badge variant="warning" size="sm">
-              Tạm dừng
-            </Badge>
-          )}
-        </div>
+              {displayName}
+            </p>
+            <Pencil
+              size={12}
+              className={
+                isPaused
+                  ? 'shrink-0 text-amber-600 dark:text-amber-400'
+                  : 'shrink-0 text-zinc-400'
+              }
+            />
+          </button>
+        )}
+        <span
+          aria-hidden={!hasPaused}
+          className={`inline-flex items-center gap-1 text-xs tabular-nums transition-colors duration-200 ${
+            hasPaused
+              ? isPaused
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-zinc-500 dark:text-zinc-400'
+              : 'invisible'
+          }`}
+        >
+          <Timer
+            size={11}
+            className={
+              hasPaused
+                ? isPaused
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-zinc-400 dark:text-zinc-500'
+                : ''
+            }
+          />
+          Nghỉ {hasPaused ? formatPausedHMS(pausedSeconds) : '00:00:00'}
+        </span>
       </div>
+
+      {/* Phải — timer chính + nút Dừng/Chơi xếp dọc */}
       <div className="flex shrink-0 flex-col items-end gap-2">
-        <SessionTimer
-          elapsed={elapsed}
-          pausedSeconds={pausedSeconds}
-          isPaused={isPaused}
-        />
+        <SessionTimer elapsed={elapsed} isPaused={isPaused} />
         {isPaused ? (
           <Button variant="inverse" size="xs" disabled={pauseDisabled} onClick={onResume} title="Tiếp tục chơi">
             <Play size={12} className="mr-1" />

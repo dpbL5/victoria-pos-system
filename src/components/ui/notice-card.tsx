@@ -39,7 +39,7 @@ export function NoticeCard({ tone, title, description, action }: NoticeCardProps
   const { Icon, classes } = toneConfig[tone]
 
   return (
-    <div className={`flex items-start justify-between gap-3 rounded-xl border p-3 ${classes}`}>
+    <div className={`flex animate-slide-down items-start justify-between gap-3 rounded-xl border p-3 ${classes}`}>
       <div className="flex gap-2">
         <Icon size={18} className="mt-0.5 shrink-0" />
         <div>

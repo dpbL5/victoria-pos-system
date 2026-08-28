@@ -80,8 +80,15 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
                 pricingRuleId: true,
                 pricingSnapshot: true,
                 players: {
-                  select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true, checkedOutAt: true },
-                  orderBy: { createdAt: 'asc' },
+                  select: {
+                    id: true,
+                    name: true,
+                    pausedAt: true,
+                    totalPausedSeconds: true,
+                    checkedOutAt: true,
+                    position: true,
+                  },
+                  orderBy: { position: 'asc' },
                 },
               },
               orderBy: { createdAt: 'asc' },
@@ -113,8 +120,15 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
               pricingRuleId: true,
               pricingSnapshot: true,
               players: {
-                select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true, checkedOutAt: true },
-                orderBy: { createdAt: 'asc' },
+                select: {
+                  id: true,
+                  name: true,
+                  pausedAt: true,
+                  totalPausedSeconds: true,
+                  checkedOutAt: true,
+                  position: true,
+                },
+                orderBy: { position: 'asc' },
               },
             },
             orderBy: { createdAt: 'asc' },
@@ -234,13 +248,18 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
 
     async createPlayersForGroup(sessionId, groupId, count) {
       if (count <= 0) return
+      // Gán tên cố định "Người N" + position tăng dần ngay khi tạo.
+      // `position` là sort key ổn định — không phụ thuộc createdAt/CTID, không
+      // đổi sau UPDATE (renamePlayer chỉ sửa `name`). UI fallback theo `position`
+      // để hiển thị tên khi name rỗng.
       await store.sessionPlayer.createMany({
-        data: Array.from({ length: count }, () => ({
+        data: Array.from({ length: count }, (_, i) => ({
           sessionId,
           groupId,
-          name: null,
+          name: `Người ${i + 1}`,
           pausedAt: null,
           totalPausedSeconds: 0,
+          position: i,
         })),
       })
     },
@@ -295,7 +314,9 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
           membership: true,
           pricingGroups: {
             orderBy: { createdAt: 'asc' },
-            include: { players: true },
+            include: {
+              players: { orderBy: { position: 'asc' } },
+            },
           },
         },
       })
@@ -315,7 +336,8 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
             select: {
               id: true,
               players: {
-                select: { id: true, pausedAt: true, totalPausedSeconds: true },
+                select: { id: true, pausedAt: true, totalPausedSeconds: true, position: true },
+                orderBy: { position: 'asc' },
               },
             },
           },

@@ -556,6 +556,7 @@ async function getTrends(store: ReportingStore, input: RevenueInput): Promise<Tr
       players: totalPlayers,
       avgHours: sessions > 0 ? Math.round((totalHours / sessions) * 100) / 100 : 0,
       revenuePerSession: sessions > 0 ? Math.round(currentRevenue / sessions) : 0,
+      revenuePerPlayer: totalPlayers > 0 ? Math.round(currentRevenue / totalPlayers) : 0,
     },
   }
 }

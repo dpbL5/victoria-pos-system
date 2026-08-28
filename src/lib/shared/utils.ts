@@ -3,6 +3,17 @@ export function formatVND(amount: number | string): string {
   return `${num.toLocaleString('vi-VN')}đ`
 }
 
+/**
+ * Rút gọn `invoiceNo` cho list views: chỉ giữ phần cuối sau dấu `-` cuối cùng.
+ * Ví dụ: `INV-20260828-222614-35E7A9DE` → `35E7A9DE`.
+ * Dùng cho danh sách giao dịch, lịch sử hoá đơn của khách. Màn chi tiết vẫn hiển thị đầy đủ.
+ * Trả về nguyên chuỗi nếu không có dấu `-` (fallback an toàn).
+ */
+export function shortInvoiceNo(invoiceNo: string): string {
+  const idx = invoiceNo.lastIndexOf('-')
+  return idx === -1 ? invoiceNo : invoiceNo.slice(idx + 1)
+}
+
 /** Làm tròn lên hàng nghìn (mặc định dùng cho tất cả màn POS). */
 export function roundToNearestThousand(amount: number | string): number {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount

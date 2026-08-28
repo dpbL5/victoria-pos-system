@@ -397,6 +397,7 @@ export async function GET(
           pausedAt: p.pausedAt ? p.pausedAt.toISOString() : null,
           totalPausedSeconds: p.totalPausedSeconds,
           checkedOutAt: p.checkedOutAt ? p.checkedOutAt.toISOString() : null,
+          position: p.position,
         })) : undefined,
       })),
       parkingFeeUnitPrice: (await repositories.settings.getNumeric(SETTING_KEYS.PARKING_FEE_UNIT_PRICE, 0)) || undefined,

@@ -20,7 +20,7 @@ export function EmptyState({
   className = "",
 }: EmptyStateProps) {
   return (
-    <div className={`flex flex-col items-center justify-center py-16 px-4 text-center ${className}`}>
+    <div className={`flex animate-fade-in flex-col items-center justify-center py-16 px-4 text-center ${className}`}>
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
         <Icon className="text-zinc-300 dark:text-zinc-600" size={28} />
       </div>

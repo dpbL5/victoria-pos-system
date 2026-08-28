@@ -4,14 +4,12 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } fro
 import { useRouter } from 'next/navigation'
 import {
   BarChart3,
-  Clock,
+  ChevronRight,
   Download,
   ReceiptText,
   Target,
-  Timer,
+  TrendingDown,
   TrendingUp,
-  Users,
-  Wallet,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,7 +17,6 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label, Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { StatCard } from '@/components/ui/stat-card'
 import { apiJson } from '@/lib/api'
 import { formatClock, money, paymentMethodLabel } from '@/features/pos/format'
 import type { PaymentMethod, UserSession } from '@/features/pos/types'
@@ -124,6 +121,7 @@ interface TrendData {
     players: number
     avgHours: number
     revenuePerSession: number
+    revenuePerPlayer: number
   }
 }
 
@@ -233,9 +231,10 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
   }, [from, to, loadRevenue, loadTrends])
 
   const canExport = isAdminOnly(user?.role)
-  const isAdmin = isAdminOnly(user?.role)
   const currentShift = dashboard?.currentShift ?? null
   const today = dashboard?.today
+  // Khoảng 1 ngày lịch → hero chart chuyển sang granularity giờ (HourlyBarChart).
+  const singleDay = isSingleDay(from, to)
 
   const applyRange = (nextRange: Range) => {
     setRange(nextRange)
@@ -243,14 +242,6 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
     const end = new Date()
     const start = new Date()
     start.setDate(end.getDate() - active.days + 1)
-    setFrom(toInputDate(start))
-    setTo(toInputDate(end))
-  }
-
-  const applyQuickRange = (days: number) => {
-    const end = new Date()
-    const start = new Date()
-    start.setDate(end.getDate() - days + 1)
     setFrom(toInputDate(start))
     setTo(toInputDate(end))
   }
@@ -269,200 +260,234 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
         />
       )}
 
-      <NoticeCard
-        tone={currentShift ? 'success' : 'warning'}
-        title={currentShift ? `Ca đang mở từ ${formatClock(currentShift.openedAt)}` : 'Chưa có ca đang mở'}
-        description={
-          currentShift
-            ? `Doanh thu ca ${money(currentShift.revenue)}, tiền mặt dự kiến ${money(currentShift.expectedCash)}`
-            : 'Màn này vẫn xem được doanh thu ngày, nhưng đối soát ca cần nhân viên mở ca trước.'
-        }
-      />
-
-      <RangeTabs range={range} onChange={applyRange} />
-
-      {today && <Scoreboard today={today} trends={trends} />}
-
-      {currentShift && (
-        <ShiftReportPanel shift={currentShift} />
-      )}
-
+      {/* Cụm chọn khoảng thời gian — gom 3 cách chọn cùng kỳ vào 1 card, full width */}
       <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
-              <TrendingUp size={17} className="text-emerald-500" />
-              Doanh thu theo ngày
-            </h2>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {dashboard?.scope === 'STAFF' ? 'Số liệu của ca và tài khoản của bạn' : 'Số liệu toàn bộ hệ thống'}
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Khoảng thời gian
+            </p>
+            <p className="mt-0.5 text-sm font-semibold text-zinc-950 dark:text-white">
+              {rangeLabel(range, from, to)}
             </p>
           </div>
-          <Badge variant="outline">
-            {revenueSummary ? money(revenueSummary.totalRevenue) : money(0)}
-          </Badge>
+          <RangeTabs range={range} onChange={applyRange} />
         </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="report-from">Từ ngày</Label>
-            <Input
-              id="report-from"
-              type="date"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="report-to">Đến ngày</Label>
-            <Input
-              id="report-to"
-              type="date"
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-4 gap-2">
-          <Button variant="secondary" size="xs" onClick={() => applyQuickRange(1)}>Hôm nay</Button>
-          <Button variant="secondary" size="xs" onClick={() => applyQuickRange(7)}>7 ngày</Button>
-          <Button variant="secondary" size="xs" onClick={() => applyQuickRange(30)}>30 ngày</Button>
-          <Button variant="inverse" size="xs" disabled={revenueLoading} onClick={() => void loadRevenue(from, to)}>
-            {revenueLoading ? 'Đang tải' : 'Xem'}
-          </Button>
-        </div>
-
-        <div className="mt-4">
-          {revenueLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-            </div>
-          ) : revenue.length === 0 ? (
-            <EmptyState
-              icon={BarChart3}
-              message="Chưa có doanh thu"
-              description="Thử đổi khoảng ngày hoặc kiểm tra các giao dịch đã thu."
-            />
-          ) : (
-            <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
-              <AreaChart
-                data={revenue.map((item) => ({ label: item.period, value: item.revenue }))}
-                axisLabels={[formatReportDate(revenue[0].period), formatReportDate(revenue[revenue.length - 1].period)]}
+        <details className="mt-3 group">
+          <summary className="flex cursor-pointer items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 [&::-webkit-details-marker]:hidden">
+            <span>Tuỳ chỉnh ngày</span>
+            <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
+          </summary>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="report-from">Từ ngày</Label>
+              <Input
+                id="report-from"
+                type="date"
+                value={from}
+                onChange={(event) => setFrom(event.target.value)}
               />
             </div>
-          )}
-        </div>
-
-        {recentPayments.length > 0 && (
-          <div className="mt-6 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Giao dịch gần đây
-            </h3>
-            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {recentPayments.map((payment) => (
-                <RecentPaymentRow key={payment.id} payment={payment} />
-              ))}
+            <div>
+              <Label htmlFor="report-to">Đến ngày</Label>
+              <Input
+                id="report-to"
+                type="date"
+                value={to}
+                onChange={(event) => setTo(event.target.value)}
+              />
             </div>
           </div>
-        )}
+          <div className="mt-3 flex justify-end">
+            <Button variant="inverse" size="xs" disabled={revenueLoading} onClick={() => void loadRevenue(from, to)}>
+              {revenueLoading ? 'Đang tải' : 'Xem'}
+            </Button>
+          </div>
+        </details>
       </section>
 
-      {trends && (
-        <div className="space-y-4">
-          <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Phương thức thanh toán</h2>
-              <div className="mt-4">
-                <DonutChart
-                  data={buildPaymentSlices(trends.byPaymentMethod)}
-                  centerValue={money(trends.totals.revenue, false)}
-                />
-              </div>
-            </section>
+      {/* Layout 2/3 + 1/3 — main: monitor focal (scoreboard + chart + lưu lượng);
+          side: phân tích cơ cấu + recent + xuất báo cáo. Mobile: stack dọc. */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* ── Main column (2/3) — monitor focal ── */}
+        <div className="space-y-4 md:col-span-2">
+          {/* Hero scoreboard — doanh thu là focal point */}
+          {today && <HeroScoreboard today={today} trends={trends} />}
 
-            <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Nguồn doanh thu</h2>
-              <div className="mt-4">
-                <DonutChart
-                  data={buildItemSlices(trends.byItemType)}
-                  centerValue={money(trends.totals.revenue, false)}
-                />
+          {currentShift && <ShiftReportPanel shift={currentShift} />}
+
+          {/* Hero chart: 1 ngày → doanh thu theo giờ; nhiều ngày → doanh thu theo ngày */}
+          <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-start justify-between gap-3 p-4 pb-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
+                  <TrendingUp size={17} className="text-emerald-500" />
+                  {singleDay ? 'Doanh thu theo giờ' : 'Doanh thu theo ngày'}
+                </h2>
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  {dashboard?.scope === 'STAFF' ? 'Số liệu của ca và tài khoản của bạn' : 'Số liệu toàn bộ hệ thống'}
+                </p>
               </div>
-            </section>
+              <Badge variant="outline">
+                {revenueSummary ? money(revenueSummary.totalRevenue) : money(0)}
+              </Badge>
+            </div>
+
+            <div className="px-4 pb-5">
+              {revenueLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-14 w-full" />
+                  <Skeleton className="h-14 w-full" />
+                </div>
+              ) : singleDay ? (
+                // 1 ngày: lấy từ trends.byHour (granularity giờ). Fallback rỗng khi chưa có trends.
+                trends && trends.byHour.length > 0 ? (
+                  <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+                    <HourlyBarChart data={trends.byHour} height={220} />
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={BarChart3}
+                    message="Chưa có doanh thu trong ngày"
+                    description="Chưa có giao dịch nào được ghi nhận hôm nay."
+                  />
+                )
+              ) : revenue.length === 0 ? (
+                <EmptyState
+                  icon={BarChart3}
+                  message="Chưa có doanh thu"
+                  description="Thử đổi khoảng ngày hoặc kiểm tra các giao dịch đã thu."
+                />
+              ) : (
+                <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+                  <AreaChart
+                    data={revenue.map((item) => ({ label: item.period, value: item.revenue }))}
+                    axisLabels={[formatReportDate(revenue[0].period), formatReportDate(revenue[revenue.length - 1].period)]}
+                    height={200}
+                  />
+                </div>
+              )}
+            </div>
           </section>
 
-          {isAdmin && trends.byHour.length > 0 && (
+          {/* Lưu lượng theo ngày (người chơi + phiên) */}
+          {trends && (
             <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="flex items-center gap-2">
-                <Clock size={17} className="text-blue-500" />
-                <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Doanh thu theo khung giờ</h2>
-              </div>
+              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Lưu lượng theo ngày</h2>
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                Số người chơi và số phiên trong kỳ
+              </p>
               <div className="mt-4">
-                <HourlyBarChart data={trends.byHour} />
+                <DailyVolumeChart
+                  data={trends.byDay.map((d) => ({
+                    label: formatReportDate(d.date),
+                    sessions: d.sessions,
+                    players: d.players,
+                    revenue: d.revenue,
+                  }))}
+                />
+              </div>
+            </section>
+          )}
+        </div>
+
+        {/* ── Side column (1/3) — phân tích + tác vụ ── */}
+        <div className="space-y-4">
+          {trends && (
+            <>
+              {/* Cơ cấu doanh thu — 2 donut xếp dọc */}
+              <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Cơ cấu doanh thu</h2>
+                <div className="mt-4 space-y-5">
+                  <div>
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Phương thức thanh toán
+                    </h3>
+                    <div className="mt-2">
+                      <DonutChart
+                        data={buildPaymentSlices(trends.byPaymentMethod)}
+                        size={160}
+                        centerValue={money(trends.totals.revenue, false)}
+                      />
+                    </div>
+                  </div>
+                  <div className="border-t border-zinc-100 pt-4 dark:border-zinc-800">
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Nguồn doanh thu
+                    </h3>
+                    <div className="mt-2">
+                      <DonutChart
+                        data={buildItemSlices(trends.byItemType)}
+                        size={160}
+                        centerValue={money(trends.totals.revenue, false)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+
+          {/* Giao dịch gần đây — compact trong side column */}
+          {recentPayments.length > 0 && (
+            <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+                <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
+                  Giao dịch gần đây
+                </h2>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {recentPayments.length}
+                </span>
+              </header>
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {recentPayments.slice(0, 5).map((payment) => (
+                  <RecentPaymentRow key={payment.id} payment={payment} />
+                ))}
               </div>
             </section>
           )}
 
-          <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Lưu lượng khách theo ngày</h2>
-            <div className="mt-4">
-              <DailyVolumeChart
-                data={trends.byDay.map((d) => ({
-                  label: formatReportDate(d.date),
-                  sessions: d.sessions,
-                  players: d.players,
-                  revenue: d.revenue,
-                }))}
-              />
+          {/* Xuất báo cáo — gọn, đặt cuối side column */}
+          <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-center gap-2">
+              <Download size={16} className="text-zinc-400" />
+              <span className="text-sm font-semibold text-zinc-950 dark:text-white">Xuất báo cáo</span>
             </div>
-          </section>
-        </div>
-      )}
-
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
-              <Download size={17} className="text-blue-500" />
-              Xuất báo cáo
-            </h2>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
               {canExport ? 'Tải CSV cho khoảng ngày đã chọn' : 'Chỉ quản trị viên được tải file báo cáo'}
             </p>
-          </div>
+            <div className="flex items-center gap-2">
+              <Select
+                value={exportType}
+                onChange={(event) => setExportType(event.target.value)}
+                disabled={!canExport}
+                className="min-w-0 flex-1"
+              >
+                <option value="revenue">Doanh thu</option>
+                <option value="sessions">Phiên chơi</option>
+              </Select>
+              {canExport ? (
+                <a
+                  href={`/api/reports/export?type=${exportType}&from=${from}&to=${to}`}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white"
+                >
+                  <Download size={16} />
+                  CSV
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-zinc-200 px-3 py-2 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
+                >
+                  <Download size={16} />
+                  CSV
+                </button>
+              )}
+            </div>
+          </section>
         </div>
-
-        <div className="mt-4 grid grid-cols-[1fr_auto] gap-2">
-          <Select
-            value={exportType}
-            onChange={(event) => setExportType(event.target.value)}
-            disabled={!canExport}
-          >
-            <option value="revenue">Doanh thu</option>
-            <option value="sessions">Phiên chơi</option>
-          </Select>
-          {canExport ? (
-            <a
-              href={`/api/reports/export?type=${exportType}&from=${from}&to=${to}`}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white"
-            >
-              <Download size={16} />
-              CSV
-            </a>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-200 px-4 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
-            >
-              <Download size={16} />
-              CSV
-            </button>
-          )}
-        </div>
-      </section>
+      </div>
 
       {recentPayments.length === 0 && !revenueLoading && revenue.length === 0 && (
         <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -515,8 +540,8 @@ function RangeTabs({ range, onChange }: { range: Range; onChange: (range: Range)
   )
 }
 
-// ── Scorecard 4 ô — thay thế DailyScoreboard tự vẽ bằng StatCard có sẵn ──
-function Scoreboard({
+// ── HeroScoreboard: 1 doanh thu focal (số to + growth badge) + 3 chỉ số phụ ──
+function HeroScoreboard({
   today,
   trends,
 }: {
@@ -525,9 +550,9 @@ function Scoreboard({
 }) {
   // Ưu tiên số liệu kỳ (trends) nếu có; fallback hôm nay (dashboard)
   const revenue = trends?.totals.revenue ?? today.revenue
-  const sessions = trends?.totals.sessions ?? today.sessionsCreated
   const players = trends?.totals.players ?? today.sessionsCreated
-  const revPerSession = trends?.totals.revenuePerSession ?? today.averagePayment
+  const sessions = trends?.totals.sessions ?? today.sessionsCreated
+  const revPerPlayer = trends?.totals.revenuePerPlayer ?? today.averagePayment
 
   // % tăng trưởng so với kỳ trước
   const revenueGrowth = trends && trends.comparison.previousRevenue > 0
@@ -535,34 +560,70 @@ function Scoreboard({
     : null
 
   return (
-    <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      <StatCard
-        label="Doanh thu"
-        value={money(revenue)}
-        color="green"
-        icon={Wallet}
-        trend={revenueGrowth != null ? { value: revenueGrowth, label: 'so kỳ trước' } : undefined}
-      />
-      <StatCard
-        label="Phiên chơi"
-        value={String(sessions)}
-        color="blue"
-        icon={Timer}
-        subtitle={today.completedSessions > 0 ? `${today.completedSessions} đã checkout` : undefined}
-      />
-      <StatCard
-        label="Người chơi"
-        value={String(players)}
-        color="yellow"
-        icon={Users}
-      />
-      <StatCard
-        label="TB / phiên"
-        value={money(revPerSession)}
-        color="purple"
-        icon={BarChart3}
-      />
+    <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      {/* Focal: doanh thu — số to, growth badge, dải emerald */}
+      <div className="relative overflow-hidden p-5 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-emerald-500">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Doanh thu kỳ
+            </p>
+            <p className="mt-1 text-3xl font-extrabold tracking-tight text-zinc-950 dark:text-white tabular-nums md:text-4xl">
+              {money(revenue)}
+            </p>
+          </div>
+          {revenueGrowth != null && (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                revenueGrowth >= 0
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                  : 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300'
+              }`}
+            >
+              {revenueGrowth >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+              {revenueGrowth >= 0 ? '+' : ''}{revenueGrowth}%
+              <span className="font-normal text-zinc-500 dark:text-zinc-400">vs kỳ trước</span>
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          {today.invoiceCount} hóa đơn · {today.paymentCount} giao dịch
+        </p>
+      </div>
+
+      {/* Các chỉ số phụ — Người chơi (focal phụ) + Phiên + TB/người */}
+      <div className="grid grid-cols-3 divide-x divide-zinc-200 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+        <SupportStat
+          label="Người chơi"
+          value={String(players)}
+          hint={today.completedSessions > 0 ? `${today.completedSessions} phiên đã checkout` : undefined}
+        />
+        <SupportStat
+          label="Phiên"
+          value={String(sessions)}
+        />
+        <SupportStat
+          label="TB / người"
+          value={money(revPerPlayer)}
+        />
+      </div>
     </section>
+  )
+}
+
+function SupportStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="px-3 py-3 text-center">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        {label}
+      </p>
+      <p className="mt-0.5 text-lg font-bold tabular-nums text-zinc-950 dark:text-white">
+        {value}
+      </p>
+      {hint ? (
+        <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">{hint}</p>
+      ) : null}
+    </div>
   )
 }
 
@@ -710,4 +771,17 @@ function buildItemSlices(items: ItemBreakdown): Array<{ label: string; value: nu
 function formatReportDate(value: string): string {
   const [, month, day] = value.split('-')
   return `${day}/${month}`
+}
+
+function rangeLabel(range: Range, from: string, to: string): string {
+  if (range === 'today') return 'Hôm nay'
+  if (range === '7d') return '7 ngày gần nhất'
+  if (range === '30d') return '30 ngày gần nhất'
+  // Tuỳ chỉnh: hiển thị khoảng ngày
+  return `${formatReportDate(from)} – ${formatReportDate(to)}`
+}
+
+/** Khoảng chỉ chứa 1 ngày lịch — dùng để đổi granularity của hero chart sang giờ. */
+function isSingleDay(from: string, to: string): boolean {
+  return from === to
 }
