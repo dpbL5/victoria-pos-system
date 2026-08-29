@@ -8,8 +8,6 @@ export interface CreateInvoiceLineInput {
   description: string
   quantity: number
   unitPrice: number
-  /** Giá vốn đơn vị (weighted average cost) tại thời điểm bán — snapshot để truy vết lợi nhuận */
-  unitCost?: number | null
   subtotal: number
   discountAmount: number
   total: number
@@ -49,7 +47,6 @@ export interface EditStockMovementRef {
   id: string
   productId: string | null
   quantity: number
-  unitCost: number | null
 }
 
 export interface EditInvoiceItemRef {
@@ -97,8 +94,6 @@ export interface CreateInvoiceItemInput {
   description: string
   quantity: number
   unitPrice: number
-  /** Giá vốn đơn vị (weighted average cost) tại thời điểm bán — snapshot để truy vết lợi nhuận */
-  unitCost?: number | null
   subtotal: number
   discountAmount: number
   total: number
@@ -122,7 +117,6 @@ export interface VoidStockMovementRef {
   id: string
   productId: string | null
   quantity: number
-  unitCost: number | null
 }
 
 export interface VoidInvoiceItemRef {
@@ -150,7 +144,6 @@ export interface ReverseStockInput {
   shiftId: string
   staffId: string
   quantity: number
-  unitCost: number | null
   reason: string
 }
 

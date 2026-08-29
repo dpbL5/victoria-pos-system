@@ -56,7 +56,6 @@ export async function POST(request: NextRequest) {
       sku: parsed.data.sku ?? null,
       type: parsed.data.type,
       price: parsed.data.price,
-      costPrice: parsed.data.costPrice ?? null,
       stockQuantity: parsed.data.stockQuantity,
       minStockLevel: parsed.data.minStockLevel,
       isActive: parsed.data.isActive,

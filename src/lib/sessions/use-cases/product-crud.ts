@@ -14,7 +14,6 @@ export interface CreateProductInput {
   sku: string | null
   type: 'PRODUCT' | 'SERVICE'
   price: number
-  costPrice: number | null
   stockQuantity: number
   minStockLevel: number
   isActive: boolean
@@ -34,7 +33,6 @@ export async function createProduct(
       sku: input.sku?.trim() || null,
       type: input.type,
       price: input.price,
-      costPrice: input.costPrice,
       stockQuantity: input.type === 'SERVICE' ? 0 : input.stockQuantity,
       minStockLevel: input.type === 'SERVICE' ? 0 : input.minStockLevel,
       isActive: input.isActive,
@@ -76,7 +74,6 @@ export interface ApplyStockMovementInput {
   staffId: string
   type: 'RESTOCK' | 'ADJUSTMENT'
   quantity: number
-  unitCost: number | null
   reason: string | null
   shiftId: string | null
 }
@@ -108,7 +105,6 @@ export async function applyStockMovement(
       staffId: input.staffId,
       type: input.type,
       quantity: input.quantity,
-      unitCost: input.unitCost,
       reason: input.reason,
       shiftId: input.shiftId,
     })

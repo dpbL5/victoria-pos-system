@@ -36,7 +36,7 @@ function makeInvoice(overrides: Partial<EditInvoiceTarget> = {}): EditInvoiceTar
         discountAmount: 0,
         total: 30000,
         metadata: null,
-        stockMovements: [{ id: 'sm-1', productId: 'prod-1', quantity: 2, unitCost: 8000 }],
+        stockMovements: [{ id: 'sm-1', productId: 'prod-1', quantity: 2 }],
       },
     ],
     payments: [{ id: 'pay-1', totalHours: 2, paymentMethod: 'CASH', kind: 'OPERATIONAL' }],
@@ -88,9 +88,9 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     },
     product: {
       findManyByIds: vi.fn(async (): Promise<ProductRecord[]> => [
-        { id: 'prod-2', name: 'Trà sữa', type: 'PRODUCT', price: 25000, costPrice: 12000, stockQuantity: 10, isActive: true },
+        { id: 'prod-2', name: 'Trà sữa', type: 'PRODUCT', price: 25000, stockQuantity: 10, isActive: true },
       ]),
-      findByIdForSale: vi.fn(async (): Promise<ProductRecord | null> => ({ id: 'prod-2', name: 'Trà sữa', type: 'PRODUCT', price: 25000, costPrice: 12000, stockQuantity: 10, isActive: true })),
+      findByIdForSale: vi.fn(async (): Promise<ProductRecord | null> => ({ id: 'prod-2', name: 'Trà sữa', type: 'PRODUCT', price: 25000, stockQuantity: 10, isActive: true })),
       decrementStockIfAvailable: vi.fn(async () => ({ count: 1 })),
       recordSaleMovement: vi.fn(async () => {}),
       findManyForAdmin: vi.fn(), findByIdAdmin: vi.fn(), createWithInitialStock: vi.fn(), applyStockMovement: vi.fn(),

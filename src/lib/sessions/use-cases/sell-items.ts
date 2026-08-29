@@ -86,8 +86,6 @@ export async function sellItems(
         productId: latestProduct.id,
         quantity: line.quantity,
         unitPrice: Number(latestProduct.price),
-        // Snapshot giá vốn (weighted average cost) tại thời điểm bán kèm
-        unitCost: latestProduct.costPrice !== null ? Number(latestProduct.costPrice) : null,
         notes: notes ?? null,
       })
 
@@ -103,7 +101,6 @@ export async function sellItems(
           shiftId: openShift.id,
           staffId,
           quantity: line.quantity,
-          unitCost: latestProduct.costPrice !== null ? Number(latestProduct.costPrice) : null,
           reason: `Bán kèm phiên ${sessionId}`,
         })
       }
@@ -181,7 +178,6 @@ export async function removeSellItems(
         shiftId: openShift.id,
         staffId,
         quantity: row.quantity,
-        unitCost: row.unitCost,
         reason: `Huỷ bán kèm phiên ${sessionId}`,
       })
     }

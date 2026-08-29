@@ -20,6 +20,7 @@ import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
+import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { useToast } from '@/components/ui/toast'
 import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
@@ -173,6 +174,56 @@ export function CashflowScreen() {
     },
   ], [])
 
+  // ── Cột cho mobile card list (title + details + actions) ──
+  const cardColumns: CardColumn<CashflowRow>[] = useMemo(() => [
+    {
+      key: 'personName',
+      label: 'Người phát sinh',
+      render: (e) => (
+        <span className="flex flex-wrap items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
+          {e.personName}
+          <Badge variant={e.type === 'INCOME' ? 'success' : 'danger'} size="sm">
+            {e.type === 'INCOME' ? 'Thu' : 'Chi'}
+          </Badge>
+        </span>
+      ),
+    },
+    {
+      key: 'amount',
+      label: 'Số tiền',
+      render: (e) => (
+        <span className={`text-sm font-bold tabular-nums ${
+          e.type === 'INCOME' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+        }`}>
+          {e.type === 'INCOME' ? '+' : '-'}{money(e.amount, false)}
+        </span>
+      ),
+    },
+    {
+      key: 'createdAt',
+      label: 'Ngày giờ',
+      render: (e) => (
+        <span className="tabular-nums text-zinc-500 dark:text-zinc-400">
+          {formatDay(e.createdAt)} {formatClock(e.createdAt)}
+        </span>
+      ),
+    },
+    {
+      key: 'reason',
+      label: 'Lý do',
+      render: (e) => <span className="line-clamp-2">{e.reason}</span>,
+    },
+    {
+      label: '',
+      render: (e) => (
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" icon={Edit3} onClick={() => setEditingEntry(e)} title="Sửa" />
+          <Button variant="ghost" size="sm" icon={Trash2} onClick={() => setDeleteTarget(e)} title="Xoá" />
+        </div>
+      ),
+    },
+  ], [])
+
   // ── Mutations ──
 
   const handleCreate = async (payload: {
@@ -250,6 +301,20 @@ export function CashflowScreen() {
 
   if (loading) return <CashflowSkeleton />
 
+  const listHeader = (
+    <div className="flex flex-col gap-2">
+      <div>
+        <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Danh sách thu chi</h2>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">{pagination.total} khoản thu chi</p>
+      </div>
+      <div role="group" aria-label="Lọc thu chi" className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+        <FilterButton active={typeFilter === 'ALL'} onClick={() => filterByType('ALL')}>Tất cả</FilterButton>
+        <FilterButton active={typeFilter === 'INCOME'} onClick={() => filterByType('INCOME')}>Thu</FilterButton>
+        <FilterButton active={typeFilter === 'EXPENSE'} onClick={() => filterByType('EXPENSE')}>Chi</FilterButton>
+      </div>
+    </div>
+  )
+
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-5xl space-y-4">
@@ -296,27 +361,7 @@ export function CashflowScreen() {
               />
             </div>
 
-            {/* Filters + action */}
-            <div className="flex flex-wrap items-center gap-2">
-              <FilterButton
-                active={typeFilter === 'ALL'}
-                onClick={() => filterByType('ALL')}
-              >
-                Tất cả
-              </FilterButton>
-              <FilterButton
-                active={typeFilter === 'INCOME'}
-                onClick={() => filterByType('INCOME')}
-              >
-                Thu
-              </FilterButton>
-              <FilterButton
-                active={typeFilter === 'EXPENSE'}
-                onClick={() => filterByType('EXPENSE')}
-              >
-                Chi
-              </FilterButton>
-              <div className="flex-1" />
+            <div className="flex justify-end">
               <Button
                 variant="inverse"
                 size="sm"
@@ -327,23 +372,41 @@ export function CashflowScreen() {
               </Button>
             </div>
 
-            {/* Table */}
-            <SortableTable
-              columns={columns}
-              data={entries}
-              keyExtractor={(e) => e.id}
-              sortableKeys={['createdAt', 'type', 'personName', 'amount', 'reason']}
-              defaultSortKey="createdAt"
-              emptyIcon={ArrowRightLeft}
-              emptyMessage="Chưa có khoản thu chi nào"
-              emptyDescription='Nhấn "Thêm khoản thu chi" để ghi nhận khoản thu hoặc chi.'
-              pagination={{
-                page: pagination.page,
-                totalPages: pagination.totalPages,
-                total: pagination.total,
-                onPageChange: goPage,
-              }}
-            />
+            {/* Mobile: card list */}
+            <div className="md:hidden">
+              <SortableCardList
+                header={listHeader}
+                columns={cardColumns}
+                data={entries}
+                keyExtractor={(e) => e.id}
+                sortableKeys={['personName', 'amount', 'createdAt', 'reason']}
+                defaultSortKey="createdAt"
+                emptyIcon={ArrowRightLeft}
+                emptyMessage="Chưa có khoản thu chi nào"
+                emptyDescription='Nhấn "Thêm khoản thu chi" để ghi nhận khoản thu hoặc chi.'
+              />
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block">
+              <SortableTable
+                header={listHeader}
+                columns={columns}
+                data={entries}
+                keyExtractor={(e) => e.id}
+                sortableKeys={['createdAt', 'type', 'personName', 'amount', 'reason']}
+                defaultSortKey="createdAt"
+                emptyIcon={ArrowRightLeft}
+                emptyMessage="Chưa có khoản thu chi nào"
+                emptyDescription='Nhấn "Thêm khoản thu chi" để ghi nhận khoản thu hoặc chi.'
+                pagination={{
+                  page: pagination.page,
+                  totalPages: pagination.totalPages,
+                  total: pagination.total,
+                  onPageChange: goPage,
+                }}
+              />
+            </div>
           </>
         )}
 

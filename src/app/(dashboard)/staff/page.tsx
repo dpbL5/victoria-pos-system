@@ -28,7 +28,7 @@ import { Input, Label, Select } from '@/components/ui/input'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
@@ -398,7 +398,7 @@ function AccountsTab({
       cellClassName: 'px-4 py-3',
       render: (item) => (
         <Badge variant={isAdminOnly(item.role) ? 'purple' : 'default'} size="sm">
-          {isAdminOnly(item.role) ? 'Admin' : 'Nhân viên'}
+          {item.role === 'ADMIN' ? 'Admin' : item.role === 'MANAGER' ? 'Quản lý' : 'Nhân viên'}
         </Badge>
       ),
     },
@@ -462,7 +462,7 @@ function AccountsTab({
         <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
           {item.fullName}
           <Badge variant={isAdminOnly(item.role) ? 'purple' : 'default'} size="sm">
-            {isAdminOnly(item.role) ? 'Admin' : 'Nhân viên'}
+            {item.role === 'ADMIN' ? 'Admin' : item.role === 'MANAGER' ? 'Quản lý' : 'Nhân viên'}
           </Badge>
         </span>
       ),
@@ -524,6 +524,15 @@ function AccountsTab({
     return <StaffSkeleton compact />
   }
 
+  const listHeader = (
+    <div>
+      <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Tài khoản nội bộ</h2>
+      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+        Tổng: {stats.total} · Đang hoạt động: {stats.active} · Quản trị: {stats.admins} · Nhân viên: {stats.staff}
+      </p>
+    </div>
+  )
+
   return (
     <div className="space-y-4">
       {error && (
@@ -534,46 +543,28 @@ function AccountsTab({
         />
       )}
 
-      <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <StaffStat label="Tổng" value={stats.total} />
-        <StaffStat label="Đang hoạt động" value={stats.active} tone="success" />
-        <StaffStat label="Admin" value={stats.admins} tone="purple" />
-        <StaffStat label="Nhân viên" value={stats.staff} />
-      </section>
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={RefreshCw}
+          onClick={() => void onReload()}
+          title="Làm mới"
+        />
+        <Button
+          variant="primary"
+          size="sm"
+          icon={Plus}
+          onClick={() => setShowCreate((value) => !value)}
+        >
+          Tạo tài khoản
+        </Button>
+      </div>
 
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
-              Tài khoản nội bộ
-            </h2>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-              {users.length} tài khoản trong hệ thống
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={RefreshCw}
-              onClick={() => void onReload()}
-              title="Làm mới"
-            />
-            <Button
-              variant="primary"
-              size="sm"
-              icon={Plus}
-              onClick={() => setShowCreate((value) => !value)}
-            >
-              Tạo tài khoản
-            </Button>
-          </div>
-        </div>
-
-        {showCreate && (
+      {showCreate && (
           <form
             onSubmit={handleCreate}
-            className="mt-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-500/20 dark:bg-blue-500/10"
+            className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-500/20 dark:bg-blue-500/10"
           >
             <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_160px_auto] md:items-end">
               <div>
@@ -639,15 +630,24 @@ function AccountsTab({
               </div>
             </div>
           </form>
-        )}
-      </section>
+      )}
 
       {/* Mobile: card list */}
       <div className="md:hidden">
         <SortableCardList
+          header={listHeader}
           columns={userCardColumns}
           data={users}
           keyExtractor={(u) => u.id}
+          search={{
+            placeholder: 'Tìm họ tên hoặc tên đăng nhập',
+            getText: (u) => `${u.fullName} ${u.username}`,
+          }}
+          filters={[
+            { key: 'STAFF', label: 'Nhân viên', matches: (u) => u.role === 'STAFF' },
+            { key: 'MANAGER', label: 'Quản lý', matches: (u) => u.role === 'MANAGER' },
+            { key: 'ADMIN', label: 'Quản trị viên', matches: (u) => u.role === 'ADMIN' },
+          ]}
           sortableKeys={['fullName', 'username', 'isActive', 'createdAt']}
           defaultSortKey="createdAt"
           emptyIcon={UserPlus}
@@ -659,9 +659,14 @@ function AccountsTab({
       {/* Desktop: table */}
       <div className="hidden md:block">
         <SortableTable
+          header={listHeader}
           columns={userColumns}
           data={users}
           keyExtractor={(u) => u.id}
+          search={{
+            placeholder: 'Tìm họ tên hoặc tên đăng nhập',
+            getText: (u) => `${u.fullName} ${u.username}`,
+          }}
           sortableKeys={['fullName', 'username', 'role', 'isActive', 'createdAt']}
           defaultSortKey="createdAt"
           emptyIcon={UserPlus}
@@ -939,35 +944,11 @@ function getLogIcon(action: string) {
   return <History size={16} />
 }
 
-function StaffStat({
-  label,
-  value,
-  tone = 'default',
-}: {
-  label: string
-  value: number
-  tone?: 'success' | 'purple' | 'default'
-}) {
-  const valueClass = tone === 'success'
-    ? 'text-emerald-600 dark:text-emerald-300'
-    : tone === 'purple'
-      ? 'text-purple-600 dark:text-purple-300'
-      : 'text-zinc-950 dark:text-white'
-
-  return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className={`mt-1 text-xl font-bold tabular-nums ${valueClass}`}>{value}</p>
-    </div>
-  )
-}
-
 function StaffSkeleton({ compact = false }: { compact?: boolean }) {
   return (
     <SkeletonPage>
       {!compact && <Skeleton className="h-10 w-44" />}
       <SkeletonPanel><Skeleton className="h-12 w-full" /></SkeletonPanel>
-      <SkeletonStats />
       <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
     </SkeletonPage>
   )

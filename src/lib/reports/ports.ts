@@ -143,10 +143,6 @@ export interface TopProductRow {
   sku: string | null
   quantitySold: number
   revenue: number
-  /** Giá vốn đơn vị hiện hành (Product.costPrice) */
-  unitCost: number | null
-  /** Lợi nhuận = doanh thu − (giá vốn snapshot × SL bán) */
-  profit: number
 }
 
 export interface TopProductsResult {

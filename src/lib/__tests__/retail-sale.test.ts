@@ -55,10 +55,10 @@ function resetMocks() {
 
   // Sản phẩm
   fakeStore.product.findMany.mockResolvedValue([
-    { id: 'prod-1', name: 'Nước suối', type: 'PRODUCT', price: 10000, costPrice: 5000, stockQuantity: 10, isActive: true },
+    { id: 'prod-1', name: 'Nước suối', type: 'PRODUCT', price: 10000, stockQuantity: 10, isActive: true },
   ])
   fakeStore.product.findUnique.mockResolvedValue({
-    id: 'prod-1', name: 'Nước suối', type: 'PRODUCT', price: 10000, costPrice: 5000, stockQuantity: 10, isActive: true,
+    id: 'prod-1', name: 'Nước suối', type: 'PRODUCT', price: 10000, stockQuantity: 10, isActive: true,
   })
 
   // Invoice PAID + items + payment
@@ -93,7 +93,7 @@ describe('retailSale', () => {
 
     // InvoiceItem
     const itemCall = fakeStore.invoiceItem.create.mock.calls[0][0]
-    expect(itemCall.data).toMatchObject({ productId: 'prod-1', quantity: 2, unitPrice: 10000, unitCost: 5000 })
+    expect(itemCall.data).toMatchObject({ productId: 'prod-1', quantity: 2, unitPrice: 10000 })
 
     // Trừ kho
     expect(fakeStore.product.updateMany).toHaveBeenCalledWith({

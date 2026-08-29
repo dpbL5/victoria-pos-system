@@ -4,9 +4,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   BarChart3,
-  CalendarClock,
   MoreHorizontal,
   Package,
+  ShieldCheck,
   Timer,
   type LucideIcon,
 } from 'lucide-react'
@@ -19,7 +19,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/sessions', label: 'Ca', Icon: Timer },
-  { href: '/shifts', label: 'Ca làm', Icon: CalendarClock },
+  { href: '/customers', label: 'Hội viên', Icon: ShieldCheck },
   { href: '/inventory', label: 'Kho', Icon: Package },
   { href: '/reports', label: 'Báo cáo', Icon: BarChart3 },
   { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
@@ -31,10 +31,10 @@ interface BottomNavProps {
 
 export function BottomNav({ userRole }: BottomNavProps) {
   const pathname = usePathname()
-  // STAFF: Ca, Ca làm, Cài đặt. MANAGER: + Kho (không Báo cáo). ADMIN: đủ 5 tab.
+  // STAFF: Ca, Hội viên, Thêm. MANAGER: thêm Kho. ADMIN: đủ 5 tab.
   const visibleItems = navItems.filter((item) => {
     if (userRole === 'STAFF') {
-      return item.href === '/sessions' || item.href === '/shifts' || item.href === '/settings'
+      return item.href === '/sessions' || item.href === '/customers' || item.href === '/settings'
     }
     if (userRole === 'MANAGER') {
       return item.href !== '/reports'

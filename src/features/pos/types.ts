@@ -91,7 +91,6 @@ export interface Product {
   sku?: string | null
   type: ProductType
   price: number | string
-  costPrice?: number | string | null
   stockQuantity: number
   minStockLevel: number
   isActive: boolean

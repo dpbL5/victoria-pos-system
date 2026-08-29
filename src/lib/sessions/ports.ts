@@ -138,7 +138,6 @@ export type SessionSellItemRecord = {
   productId: string
   quantity: number
   unitPrice: number
-  unitCost: number | null
   notes: string | null
   createdAt: Date
 }
@@ -197,7 +196,6 @@ export interface SessionRepository {
     productId: string
     quantity: number
     unitPrice: number
-    unitCost: number | null
     notes?: string | null
   }): Promise<void>
   /** Xoá các dòng bán kèm (đã checkout/huỷ) */
@@ -279,12 +277,11 @@ export interface ProductRecord {
   name: string
   type: 'PRODUCT' | 'SERVICE'
   price: number
-  costPrice: number | null
   stockQuantity: number
   isActive: boolean
 }
 
-/** Dòng sản phẩm cho admin — costPrice cố ý loại (dữ liệu nhạy cảm) */
+/** Dòng sản phẩm cho admin */
 export type ProductAdminRow = Prisma.ProductGetPayload<{
   select: {
     id: true
@@ -300,7 +297,7 @@ export type ProductAdminRow = Prisma.ProductGetPayload<{
   }
 }>
 
-/** Product đầy đủ (cả costPrice) — cho admin edit/stock */
+/** Product đầy đủ — cho admin edit/stock */
 export type ProductAdminDetail = Prisma.ProductGetPayload<object>
 
 export interface ProductRepository {
@@ -317,10 +314,9 @@ export interface ProductRepository {
     shiftId: string
     staffId: string
     quantity: number
-    unitCost: number | null
     reason: string
   }): Promise<void>
-  /** Danh sách sản phẩm cho admin (search/isActive, exclude costPrice) — GET /api/products */
+  /** Danh sách sản phẩm cho admin (search/isActive) — GET /api/products */
   findManyForAdmin(input: { search?: string; isActive?: boolean; take?: number }): Promise<ProductAdminRow[]>
   /** Product đầy đủ (kèm stock) — cho POST stock & PUT product */
   findByIdAdmin(id: string): Promise<ProductAdminDetail | null>
@@ -330,7 +326,6 @@ export interface ProductRepository {
     sku: string | null
     type: 'PRODUCT' | 'SERVICE'
     price: number
-    costPrice: number | null
     stockQuantity: number
     minStockLevel: number
     isActive: boolean
@@ -342,7 +337,6 @@ export interface ProductRepository {
     staffId: string
     type: 'RESTOCK' | 'ADJUSTMENT'
     quantity: number
-    unitCost: number | null
     reason: string | null
     shiftId: string | null
    }): Promise<{ movementId: string; before: number; after: number; shiftId: string | null; type: string; quantity: number }>

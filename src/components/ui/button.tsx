@@ -64,7 +64,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ) : Icon ? (
           <Icon size={16} />
         ) : null}
-        {children}
+        {children && <span className="button-label">{children}</span>}
       </button>
     )
   }

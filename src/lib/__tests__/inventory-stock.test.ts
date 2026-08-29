@@ -21,7 +21,6 @@ const product = {
   name: 'Nước suối',
   type: 'PRODUCT',
   price: 15000,
-  costPrice: 8000,
   stockQuantity: 10,
   minStockLevel: 2,
   isActive: true,
@@ -32,7 +31,6 @@ const input = {
   staffId: 'staff-1',
   type: 'RESTOCK' as const,
   quantity: 5,
-  unitCost: 8000,
   reason: 'Nhập kho',
   shiftId: null,
 }

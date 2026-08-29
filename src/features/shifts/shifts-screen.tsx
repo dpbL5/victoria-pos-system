@@ -20,7 +20,7 @@ import { Input, Label, Select } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
 import { apiJson } from '@/lib/api'
@@ -168,34 +168,6 @@ export function ShiftsScreen() {
 
   const isAdmin = isManagerOrAdmin(user?.role)
 
-  const allShifts = useMemo(() => dayGroups.flatMap((g) => g.shifts), [dayGroups])
-
-  const stats = useMemo(() => {
-    const open = allShifts.filter((s) => s.status === 'OPEN').length
-    const closed = allShifts.filter((s) => s.status === 'CLOSED').length
-    return { total: open + closed, open, closed }
-  }, [allShifts])
-
-  const totals = useMemo(() => {
-    let totalRevenue = 0
-    let cashRevenue = 0
-    let transferRevenue = 0
-    let cardRevenue = 0
-    let paymentCount = 0
-    let membershipCount = 0
-    let sessionCount = 0
-    for (const g of dayGroups) {
-      totalRevenue += g.totalRevenue
-      cashRevenue += g.cashRevenue
-      transferRevenue += g.transferRevenue
-      cardRevenue += g.cardRevenue
-      paymentCount += g.paymentCount
-      membershipCount += g.membershipCount
-      sessionCount += g.sessionCount
-    }
-    return { totalRevenue, cashRevenue, transferRevenue, cardRevenue, paymentCount, membershipCount, sessionCount }
-  }, [dayGroups])
-
   const visibleGroups = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase()
     if (!keyword) return dayGroups
@@ -314,17 +286,6 @@ export function ShiftsScreen() {
         {error && (
           <NoticeCard tone="danger" title="Không tải được dữ liệu" description={error} />
         )}
-
-        <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <ShiftStat label={`Ca (${pagination.daysPerPage} ngày)`} value={stats.total} />
-          <ShiftStat label="Đang mở" value={stats.open} tone="success" />
-          <ShiftStat label="Đã đóng" value={stats.closed} />
-          <ShiftStat
-            label="Doanh thu"
-            value={money(totals.totalRevenue)}
-            tone="blue"
-          />
-        </section>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <Input
@@ -668,34 +629,10 @@ function ManageParticipantsDialog({
   )
 }
 
-function ShiftStat({
-  label,
-  value,
-  tone = 'default',
-}: {
-  label: string
-  value: number | string
-  tone?: 'success' | 'blue' | 'default'
-}) {
-  const valueClass = tone === 'success'
-    ? 'text-emerald-600 dark:text-emerald-300'
-    : tone === 'blue'
-      ? 'text-blue-600 dark:text-blue-300'
-      : 'text-zinc-950 dark:text-white'
-
-  return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className={`mt-1 text-xl font-bold tabular-nums ${valueClass}`}>{value}</p>
-    </div>
-  )
-}
-
 function ShiftsSkeleton() {
   return (
     <SkeletonPage>
       <Skeleton className="h-10 w-36" />
-      <SkeletonStats />
       <SkeletonPanel><Skeleton className="h-28 w-full" /></SkeletonPanel>
       <SkeletonPanel className="space-y-3">
         <Skeleton className="h-5 w-32" />

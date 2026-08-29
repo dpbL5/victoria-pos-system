@@ -442,7 +442,7 @@ export function TodayShiftScreen() {
         <div className="animate-slide-up" style={{ animationDelay: '40ms' }}>
           <QuickActions
             shiftReady={shiftReady}
-            retailDisabled
+            retailDisabled={!shift}
             onCheckIn={() => {
               setCheckInInitialMode('WALK_IN')
               setCheckInDialog(true)
@@ -596,10 +596,10 @@ export function TodayShiftScreen() {
         }}
       />
 
-      {/* <RetailDialog
+      <RetailDialog
         open={retailOpen}
         products={products}
-        shiftReady={shiftReady}
+        shiftReady={!!shift}
         submitting={submitting}
         setSubmitting={setSubmitting}
         onClose={() => setRetailOpen(false)}
@@ -607,7 +607,7 @@ export function TodayShiftScreen() {
           setRetailOpen(false)
           await loadData()
         }}
-      /> */}
+      />
 
     </div>
   )

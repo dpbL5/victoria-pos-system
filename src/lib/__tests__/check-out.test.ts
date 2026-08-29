@@ -149,7 +149,6 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
         name: 'Nước suối',
         type: 'PRODUCT' as const,
         price: 15000,
-        costPrice: 8000,
         stockQuantity: 10,
         isActive: true,
       })),
@@ -512,8 +511,8 @@ describe('runCheckOutTx', () => {
     const ctx = makeCtx()
     ctx.mergedSellItemIds = ['ssi-1', 'ssi-2']
     ctx.sellItemLines = [
-      { id: 'ssi-1', productId: 'prod-1', quantity: 1, unitPrice: 15000, unitCost: 8000 },
-      { id: 'ssi-2', productId: 'prod-1', quantity: 1, unitPrice: 15000, unitCost: 8000 },
+      { id: 'ssi-1', productId: 'prod-1', quantity: 1, unitPrice: 15000 },
+      { id: 'ssi-2', productId: 'prod-1', quantity: 1, unitPrice: 15000 },
     ]
     const result = await runCheckOutTx(repos, ctx, makeState())
 
@@ -533,7 +532,7 @@ describe('runCheckOutTx', () => {
     const ctx = makeCtx()
     ctx.mergedSellItemIds = ['ssi-1']
     ctx.sellItemLines = [
-      { id: 'ssi-1', productId: 'prod-1', quantity: 1, unitPrice: 15000, unitCost: 8000 },
+      { id: 'ssi-1', productId: 'prod-1', quantity: 1, unitPrice: 15000 },
     ]
     const result = await runCheckOutTx(repos, ctx, makeState())
 

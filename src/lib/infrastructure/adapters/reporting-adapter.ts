@@ -575,8 +575,6 @@ async function getTrends(store: ReportingStore, input: RevenueInput): Promise<Tr
  * Nguồn: InvoiceItem type=PRODUCT (có productId), invoice status=PAID, paidAt trong kỳ.
  * Scope STAFF → lọc theo invoice.staffId (InvoiceItem không có staffId trực tiếp).
  * Sản phẩm bị xoá (productId không còn tồn tại) → bỏ qua row orphan.
- * Lợi nhuận = doanh thu − (giá vốn snapshot × SL bán), dùng InvoiceItem.unitCost theo từng dòng
- * (fallback Product.costPrice cho dữ liệu cũ chưa có snapshot).
  */
 async function getTopProducts(store: ReportingStore, input: TopProductsInput): Promise<TopProductsResult> {
   const invoiceWhere = {
@@ -585,7 +583,6 @@ async function getTopProducts(store: ReportingStore, input: TopProductsInput): P
     ...scopeWhere(input.scope, input.staffId),
   }
 
-  // Dùng findMany (không groupBy) để lấy unitCost snapshot từng dòng — profit = Σ(quantity × unitCost)
   const rows = await invoiceItem(store).findMany({
     where: {
       type: 'PRODUCT' as const,
@@ -596,7 +593,6 @@ async function getTopProducts(store: ReportingStore, input: TopProductsInput): P
       productId: true,
       quantity: true,
       total: true,
-      unitCost: true,
     },
   })
 
@@ -619,7 +615,7 @@ async function getTopProducts(store: ReportingStore, input: TopProductsInput): P
 
   const products = await product(store).findMany({
     where: { id: { in: ranked.map((r) => r.productId) } },
-    select: { id: true, name: true, sku: true, costPrice: true },
+    select: { id: true, name: true, sku: true },
   })
   const productById = new Map(products.map((p) => [p.id, p]))
 
@@ -627,24 +623,12 @@ async function getTopProducts(store: ReportingStore, input: TopProductsInput): P
     .filter((row) => productById.has(row.productId)) // omit orphan
     .map((row) => {
       const p = productById.get(row.productId)!
-      // Giá vốn: snapshot từng dòng (unitCost), fallback costPrice hiện hành cho dữ liệu cũ
-      const unitCost = p.costPrice != null ? Number(p.costPrice) : null
-      // Cogs = Σ per row: quantity × (row.unitCost ?? costPrice hiện hành)
-      let cogs = 0
-      for (const r of rows) {
-        if (r.productId !== row.productId) continue
-        const qty = Number(r.quantity ?? 0)
-        const cost = r.unitCost != null ? Number(r.unitCost) : unitCost
-        if (cost != null) cogs += qty * cost
-      }
       return {
         productId: row.productId,
         name: p.name,
         sku: p.sku,
         quantitySold: row.quantitySold,
         revenue: row.revenue,
-        unitCost,
-        profit: row.revenue - cogs,
       }
     })
 

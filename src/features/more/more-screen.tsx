@@ -3,15 +3,13 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { mutate as clearSWRCache } from 'swr'
 import type { LucideIcon } from 'lucide-react'
 import {
-  AlertCircle,
-  ArrowRight,
   ArrowRightLeft,
   Banknote,
   CalendarClock,
   Car,
-  CheckCircle2,
   GraduationCap,
   LogOut,
   Monitor,
@@ -38,11 +36,6 @@ import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
 import { formatClock, money } from '@/features/pos/format'
 import type { Shift, UserSession } from '@/features/pos/types'
 import { useTheme, type Theme } from '@/hooks/use-theme'
-
-interface PricingStatus {
-  count: number
-  activeCount?: number
-}
 
 interface ThemeOption {
   value: Theme
@@ -75,10 +68,6 @@ export function MoreScreen() {
     dedupingInterval: 60_000,
     revalidateOnFocus: false,
   })
-  const { data: pricingData } = useApi<PricingStatus>('/api/pricing/status', {
-    dedupingInterval: 300_000,
-    revalidateOnFocus: false,
-  })
   const { data: parkingFeeData } = useApi<{ key: string; value: string; label: string | null }>(
     `/api/settings?key=${PARKING_FEE_KEY}`,
     { dedupingInterval: 300_000, revalidateOnFocus: false }
@@ -86,8 +75,6 @@ export function MoreScreen() {
 
   const user = userData?.data ?? null
   const shift = shiftData?.data ?? null
-  const pricingCount = pricingData?.data?.count ?? 0
-  const activePricingCount = pricingData?.data?.activeCount ?? pricingData?.data?.count ?? 0
   const loading = userLoading || shiftLoading
   const error = !userData?.success ? (userData?.error as string ?? '') : ''
 
@@ -134,6 +121,7 @@ export function MoreScreen() {
         notifyError(data.error || 'Không đăng xuất được')
         return
       }
+      await clearSWRCache(() => true, undefined, { revalidate: false })
       notifySuccess('Đã đăng xuất')
       router.replace('/login')
     } catch {
@@ -222,19 +210,6 @@ export function MoreScreen() {
           </div>
         </section>
 
-        <section>
-          <HealthCard
-            good={activePricingCount > 0}
-            title={activePricingCount > 0 ? 'Đã có giá hiệu lực' : 'Thiếu giá hiệu lực'}
-            description={
-              activePricingCount > 0
-                ? `${activePricingCount}/${pricingCount} quy tắc đang áp dụng lúc này.`
-                : 'Khách vãng lai cần quy tắc giá hiệu lực trước khi check-in.'
-            }
-            href={isAdmin ? '/pricing' : undefined}
-          />
-        </section>
-
         {isAdmin && (
           <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <SectionTitle title="Cấu hình hệ thống" />
@@ -308,7 +283,6 @@ function MoreSkeleton() {
           {Array.from({ length: 9 }, (_, index) => <Skeleton key={index} className="h-20" />)}
         </div>
       </SkeletonPanel>
-      <Skeleton className="h-16 w-full" />
       <SkeletonPanel><Skeleton className="h-48 w-full" /></SkeletonPanel>
       <SkeletonPanel><Skeleton className="h-11 w-full" /></SkeletonPanel>
     </SkeletonPage>
@@ -322,36 +296,6 @@ function SectionTitle({ title }: { title: string }) {
       <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">{title}</h2>
     </div>
   )
-}
-
-function HealthCard({
-  good,
-  title,
-  description,
-  href,
-}: {
-  good: boolean
-  title: string
-  description: string
-  href?: string
-}) {
-  const content = (
-    <div className={`flex items-start gap-3 rounded-xl border p-3 ${
-      good
-        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300'
-        : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300'
-    }`}
-    >
-      {good ? <CheckCircle2 size={18} className="mt-0.5 shrink-0" /> : <AlertCircle size={18} className="mt-0.5 shrink-0" />}
-      <div className="min-w-0">
-        <p className="text-sm font-semibold">{title}</p>
-        <p className="mt-0.5 text-xs opacity-90">{description}</p>
-      </div>
-      {href && <ArrowRight size={16} className="ml-auto mt-1 shrink-0" />}
-    </div>
-  )
-
-  return href ? <Link href={href}>{content}</Link> : content
 }
 
 function ShortcutCard({

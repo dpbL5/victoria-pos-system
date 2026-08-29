@@ -107,13 +107,12 @@ export interface CheckoutContext {
   productSubtotal: number
   /** Các dòng bán kèm chờ thu được gộp vào hoá đơn này (xoá sau khi gộp) */
   mergedSellItemIds: string[]
-  /** Snapshot dòng bán kèm — để tạo InvoiceItem (giá vốn đã chốt lúc bán kèm) */
+  /** Snapshot dòng bán kèm — để tạo InvoiceItem */
   sellItemLines: Array<{
     id: string
     productId: string
     quantity: number
     unitPrice: number
-    unitCost: number | null
   }>
   newQuantityByProductId: Map<string, number>
   parkingVehicleCount: number
@@ -504,7 +503,6 @@ export async function checkOut(
       productId: item.productId,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
-      unitCost: item.unitCost,
     })),
     newQuantityByProductId,
     parkingVehicleCount,
@@ -1042,7 +1040,6 @@ export async function runCheckOutTx(
       description: sellProduct.name,
       quantity: sellLine.quantity,
       unitPrice: sellLine.unitPrice,
-      unitCost: sellLine.unitCost,
       subtotal: sellLine.quantity * sellLine.unitPrice,
       discountAmount: 0,
       total: sellLine.quantity * sellLine.unitPrice,
@@ -1062,8 +1059,6 @@ export async function runCheckOutTx(
       description: latestProduct.name,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
-      // Snapshot giá vốn (weighted average cost) tại thời điểm bán — để truy vết lợi nhuận
-      unitCost: latestProduct.costPrice,
       subtotal: line.subtotal,
       discountAmount: 0,
       total: line.subtotal,
@@ -1082,7 +1077,6 @@ export async function runCheckOutTx(
         shiftId,
         staffId,
         quantity: newQuantity,
-        unitCost: latestProduct.costPrice,
         reason: `Bán kèm phiên ${sessionId}`,
       })
     }

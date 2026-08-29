@@ -20,8 +20,6 @@ interface TopProductRow {
   sku: string | null
   quantitySold: number
   revenue: number
-  unitCost: number | null
-  profit: number
 }
 
 interface TopProductsResponse {
@@ -74,6 +72,11 @@ export function ReportsInventory() {
   }
 
   const totalRevenue = items.reduce((sum, item) => sum + item.revenue, 0)
+  const totalQuantity = items.reduce((sum, item) => sum + item.quantitySold, 0)
+  const hasData = loaded && items.length > 0
+  const [podium, rest] = items.length > 0
+    ? [items.slice(0, 3), items.slice(3)]
+    : [[], []]
 
   return (
     <div className="space-y-4">
@@ -88,7 +91,7 @@ export function ReportsInventory() {
               Top sản phẩm bán chạy theo khoảng ngày
             </p>
           </div>
-          {loaded && items.length > 0 && (
+          {hasData && (
             <Badge variant="outline">{money(totalRevenue)}</Badge>
           )}
         </div>
@@ -157,60 +160,126 @@ export function ReportsInventory() {
           />
         </section>
       ) : (
-        <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center gap-2 px-4 py-3">
-            <Package size={16} className="text-blue-500" />
-            <h3 className="text-sm font-semibold text-zinc-950 dark:text-white">
-              Top sản phẩm
-            </h3>
-            {loaded && <span className="text-xs text-zinc-500 dark:text-zinc-400">{items.length} mặt hàng</span>}
-          </div>
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-            {items.map((item, index) => (
-              <div
-                key={item.productId}
-                className="grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-3 px-4 py-3 sm:grid-cols-[2rem_minmax(0,1fr)_auto]"
-              >
-                <span className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-semibold tabular-nums ${
-                  index < 3
-                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
-                    : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
-                }`}
-                >
-                  {index + 1}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-zinc-950 dark:text-white">
-                    {item.name}
-                  </p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {item.sku ? `SKU: ${item.sku}` : 'Không có SKU'}
-                    {' · '}
-                    {item.quantitySold.toLocaleString('vi-VN')} bán
-                    {item.unitCost != null ? ` · vốn ${money(item.unitCost)}` : ''}
-                  </p>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                    <p className={`text-xs font-medium tabular-nums ${
-                      item.profit >= 0
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}
-                    >
-                      Lợi nhuận: {money(item.profit)}
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-white sm:hidden">
-                      {money(item.revenue)}
-                    </p>
-                  </div>
-                </div>
-                <p className="hidden text-sm font-semibold tabular-nums text-zinc-950 dark:text-white sm:block">
-                  {money(item.revenue)}
+        <div className="space-y-4">
+          {/* Hero: tổng quan kỳ */}
+          <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex flex-wrap items-end justify-between gap-3 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
+              <div>
+                <h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  Tổng quan kỳ
+                </h3>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-zinc-950 dark:text-white">
+                  {money(totalRevenue)}
                 </p>
               </div>
-            ))}
-          </div>
-        </section>
+              <div className="flex items-center gap-3 text-xs">
+                <div>
+                  <span className="text-zinc-500 dark:text-zinc-400">Sản phẩm</span>
+                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
+                    {items.length}
+                  </p>
+                </div>
+                <div className="h-8 w-px bg-zinc-200 dark:bg-zinc-800" />
+                <div>
+                  <span className="text-zinc-500 dark:text-zinc-400">Số lượng bán</span>
+                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
+                    {totalQuantity.toLocaleString('vi-VN')}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Podium: top 3 */}
+            <ol className="grid grid-cols-1 divide-y divide-zinc-100 border-zinc-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0 dark:divide-zinc-800/50">
+              {podium.map((item, index) => (
+                <PodiumSlot key={item.productId} item={item} rank={index + 1} />
+              ))}
+            </ol>
+          </section>
+
+          {/* Phần còn lại (hạng 4+) dạng bảng xếp hạng thu gọn */}
+          {rest.length > 0 && (
+            <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="flex items-center justify-between gap-2 border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800/50">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
+                  <Package size={15} className="text-blue-500" />
+                  Còn lại
+                </h3>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {rest.length} mặt hàng
+                </span>
+              </div>
+              <ul role="list" className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+                {rest.map((item, index) => (
+                  <RankedRow
+                    key={item.productId}
+                    item={item}
+                    rank={index + 4}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
       )}
     </div>
+  )
+}
+
+// ── Sub-components ──
+
+function PodiumSlot({ item, rank }: { item: TopProductRow; rank: number }) {
+  const rankTone = rank === 1
+    ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+    : rank === 2
+      ? 'bg-zinc-300 text-zinc-800 dark:bg-zinc-600 dark:text-zinc-100'
+      : 'bg-orange-300 text-orange-900 dark:bg-orange-700/60 dark:text-orange-100'
+  const revenueSize = rank === 1 ? 'text-xl' : 'text-base'
+
+  return (
+    <li className="px-4 py-3">
+      <div className="flex items-center gap-2">
+        <span
+          aria-label={`Hạng ${rank}`}
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-bold tabular-nums ${rankTone}`}
+        >
+          {rank}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className={`font-semibold text-zinc-950 dark:text-white ${rank === 1 ? 'text-base' : 'text-sm'}`}>
+            <span className="line-clamp-1">{item.name}</span>
+          </p>
+          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+            {item.quantitySold.toLocaleString('vi-VN')} bán
+          </p>
+        </div>
+      </div>
+      <p className={`mt-2 font-bold tabular-nums text-zinc-950 dark:text-white ${revenueSize}`}>
+        {money(item.revenue)}
+      </p>
+    </li>
+  )
+}
+
+function RankedRow({ item, rank }: { item: TopProductRow; rank: number }) {
+  return (
+    <li>
+      <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-zinc-100 text-[11px] font-semibold tabular-nums text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+          {rank}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-zinc-950 dark:text-white">
+            {item.name}
+          </p>
+          <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+            {item.quantitySold.toLocaleString('vi-VN')} bán
+          </p>
+        </div>
+        <p className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
+          {money(item.revenue)}
+        </p>
+      </div>
+    </li>
   )
 }

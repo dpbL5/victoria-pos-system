@@ -38,12 +38,12 @@ function resetMocks() {
 
   fakeStore.product.create.mockResolvedValue({
     id: 'prod-1', name: 'Nước suối', sku: 'NUOC-1', type: 'PRODUCT', price: 10000,
-    costPrice: 5000, stockQuantity: 20, minStockLevel: 5, isActive: true,
+    stockQuantity: 20, minStockLevel: 5, isActive: true,
     createdAt: new Date(), updatedAt: new Date(),
   })
   fakeStore.product.findUnique.mockResolvedValue({
     id: 'prod-1', name: 'Nước suối', sku: 'NUOC-1', type: 'PRODUCT', price: 10000,
-    costPrice: 5000, stockQuantity: 20, minStockLevel: 5, isActive: true,
+    stockQuantity: 20, minStockLevel: 5, isActive: true,
     createdAt: new Date(), updatedAt: new Date(),
   })
 }
@@ -54,7 +54,7 @@ describe('createProduct', () => {
   it('tạo PRODUCT với tồn đầu kỳ + stock movement RESTOCK + audit', async () => {
     const result = await createProduct({
       staffId: 'staff-1', name: 'Nước suối', sku: 'NUOC-1', type: 'PRODUCT', price: 10000,
-      costPrice: 5000, stockQuantity: 20, minStockLevel: 5, isActive: true,
+      stockQuantity: 20, minStockLevel: 5, isActive: true,
     }, repos)
 
     expect(result.ok).toBe(true)
@@ -74,12 +74,12 @@ describe('createProduct', () => {
   it('tạo SERVICE với stock 0 và không tạo stock movement', async () => {
     fakeStore.product.create.mockResolvedValue({
       id: 'prod-svc', name: 'Cho thuê ván', sku: null, type: 'SERVICE', price: 50000,
-      costPrice: null, stockQuantity: 0, minStockLevel: 0, isActive: true,
+      stockQuantity: 0, minStockLevel: 0, isActive: true,
       createdAt: new Date(), updatedAt: new Date(),
     })
     const result = await createProduct({
       staffId: 'staff-1', name: 'Cho thuê ván', sku: null, type: 'SERVICE', price: 50000,
-      costPrice: null, stockQuantity: 0, minStockLevel: 0, isActive: true,
+      stockQuantity: 0, minStockLevel: 0, isActive: true,
     }, repos)
 
     expect(result.ok).toBe(true)
@@ -98,20 +98,20 @@ describe('applyStockMovement', () => {
   it('RESTOCK dương làm tăng tồn + ghi movement + audit', async () => {
     fakeStore.product.findUnique.mockResolvedValue({
       id: 'prod-1', name: 'Nước suối', sku: 'NUOC-1', type: 'PRODUCT', price: 10000,
-      costPrice: 5000, stockQuantity: 20, minStockLevel: 5, isActive: true,
+      stockQuantity: 20, minStockLevel: 5, isActive: true,
       createdAt: new Date(), updatedAt: new Date(),
     })
     // Adapter applyStockMovement: stockMovement.create → { id } rồi product.update → stockQuantity mới
     fakeStore.stockMovement.create.mockResolvedValue({ id: 'mv-1', productId: 'prod-1', type: 'RESTOCK', quantity: 10 })
     fakeStore.product.update.mockResolvedValue({
       id: 'prod-1', name: 'Nước suối', sku: 'NUOC-1', type: 'PRODUCT', price: 10000,
-      costPrice: 5000, stockQuantity: 30, minStockLevel: 5, isActive: true,
+      stockQuantity: 30, minStockLevel: 5, isActive: true,
       createdAt: new Date(), updatedAt: new Date(),
     })
 
     const result = await applyStockMovement({
       productId: 'prod-1', staffId: 'staff-1', type: 'RESTOCK', quantity: 10,
-      unitCost: 5000, reason: 'Nhập thêm', shiftId: 'shift-1',
+      reason: 'Nhập thêm', shiftId: 'shift-1',
     }, repos)
 
     expect(result.ok).toBe(true)
@@ -125,12 +125,12 @@ describe('applyStockMovement', () => {
   it('trả NEGATIVE_STOCK khi tồn không được âm', async () => {
     fakeStore.product.findUnique.mockResolvedValue({
       id: 'prod-1', name: 'Nước suối', sku: 'NUOC-1', type: 'PRODUCT', price: 10000,
-      costPrice: 5000, stockQuantity: 5, minStockLevel: 5, isActive: true,
+      stockQuantity: 5, minStockLevel: 5, isActive: true,
       createdAt: new Date(), updatedAt: new Date(),
     })
     const result = await applyStockMovement({
       productId: 'prod-1', staffId: 'staff-1', type: 'ADJUSTMENT', quantity: -10,
-      unitCost: null, reason: 'Kiểm kho', shiftId: 'shift-1',
+      reason: 'Kiểm kho', shiftId: 'shift-1',
     }, repos)
 
     expect(result.ok).toBe(false)
@@ -141,12 +141,12 @@ describe('applyStockMovement', () => {
   it('trả SERVICE_HAS_NO_STOCK khi điều chỉnh tồn cho SERVICE', async () => {
     fakeStore.product.findUnique.mockResolvedValue({
       id: 'prod-svc', name: 'Cho thuê ván', sku: null, type: 'SERVICE', price: 50000,
-      costPrice: null, stockQuantity: 0, minStockLevel: 0, isActive: true,
+      stockQuantity: 0, minStockLevel: 0, isActive: true,
       createdAt: new Date(), updatedAt: new Date(),
     })
     const result = await applyStockMovement({
       productId: 'prod-svc', staffId: 'staff-1', type: 'RESTOCK', quantity: 5,
-      unitCost: null, reason: 'test', shiftId: null,
+      reason: 'test', shiftId: null,
     }, repos)
 
     expect(result.ok).toBe(false)
@@ -157,7 +157,7 @@ describe('applyStockMovement', () => {
     fakeStore.product.findUnique.mockResolvedValue(null)
     const result = await applyStockMovement({
       productId: 'missing', staffId: 'staff-1', type: 'RESTOCK', quantity: 5,
-      unitCost: null, reason: 'test', shiftId: null,
+      reason: 'test', shiftId: null,
     }, repos)
 
     expect(result.ok).toBe(false)
@@ -172,7 +172,7 @@ describe('deleteProduct', () => {
     fakeStore.product.findUnique
       .mockResolvedValueOnce({
         id: 'prod-1', name: 'Nước suối', sku: 'NUOC-1', type: 'PRODUCT', price: 10000,
-        costPrice: 5000, stockQuantity: 0, minStockLevel: 5, isActive: true,
+        stockQuantity: 0, minStockLevel: 5, isActive: true,
         createdAt: new Date(), updatedAt: new Date(),
       })
       .mockResolvedValueOnce({
@@ -193,7 +193,7 @@ describe('deleteProduct', () => {
     fakeStore.product.findUnique
       .mockResolvedValueOnce({
         id: 'prod-1', name: 'Nước suối', sku: 'NUOC-1', type: 'PRODUCT', price: 10000,
-        costPrice: 5000, stockQuantity: 20, minStockLevel: 5, isActive: true,
+        stockQuantity: 20, minStockLevel: 5, isActive: true,
         createdAt: new Date(), updatedAt: new Date(),
       })
       .mockResolvedValueOnce({

@@ -60,7 +60,6 @@ export async function retailSale(
       description: product.name,
       quantity,
       unitPrice: Number(product.price),
-      unitCost: product.costPrice !== null ? Number(product.costPrice) : null,
       subtotal: quantity * Number(product.price),
     }
   })
@@ -76,7 +75,7 @@ export async function retailSale(
 
     // Tạo invoice PAID — không gắn phiên (sessionId null)
     const invoice = await tx.billing.createPaidInvoice({
-      invoiceNo: generateInvoiceNo('INV'),
+      invoiceNo: generateInvoiceNo('SEL'),
       customerId: customerId ?? null,
       shiftId,
       staffId,
@@ -101,8 +100,6 @@ export async function retailSale(
         description: latestProduct.name,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
-        // Snapshot giá vốn (weighted average cost) tại thời điểm bán
-        unitCost: latestProduct.costPrice !== null ? Number(latestProduct.costPrice) : null,
         subtotal: line.subtotal,
         discountAmount: 0,
         total: line.subtotal,
@@ -121,7 +118,6 @@ export async function retailSale(
           shiftId,
           staffId,
           quantity: line.quantity,
-          unitCost: latestProduct.costPrice !== null ? Number(latestProduct.costPrice) : null,
           reason: 'Bán lẻ không phiên',
         })
       }

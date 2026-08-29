@@ -161,7 +161,6 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
         productId: r.productId,
         quantity: r.quantity,
         unitPrice: Number(r.unitPrice),
-        unitCost: r.unitCost !== null ? Number(r.unitCost) : null,
         notes: r.notes,
         createdAt: r.createdAt,
       }))
@@ -186,7 +185,6 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
           productId: input.productId,
           quantity: input.quantity,
           unitPrice: input.unitPrice,
-          unitCost: input.unitCost,
           notes: input.notes ?? null,
         },
       })

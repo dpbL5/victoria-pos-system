@@ -73,10 +73,10 @@ function resetMocks() {
 
   // Sản phẩm trong kho
   fakeStore.product.findMany.mockResolvedValue([
-    { id: 'prod-1', name: 'Nước suối', type: 'PRODUCT', price: 10000, costPrice: 5000, stockQuantity: 10, isActive: true },
+    { id: 'prod-1', name: 'Nước suối', type: 'PRODUCT', price: 10000, stockQuantity: 10, isActive: true },
   ])
   fakeStore.product.findUnique.mockResolvedValue({
-    id: 'prod-1', name: 'Nước suối', type: 'PRODUCT', price: 10000, costPrice: 5000, stockQuantity: 10, isActive: true,
+    id: 'prod-1', name: 'Nước suối', type: 'PRODUCT', price: 10000, stockQuantity: 10, isActive: true,
   })
 
   // SessionSellItem chưa có dòng nào (chưa bán kèm)
@@ -135,7 +135,6 @@ describe('sellItems', () => {
       productId: 'prod-1',
       quantity: 2,
       unitPrice: 10000,
-      unitCost: 5000,
     })
 
     // Trừ kho 2 nước suối
@@ -186,7 +185,6 @@ describe('removeSellItems', () => {
         productId: 'prod-1',
         quantity: 2,
         unitPrice: 10000,
-        unitCost: 5000,
         notes: null,
         createdAt: new Date(),
       },
