@@ -47,7 +47,6 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       upsertParticipant: vi.fn(),
       findByIdOrThrow: vi.fn(),
       createWithLead: vi.fn(),
-      update: vi.fn(),
       findByIdWithToolStats: vi.fn(),
       findByIdAccess: vi.fn(),
       findManyWithCount: vi.fn(),
@@ -237,6 +236,84 @@ describe('runCheckInTx', () => {
     expect(repos.customer.create).not.toHaveBeenCalled()
     expect(repos.session.createWithRefs).toHaveBeenCalledWith(
       expect.objectContaining({ customerId: null, customerName: 'Khách #005' })
+    )
+  })
+
+  it('khách vãng lai có SĐT: lưu customerPhone trên phiên + audit', async () => {
+    const repos = makeRepositories({
+      session: {
+        ...makeRepositories().session,
+        countCreatedBetween: vi.fn(async () => 4),
+        createWithRefs: vi.fn(async () => ({
+          id: 'session-phone',
+          customerId: null,
+          staffId: 'staff-1',
+          shiftId: 'shift-1',
+          membershipId: null,
+          startTime: new Date('2026-08-07T10:00:00Z'),
+          hourlyRate: 0,
+          pricingRuleId: null,
+          pricingRuleSnapshot: null,
+          playerCount: 1,
+          status: 'ACTIVE',
+          customerPhone: '0901234567',
+          customer: null,
+          membership: null,
+          shift: { id: 'shift-1', openedAt: new Date('2026-08-07T08:00:00Z'), status: 'OPEN' },
+        }) as never),
+      },
+    })
+    const result = await runCheckInTx(repos, makeInput({
+      customerId: null,
+      customerName: 'A',
+      customerPhone: '0901234567',
+    }))
+
+    expect(repos.session.createWithRefs).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: null, customerName: 'A', customerPhone: '0901234567' })
+    )
+    expect(result.customerPhone).toBe('0901234567')
+
+    const auditCall = (repos.audit.append as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(auditCall.details.customerPhone).toBe('0901234567')
+  })
+
+  it('khách vãng lai không có SĐT: customerPhone null trên phiên + audit', async () => {
+    const repos = makeRepositories({
+      session: {
+        ...makeRepositories().session,
+        countCreatedBetween: vi.fn(async () => 0),
+      },
+    })
+    await runCheckInTx(repos, makeInput({
+      customerId: null,
+      customerName: 'B',
+      customerPhone: null,
+    }))
+
+    expect(repos.session.createWithRefs).toHaveBeenCalledWith(
+      expect.objectContaining({ customerPhone: null })
+    )
+    const auditCall = (repos.audit.append as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(auditCall.details.customerPhone).toBeNull()
+  })
+
+  it('hội viên có customerId: không lưu customerPhone trên phiên', async () => {
+    const repos = makeRepositories({
+      session: {
+        ...makeRepositories().session,
+        countCreatedBetween: vi.fn(async () => 0),
+      },
+    })
+    await runCheckInTx(repos, makeInput({
+      customerId: 'cust-existing',
+      customerName: null,
+      customerPhone: '0901234567',
+    }))
+
+    // customerPhone bị force-null khi có customerId (phone đến từ Customer record)
+    expect(repos.session.createWithRefs).toHaveBeenCalledWith(
+      expect.objectContaining({ customerPhone: null })
     )
   })
 

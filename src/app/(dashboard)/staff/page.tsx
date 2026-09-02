@@ -84,8 +84,6 @@ const actionLabels: Record<string, string> = {
   SHIFT_OPEN: 'mở ca',
   SHIFT_JOIN: 'vào ca',
   SHIFT_CLOSE: 'đóng ca',
-  SHIFT_PARTICIPANT_UPSERT: 'thêm người vào ca',
-  SHIFT_PARTICIPANT_REMOVE: 'rời ca',
   PRODUCT_CREATE: 'thêm hàng',
   STOCK_MOVEMENT: 'điều chỉnh kho',
   PRICING_RULE_CREATE: 'tạo bảng giá',

@@ -60,6 +60,7 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
             totalAmount: true,
             playerCount: true,
             customerName: true,
+            customerPhone: true,
             pausedAt: true,
             totalPausedSeconds: true,
             promotionRuleId: true,
@@ -204,6 +205,7 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
         data: {
           customerId: data.customerId,
           customerName: data.customerName ?? null,
+          customerPhone: data.customerPhone ?? null,
           staffId: data.staffId,
           shiftId: data.shiftId,
           membershipId: data.membershipId,

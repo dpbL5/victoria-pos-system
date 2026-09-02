@@ -13,6 +13,8 @@ export interface CheckInInput {
   customerId?: string
   /** Tên khách vãng lai (không bắt buộc — để trống thì tự đặt `Khách #NNN` theo số phiên trong ngày) */
   customerName?: string
+  /** SĐT khách vãng lai (không bắt buộc — chỉ dùng khi không có customerId) */
+  customerPhone?: string
   playerCount?: number
   now?: Date
 }
@@ -29,6 +31,7 @@ export interface CheckInResult {
   pricingRuleSnapshot: PricingRuleSnapshot | null
   playerCount: number
   status: 'ACTIVE'
+  customerPhone: string | null
   customer: { id: string | null; fullName: string; type: 'WALK_IN' | 'MEMBER' } | null
   membership: { id: string; startsAt: Date; expiresAt: Date } | null
   shift: { id: string; openedAt: Date; status: 'OPEN' | 'CLOSED' } | null
@@ -43,6 +46,8 @@ export interface CheckInTxInput {
   customerId: string | null
   /** Tên khách vãng lai (đã resolve `Khách #NNN` nếu không nhập) */
   customerName: string | null
+  /** SĐT khách vãng lai (chỉ có khi không có customerId) */
+  customerPhone?: string | null
   playerCount: number
   now: Date
   /** Có khi customer là MEMBER đang active */
@@ -55,10 +60,10 @@ export async function checkIn(
   input: CheckInInput,
   deps: Repositories = repositories
 ): Promise<Result<CheckInResult>> {
-  const { staffId, customerId, customerName, playerCount = 1, now = new Date() } = input
+  const { staffId, customerId, customerName, customerPhone, playerCount = 1, now = new Date() } = input
 
   if (!customerId) {
-    return checkInAnonymousWalkIn({ staffId, customerName, playerCount, now })
+    return checkInAnonymousWalkIn({ staffId, customerName, customerPhone, playerCount, now })
   }
 
   return checkInRegisteredCustomer({ staffId, customerId, playerCount, now }, deps)
@@ -77,6 +82,7 @@ export interface CheckInTxResult {
   pricingRuleSnapshot: PricingRuleSnapshot | null
   playerCount: number
   status: 'ACTIVE'
+  customerPhone: string | null
   customer: { id: string | null; fullName: string; type: 'WALK_IN' | 'MEMBER' } | null
   membership: { id: string; startsAt: Date; expiresAt: Date } | null
   shift: { id: string; openedAt: Date; status: 'OPEN' | 'CLOSED' } | null
@@ -94,6 +100,7 @@ export async function runCheckInTx(
     staffId,
     customerId,
     customerName,
+    customerPhone,
     now,
     membershipId,
     totalPlayers,
@@ -121,6 +128,7 @@ export async function runCheckInTx(
   const session = await tx.session.createWithRefs({
     customerId,
     customerName: sessionCustomerName,
+    customerPhone: customerId ? null : (customerPhone ?? null),
     staffId,
     shiftId: openShift.id,
     membershipId,
@@ -154,6 +162,7 @@ export async function runCheckInTx(
     details: {
       customerId,
       customerName: sessionCustomerName ?? session.customer?.fullName ?? null,
+      customerPhone: session.customerPhone ?? null,
       customerType: session.customer?.type ?? 'WALK_IN',
       membershipId,
       shiftId: openShift.id,
@@ -171,11 +180,12 @@ async function checkInAnonymousWalkIn(
   input: {
     staffId: string
     customerName?: string
+    customerPhone?: string
     playerCount?: number
     now: Date
   }
 ): Promise<Result<CheckInResult>> {
-  const { staffId, customerName, playerCount = 1, now } = input
+  const { staffId, customerName, customerPhone, playerCount = 1, now } = input
 
   const totalPlayers = playerCount
 
@@ -184,6 +194,7 @@ async function checkInAnonymousWalkIn(
       staffId,
       customerId: null,
       customerName: customerName ?? null,
+      customerPhone: customerPhone?.trim() || null,
       playerCount,
       now,
       totalPlayers,

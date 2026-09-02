@@ -43,8 +43,6 @@ export interface ShiftRepository {
   upsertParticipant(shiftId: string, staffId: string): Promise<void>
   /** findUniqueOrThrow với include participants — throw P2025 nếu không tồn tại */
   findByIdOrThrow(shiftId: string): Promise<OpenShiftDetail>
-  /** Cập nhật trực tiếp (dùng cho manage-participant set role LEAD) */
-  update(shiftId: string, data: Record<string, unknown>): Promise<void>
   /** Tạo ca mới với participant LEAD + toolCounts */
   createWithLead(data: {
     staffId: string

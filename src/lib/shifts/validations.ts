@@ -21,15 +21,6 @@ export const logToolCountSchema = z.object({
   toolCounts: z.array(toolCountEntry).min(1, 'Chưa có số liệu dụng cụ'),
 })
 
-export const manageShiftParticipantSchema = z.object({
-  staffId: z.string().uuid('Nhân viên không hợp lệ'),
-  role: z.enum(['LEAD', 'STAFF']).default('STAFF'),
-})
-
-export const removeShiftParticipantSchema = z.object({
-  staffId: z.string().uuid('Nhân viên không hợp lệ'),
-})
-
 export const adjustCashDifferenceSchema = z.object({
   cashDifference: z.number(),
   notes: z.string().max(500).optional(),
@@ -39,6 +30,4 @@ export type ToolCountEntry = z.infer<typeof toolCountEntry>
 export type OpenShiftInput = z.infer<typeof openShiftSchema>
 export type CloseShiftInput = z.infer<typeof closeShiftSchema>
 export type LogToolCountInput = z.infer<typeof logToolCountSchema>
-export type ManageShiftParticipantInput = z.infer<typeof manageShiftParticipantSchema>
-export type RemoveShiftParticipantInput = z.infer<typeof removeShiftParticipantSchema>
 export type AdjustCashDifferenceInput = z.infer<typeof adjustCashDifferenceSchema>

@@ -15,7 +15,6 @@ export {
 export { closeShift, mapCloseShiftError } from './use-cases/close-shift'
 export { openOrJoinShift, mapOpenOrJoinShiftError } from './use-cases/open-or-join'
 export { logToolCount, mapLogToolCountError } from './use-cases/log-tool-count'
-export { addShiftParticipant, mapAddShiftParticipantError, removeShiftParticipant, mapRemoveShiftParticipantError } from './use-cases/manage-participant'
 export { adjustShiftCashDifference, mapAdjustShiftCashDifferenceError } from './use-cases/adjust-shift-cash'
 export type {
   CloseShiftInput,
@@ -29,12 +28,6 @@ export type {
   LogToolCountInput,
   LogToolCountResult,
 } from './use-cases/log-tool-count'
-export type {
-  AddShiftParticipantInput,
-  AddShiftParticipantResult,
-  RemoveShiftParticipantInput,
-  RemoveShiftParticipantResult,
-} from './use-cases/manage-participant'
 export type {
   AdjustShiftCashDifferenceInput,
   AdjustShiftCashDifferenceResult,

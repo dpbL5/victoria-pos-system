@@ -105,10 +105,6 @@ export function createShiftRepository(store: ShiftAdapterStore): ShiftRepository
         include: shiftWithParticipantsInclude,
       }),
 
-    async update(shiftId, data) {
-      await store.shift.update({ where: { id: shiftId }, data })
-    },
-
     async createWithLead(data) {
       return store.shift.create({
         data: {

@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
       staffId: auth.userId,
       customerId: parsed.data.customerId,
       customerName: parsed.data.customerName,
+      customerPhone: parsed.data.customerPhone,
       playerCount: parsed.data.playerCount,
       now: parsed.data.startTime ? new Date(parsed.data.startTime) : undefined,
     })

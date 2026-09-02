@@ -64,7 +64,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ) : Icon ? (
           <Icon size={16} />
         ) : null}
-        {children && <span className="button-label">{children}</span>}
+        {children && <span className="button-label flex items-center gap-1.5">{children}</span>}
       </button>
     )
   }

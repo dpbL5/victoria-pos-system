@@ -68,7 +68,6 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       upsertParticipant: vi.fn(),
       findByIdOrThrow: vi.fn(),
       createWithLead: vi.fn(),
-      update: vi.fn(),
       findByIdWithToolStats: vi.fn(),
       findByIdAccess: vi.fn(),
       findManyWithCount: vi.fn(),

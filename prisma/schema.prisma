@@ -170,6 +170,10 @@ model Session {
    * Tên khách vãng lai lưu ngay trên phiên (không tạo Customer) — hội viên lấy từ customer.fullName
    */
   customerName           String?                @map("customer_name") @db.VarChar(100)
+  /**
+   * SĐT khách vãng lai lưu ngay trên phiên (không tạo Customer) — hội viên lấy từ customer.phone
+   */
+  customerPhone          String?                @map("customer_phone") @db.VarChar(20)
   staffId                String                 @map("staff_id")
   staff                  User                   @relation(fields: [staffId], references: [id])
   shiftId                String?                @map("shift_id")

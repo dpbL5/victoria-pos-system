@@ -51,7 +51,7 @@ export type SessionRefs = Prisma.SessionGetPayload<{
     membership: { select: { id: true; startsAt: true; expiresAt: true } }
     shift: { select: { id: true; openedAt: true; status: true } }
   }
-}> & { customerName: string | null }
+}> & { customerName: string | null; customerPhone: string | null }
 
 /** Dòng phiên trong danh sách — GET /api/sessions */
 export type SessionListRow = Prisma.SessionGetPayload<{
@@ -76,6 +76,7 @@ export type SessionListRow = Prisma.SessionGetPayload<{
     promotionDiscountType: true
     promotionDiscountValue: true
     customer: { select: { id: true; fullName: true; phone: true; type: true } }
+    customerPhone: true
     staff: { select: { id: true; fullName: true } }
     membership: { select: { id: true; startsAt: true; expiresAt: true } }
     shift: { select: { id: true; openedAt: true; status: true } }
@@ -240,6 +241,8 @@ export interface CreateSessionData {
   customerId: string | null
   /** Tên khách vãng lai — null khi là hội viên (lấy từ customer.fullName) */
   customerName?: string | null
+  /** SĐT khách vãng lai (optional) — null khi là hội viên (lấy từ customer.phone) */
+  customerPhone?: string | null
   staffId: string
   shiftId: string
   membershipId?: string

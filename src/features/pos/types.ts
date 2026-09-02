@@ -40,6 +40,8 @@ export interface SessionRow {
   playerCount: number
   /** Tên khách vãng lai lưu trên phiên (không tạo Customer) */
   customerName?: string | null
+  /** SĐT khách vãng lai lưu trên phiên (không tạo Customer) */
+  customerPhone?: string | null
   /** null = đang chạy, khác null = đang tạm dừng tại thời điểm này */
   pausedAt?: string | null
   /** Tổng số giây đã tạm dừng (đã chốt qua các lần pause/resume) */

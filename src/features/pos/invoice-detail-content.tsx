@@ -74,6 +74,8 @@ export interface InvoiceDetail {
     endTime: string | null
     status: string
     totalPausedSeconds?: number | null
+    customerName?: string | null
+    customerPhone?: string | null
   } | null
   shift: {
     id: string
@@ -204,9 +206,30 @@ export function InvoiceDetailContent({
                 <span className="font-medium text-zinc-700 dark:text-zinc-200">
                   {invoice.customer.fullName}
                   {invoice.customer.phone && (
-                    <span className="ml-1 font-normal text-zinc-400 dark:text-zinc-500">
-                      · {invoice.customer.phone}
-                    </span>
+                    <>
+                      {' · '}
+                      <a
+                        href={`tel:${invoice.customer.phone}`}
+                        className="font-normal text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
+                      >
+                        {invoice.customer.phone}
+                      </a>
+                    </>
+                  )}
+                </span>
+              ) : invoice.session?.customerName ? (
+                <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                  {invoice.session.customerName}
+                  {invoice.session.customerPhone && (
+                    <>
+                      {' · '}
+                      <a
+                        href={`tel:${invoice.session.customerPhone}`}
+                        className="font-normal text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
+                      >
+                        {invoice.session.customerPhone}
+                      </a>
+                    </>
                   )}
                 </span>
               ) : (

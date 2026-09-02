@@ -75,7 +75,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     shift: {
       findOpenForStaff: vi.fn(), findOpenOperational: vi.fn(), findByIdForClose: vi.fn(), calculateExpectedCash: vi.fn(), markParticipantsLeft: vi.fn(),
       upsertToolCloseCount: vi.fn(), upsertToolOpenCount: vi.fn(), close: vi.fn(), upsertParticipant: vi.fn(), findByIdOrThrow: vi.fn(), createWithLead: vi.fn(),
-      update: vi.fn(), findByIdWithToolStats: vi.fn(), findByIdAccess: vi.fn(), findManyWithCount: vi.fn(), findByIdExport: vi.fn(), adjustCashDifference: vi.fn(),
+      findByIdWithToolStats: vi.fn(), findByIdAccess: vi.fn(), findManyWithCount: vi.fn(), findByIdExport: vi.fn(), adjustCashDifference: vi.fn(),
     },
     pricing: { findApplicableRule: vi.fn(), findByIdWithTiers: vi.fn(), getApplicableRules: vi.fn(), countApplicable: vi.fn(), countAll: vi.fn(), findOverlapping: vi.fn(), findManyWithTiers: vi.fn(), findById: vi.fn(), createWithTiers: vi.fn(), update: vi.fn(), deleteTiersByRule: vi.fn(), createTiers: vi.fn(), delete: vi.fn() },
     promotions: { findAvailable: vi.fn(), findAvailableById: vi.fn(), findOverlapping: vi.fn(), findMany: vi.fn(), findById: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
