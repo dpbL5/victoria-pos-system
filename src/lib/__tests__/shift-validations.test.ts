@@ -3,12 +3,7 @@ import {
   openShiftSchema,
   closeShiftSchema,
   adjustCashDifferenceSchema,
-  manageShiftParticipantSchema,
-  removeShiftParticipantSchema,
 } from '@/lib/shifts'
-
-const STAFF_A = '123e4567-e89b-42d3-a456-426614174000'
-const STAFF_B = '223e4567-e89b-42d3-a456-426614174001'
 
 // ── openShiftSchema ─────────────────────────────────────
 
@@ -119,64 +114,6 @@ describe('adjustCashDifferenceSchema', () => {
       cashDifference: 0,
       notes: 'A'.repeat(501),
     })
-    expect(result.success).toBe(false)
-  })
-})
-
-// ── manageShiftParticipantSchema ────────────────────────
-
-describe('manageShiftParticipantSchema', () => {
-  it('hợp lệ với staffId UUID và role LEAD', () => {
-    const result = manageShiftParticipantSchema.safeParse({
-      staffId: STAFF_A,
-      role: 'LEAD',
-    })
-    expect(result.success).toBe(true)
-  })
-
-  it('mặc định role = STAFF', () => {
-    const result = manageShiftParticipantSchema.safeParse({ staffId: STAFF_A })
-    expect(result.success).toBe(true)
-    if (result.success) expect(result.data.role).toBe('STAFF')
-  })
-
-  it('từ chối khi thiếu staffId', () => {
-    const result = manageShiftParticipantSchema.safeParse({ role: 'STAFF' })
-    expect(result.success).toBe(false)
-  })
-
-  it('từ chối staffId không phải UUID', () => {
-    const result = manageShiftParticipantSchema.safeParse({
-      staffId: 'not-a-uuid',
-      role: 'STAFF',
-    })
-    expect(result.success).toBe(false)
-  })
-
-  it('từ chối role không hợp lệ', () => {
-    const result = manageShiftParticipantSchema.safeParse({
-      staffId: STAFF_A,
-      role: 'MANAGER',
-    })
-    expect(result.success).toBe(false)
-  })
-})
-
-// ── removeShiftParticipantSchema ────────────────────────
-
-describe('removeShiftParticipantSchema', () => {
-  it('hợp lệ với staffId UUID', () => {
-    const result = removeShiftParticipantSchema.safeParse({ staffId: STAFF_A })
-    expect(result.success).toBe(true)
-  })
-
-  it('từ chối khi thiếu staffId', () => {
-    const result = removeShiftParticipantSchema.safeParse({})
-    expect(result.success).toBe(false)
-  })
-
-  it('từ chối staffId không phải UUID', () => {
-    const result = removeShiftParticipantSchema.safeParse({ staffId: 'abc123' })
     expect(result.success).toBe(false)
   })
 })

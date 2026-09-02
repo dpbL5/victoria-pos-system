@@ -37,7 +37,6 @@ export async function POST(
       staffId: auth.userId,
       type: parsed.data.type as 'RESTOCK' | 'ADJUSTMENT',
       quantity: parsed.data.quantity,
-      unitCost: parsed.data.unitCost ?? null,
       reason: parsed.data.reason ?? null,
       shiftId: openShift?.id ?? null,
     })

@@ -9,47 +9,25 @@ import {
   CalendarClock,
   CreditCard,
   History,
-  UserMinus,
-  UserRoundPlus,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
-import { Input, Label, Select } from '@/components/ui/input'
-import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { Modal } from '@/components/ui/modal'
+import { Input } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
-import { useToast } from '@/components/ui/toast'
-import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
-import { apiJson } from '@/lib/api'
+import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
-import { formatClock, formatDay, money } from '@/features/pos/format'
-import { getVnDay } from '@/lib/shared/utils'
-import type { UserRole, UserSession } from '@/features/pos/types'
+import { formatClock, money } from '@/features/pos/format'
+import { today } from '@/lib/shared/utils'
 
 type ShiftStatusFilter = 'ALL' | 'OPEN' | 'CLOSED'
 
-interface UserRow {
-  id: string
-  username: string
-  fullName: string
-  role: UserRole
-  isActive: boolean
-}
-
 interface ShiftParticipantRow {
   id: string
-  joinedAt: string
   leftAt?: string | null
-  staffId: string
   staff: {
-    id: string
-    username?: string
     fullName: string
-    role?: UserRole
-    isActive?: boolean
   }
 }
 
@@ -105,9 +83,6 @@ interface DayGroupsResponse {
 }
 
 export function ShiftsScreen() {
-  const { success: notifySuccess, error: notifyError } = useToast()
-  const [user, setUser] = useState<UserSession | null>(null)
-  const [users, setUsers] = useState<UserRow[]>([])
   const [dayGroups, setDayGroups] = useState<DayGroup[]>([])
   const [pagination, setPagination] = useState({ page: 1, daysPerPage: 7, totalDays: 0, totalPages: 0 })
   const [statusFilter, setStatusFilter] = useState<ShiftStatusFilter>('ALL')
@@ -115,19 +90,13 @@ export function ShiftsScreen() {
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [manageShift, setManageShift] = useState<ShiftRow | null>(null)
-  const [removingParticipant, setRemovingParticipant] = useState<{ shift: ShiftRow; participant: ShiftParticipantRow } | null>(null)
 
-  const todayWeekday = getVnDay(new Date())
+  const todayStr = today()
 
   const loadData = useCallback(async (page: number) => {
     setLoading(true)
     setError('')
     try {
-      const me = await apiJson<UserSession>('/api/auth/me')
-      if (!me.success || !me.data) throw new Error(me.error || 'Không tải được tài khoản')
-
       const params = new URLSearchParams({
         groupBy: 'day',
         daysPerPage: '7',
@@ -135,20 +104,12 @@ export function ShiftsScreen() {
       })
       if (statusFilter !== 'ALL') params.set('status', statusFilter)
 
-      const [shiftData, userData] = await Promise.all([
-        fetch(`/api/shifts?${params.toString()}`).then((r) => r.json()) as Promise<DayGroupsResponse>,
-        isAdminOnly(me.data.role)
-          ? apiJson<UserRow[]>('/api/users')
-          : Promise.resolve({ success: true, data: [] as UserRow[], error: undefined }),
-      ])
+      const shiftData = await fetch(`/api/shifts?${params.toString()}`).then((r) => r.json()) as DayGroupsResponse
 
       if (!shiftData.success) throw new Error(shiftData.error || 'Không tải được ca làm')
-      if (!userData.success) throw new Error(userData.error || 'Không tải được nhân viên')
 
-      setUser(me.data)
       setDayGroups(shiftData.data ?? [])
       if (shiftData.pagination) setPagination(shiftData.pagination)
-      setUsers((userData.data ?? []).filter((item) => item.isActive))
     } catch (err) {
       setError((err as Error).message || 'Lỗi kết nối máy chủ')
     } finally {
@@ -165,36 +126,6 @@ export function ShiftsScreen() {
   useEffect(() => {
     return registerRefresh(() => void loadData(pagination.page))
   }, [registerRefresh, loadData, pagination.page])
-
-  const isAdmin = isManagerOrAdmin(user?.role)
-
-  const allShifts = useMemo(() => dayGroups.flatMap((g) => g.shifts), [dayGroups])
-
-  const stats = useMemo(() => {
-    const open = allShifts.filter((s) => s.status === 'OPEN').length
-    const closed = allShifts.filter((s) => s.status === 'CLOSED').length
-    return { total: open + closed, open, closed }
-  }, [allShifts])
-
-  const totals = useMemo(() => {
-    let totalRevenue = 0
-    let cashRevenue = 0
-    let transferRevenue = 0
-    let cardRevenue = 0
-    let paymentCount = 0
-    let membershipCount = 0
-    let sessionCount = 0
-    for (const g of dayGroups) {
-      totalRevenue += g.totalRevenue
-      cashRevenue += g.cashRevenue
-      transferRevenue += g.transferRevenue
-      cardRevenue += g.cardRevenue
-      paymentCount += g.paymentCount
-      membershipCount += g.membershipCount
-      sessionCount += g.sessionCount
-    }
-    return { totalRevenue, cashRevenue, transferRevenue, cardRevenue, paymentCount, membershipCount, sessionCount }
-  }, [dayGroups])
 
   const visibleGroups = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase()
@@ -213,59 +144,7 @@ export function ShiftsScreen() {
     })).filter((group) => group.shifts.length > 0)
   }, [searchQuery, dayGroups])
 
-  const replaceShift = (updated: ShiftRow) => {
-    setDayGroups((current) => current.map((group) => ({
-      ...group,
-      shifts: group.shifts.map((s) => (s.id === updated.id ? updated : s)),
-    })))
-    setManageShift((current) => (current?.id === updated.id ? updated : current))
-  }
-
-  const isCurrentGroup = (group: DayGroup) =>
-    group.weekday !== undefined && group.weekday === todayWeekday
-
-  const upsertParticipant = async (shift: ShiftRow, staffId: string) => {
-    setSubmitting(true)
-    try {
-      const data = await apiJson<ShiftRow>(
-        `/api/shifts/${shift.id}/participants`,
-        jsonRequest('POST', { staffId })
-      )
-      if (!data.success || !data.data) {
-        notifyError(data.error || 'Không cập nhật được nhân viên trong ca')
-        return
-      }
-      replaceShift(data.data)
-      notifySuccess('Đã cập nhật nhân viên trong ca')
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const confirmRemoveParticipant = async () => {
-    if (!removingParticipant) return
-    const { shift, participant } = removingParticipant
-    setSubmitting(true)
-    try {
-      const data = await apiJson<ShiftRow>(
-        `/api/shifts/${shift.id}/participants`,
-        jsonRequest('DELETE', { staffId: participant.staffId })
-      )
-      if (!data.success || !data.data) {
-        notifyError(data.error || 'Không xoá được nhân viên khỏi ca')
-        return
-      }
-      replaceShift(data.data)
-      notifySuccess('Đã cho nhân viên rời ca')
-      setRemovingParticipant(null)
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  const isCurrentGroup = (group: DayGroup) => group.date === todayStr
 
   if (loading) return <ShiftsSkeleton />
 
@@ -315,17 +194,6 @@ export function ShiftsScreen() {
           <NoticeCard tone="danger" title="Không tải được dữ liệu" description={error} />
         )}
 
-        <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <ShiftStat label={`Ca (${pagination.daysPerPage} ngày)`} value={stats.total} />
-          <ShiftStat label="Đang mở" value={stats.open} tone="success" />
-          <ShiftStat label="Đã đóng" value={stats.closed} />
-          <ShiftStat
-            label="Doanh thu"
-            value={money(totals.totalRevenue)}
-            tone="blue"
-          />
-        </section>
-
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <Input
             aria-label="Tìm ca làm"
@@ -368,42 +236,11 @@ export function ShiftsScreen() {
             </div>
           ) : (
             visibleGroups.map((group) => (
-              <DayGroupSection
-                key={group.date}
-                group={group}
-                isCurrentDay={isCurrentGroup(group)}
-                canManageParticipants={!!isAdmin}
-                submitting={submitting}
-                onManage={setManageShift}
-                onRemove={(shift, participant) => setRemovingParticipant({ shift, participant })}
-              />
+              <DayGroupSection key={group.date} group={group} isCurrentDay={isCurrentGroup(group)} />
             ))
           )}
         </section>
       </div>
-
-      <ManageParticipantsDialog
-        shift={manageShift}
-        users={users}
-        submitting={submitting}
-        onClose={() => setManageShift(null)}
-        onSubmit={upsertParticipant}
-      />
-
-      <ConfirmDialog
-        open={!!removingParticipant}
-        onClose={() => setRemovingParticipant(null)}
-        title="Cho nhân viên rời ca"
-        description={removingParticipant ? `Nhân viên "${removingParticipant.participant.staff.fullName}" sẽ rời khỏi ca.` : undefined}
-        body={
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Nhân viên có đang làm việc sẽ không thể thu ngân cho ca này sau khi rời ca.
-          </p>
-        }
-        confirmLabel="Xác nhận"
-        submitting={submitting}
-        onConfirm={confirmRemoveParticipant}
-      />
     </div>
   )
 }
@@ -411,17 +248,9 @@ export function ShiftsScreen() {
 function DayGroupSection({
   group,
   isCurrentDay,
-  canManageParticipants,
-  submitting,
-  onManage,
-  onRemove,
 }: {
   group: DayGroup
   isCurrentDay: boolean
-  canManageParticipants: boolean
-  submitting: boolean
-  onManage: (shift: ShiftRow) => void
-  onRemove: (shift: ShiftRow, participant: ShiftParticipantRow) => void
 }) {
   const dayLabel = new Date(group.date).toLocaleDateString('vi-VN', {
     weekday: 'long',
@@ -456,13 +285,7 @@ function DayGroupSection({
       <ul className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm divide-y divide-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:divide-zinc-800">
         {group.shifts.map((shift) => (
           <li key={shift.id}>
-            <ShiftCard
-              shift={shift}
-              canManageParticipants={canManageParticipants && shift.status === 'OPEN'}
-              submitting={submitting}
-              onManage={() => onManage(shift)}
-              onRemove={(p) => onRemove(shift, p)}
-            />
+            <ShiftCard shift={shift} />
           </li>
         ))}
       </ul>
@@ -470,19 +293,7 @@ function DayGroupSection({
   )
 }
 
-function ShiftCard({
-  shift,
-  canManageParticipants,
-  submitting,
-  onManage,
-  onRemove,
-}: {
-  shift: ShiftRow
-  canManageParticipants: boolean
-  submitting: boolean
-  onManage: () => void
-  onRemove: (participant: ShiftParticipantRow) => void
-}) {
+function ShiftCard({ shift }: { shift: ShiftRow }) {
   const activeParticipants = (shift.participants ?? []).filter((p) => !p.leftAt)
   const pastParticipants = (shift.participants ?? []).filter((p) => p.leftAt)
   const duration = formatShiftDuration(shift.openedAt, shift.closedAt)
@@ -519,20 +330,6 @@ function ShiftCard({
             </p>
           </div>
 
-          {canManageParticipants && (
-            <Button
-              variant="secondary"
-              size="xs"
-              icon={UserRoundPlus}
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                onManage()
-              }}
-            >
-              NV
-            </Button>
-          )}
         </div>
 
         {shift.toolStats && (
@@ -554,13 +351,14 @@ function ShiftCard({
         {(activeParticipants.length > 0 || pastParticipants.length > 0) && (
           <div className="mt-2 flex flex-wrap items-center gap-1">
             {activeParticipants.map((p) => (
-              <ParticipantPill
+              <span
                 key={p.id}
-                participant={p}
-                canManage={canManageParticipants}
-                submitting={submitting}
-                onRemove={onRemove}
-              />
+                className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-800"
+              >
+                <span className="max-w-[100px] truncate font-medium text-zinc-950 dark:text-white">
+                  {p.staff.fullName}
+                </span>
+              </span>
             ))}
             {pastParticipants.length > 0 && (
               <span className="inline-flex items-center rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] text-zinc-400 dark:border-zinc-700">
@@ -574,128 +372,10 @@ function ShiftCard({
   )
 }
 
-function ParticipantPill({
-  participant,
-  canManage,
-  submitting,
-  onRemove,
-}: {
-  participant: ShiftParticipantRow
-  canManage: boolean
-  submitting: boolean
-  onRemove: (participant: ShiftParticipantRow) => void
-}) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-800">
-      <span className="max-w-[100px] truncate font-medium text-zinc-950 dark:text-white">
-        {participant.staff.fullName}
-      </span>
-      {canManage && !participant.leftAt && (
-        <span className="ml-0.5 flex gap-0.5">
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={() => onRemove(participant)}
-            className="rounded p-0.5 text-zinc-400 hover:text-red-500"
-            title="Cho rời ca"
-          >
-            <UserMinus size={10} />
-          </button>
-        </span>
-      )}
-    </span>
-  )
-}
-
-function ManageParticipantsDialog({
-  shift,
-  users,
-  submitting,
-  onClose,
-  onSubmit,
-}: {
-  shift: ShiftRow | null
-  users: UserRow[]
-  submitting: boolean
-  onClose: () => void
-  onSubmit: (shift: ShiftRow, staffId: string) => Promise<void>
-}) {
-  const [staffId, setStaffId] = useState('')
-
-  useEffect(() => {
-    if (!shift) return
-    setStaffId('')
-  }, [shift])
-
-  const availableUsers = users.filter((u) => u.isActive)
-
-  return (
-    <Modal
-      open={!!shift}
-      onClose={onClose}
-      title="Quản lý nhân viên trong ca"
-      description={shift ? `Ca mở lúc ${formatClock(shift.openedAt)} ngày ${formatDay(shift.openedAt)}` : undefined}
-      footer={
-        <Button
-          variant="inverse"
-          size="lg"
-          fullWidth
-          disabled={submitting || !staffId}
-          onClick={() => { if (shift) void onSubmit(shift, staffId) }}
-        >
-          {submitting ? 'Đang cập nhật...' : 'Thêm hoặc cập nhật'}
-        </Button>
-      }
-    >
-      <div className="space-y-3">
-        <div>
-          <Label htmlFor="shift-staff" required>Nhân viên</Label>
-          <Select
-            id="shift-staff"
-            value={staffId}
-            onChange={(event) => setStaffId(event.target.value)}
-          >
-            <option value="">Chọn nhân viên</option>
-            {availableUsers.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.fullName} · {u.username}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-function ShiftStat({
-  label,
-  value,
-  tone = 'default',
-}: {
-  label: string
-  value: number | string
-  tone?: 'success' | 'blue' | 'default'
-}) {
-  const valueClass = tone === 'success'
-    ? 'text-emerald-600 dark:text-emerald-300'
-    : tone === 'blue'
-      ? 'text-blue-600 dark:text-blue-300'
-      : 'text-zinc-950 dark:text-white'
-
-  return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className={`mt-1 text-xl font-bold tabular-nums ${valueClass}`}>{value}</p>
-    </div>
-  )
-}
-
 function ShiftsSkeleton() {
   return (
     <SkeletonPage>
       <Skeleton className="h-10 w-36" />
-      <SkeletonStats />
       <SkeletonPanel><Skeleton className="h-28 w-full" /></SkeletonPanel>
       <SkeletonPanel className="space-y-3">
         <Skeleton className="h-5 w-32" />
@@ -708,15 +388,6 @@ function ShiftsSkeleton() {
       </SkeletonPanel>
     </SkeletonPage>
   )
-}
-
-function jsonRequest(method: 'POST' | 'DELETE', body: unknown): RequestInit {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  const csrfToken = typeof document !== 'undefined'
-    ? document.cookie.match(/(?:^|;\s*)qltrungcung_csrf=([^;]*)/)?.[1]
-    : null
-  if (csrfToken) headers['X-CSRF-Token'] = decodeURIComponent(csrfToken)
-  return { method, headers, body: JSON.stringify(body) }
 }
 
 function formatShiftDuration(openedAt: string, closedAt?: string | null): string {

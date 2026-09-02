@@ -257,6 +257,14 @@ export function ToolsScreen() {
             columns={toolCardColumns}
             data={tools}
             keyExtractor={(t) => t.id}
+            search={{
+              placeholder: 'Tìm tên hoặc mô tả dụng cụ',
+              getText: (t) => `${t.name} ${t.description ?? ''}`,
+            }}
+            filters={[
+              { key: 'required', label: 'Bắt buộc', matches: (t) => t.isRequired },
+              { key: 'optional', label: 'Không bắt buộc', matches: (t) => !t.isRequired },
+            ]}
             sortableKeys={['name', 'quantity']}
             defaultSortKey="name"
             emptyIcon={Wrench}
@@ -271,6 +279,10 @@ export function ToolsScreen() {
             columns={toolColumns}
             data={tools}
             keyExtractor={(t) => t.id}
+            search={{
+              placeholder: 'Tìm tên hoặc mô tả dụng cụ',
+              getText: (t) => `${t.name} ${t.description ?? ''}`,
+            }}
             sortableKeys={['name', 'quantity']}
             defaultSortKey="name"
             emptyIcon={Wrench}

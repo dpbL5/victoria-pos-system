@@ -7,6 +7,7 @@ import {
   CalendarClock,
   MoreHorizontal,
   Package,
+  ShieldCheck,
   Timer,
   type LucideIcon,
 } from 'lucide-react'
@@ -17,7 +18,10 @@ interface NavItem {
   Icon: LucideIcon
 }
 
+// /customers (Hội viên) được đưa lên đầu để STAFF thấy [Hội viên, Ca, Thêm].
+// MANAGER/ADMIN luôn loại trừ /customers nên thứ tự này chỉ ảnh hưởng STAFF.
 const navItems: NavItem[] = [
+  { href: '/customers', label: 'Hội viên', Icon: ShieldCheck },
   { href: '/sessions', label: 'Ca', Icon: Timer },
   { href: '/shifts', label: 'Ca làm', Icon: CalendarClock },
   { href: '/inventory', label: 'Kho', Icon: Package },
@@ -31,15 +35,15 @@ interface BottomNavProps {
 
 export function BottomNav({ userRole }: BottomNavProps) {
   const pathname = usePathname()
-  // STAFF: Ca, Ca làm, Cài đặt. MANAGER: + Kho (không Báo cáo). ADMIN: đủ 5 tab.
+  // STAFF: Hội viên, Ca, Thêm (Hội viên sang trái). MANAGER/ADMIN: Ca, Ca làm (/shifts), thay thế Hội viên bằng /shifts.
   const visibleItems = navItems.filter((item) => {
     if (userRole === 'STAFF') {
-      return item.href === '/sessions' || item.href === '/shifts' || item.href === '/settings'
+      return item.href === '/sessions' || item.href === '/customers' || item.href === '/settings'
     }
     if (userRole === 'MANAGER') {
-      return item.href !== '/reports'
+      return item.href !== '/reports' && item.href !== '/customers'
     }
-    return true
+    return item.href !== '/customers'
   })
 
   const isActive = (href: string) =>

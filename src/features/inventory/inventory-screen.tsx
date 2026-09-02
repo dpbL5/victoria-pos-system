@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import {
   Package,
   PackagePlus,
-  Search,
   Trash2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -29,8 +28,6 @@ type StockMovementType = 'RESTOCK' | 'ADJUSTMENT'
 
 export function InventoryScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
-  const [searchInput, setSearchInput] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
   const [filter, setFilter] = useState<InventoryFilter>('ALL')
   const [createOpen, setCreateOpen] = useState(false)
   const [movementProduct, setMovementProduct] = useState<Product | null>(null)
@@ -68,19 +65,15 @@ export function InventoryScreen() {
   }), [products, lowStockProducts.length])
 
   const filteredProducts = useMemo(() => {
-    const keyword = searchQuery.trim().toLowerCase()
     return products.filter((product) => {
-      const matchesSearch = !keyword
-        || product.name.toLowerCase().includes(keyword)
-        || (product.sku ?? '').toLowerCase().includes(keyword)
       const matchesFilter =
         filter === 'ALL'
         || (filter === 'LOW_STOCK' && isLowStock(product))
         || product.type === filter
 
-      return matchesSearch && matchesFilter
+      return matchesFilter
     })
-  }, [products, searchQuery, filter])
+  }, [products, filter])
 
   const refreshAfterChange = async (message: string) => {
     notifySuccess(message)
@@ -163,7 +156,7 @@ export function InventoryScreen() {
       render: (item) => (
         item.type === 'PRODUCT' && canManageStock ? (
           <div className="flex gap-1">
-            <Button variant="secondary" size="sm" onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
+            <Button variant="secondary" size="sm" icon={PackagePlus} onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
             <Button variant="danger" size="sm" icon={Trash2} onClick={() => setDeleteProduct(item)}>Xóa</Button>
           </div>
         ) : null
@@ -221,7 +214,7 @@ export function InventoryScreen() {
       render: (item) => (
         item.type === 'PRODUCT' && canManageStock ? (
           <div className="flex gap-1">
-            <Button variant="secondary" size="sm" onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
+          <Button variant="secondary" size="sm" icon={PackagePlus} onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
             <Button variant="danger" size="sm" icon={Trash2} onClick={() => setDeleteProduct(item)}>Xóa</Button>
           </div>
         ) : null
@@ -232,6 +225,30 @@ export function InventoryScreen() {
   if (loading) {
     return <InventorySkeleton />
   }
+
+  const listHeader = (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
+            Danh sách kho
+          </h2>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            {filteredProducts.length} mục · {stats.stockUnits} đơn vị tồn
+          </p>
+        </div>
+        <Badge variant={stats.lowStock > 0 ? 'warning' : 'success'}>
+          {stats.lowStock > 0 ? `${stats.lowStock} sắp hết` : 'Ổn định'}
+        </Badge>
+      </div>
+      <div role="group" aria-label="Lọc kho" className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+        <FilterButton active={filter === 'ALL'} onClick={() => setFilter('ALL')}>Tất cả</FilterButton>
+        <FilterButton active={filter === 'LOW_STOCK'} onClick={() => setFilter('LOW_STOCK')}>Sắp hết</FilterButton>
+        <FilterButton active={filter === 'PRODUCT'} onClick={() => setFilter('PRODUCT')}>Hàng hóa</FilterButton>
+        <FilterButton active={filter === 'SERVICE'} onClick={() => setFilter('SERVICE')}>Dịch vụ</FilterButton>
+      </div>
+    </div>
+  )
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
@@ -288,47 +305,6 @@ export function InventoryScreen() {
           />
         </section>
 
-        <section className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search
-                size={15}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-              />
-              <Input
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    setSearchQuery(searchInput)
-                  }
-                }}
-                className="pl-9"
-                placeholder="Tìm tên hoặc SKU"
-              />
-            </div>
-            <Button variant="secondary" size="sm" onClick={() => setSearchQuery(searchInput)}>
-              Tìm
-            </Button>
-          </div>
-
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-            <FilterButton active={filter === 'ALL'} onClick={() => setFilter('ALL')}>
-              Tất cả
-            </FilterButton>
-            <FilterButton active={filter === 'LOW_STOCK'} onClick={() => setFilter('LOW_STOCK')}>
-              Sắp hết
-            </FilterButton>
-            <FilterButton active={filter === 'PRODUCT'} onClick={() => setFilter('PRODUCT')}>
-              Hàng hóa
-            </FilterButton>
-            <FilterButton active={filter === 'SERVICE'} onClick={() => setFilter('SERVICE')}>
-              Dịch vụ
-            </FilterButton>
-          </div>
-        </section>
-
         {canManageStock && (
           <Button
             variant="inverse"
@@ -341,49 +317,43 @@ export function InventoryScreen() {
           </Button>
         )}
 
-        <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
-                Danh sách kho
-              </h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {filteredProducts.length} mục · {stats.stockUnits} đơn vị tồn
-              </p>
-            </div>
-            <Badge variant={stats.lowStock > 0 ? 'warning' : 'success'}>
-              {stats.lowStock > 0 ? `${stats.lowStock} sắp hết` : 'Ổn định'}
-            </Badge>
-          </div>
+        {/* Mobile: card list */}
+        <div className="md:hidden">
+          <SortableCardList
+            header={listHeader}
+            columns={productCardColumns}
+            data={filteredProducts}
+            keyExtractor={(p) => p.id}
+            search={{
+              placeholder: 'Tìm tên hoặc SKU',
+              getText: (p) => `${p.name} ${p.sku ?? ''}`,
+            }}
+            sortableKeys={['name', 'price', 'stockQuantity', 'minStockLevel']}
+            defaultSortKey="name"
+            emptyIcon={Package}
+            emptyMessage="Không có hàng hóa"
+            emptyDescription="Thử đổi bộ lọc hoặc thêm hàng hóa mới."
+          />
+        </div>
 
-          {/* Mobile: card list */}
-          <div className="md:hidden">
-            <SortableCardList
-              columns={productCardColumns}
-              data={filteredProducts}
-              keyExtractor={(p) => p.id}
-              sortableKeys={['name', 'price', 'stockQuantity', 'minStockLevel']}
-              defaultSortKey="name"
-              emptyIcon={Package}
-              emptyMessage="Không có hàng hóa"
-              emptyDescription="Thử đổi bộ lọc hoặc thêm hàng hóa mới."
-            />
-          </div>
-
-          {/* Desktop: table */}
-          <div className="hidden md:block">
-            <SortableTable
-              columns={productColumns}
-              data={filteredProducts}
-              keyExtractor={(p) => p.id}
-              sortableKeys={['name', 'price', 'stockQuantity', 'minStockLevel']}
-              defaultSortKey="name"
-              emptyIcon={Package}
-              emptyMessage="Không có hàng hóa"
-              emptyDescription="Thử đổi bộ lọc hoặc thêm hàng hóa mới."
-            />
-          </div>
-        </section>
+        {/* Desktop: table */}
+        <div className="hidden md:block">
+          <SortableTable
+            header={listHeader}
+            columns={productColumns}
+            data={filteredProducts}
+            keyExtractor={(p) => p.id}
+            search={{
+              placeholder: 'Tìm tên hoặc SKU',
+              getText: (p) => `${p.name} ${p.sku ?? ''}`,
+            }}
+            sortableKeys={['name', 'price', 'stockQuantity', 'minStockLevel']}
+            defaultSortKey="name"
+            emptyIcon={Package}
+            emptyMessage="Không có hàng hóa"
+            emptyDescription="Thử đổi bộ lọc hoặc thêm hàng hóa mới."
+          />
+        </div>
       </div>
 
       <CreateProductDialog
@@ -475,7 +445,6 @@ function CreateProductDialog({
   const [sku, setSku] = useState('')
   const [type, setType] = useState<ProductType>('PRODUCT')
   const [price, setPrice] = useState('')
-  const [costPrice, setCostPrice] = useState('')
   const [stockQuantity, setStockQuantity] = useState('0')
   const [minStockLevel, setMinStockLevel] = useState('0')
 
@@ -486,7 +455,6 @@ function CreateProductDialog({
     setSku('')
     setType('PRODUCT')
     setPrice('')
-    setCostPrice('')
     setStockQuantity('0')
     setMinStockLevel('0')
     /* eslint-enable react-hooks/set-state-in-effect */
@@ -498,7 +466,6 @@ function CreateProductDialog({
       sku,
       type,
       price,
-      costPrice,
       stockQuantity,
       minStockLevel,
     })
@@ -575,29 +542,16 @@ function CreateProductDialog({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="product-price" required>Giá bán</Label>
-            <Input
-              id="product-price"
-              type="number"
-              min="0"
-              inputMode="numeric"
-              value={price}
-              onChange={(event) => setPrice(event.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="product-cost">Giá vốn</Label>
-            <Input
-              id="product-cost"
-              type="number"
-              min="0"
-              inputMode="numeric"
-              value={costPrice}
-              onChange={(event) => setCostPrice(event.target.value)}
-            />
-          </div>
+        <div>
+          <Label htmlFor="product-price" required>Giá bán</Label>
+          <Input
+            id="product-price"
+            type="number"
+            min="0"
+            inputMode="numeric"
+            value={price}
+            onChange={(event) => setPrice(event.target.value)}
+          />
         </div>
 
         {type === 'PRODUCT' && (
@@ -647,7 +601,6 @@ function StockMovementDialog({
   const { error: notifyError } = useToast()
   const [movementType, setMovementType] = useState<StockMovementType>('RESTOCK')
   const [quantity, setQuantity] = useState('1')
-  const [unitCost, setUnitCost] = useState('')
   const [reason, setReason] = useState('')
 
   useEffect(() => {
@@ -655,7 +608,6 @@ function StockMovementDialog({
     /* eslint-disable react-hooks/set-state-in-effect */
     setMovementType('RESTOCK')
     setQuantity('1')
-    setUnitCost(product.costPrice ? String(toNumber(product.costPrice)) : '')
     setReason('')
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [product])
@@ -682,18 +634,11 @@ function StockMovementDialog({
       return
     }
 
-    const parsedUnitCost = unitCost.trim() ? Number(unitCost) : undefined
-    if (parsedUnitCost !== undefined && (!Number.isFinite(parsedUnitCost) || parsedUnitCost < 0)) {
-      notifyError('Giá vốn không hợp lệ')
-      return
-    }
-
     setSubmitting(true)
     try {
       const data = await apiJson(`/api/products/${product.id}/stock`, jsonRequest({
         type: movementType,
         quantity: parsed,
-        unitCost: parsedUnitCost,
         reason: reason.trim() || undefined,
       }))
       if (!data.success) {
@@ -775,18 +720,6 @@ function StockMovementDialog({
           </div>
 
           <div>
-            <Label htmlFor="stock-unit-cost">Giá vốn</Label>
-            <Input
-              id="stock-unit-cost"
-              type="number"
-              min="0"
-              inputMode="numeric"
-              value={unitCost}
-              onChange={(event) => setUnitCost(event.target.value)}
-            />
-          </div>
-
-          <div>
             <Label htmlFor="stock-reason">Lý do</Label>
             <Textarea
               id="stock-reason"
@@ -851,7 +784,6 @@ function buildCreateProductPayload(input: {
   sku: string
   type: ProductType
   price: string
-  costPrice: string
   stockQuantity: string
   minStockLevel: string
 }): { data: unknown } | { error: string } {
@@ -859,11 +791,6 @@ function buildCreateProductPayload(input: {
 
   const price = Number(input.price)
   if (!Number.isFinite(price) || price < 0) return { error: 'Giá bán không hợp lệ' }
-
-  const costPrice = input.costPrice.trim() ? Number(input.costPrice) : undefined
-  if (costPrice !== undefined && (!Number.isFinite(costPrice) || costPrice < 0)) {
-    return { error: 'Giá vốn không hợp lệ' }
-  }
 
   const stockQuantity = input.type === 'PRODUCT' ? Number(input.stockQuantity) : 0
   const minStockLevel = input.type === 'PRODUCT' ? Number(input.minStockLevel) : 0
@@ -881,7 +808,6 @@ function buildCreateProductPayload(input: {
       sku: input.sku.trim() || undefined,
       type: input.type,
       price,
-      costPrice,
       stockQuantity,
       minStockLevel,
       isActive: true,

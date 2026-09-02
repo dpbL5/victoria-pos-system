@@ -49,7 +49,6 @@
 | `/api/promotions/available` | GET | Khuyến mãi đang hiệu lực hiện tại (cho POS chọn khi checkout) |
 | `/api/products` | GET, POST | Danh sách + tạo sản phẩm/dịch vụ (POST admin only, tạo StockMovement tồn đầu kỳ) |
 | `/api/products/[id]/stock` | POST | Nhập kho / điều chỉnh tồn kho (admin only, ghi StockMovement + ActivityLog) |
-| `/api/shifts/[id]/participants` | GET, POST | Danh sách + thêm nhân viên tham gia ca |
 | `/api/shifts/[id]/transactions` | GET | Giao dịch (payment) phát sinh trong ca, kèm đối soát |
 | `/api/shifts/[id]/tool-counts` | GET, POST | Đếm dụng cụ mở/đóng theo ca (ShiftTool, unique `[shiftId, toolId]`) |
 | `/api/cashflows` | GET, POST | Thu/chi ngoài vận hành (admin only) |

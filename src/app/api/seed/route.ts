@@ -166,7 +166,6 @@ export async function POST() {
           sku: 'DRINK-WATER',
           type: 'PRODUCT',
           price: 10000,
-          costPrice: 5000,
           stockQuantity: 50,
           minStockLevel: 10,
         },
@@ -177,7 +176,6 @@ export async function POST() {
           sku: 'DRINK-ION',
           type: 'PRODUCT',
           price: 20000,
-          costPrice: 12000,
           stockQuantity: 30,
           minStockLevel: 10,
         },
@@ -202,7 +200,6 @@ export async function POST() {
               staffId: admin.id,
               type: 'RESTOCK',
               quantity: product.stockQuantity,
-              unitCost: product.costPrice,
               reason: 'Seed tồn đầu kỳ',
             },
           })

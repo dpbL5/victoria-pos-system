@@ -1,10 +1,12 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import type { ReactNode, MouseEvent } from 'react'
 import { ArrowUpDown } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { EmptyState } from './empty-state'
 import { Button } from './button'
+import { ListHeader, type ListSearchConfig } from './list-header'
 import { useTableSort } from '@/hooks/use-table-sort'
 
 // ── Types ──
@@ -157,6 +159,8 @@ interface SortableTableProps<T> {
   emptyIcon?: LucideIcon
   emptyMessage?: string
   emptyDescription?: string
+  header?: ReactNode
+  search?: ListSearchConfig<T>
   pagination?: PaginationProps
   onRowClick?: (item: T) => void
   className?: string
@@ -173,12 +177,22 @@ export function SortableTable<T>({
   emptyIcon,
   emptyMessage = 'Không có dữ liệu',
   emptyDescription,
+  header,
+  search,
   pagination,
   onRowClick,
   className = '',
 }: SortableTableProps<T>) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const filteredData = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase('vi')
+    return query && search
+      ? data.filter((item) => search.getText(item).toLocaleLowerCase('vi').includes(query))
+      : data
+  }, [data, search, searchQuery])
+
   // ── Sort: ưu tiên override, fallback auto-sort ──
-  const autoSort = useTableSort(data, sortableKeys, defaultSortKey, defaultSortDir)
+  const autoSort = useTableSort(filteredData, sortableKeys, defaultSortKey, defaultSortDir)
 
   const sorted = sortOverride ? sortOverride.sorted : autoSort.sorted
   const sortKey = sortOverride ? sortOverride.sortKey : autoSort.sortKey
@@ -186,13 +200,33 @@ export function SortableTable<T>({
   const onSortChange = sortOverride ? sortOverride.onSortChange : autoSort.toggle
 
   const sortableColumnKeys = sortableKeys
+  const hasActiveSearch = searchQuery.trim() !== ''
 
   return (
     <div className={className}>
       <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        {data.length === 0 ? (
+        <ListHeader
+          search={search ? {
+            value: searchQuery,
+            onChange: setSearchQuery,
+            placeholder: search.placeholder,
+            ariaLabel: 'Tìm kiếm danh sách',
+          } : undefined}
+        >
+          {header}
+        </ListHeader>
+        {filteredData.length === 0 ? (
           <div className="p-8">
-            <EmptyState icon={emptyIcon} message={emptyMessage} description={emptyDescription} />
+            <EmptyState
+              icon={emptyIcon}
+              message={hasActiveSearch ? 'Không tìm thấy dữ liệu phù hợp' : emptyMessage}
+              description={hasActiveSearch ? 'Thử xoá nội dung tìm kiếm.' : emptyDescription}
+              action={hasActiveSearch ? (
+                <Button variant="secondary" size="sm" onClick={() => setSearchQuery('')}>
+                  Xoá tìm kiếm
+                </Button>
+              ) : undefined}
+            />
           </div>
         ) : (
           <div className="overflow-x-auto">

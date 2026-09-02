@@ -36,7 +36,7 @@ function makeInvoice(overrides: Partial<EditInvoiceTarget> = {}): EditInvoiceTar
         discountAmount: 0,
         total: 30000,
         metadata: null,
-        stockMovements: [{ id: 'sm-1', productId: 'prod-1', quantity: 2, unitCost: 8000 }],
+        stockMovements: [{ id: 'sm-1', productId: 'prod-1', quantity: 2 }],
       },
     ],
     payments: [{ id: 'pay-1', totalHours: 2, paymentMethod: 'CASH', kind: 'OPERATIONAL' }],
@@ -75,7 +75,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     shift: {
       findOpenForStaff: vi.fn(), findOpenOperational: vi.fn(), findByIdForClose: vi.fn(), calculateExpectedCash: vi.fn(), markParticipantsLeft: vi.fn(),
       upsertToolCloseCount: vi.fn(), upsertToolOpenCount: vi.fn(), close: vi.fn(), upsertParticipant: vi.fn(), findByIdOrThrow: vi.fn(), createWithLead: vi.fn(),
-      update: vi.fn(), findByIdWithToolStats: vi.fn(), findByIdAccess: vi.fn(), findManyWithCount: vi.fn(), findByIdExport: vi.fn(), adjustCashDifference: vi.fn(),
+      findByIdWithToolStats: vi.fn(), findByIdAccess: vi.fn(), findManyWithCount: vi.fn(), findByIdExport: vi.fn(), adjustCashDifference: vi.fn(),
     },
     pricing: { findApplicableRule: vi.fn(), findByIdWithTiers: vi.fn(), getApplicableRules: vi.fn(), countApplicable: vi.fn(), countAll: vi.fn(), findOverlapping: vi.fn(), findManyWithTiers: vi.fn(), findById: vi.fn(), createWithTiers: vi.fn(), update: vi.fn(), deleteTiersByRule: vi.fn(), createTiers: vi.fn(), delete: vi.fn() },
     promotions: { findAvailable: vi.fn(), findAvailableById: vi.fn(), findOverlapping: vi.fn(), findMany: vi.fn(), findById: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
@@ -88,9 +88,9 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     },
     product: {
       findManyByIds: vi.fn(async (): Promise<ProductRecord[]> => [
-        { id: 'prod-2', name: 'Trà sữa', type: 'PRODUCT', price: 25000, costPrice: 12000, stockQuantity: 10, isActive: true },
+        { id: 'prod-2', name: 'Trà sữa', type: 'PRODUCT', price: 25000, stockQuantity: 10, isActive: true },
       ]),
-      findByIdForSale: vi.fn(async (): Promise<ProductRecord | null> => ({ id: 'prod-2', name: 'Trà sữa', type: 'PRODUCT', price: 25000, costPrice: 12000, stockQuantity: 10, isActive: true })),
+      findByIdForSale: vi.fn(async (): Promise<ProductRecord | null> => ({ id: 'prod-2', name: 'Trà sữa', type: 'PRODUCT', price: 25000, stockQuantity: 10, isActive: true })),
       decrementStockIfAvailable: vi.fn(async () => ({ count: 1 })),
       recordSaleMovement: vi.fn(async () => {}),
       findManyForAdmin: vi.fn(), findByIdAdmin: vi.fn(), createWithInitialStock: vi.fn(), applyStockMovement: vi.fn(),

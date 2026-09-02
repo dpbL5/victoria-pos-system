@@ -46,6 +46,7 @@ export function CheckInDialog({
   const { success: notifySuccess, error: notifyError } = useToast()
   const [mode, setMode] = useState<CheckInMode>('WALK_IN')
   const [walkInName, setWalkInName] = useState('')
+  const [walkInPhone, setWalkInPhone] = useState('')
   const [playerCountInput, setPlayerCountInput] = useState('1')
   const [memberSearch, setMemberSearch] = useState('')
   const [memberResults, setMemberResults] = useState<MemberSearchResult[]>([])
@@ -61,6 +62,7 @@ export function CheckInDialog({
     /* eslint-disable react-hooks/set-state-in-effect */
     setMode(initialMode)
     setWalkInName('')
+    setWalkInPhone('')
     setPlayerCountInput('1')
     setMemberSearch('')
     setMemberResults([])
@@ -138,8 +140,11 @@ export function CheckInDialog({
       body.startTime = start.toISOString()
     }
     if (mode === 'WALK_IN') {
-      // Khách vãng lai: gửi thẳng tên lên phiên — không tạo Customer trong DB
+      // Khách vãng lai: gửi thẳng tên + SĐT (optional) lên phiên — không tạo Customer trong DB
       body.customerName = walkInName.trim()
+      if (walkInPhone.trim()) {
+        body.customerPhone = walkInPhone.trim()
+      }
       // Bảng giá không chọn lúc check-in — để trống, chọn khi thu tiền
       if (parsedPlayerCount > 1) {
         body.playerCount = parsedPlayerCount
@@ -185,6 +190,11 @@ export function CheckInDialog({
       if (mode === 'WALK_IN') {
         if (!walkInName.trim()) {
           notifyError('Nhập tên khách vãng lai')
+          return
+        }
+        const phone = walkInPhone.trim()
+        if (phone && (phone.length < 9 || phone.length > 11)) {
+          notifyError('SĐT không hợp lệ (9-11 chữ số)')
           return
         }
         // Khách vãng lai: không tạo Customer — tên được lưu ngay trên phiên
@@ -284,6 +294,22 @@ export function CheckInDialog({
               onChange={(event) => setWalkInName(event.target.value)}
               placeholder="Nhập tên khách"
             />
+            <div className="mt-3">
+              <Label htmlFor="walk-in-phone">Số điện thoại</Label>
+              <Input
+                id="walk-in-phone"
+                type="tel"
+                inputMode="numeric"
+                value={walkInPhone}
+                onChange={(event) => {
+                  const value = event.target.value
+                  if (value === '' || /^\d+$/.test(value)) {
+                    setWalkInPhone(value.slice(0, 11))
+                  }
+                }}
+                placeholder="Không bắt buộc"
+              />
+            </div>
             <div className="mt-3">
               <Label htmlFor="player-count">Số người chơi</Label>
               <div className="flex items-center gap-2">

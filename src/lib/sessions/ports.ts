@@ -51,7 +51,7 @@ export type SessionRefs = Prisma.SessionGetPayload<{
     membership: { select: { id: true; startsAt: true; expiresAt: true } }
     shift: { select: { id: true; openedAt: true; status: true } }
   }
-}> & { customerName: string | null }
+}> & { customerName: string | null; customerPhone: string | null }
 
 /** Dòng phiên trong danh sách — GET /api/sessions */
 export type SessionListRow = Prisma.SessionGetPayload<{
@@ -76,6 +76,7 @@ export type SessionListRow = Prisma.SessionGetPayload<{
     promotionDiscountType: true
     promotionDiscountValue: true
     customer: { select: { id: true; fullName: true; phone: true; type: true } }
+    customerPhone: true
     staff: { select: { id: true; fullName: true } }
     membership: { select: { id: true; startsAt: true; expiresAt: true } }
     shift: { select: { id: true; openedAt: true; status: true } }
@@ -138,7 +139,6 @@ export type SessionSellItemRecord = {
   productId: string
   quantity: number
   unitPrice: number
-  unitCost: number | null
   notes: string | null
   createdAt: Date
 }
@@ -197,7 +197,6 @@ export interface SessionRepository {
     productId: string
     quantity: number
     unitPrice: number
-    unitCost: number | null
     notes?: string | null
   }): Promise<void>
   /** Xoá các dòng bán kèm (đã checkout/huỷ) */
@@ -242,6 +241,8 @@ export interface CreateSessionData {
   customerId: string | null
   /** Tên khách vãng lai — null khi là hội viên (lấy từ customer.fullName) */
   customerName?: string | null
+  /** SĐT khách vãng lai (optional) — null khi là hội viên (lấy từ customer.phone) */
+  customerPhone?: string | null
   staffId: string
   shiftId: string
   membershipId?: string
@@ -279,12 +280,11 @@ export interface ProductRecord {
   name: string
   type: 'PRODUCT' | 'SERVICE'
   price: number
-  costPrice: number | null
   stockQuantity: number
   isActive: boolean
 }
 
-/** Dòng sản phẩm cho admin — costPrice cố ý loại (dữ liệu nhạy cảm) */
+/** Dòng sản phẩm cho admin */
 export type ProductAdminRow = Prisma.ProductGetPayload<{
   select: {
     id: true
@@ -300,7 +300,7 @@ export type ProductAdminRow = Prisma.ProductGetPayload<{
   }
 }>
 
-/** Product đầy đủ (cả costPrice) — cho admin edit/stock */
+/** Product đầy đủ — cho admin edit/stock */
 export type ProductAdminDetail = Prisma.ProductGetPayload<object>
 
 export interface ProductRepository {
@@ -317,10 +317,9 @@ export interface ProductRepository {
     shiftId: string
     staffId: string
     quantity: number
-    unitCost: number | null
     reason: string
   }): Promise<void>
-  /** Danh sách sản phẩm cho admin (search/isActive, exclude costPrice) — GET /api/products */
+  /** Danh sách sản phẩm cho admin (search/isActive) — GET /api/products */
   findManyForAdmin(input: { search?: string; isActive?: boolean; take?: number }): Promise<ProductAdminRow[]>
   /** Product đầy đủ (kèm stock) — cho POST stock & PUT product */
   findByIdAdmin(id: string): Promise<ProductAdminDetail | null>
@@ -330,7 +329,6 @@ export interface ProductRepository {
     sku: string | null
     type: 'PRODUCT' | 'SERVICE'
     price: number
-    costPrice: number | null
     stockQuantity: number
     minStockLevel: number
     isActive: boolean
@@ -342,7 +340,6 @@ export interface ProductRepository {
     staffId: string
     type: 'RESTOCK' | 'ADJUSTMENT'
     quantity: number
-    unitCost: number | null
     reason: string | null
     shiftId: string | null
    }): Promise<{ movementId: string; before: number; after: number; shiftId: string | null; type: string; quantity: number }>

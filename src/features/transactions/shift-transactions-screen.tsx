@@ -4,22 +4,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
-  Banknote,
   CalendarClock,
-  CreditCard,
   ReceiptText,
   RefreshCw,
-  Users,
-  type LucideIcon,
+  Search,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
-import { Label, Select } from '@/components/ui/input'
+import { Input, Label, Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
 import { shortInvoiceNo } from '@/lib/shared/utils'
 import { formatClock, formatDay, money, paymentMethodLabel } from '@/features/pos/format'
@@ -59,6 +56,7 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
   const [shiftsError, setShiftsError] = useState('')
   const [transactionsError, setTransactionsError] = useState('')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL')
+  const [searchQuery, setSearchQuery] = useState('')
 
   // ── Load danh sách ca + resolve ca mặc định (param → ca đang mở → ca gần nhất) ──
   const loadShifts = useCallback(async () => {
@@ -124,13 +122,21 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
     router.replace('/transactions?shiftId=' + id, { scroll: false })
   }
 
-  const filteredTransactions = useMemo(
-    () =>
+  const filteredTransactions = useMemo(() => {
+    const byType =
       typeFilter === 'ALL'
         ? transactions
-        : transactions.filter((t) => t.type === typeFilter),
-    [transactions, typeFilter]
-  )
+        : transactions.filter((t) => t.type === typeFilter)
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return byType
+    return byType.filter((t) => {
+      if (t.customerName.toLowerCase().includes(q)) return true
+      if (t.invoiceNo && t.invoiceNo.toLowerCase().includes(q)) return true
+      if (t.staffName.toLowerCase().includes(q)) return true
+      if (t.planName && t.planName.toLowerCase().includes(q)) return true
+      return false
+    })
+  }, [transactions, typeFilter, searchQuery])
 
   const selectedShift = shifts.find((s) => s.id === selectedShiftId) ?? null
 
@@ -139,8 +145,8 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
     return (
       <SkeletonPage maxWidth="max-w-5xl">
           <Skeleton className="h-9 w-24" />
-          <SkeletonPanel><Skeleton className="h-28 w-full" /></SkeletonPanel>
-          <SkeletonStats />
+          <SkeletonPanel><Skeleton className="h-12 w-full" /></SkeletonPanel>
+          <SkeletonPanel><Skeleton className="h-20 w-full" /></SkeletonPanel>
           <SkeletonPanel><Skeleton className="h-64 w-full" /></SkeletonPanel>
       </SkeletonPage>
     )
@@ -200,63 +206,32 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
           }}
         />
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-[18rem_1fr] md:items-start">
-          {/* ── Left rail: shift selector ── */}
-          <div className="md:sticky md:top-4">
-            <ShiftPickerCard
-              shifts={shifts}
-              selectedShiftId={selectedShiftId}
-              onChange={handlePickerChange}
-            />
-          </div>
+        {/* ── Shift selector — inline, no left rail ── */}
+        <ShiftPickerBar
+          shifts={shifts}
+          selectedShift={selectedShift}
+          onChange={handlePickerChange}
+        />
 
-          {/* ── Main: summary + ledger ── */}
-          <div className="space-y-4">
-            {summary && selectedShift && (
-              <ShiftSummaryHero summary={summary} shift={selectedShift} />
-            )}
+        {summary && selectedShift && (
+          <ShiftSummaryStrip summary={summary} shift={selectedShift} />
+        )}
 
-            {summary && (
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                <MethodTile
-                  icon={Banknote}
-                  label="Tiền mặt"
-                  value={money(summary.cashAmount)}
-                />
-                <MethodTile
-                  icon={CreditCard}
-                  label="Chuyển khoản"
-                  value={money(summary.transferAmount)}
-                />
-                <MethodTile
-                  icon={CreditCard}
-                  label="Thẻ"
-                  value={money(summary.cardAmount)}
-                />
-                <MethodTile
-                  icon={Users}
-                  label="Hội viên"
-                  value={money(summary.memberAmount)}
-                  accent="purple"
-                />
-              </div>
-            )}
-
-            <TransactionLedger
-              loading={transactionsLoading}
-              error={transactionsError}
-              filter={typeFilter}
-              onFilterChange={setTypeFilter}
-              totalCount={transactions.length}
-              filteredCount={filteredTransactions.length}
-              transactions={filteredTransactions}
-              onRetry={() => {
-                if (selectedShiftId) void loadTransactions(selectedShiftId)
-              }}
-              onOpenInvoice={(invoiceId) => router.push(`/invoices/${invoiceId}`)}
-            />
-          </div>
-        </div>
+        <TransactionLedger
+          loading={transactionsLoading}
+          error={transactionsError}
+          filter={typeFilter}
+          onFilterChange={setTypeFilter}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          totalCount={transactions.length}
+          filteredCount={filteredTransactions.length}
+          transactions={filteredTransactions}
+          onRetry={() => {
+            if (selectedShiftId) void loadTransactions(selectedShiftId)
+          }}
+          onOpenInvoice={(invoiceId) => router.push(`/invoices/${invoiceId}`)}
+        />
       </div>
     </div>
   )
@@ -295,127 +270,127 @@ function PageHeader({
   )
 }
 
-// ─── Shift picker card (left rail) ───────────────────────────────────────────
-function ShiftPickerCard({
+// ─── Shift picker bar (inline toolbar, not a side rail) ─────────────────────
+function ShiftPickerBar({
   shifts,
-  selectedShiftId,
+  selectedShift,
   onChange,
 }: {
   shifts: Shift[]
-  selectedShiftId: string | null
+  selectedShift: Shift | null
   onChange: (id: string) => void
 }) {
   return (
-    <Card padding="md">
-      <Label htmlFor="shift-picker" className="text-xs uppercase tracking-wide text-zinc-500">
-        Ca làm
-      </Label>
-      <Select
-        id="shift-picker"
-        value={selectedShiftId ?? ''}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-2"
-      >
-        {shifts.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'} · {formatDay(s.openedAt)} ·{' '}
-            {formatClock(s.openedAt)} · {s.staff?.fullName ?? '—'}
-          </option>
-        ))}
-      </Select>
-      <p className="mt-2 text-[11px] text-zinc-400 dark:text-zinc-500">
-        {shifts.length} ca gần đây
-      </p>
+    <Card padding="sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <Label
+          htmlFor="shift-picker"
+          className="mb-0 shrink-0 text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+        >
+          Ca làm
+        </Label>
+        <Select
+          id="shift-picker"
+          value={selectedShift?.id ?? ''}
+          onChange={(event) => onChange(event.target.value)}
+          className="min-w-0 flex-1 text-sm"
+        >
+          {shifts.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'} · {formatDay(s.openedAt)} ·{' '}
+              {formatClock(s.openedAt)} · {s.staff?.fullName ?? '—'}
+            </option>
+          ))}
+        </Select>
+        {selectedShift && (
+          <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+            <Badge variant={selectedShift.status === 'OPEN' ? 'success' : 'default'} size="sm">
+              {selectedShift.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}
+            </Badge>
+            <span className="tabular-nums">
+              {formatClock(selectedShift.openedAt)}
+              {selectedShift.closedAt && ` → ${formatClock(selectedShift.closedAt)}`}
+            </span>
+            <span aria-hidden>·</span>
+            <span className="truncate">{selectedShift.staff?.fullName ?? '—'}</span>
+          </div>
+        )}
+      </div>
     </Card>
   )
 }
 
-// ─── Hero: Tổng thu + trạng thái ─────────────────────────────────────────────
-function ShiftSummaryHero({
+// ─── Summary strip: total + count + method breakdown in one row ──────────────
+function ShiftSummaryStrip({
   summary,
   shift,
 }: {
   summary: ShiftTransactionsResponse['summary']
   shift: Shift
 }) {
-  const isOpen = shift.status === 'OPEN'
   return (
-    <Card padding="md" className="bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-500/10 dark:via-zinc-900 dark:to-zinc-900">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Tổng thu trong ca
-            </p>
-            <Badge variant={isOpen ? 'success' : 'default'} size="sm">
-              {isOpen ? 'Đang mở' : 'Đã đóng'}
-            </Badge>
-          </div>
-          <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-white md:text-4xl">
+    <Card padding="md">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3 md:grid-cols-[auto_1fr] md:items-center md:gap-x-6">
+        {/* Total — the only big number on the page */}
+        <div className="col-span-2 md:col-span-1">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Tổng thu
+          </p>
+          <p className="mt-0.5 text-2xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-white md:text-3xl">
             {money(summary.totalAmount)}
           </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {formatDay(shift.openedAt)} {formatClock(shift.openedAt)}
-            {shift.closedAt && ` → ${formatClock(shift.closedAt)}`}
-            {' · '}
-            {shift.staff?.fullName ?? '—'}
+          <p className="mt-0.5 text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
+            {summary.totalCount} giao dịch · {summary.paymentCount} TT · {summary.membershipCount} HV
           </p>
         </div>
-        <div className="shrink-0 text-right">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            Giao dịch
-          </p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-zinc-900 dark:text-white">
-            {summary.totalCount}
-          </p>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-            {summary.paymentCount} TT · {summary.membershipCount} HV
-          </p>
-        </div>
+
+        {/* Method breakdown — single horizontal row, equal weight to total */}
+        <dl className="col-span-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm md:col-span-1 md:grid-cols-4 md:gap-x-6 md:gap-y-0">
+          <MethodCell label="Tiền mặt" value={money(summary.cashAmount)} />
+          <MethodCell label="Chuyển khoản" value={money(summary.transferAmount)} />
+          <MethodCell label="Thẻ" value={money(summary.cardAmount)} />
+          <MethodCell
+            label="Phí hội viên"
+            value={money(summary.memberAmount)}
+            accent="purple"
+          />
+        </dl>
       </div>
     </Card>
   )
 }
 
-// ─── Method tile (compact band) ──────────────────────────────────────────────
-function MethodTile({
-  icon: Icon,
+function MethodCell({
   label,
   value,
   accent,
 }: {
-  icon: LucideIcon
   label: string
   value: string
-  accent?: 'green' | 'purple' | 'blue'
+  accent?: 'purple'
 }) {
-  const accentClass =
-    accent === 'green'
-      ? 'text-emerald-600 dark:text-emerald-400'
-      : accent === 'purple'
-        ? 'text-purple-600 dark:text-purple-400'
-        : accent === 'blue'
-          ? 'text-blue-600 dark:text-blue-400'
-          : 'text-zinc-900 dark:text-white'
+  const valueClass =
+    accent === 'purple'
+      ? 'text-purple-700 dark:text-purple-400'
+      : 'text-zinc-900 dark:text-white'
   return (
-    <div className="rounded-lg border border-zinc-100 bg-white px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex items-center gap-1.5">
-        <Icon size={12} className="text-zinc-400 dark:text-zinc-500" aria-hidden />
-        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-          {label}
-        </p>
-      </div>
-      <p className={`mt-1 text-base font-semibold tabular-nums ${accentClass}`}>{value}</p>
+    <div className="flex flex-col gap-0.5 border-l border-zinc-200 pl-3 first:border-l-0 first:pl-0 md:border-l md:pl-3 md:first:border-l md:first:pl-3">
+      <dt className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+        {label}
+      </dt>
+      <dd className={`text-sm font-semibold tabular-nums ${valueClass}`}>{value}</dd>
     </div>
   )
 }
 
-// ─── Ledger (filters + transaction list) ─────────────────────────────────────
+// ─── Ledger (search + filters + transaction list) ────────────────────────────
 function TransactionLedger({
   loading,
   error,
   filter,
   onFilterChange,
+  searchQuery,
+  onSearchChange,
   totalCount,
   filteredCount,
   transactions,
@@ -426,37 +401,58 @@ function TransactionLedger({
   error: string
   filter: TypeFilter
   onFilterChange: (f: TypeFilter) => void
+  searchQuery: string
+  onSearchChange: (q: string) => void
   totalCount: number
   filteredCount: number
   transactions: TransactionItem[]
   onRetry: () => void
   onOpenInvoice: (id: string) => void
 }) {
+  const hasFilter = filter !== 'ALL' || searchQuery.trim() !== ''
+  const isFiltered = filteredCount !== totalCount
   return (
     <Card padding="none">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
-          Giao dịch{' '}
-          <span className="text-zinc-400 dark:text-zinc-500">
-            ({filter === 'ALL' ? totalCount : `${filteredCount}/${totalCount}`})
-          </span>
-        </h2>
-        <div className="flex items-center gap-1.5">
-          <FilterButton active={filter === 'ALL'} onClick={() => onFilterChange('ALL')}>
-            Tất cả
-          </FilterButton>
-          <FilterButton
-            active={filter === 'payment'}
-            onClick={() => onFilterChange('payment')}
-          >
-            Thanh toán
-          </FilterButton>
-          <FilterButton
-            active={filter === 'membership'}
-            onClick={() => onFilterChange('membership')}
-          >
-            Hội viên
-          </FilterButton>
+      <div className="flex flex-col gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-zinc-950 dark:text-white">
+            Danh sách giao dịch
+            <span className="ml-1.5 text-xs font-normal tabular-nums text-zinc-400 dark:text-zinc-500">
+              {isFiltered ? `${filteredCount}/${totalCount}` : totalCount}
+            </span>
+          </p>
+          <div className="flex items-center gap-1.5">
+            <FilterButton active={filter === 'ALL'} onClick={() => onFilterChange('ALL')}>
+              Tất cả
+            </FilterButton>
+            <FilterButton
+              active={filter === 'payment'}
+              onClick={() => onFilterChange('payment')}
+            >
+              Thanh toán
+            </FilterButton>
+            <FilterButton
+              active={filter === 'membership'}
+              onClick={() => onFilterChange('membership')}
+            >
+              Hội viên
+            </FilterButton>
+          </div>
+        </div>
+        <div className="relative">
+          <Search
+            size={14}
+            aria-hidden
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+          />
+          <Input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Tìm theo tên khách, mã hóa đơn, nhân viên, gói hội viên…"
+            aria-label="Tìm giao dịch"
+            className="pl-8 text-sm"
+          />
         </div>
       </div>
 
@@ -481,11 +477,29 @@ function TransactionLedger({
         <div className="p-4">
           <EmptyState
             icon={ReceiptText}
-            message={filter === 'ALL' ? 'Chưa có giao dịch' : 'Không có giao dịch thuộc loại này'}
+            message={
+              hasFilter
+                ? 'Không tìm thấy giao dịch phù hợp'
+                : 'Chưa có giao dịch'
+            }
             description={
-              filter === 'ALL'
-                ? 'Giao dịch của ca này sẽ hiện ở đây.'
-                : 'Bỏ chọn bộ lọc để xem tất cả giao dịch.'
+              hasFilter
+                ? 'Thử đổi bộ lọc hoặc xoá nội dung tìm kiếm.'
+                : 'Giao dịch của ca này sẽ hiện ở đây.'
+            }
+            action={
+              hasFilter ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    onFilterChange('ALL')
+                    onSearchChange('')
+                  }}
+                >
+                  Xoá bộ lọc
+                </Button>
+              ) : undefined
             }
           />
         </div>
@@ -521,6 +535,11 @@ function TransactionRow({
   const isMembership = tx.type === 'membership'
   const isCancelled = tx.invoiceStatus === 'CANCELLED'
   const canOpen = !!tx.invoiceId
+  const invoiceType = isMembership || tx.invoiceNo?.startsWith('MEM-')
+    ? { label: 'Đăng ký hội viên', variant: 'purple' as const }
+    : tx.invoiceNo?.startsWith('SEL-')
+      ? { label: 'Bán lẻ', variant: 'warning' as const }
+      : { label: 'Thường', variant: 'default' as const }
   const methodLabel = isMembership
     ? 'Phí hội viên'
     : tx.paymentMethod
@@ -539,39 +558,19 @@ function TransactionRow({
         onClick={() => {
           if (canOpen) onOpen(tx.invoiceId!)
         }}
-        className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent sm:grid-cols-[7rem_1fr_auto] sm:gap-4 dark:hover:bg-zinc-800/50"
+        className="grid w-full grid-cols-[3.5rem_minmax(0,1fr)_auto_auto] items-center gap-x-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto] sm:gap-x-4 dark:hover:bg-zinc-800/50"
       >
-        {/* Time + invoice no — primary identifier */}
-        <div className="flex flex-col items-start gap-0">
-          <span className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
-            {formatClock(tx.paidAt)}
-          </span>
-          {tx.invoiceNo && (
-            <span className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
-              {shortInvoiceNo(tx.invoiceNo)}
-            </span>
-          )}
-        </div>
+        {/* Time — fixed, scannable, primary sort key */}
+        <span className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
+          {formatClock(tx.paidAt)}
+        </span>
 
-        {/* Customer + badges */}
+        {/* Customer + meta */}
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
             <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
               {tx.customerName}
             </p>
-            {isMembership ? (
-              <Badge variant="purple" size="sm">
-                Hội viên
-              </Badge>
-            ) : tx.customerType === 'MEMBER' ? (
-              <Badge variant="purple" size="sm">
-                HV
-              </Badge>
-            ) : (
-              <Badge variant="default" size="sm">
-                VL
-              </Badge>
-            )}
             {isCancelled && (
               <Badge variant="danger" size="sm">
                 Đã hủy
@@ -579,14 +578,25 @@ function TransactionRow({
             )}
           </div>
           <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+            {tx.invoiceNo && (
+              <span className="font-mono">{shortInvoiceNo(tx.invoiceNo)}</span>
+            )}
+            {tx.invoiceNo && ' · '}
             {methodLabel}
             {tx.planName ? ` · ${tx.planName}` : ''}
           </p>
         </div>
 
+        {/* Invoice type */}
+        <div className="text-right">
+          <Badge variant={invoiceType.variant} size="sm">
+            {invoiceType.label}
+          </Badge>
+        </div>
+
         {/* Amount — anchored right */}
         <p
-          className={`self-center text-sm font-bold tabular-nums sm:text-lg ${amountClass}`}
+          className={`self-center text-right text-sm font-bold tabular-nums sm:text-base ${amountClass}`}
         >
           {money(tx.amount)}
         </p>

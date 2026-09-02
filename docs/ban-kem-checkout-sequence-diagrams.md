@@ -174,7 +174,7 @@ sequenceDiagram
     alt không có ca mở
         DB--xDB: fail(SHIFT_REQUIRED) → rollback
     end
-    DB->>DB: billing.createPaidInvoice(invoiceNo 'INV...', sessionId: null, PAID)
+    DB->>DB: billing.createPaidInvoice(invoiceNo 'SEL...', sessionId: null, PAID)
     loop từng line sản phẩm
         DB->>DB: product.findByIdForSale → billing.createInvoiceItem
         opt type = PRODUCT

@@ -60,6 +60,7 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
             totalAmount: true,
             playerCount: true,
             customerName: true,
+            customerPhone: true,
             pausedAt: true,
             totalPausedSeconds: true,
             promotionRuleId: true,
@@ -161,7 +162,6 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
         productId: r.productId,
         quantity: r.quantity,
         unitPrice: Number(r.unitPrice),
-        unitCost: r.unitCost !== null ? Number(r.unitCost) : null,
         notes: r.notes,
         createdAt: r.createdAt,
       }))
@@ -186,7 +186,6 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
           productId: input.productId,
           quantity: input.quantity,
           unitPrice: input.unitPrice,
-          unitCost: input.unitCost,
           notes: input.notes ?? null,
         },
       })
@@ -206,6 +205,7 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
         data: {
           customerId: data.customerId,
           customerName: data.customerName ?? null,
+          customerPhone: data.customerPhone ?? null,
           staffId: data.staffId,
           shiftId: data.shiftId,
           membershipId: data.membershipId,

@@ -80,7 +80,6 @@ export async function runEditInvoice(
         shiftId: invoice.shiftId,
         staffId,
         quantity: returnQty,
-        unitCost: movement.unitCost ?? null,
         reason: `Sửa hoá đơn ${invoice.invoiceNo} bởi ${actorName}`,
       })
       reversedStockQty += returnQty
@@ -100,7 +99,6 @@ export async function runEditInvoice(
           shiftId: invoice.shiftId,
           staffId,
           quantity: returnQty,
-          unitCost: movement.unitCost ?? null,
           reason: `Sửa hoá đơn gộp ${invoice.invoiceNo} bởi ${actorName}`,
         })
         reversedStockQty += returnQty
@@ -193,8 +191,6 @@ export async function runEditInvoice(
       description: line.description,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
-      // Snapshot giá vốn (weighted average cost) tại thời điểm sửa hoá đơn
-      unitCost: (await tx.product.findByIdForSale(line.productId))?.costPrice ?? null,
       subtotal: line.subtotal,
       discountAmount: 0,
       total: line.subtotal,
@@ -208,15 +204,12 @@ export async function runEditInvoice(
         fail('INSUFFICIENT_STOCK', product?.name ?? line.productId)
       }
 
-      const latestProduct = await tx.product.findByIdForSale(line.productId)
-
       await tx.product.recordSaleMovement({
         productId: line.productId,
         invoiceItemId: createdItem.id,
         shiftId: invoice.shiftId,
         staffId,
         quantity: line.quantity,
-        unitCost: latestProduct?.costPrice ?? null,
         reason: `Sửa hoá đơn ${invoice.invoiceNo}`,
       })
       appliedStockQty += line.quantity

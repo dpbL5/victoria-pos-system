@@ -71,7 +71,6 @@ export async function runVoidInvoice(
         shiftId: correctionShiftId,
         staffId,
         quantity: returnQty,
-        unitCost: movement.unitCost ?? null,
         reason: note,
       })
       reversedStockItems += returnQty
@@ -91,7 +90,6 @@ export async function runVoidInvoice(
           shiftId: correctionShiftId,
           staffId,
           quantity: returnQty,
-          unitCost: movement.unitCost ?? null,
           reason: note,
         })
         reversedStockItems += returnQty

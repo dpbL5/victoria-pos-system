@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, LogIn, Pause, Play, Timer } from 'lucide-react'
+import { ChevronDown, LogIn, Pause, Phone, Play, Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { calcElapsedHMS, formatClock, formatPausedHMS, money, pausedSecondsUntil, toNumber } from './format'
 import { PlayerPauseCard } from './player-pause-card'
@@ -83,6 +83,12 @@ export function ActiveSessionCard({
               <LogIn size={11} className="shrink-0" />
               {formatClock(session.startTime)}
             </span>
+            {session.customerPhone && (
+              <>
+                <Phone size={11} className="shrink-0 text-zinc-500 dark:text-zinc-400" />
+                <span className='inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400'>{session.customerPhone}</span>
+              </>
+            )}
             {pendingSell > 0 && (
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
                 · Tạm tính{' '}
@@ -95,13 +101,12 @@ export function ActiveSessionCard({
           {!isGroup && (
             <span
               aria-hidden={!hasPausedSeconds}
-              className={`inline-flex items-center gap-1 text-xs tabular-nums transition-colors duration-200 ${
-                hasPausedSeconds
-                  ? isPaused
-                    ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-zinc-500 dark:text-zinc-400'
-                  : 'invisible'
-              }`}
+              className={`inline-flex items-center gap-1 text-xs tabular-nums transition-colors duration-200 ${hasPausedSeconds
+                ? isPaused
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-zinc-500 dark:text-zinc-400'
+                : 'invisible'
+                }`}
             >
               <Timer
                 size={11}
@@ -118,8 +123,8 @@ export function ActiveSessionCard({
           )}
         </div>
 
-        {/* Phải — timer chính + nút Dừng/Chơi + Thu xếp dọc, căn phải */}
-        <div className="flex shrink-0 flex-col items-end gap-2">
+        {/* Phải — timer chính + nút Dừng/Chơi + Thu, xếp dọc, căn phải */}
+        <div className="flex shrink-0 flex-col items-end gap-2 min-w-0">
           {!isGroup ? (
             <SessionTimer
               elapsed={elapsed}
@@ -141,7 +146,7 @@ export function ActiveSessionCard({
             </button>
           )}
           {!isGroup && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
               {isPaused ? (
                 <Button
                   variant="inverse"
@@ -149,9 +154,9 @@ export function ActiveSessionCard({
                   disabled={pauseDisabled}
                   onClick={onResume}
                   title="Tiếp tục chơi"
-                  className="px-2.5 md:px-3"
+                  className="flex flex-row px-2.5 md:px-3"
                 >
-                  <Play size={14} className="mr-1" />
+                  <Play size={14} className="" />
                   <span className="hidden sm:inline">Chơi</span>
                 </Button>
               ) : (
@@ -161,9 +166,9 @@ export function ActiveSessionCard({
                   disabled={pauseDisabled}
                   onClick={onPause}
                   title="Tạm dừng"
-                  className="px-2.5 md:px-3"
+                  className="px-1.5 sm:px-2.5 md:px-3"
                 >
-                  <Pause size={14} className="mr-1" />
+                  <Pause size={14} className="shrink-0" />
                   <span className="hidden sm:inline">Dừng</span>
                 </Button>
               )}
@@ -195,48 +200,50 @@ export function ActiveSessionCard({
       {/* Phiên nhiều người có player rows → danh sách thẻ từng người chơi với timer + pause riêng.
           Container luôn render để animate enter/exit bằng grid-rows; phần nội dung
           collapse xuống 0px khi đóng. Phiên 1 người KHÔNG vào nhánh này. */}
-      {hasGroupPlayers && (
-        <div
-          className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
-          style={{
-            gridTemplateRows: collapsed ? '0fr' : '1fr',
-            opacity: collapsed ? 0 : 1,
-          }}
-          aria-hidden={collapsed}
-        >
-          <div className="overflow-hidden">
-            <div className="mt-3 space-y-2">
-              {session.pricingGroups!
-                .filter((g) => g.remainingCount > 0)
-                .map((group) => {
-                  // Lọc người đã được thu trước (checkedOutAt) — không hiển thị thẻ pause nữa
-                  const players = (group.players ?? []).filter((p) => !p.checkedOutAt)
-                  return players.map((player, index) => (
-                    <PlayerPauseCard
-                      key={player.id}
-                      player={player}
-                      index={index}
-                      startTime={session.startTime}
-                      pauseDisabled={pauseDisabled}
-                      renaming={renaming}
-                      onPause={() => onPausePlayer?.(player.id)}
-                      onResume={() => onResumePlayer?.(player.id)}
-                      onRename={async (name) => {
-                        if (!onRenamePlayer) return false
-                        setRenaming(true)
-                        try {
-                          return await onRenamePlayer(player.id, name)
-                        } finally {
-                          setRenaming(false)
-                        }
-                      }}
-                    />
-                  ))
-                })}
+      {
+        hasGroupPlayers && (
+          <div
+            className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+            style={{
+              gridTemplateRows: collapsed ? '0fr' : '1fr',
+              opacity: collapsed ? 0 : 1,
+            }}
+            aria-hidden={collapsed}
+          >
+            <div className="overflow-hidden">
+              <div className="mt-3 space-y-2">
+                {session.pricingGroups!
+                  .filter((g) => g.remainingCount > 0)
+                  .map((group) => {
+                    // Lọc người đã được thu trước (checkedOutAt) — không hiển thị thẻ pause nữa
+                    const players = (group.players ?? []).filter((p) => !p.checkedOutAt)
+                    return players.map((player, index) => (
+                      <PlayerPauseCard
+                        key={player.id}
+                        player={player}
+                        index={index}
+                        startTime={session.startTime}
+                        pauseDisabled={pauseDisabled}
+                        renaming={renaming}
+                        onPause={() => onPausePlayer?.(player.id)}
+                        onResume={() => onResumePlayer?.(player.id)}
+                        onRename={async (name) => {
+                          if (!onRenamePlayer) return false
+                          setRenaming(true)
+                          try {
+                            return await onRenamePlayer(player.id, name)
+                          } finally {
+                            setRenaming(false)
+                          }
+                        }}
+                      />
+                    ))
+                  })}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   )
 }

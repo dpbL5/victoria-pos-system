@@ -4,6 +4,7 @@ import { z } from "zod";
 export const createSessionSchema = z.object({
   customerId: z.string().uuid("ID khách hàng không hợp lệ").optional(),
   customerName: z.string().trim().min(1, "Tên khách không được trống").max(100, "Tên khách tối đa 100 ký tự").optional(),
+  customerPhone: z.string().trim().regex(/^\d{9,11}$/, "SĐT không hợp lệ (9-11 chữ số)").optional(),
   playerCount: z.number().int().min(1, "Số người chơi tối thiểu là 1").max(50, "Số người chơi tối đa là 50").default(1),
   startTime: z.string().datetime().optional(),
 });

@@ -17,7 +17,7 @@ import { Input, Label, Select } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
@@ -78,14 +78,9 @@ export function MembershipPlansScreen() {
   const stats = useMemo(() => {
     const active = plans.filter((plan) => plan.isActive).length
     const inactive = plans.length - active
-    const shortest = plans.length
-      ? Math.min(...plans.map((plan) => plan.durationMonths))
-      : 0
     return {
-      total: plans.length,
       active,
       inactive,
-      shortest,
     }
   }, [plans])
 
@@ -179,21 +174,6 @@ export function MembershipPlansScreen() {
               }
             />
 
-            <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              <PlanStat label="Tất cả" value={stats.total} active={filter === 'ALL'} onClick={() => setFilter('ALL')} />
-              <PlanStat label="Đang bán" value={stats.active} active={filter === 'ACTIVE'} onClick={() => setFilter('ACTIVE')} />
-              <PlanStat label="Ngừng dùng" value={stats.inactive} active={filter === 'INACTIVE'} onClick={() => setFilter('INACTIVE')} warning={stats.inactive > 0} />
-              <PlanStat label="Gói ngắn nhất" value={stats.shortest} suffix="tháng" active={false} onClick={() => setFilter('ALL')} />
-            </section>
-
-            <section className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                <FilterButton active={filter === 'ALL'} onClick={() => setFilter('ALL')}>Tất cả</FilterButton>
-                <FilterButton active={filter === 'ACTIVE'} onClick={() => setFilter('ACTIVE')}>Đang bán</FilterButton>
-                <FilterButton active={filter === 'INACTIVE'} onClick={() => setFilter('INACTIVE')}>Ngừng dùng</FilterButton>
-              </div>
-            </section>
-
             <Button
               variant="inverse"
               size="lg"
@@ -213,6 +193,11 @@ export function MembershipPlansScreen() {
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
                     {filteredPlans.length} gói · {stats.active} đang bán · {stats.inactive} ngừng dùng
                   </p>
+                  <div role="group" aria-label="Lọc gói hội viên" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+                    <FilterButton active={filter === 'ALL'} onClick={() => setFilter('ALL')}>Tất cả</FilterButton>
+                    <FilterButton active={filter === 'ACTIVE'} onClick={() => setFilter('ACTIVE')}>Đang bán</FilterButton>
+                    <FilterButton active={filter === 'INACTIVE'} onClick={() => setFilter('INACTIVE')}>Ngừng dùng</FilterButton>
+                  </div>
                 </div>
                 <Badge variant={stats.active > 0 ? 'success' : 'warning'}>
                   {stats.active > 0 ? 'Sẵn sàng' : 'Thiếu gói'}
@@ -282,46 +267,8 @@ function MembershipPlansSkeleton() {
     <SkeletonPage>
       <Skeleton className="h-10 w-40" />
       <SkeletonPanel><Skeleton className="h-16 w-full" /></SkeletonPanel>
-      <SkeletonStats />
       <SkeletonPanel><Skeleton className="h-80 w-full" /></SkeletonPanel>
     </SkeletonPage>
-  )
-}
-
-function PlanStat({
-  label,
-  value,
-  suffix,
-  active,
-  warning,
-  onClick,
-}: {
-  label: string
-  value: number
-  suffix?: string
-  active: boolean
-  warning?: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl border p-3 text-left shadow-sm transition-colors ${
-        active
-          ? 'border-blue-300 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10'
-          : 'border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800'
-      }`}
-    >
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className={`mt-1 text-xl font-bold tabular-nums ${
-        warning ? 'text-amber-600 dark:text-amber-300' : 'text-zinc-950 dark:text-white'
-      }`}
-      >
-        {value}
-        {suffix && <span className="ml-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">{suffix}</span>}
-      </p>
-    </button>
   )
 }
 

@@ -287,6 +287,14 @@ export function StudentsScreen() {
             columns={cardColumns}
             data={students}
             keyExtractor={(s) => s.id}
+            search={{
+              placeholder: 'Tìm tên hoặc số điện thoại',
+              getText: (s) => `${s.fullName} ${s.phone ?? ''}`,
+            }}
+            filters={[
+              { key: 'ACTIVE', label: 'Đang học', matches: (s) => s.status === 'ACTIVE' },
+              { key: 'INACTIVE', label: 'Đã nghỉ', matches: (s) => s.status === 'INACTIVE' },
+            ]}
             sortableKeys={['fullName']}
             defaultSortKey="fullName"
             defaultSortDir="asc"
@@ -301,6 +309,10 @@ export function StudentsScreen() {
             columns={columns}
             data={students}
             keyExtractor={(s) => s.id}
+            search={{
+              placeholder: 'Tìm tên hoặc số điện thoại',
+              getText: (s) => `${s.fullName} ${s.phone ?? ''}`,
+            }}
             sortableKeys={['fullName', 'phone']}
             defaultSortKey="fullName"
             defaultSortDir="asc"

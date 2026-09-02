@@ -24,7 +24,7 @@ function makeInvoice(overrides: Partial<VoidInvoiceTarget> = {}): VoidInvoiceTar
         type: 'PRODUCT',
         productId: 'prod-1',
         stockMovements: [
-          { id: 'sm-1', productId: 'prod-1', quantity: 2, unitCost: 25000 },
+          { id: 'sm-1', productId: 'prod-1', quantity: 2 },
         ],
       },
     ],
@@ -82,7 +82,6 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
       upsertParticipant: vi.fn(),
       findByIdOrThrow: vi.fn(),
       createWithLead: vi.fn(),
-      update: vi.fn(),
       findByIdWithToolStats: vi.fn(),
       findByIdAccess: vi.fn(),
       findManyWithCount: vi.fn(),
@@ -243,7 +242,6 @@ describe('runVoidInvoice', () => {
       shiftId: 'shift-1',
       staffId: 'staff-1',
       quantity: 2,
-      unitCost: 25000,
       reason: 'Huỷ hoá đơn INV-20260807-0001 bởi Nhân viên A: Ghi nhầm',
     })
 
@@ -273,7 +271,7 @@ describe('runVoidInvoice', () => {
           id: 'item-draft',
           type: 'PRODUCT',
           productId: 'prod-2',
-          stockMovements: [{ id: 'sm-2', productId: 'prod-2', quantity: 1, unitCost: 20000 }],
+          stockMovements: [{ id: 'sm-2', productId: 'prod-2', quantity: 1 }],
         },
       ]),
     })

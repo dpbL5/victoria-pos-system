@@ -32,7 +32,6 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
                   id: true,
                   productId: true,
                   quantity: true,
-                  unitCost: true,
                 },
               },
             },
@@ -46,10 +45,7 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
         grandTotal: Number(invoice.grandTotal),
         items: invoice.items.map((item) => ({
           ...item,
-          stockMovements: item.stockMovements.map((m) => ({
-            ...m,
-            unitCost: m.unitCost !== null ? Number(m.unitCost) : null,
-          })),
+          stockMovements: item.stockMovements,
         })),
       } satisfies VoidInvoiceTarget
     },
@@ -69,7 +65,7 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
               productId: true,
               stockMovements: {
                 where: { type: 'SALE' },
-                select: { id: true, productId: true, quantity: true, unitCost: true },
+                select: { id: true, productId: true, quantity: true },
               },
             },
           },
@@ -79,10 +75,7 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
         .flatMap((d) => d.items)
         .map((item) => ({
           ...item,
-          stockMovements: item.stockMovements.map((m) => ({
-            ...m,
-            unitCost: m.unitCost !== null ? Number(m.unitCost) : null,
-          })),
+          stockMovements: item.stockMovements,
         }))
     },
 
@@ -99,7 +92,6 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
           staffId: input.staffId,
           type: 'VOID',
           quantity: input.quantity,
-          unitCost: input.unitCost,
           reason: input.reason,
         },
       })
@@ -131,7 +123,6 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
               description: line.description,
               quantity: line.quantity,
               unitPrice: line.unitPrice,
-              unitCost: line.unitCost ?? null,
               subtotal: line.subtotal,
               discountAmount: line.discountAmount,
               total: line.total,
@@ -195,7 +186,6 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
           description: input.description,
           quantity: input.quantity,
           unitPrice: input.unitPrice,
-          unitCost: input.unitCost ?? null,
           subtotal: input.subtotal,
           discountAmount: input.discountAmount,
           total: input.total,
@@ -246,7 +236,6 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
                   id: true,
                   productId: true,
                   quantity: true,
-                  unitCost: true,
                 },
               },
             },
@@ -274,7 +263,6 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
           stockMovements: item.stockMovements.map((m) => ({
             ...m,
             quantity: toNum(m.quantity),
-            unitCost: m.unitCost !== null ? Number(m.unitCost) : null,
           })),
         })),
         payments: invoice.payments.map((p) => ({
@@ -310,7 +298,7 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
         where: { id: invoiceId },
         include: {
           customer: { select: { id: true, fullName: true, phone: true, type: true } },
-          session: { select: { id: true, startTime: true, endTime: true, status: true, customerName: true, totalPausedSeconds: true } },
+          session: { select: { id: true, startTime: true, endTime: true, status: true, customerName: true, customerPhone: true, totalPausedSeconds: true } },
           shift: { select: { id: true, openedAt: true, closedAt: true } },
           staff: { select: { id: true, fullName: true } },
           items: {

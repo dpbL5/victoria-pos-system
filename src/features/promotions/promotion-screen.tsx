@@ -23,7 +23,7 @@ import { Input, Label } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
@@ -195,37 +195,6 @@ export function PromotionScreen() {
 
         {!isAdmin ? <AccessDenied /> : (
           <>
-            <NoticeCard
-              tone={stats.active > 0 ? 'success' : 'info'}
-              title={stats.active > 0 ? 'Khuyến mại đang sẵn sàng' : 'Chưa có khuyến mại đang áp dụng'}
-              description={
-                stats.active > 0
-                  ? `${stats.active} quy tắc đang trong thời hạn hiệu lực cho khách vãng lai.`
-                  : 'Khuyến mại là tùy chọn; khách vãng lai vẫn dùng giá giờ chơi hiện hành.'
-              }
-            />
-
-            <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              <PromotionStat label="Tất cả" value={stats.total} active={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} />
-              <PromotionStat label="Hiệu lực" value={stats.active} active={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} />
-              <PromotionStat label="Sắp tới" value={stats.future} active={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')} />
-              <PromotionStat label="Tạm dừng / hết" value={stats.inactive} active={statusFilter === 'INACTIVE'} onClick={() => setStatusFilter('INACTIVE')} warning={stats.inactive > 0} />
-            </section>
-
-            <section className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                <FilterButton active={typeFilter === 'ALL'} onClick={() => setTypeFilter('ALL')}>
-                  Tất cả loại giảm
-                </FilterButton>
-                <FilterButton active={typeFilter === 'FIXED_AMOUNT'} onClick={() => setTypeFilter('FIXED_AMOUNT')}>
-                  Giảm tiền cố định
-                </FilterButton>
-                <FilterButton active={typeFilter === 'PERCENT'} onClick={() => setTypeFilter('PERCENT')}>
-                  Giảm phần trăm
-                </FilterButton>
-              </div>
-            </section>
-
             <Button
               variant="inverse"
               size="lg"
@@ -246,6 +215,17 @@ export function PromotionScreen() {
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
                     Mỗi thời điểm chỉ áp dụng một quy tắc, không cộng dồn.
                   </p>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                    <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
+                    <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hiệu lực: {stats.active}</button>
+                    <button type="button" aria-pressed={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')} className={statusFilter === 'FUTURE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Sắp tới: {stats.future}</button>
+                    <button type="button" aria-pressed={statusFilter === 'INACTIVE'} onClick={() => setStatusFilter('INACTIVE')} className={statusFilter === 'INACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200'}>Tạm dừng / hết: {stats.inactive}</button>
+                  </div>
+                  <div role="group" aria-label="Lọc loại khuyến mại" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+                    <FilterButton active={typeFilter === 'ALL'} onClick={() => setTypeFilter('ALL')}>Tất cả loại giảm</FilterButton>
+                    <FilterButton active={typeFilter === 'FIXED_AMOUNT'} onClick={() => setTypeFilter('FIXED_AMOUNT')}>Giảm tiền cố định</FilterButton>
+                    <FilterButton active={typeFilter === 'PERCENT'} onClick={() => setTypeFilter('PERCENT')}>Giảm phần trăm</FilterButton>
+                  </div>
                 </div>
                 <Badge variant={stats.active > 0 ? 'success' : 'default'}>{filteredRules.length}</Badge>
               </div>
@@ -324,42 +304,11 @@ export function PromotionScreen() {
 
 function PromotionSkeleton() {
   return (
-    <SkeletonPage>
+      <SkeletonPage>
       <Skeleton className="h-10 w-52" />
-      <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
-      <SkeletonStats />
       <SkeletonPanel><Skeleton className="h-12 w-full" /></SkeletonPanel>
       <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
     </SkeletonPage>
-  )
-}
-
-function PromotionStat({
-  label,
-  value,
-  active,
-  warning = false,
-  onClick,
-}: {
-  label: string
-  value: number
-  active: boolean
-  warning?: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl border p-3 text-left shadow-sm transition-colors ${
-        active
-          ? 'border-blue-500 bg-blue-600 text-white shadow-blue-500/20'
-          : 'border-zinc-200 bg-white text-zinc-950 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:hover:border-zinc-700'
-      }`}
-    >
-      <p className={`text-[11px] font-medium ${active ? 'text-blue-100' : 'text-zinc-500 dark:text-zinc-400'}`}>{label}</p>
-      <p className={`mt-1 text-xl font-bold tabular-nums ${!active && warning ? 'text-amber-600 dark:text-amber-300' : ''}`}>{value}</p>
-    </button>
   )
 }
 

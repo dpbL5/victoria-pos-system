@@ -19,7 +19,7 @@ import { Input, Label } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
@@ -201,38 +201,6 @@ export function PricingScreen() {
           <AccessDenied />
         ) : (
           <>
-            <NoticeCard
-              tone={stats.active > 0 ? 'success' : 'warning'}
-              title={stats.active > 0 ? 'Có giá đang hiệu lực' : 'Chưa có giá hiệu lực'}
-              description={
-                stats.active > 0
-                  ? `${stats.active} quy tắc đang nằm trong thời hạn áp dụng.`
-                  : 'Khách vãng lai sẽ bị khóa check-in nếu thời điểm hiện tại không có quy tắc giá phù hợp.'
-              }
-            />
-
-            <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              <PricingStat label="Tất cả" value={stats.total} active={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} />
-              <PricingStat label="Hiệu lực" value={stats.active} active={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} />
-              <PricingStat label="Sắp tới" value={stats.future} active={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')} />
-              <PricingStat label="Hết hạn" value={stats.expired} active={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')} warning={stats.expired > 0} />
-            </section>
-
-            <section className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                <FilterButton active={dayFilter === 'ALL'} onClick={() => setDayFilter('ALL')}>Tất cả ngày</FilterButton>
-                {weekDays.map((day) => (
-                  <FilterButton
-                    key={day.value}
-                    active={dayFilter === String(day.value)}
-                    onClick={() => setDayFilter(String(day.value))}
-                  >
-                    {day.short}
-                  </FilterButton>
-                ))}
-              </div>
-            </section>
-
             <Button
               variant="inverse"
               size="lg"
@@ -252,6 +220,24 @@ export function PricingScreen() {
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
                     {filteredRules.length} quy tắc · phủ {stats.coveredDays}/7 ngày trong tuần
                   </p>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                    <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
+                    <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hiệu lực: {stats.active}</button>
+                    <button type="button" aria-pressed={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')} className={statusFilter === 'FUTURE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Sắp tới: {stats.future}</button>
+                    <button type="button" aria-pressed={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')} className={statusFilter === 'EXPIRED' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200'}>Hết hạn: {stats.expired}</button>
+                  </div>
+                  <div role="group" aria-label="Lọc ngày áp dụng" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+                    <FilterButton active={dayFilter === 'ALL'} onClick={() => setDayFilter('ALL')}>Tất cả ngày</FilterButton>
+                    {weekDays.map((day) => (
+                      <FilterButton
+                        key={day.value}
+                        active={dayFilter === String(day.value)}
+                        onClick={() => setDayFilter(String(day.value))}
+                      >
+                        {day.short}
+                      </FilterButton>
+                    ))}
+                  </div>
                 </div>
                 <Badge variant={stats.active > 0 ? 'success' : 'warning'}>
                   {stats.active > 0 ? 'Sẵn sàng' : 'Thiếu giá'}
@@ -313,46 +299,10 @@ export function PricingScreen() {
 
 function PricingSkeleton() {
   return (
-    <SkeletonPage>
+      <SkeletonPage>
       <Skeleton className="h-10 w-36" />
-      <SkeletonPanel><Skeleton className="h-16 w-full" /></SkeletonPanel>
-      <SkeletonStats />
       <SkeletonPanel><Skeleton className="h-80 w-full" /></SkeletonPanel>
     </SkeletonPage>
-  )
-}
-
-function PricingStat({
-  label,
-  value,
-  active,
-  warning,
-  onClick,
-}: {
-  label: string
-  value: number
-  active: boolean
-  warning?: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl border p-3 text-left shadow-sm transition-colors ${
-        active
-          ? 'border-blue-300 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10'
-          : 'border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800'
-      }`}
-    >
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className={`mt-1 text-xl font-bold tabular-nums ${
-        warning ? 'text-amber-600 dark:text-amber-300' : 'text-zinc-950 dark:text-white'
-      }`}
-      >
-        {value}
-      </p>
-    </button>
   )
 }
 

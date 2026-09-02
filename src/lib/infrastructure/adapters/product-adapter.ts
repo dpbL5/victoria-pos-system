@@ -7,7 +7,6 @@ const PRODUCT_SELECT = {
   name: true,
   type: true,
   price: true,
-  costPrice: true,
   stockQuantity: true,
   isActive: true,
 } as const
@@ -17,7 +16,6 @@ function toProductRecord(p: {
   name: string
   type: 'PRODUCT' | 'SERVICE'
   price: unknown
-  costPrice: unknown
   stockQuantity: number
   isActive: boolean
 }): ProductRecord {
@@ -26,7 +24,6 @@ function toProductRecord(p: {
     name: p.name,
     type: p.type,
     price: Number(p.price),
-    costPrice: p.costPrice !== null ? Number(p.costPrice) : null,
     stockQuantity: Number(p.stockQuantity),
     isActive: p.isActive,
   }
@@ -66,7 +63,6 @@ export function createProductRepository(store: ProductStore): ProductRepository 
           staffId: input.staffId,
           type: 'SALE',
           quantity: -input.quantity,
-          unitCost: input.unitCost,
           reason: input.reason,
         },
       })
@@ -96,7 +92,6 @@ export function createProductRepository(store: ProductStore): ProductRepository 
           isActive: true,
           createdAt: true,
           updatedAt: true,
-          // costPrice intentionally excluded — sensitive business data
         },
         orderBy: { name: 'asc' },
         take: input.take ?? 100,
@@ -114,7 +109,6 @@ export function createProductRepository(store: ProductStore): ProductRepository 
           sku: input.sku,
           type: input.type,
           price: input.price,
-          costPrice: input.costPrice,
           stockQuantity: input.type === 'SERVICE' ? 0 : input.stockQuantity,
           minStockLevel: input.type === 'SERVICE' ? 0 : input.minStockLevel,
           isActive: input.isActive,
@@ -128,7 +122,6 @@ export function createProductRepository(store: ProductStore): ProductRepository 
             staffId: input.staffId,
             type: 'RESTOCK',
             quantity: created.stockQuantity,
-            unitCost: input.costPrice,
             reason: 'Tồn đầu kỳ',
           },
         })
@@ -152,33 +145,13 @@ export function createProductRepository(store: ProductStore): ProductRepository 
           staffId: input.staffId,
           type: input.type,
           quantity: input.quantity,
-          unitCost: input.unitCost,
           reason: input.reason,
         },
       })
 
-      // ── Cập nhật giá vốn theo weighted average khi nhập kho (RESTOCK) ──
-      // costPrice_mới = (stock_cũ × costPrice_cũ + q_nhập × unitCost_nhập) / (stock_cũ + q_nhập)
-      // Chỉ áp dụng khi có unitCost nhập vào; tồn đầu kỳ (createWithInitialStock) đã set costPrice lúc tạo.
-      let costPriceUpdate: { costPrice?: number } = {}
-      if (
-        input.type === 'RESTOCK' &&
-        input.unitCost != null &&
-        input.unitCost > 0 &&
-        product.stockQuantity > 0
-      ) {
-        const currentValue = Number(product.costPrice ?? 0) * product.stockQuantity
-        const addedValue = input.unitCost * input.quantity
-        const weightedAvg = (currentValue + addedValue) / nextStock
-        costPriceUpdate = { costPrice: Math.round(weightedAvg) }
-      } else if (input.type === 'RESTOCK' && input.unitCost != null && input.unitCost > 0) {
-        // Lô nhập đầu tiên — giá vốn = giá nhập lô này
-        costPriceUpdate = { costPrice: input.unitCost }
-      }
-
       const updatedProduct = await store.product.update({
         where: { id: product.id },
-        data: { stockQuantity: nextStock, ...costPriceUpdate },
+        data: { stockQuantity: nextStock },
       })
 
       return {

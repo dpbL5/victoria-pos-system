@@ -811,9 +811,23 @@ export function CheckoutDrawer({
             : "Chi tiết hoá đơn"
         }
         description={
-          session
-            ? `${isMember ? "Hội viên" : "Vãng lai"}${isGroupSession ? ` · ${sessionPlayerCount} người` : ""}`
-            : undefined
+          session ? (
+            <>
+              {isMember ? "Hội viên" : "Vãng lai"}
+              {session.customerPhone && (
+                <>
+                  {" · "}
+                  <a
+                    href={`tel:${session.customerPhone}`}
+                    className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
+                  >
+                    {session.customerPhone}
+                  </a>
+                </>
+              )}
+              {isGroupSession ? ` · ${sessionPlayerCount} người` : ""}
+            </>
+          ) : undefined
         }
         size="lg"
         footer={

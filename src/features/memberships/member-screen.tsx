@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
-  Search,
   Settings,
   Ticket,
   UserPlus,
@@ -14,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { useApi } from '@/hooks/use-api'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
@@ -45,8 +44,6 @@ interface MembershipListResponse {
 
 export function MemberScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
-  const [searchInput, setSearchInput] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
   const [selectedMember, setSelectedMember] = useState<MemberCustomer | null>(null)
   const [history, setHistory] = useState<Membership[]>([])
@@ -57,11 +54,7 @@ export function MemberScreen() {
 
   const { data: userData, isLoading: userLoading } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
 
-  const membersUrl = useMemo(() => {
-    const params = new URLSearchParams({ type: 'MEMBER', includeMembershipStatus: 'true', limit: '100' })
-    if (searchQuery.trim()) params.set('search', searchQuery.trim())
-    return `/api/customers?${params}`
-  }, [searchQuery])
+  const membersUrl = '/api/customers?type=MEMBER&includeMembershipStatus=true&limit=100'
 
   const { data: memberData, isLoading: memberLoading, mutate } = useApi<MemberCustomer[]>(membersUrl, { dedupingInterval: 120_000 })
   const { data: planData } = useApi<MembershipPlan[]>('/api/membership-plans', { dedupingInterval: 300_000 })
@@ -215,6 +208,28 @@ export function MemberScreen() {
     return <MemberScreenSkeleton />
   }
 
+  const listHeader = (
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
+          Danh sách hội viên
+        </h2>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          {filteredMembers.length} người
+        </p>
+        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+          <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
+          <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Còn hạn: {stats.active}</button>
+          <button type="button" aria-pressed={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')} className={statusFilter === 'EXPIRED' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hết hạn: {stats.expired}</button>
+          <button type="button" aria-pressed={statusFilter === 'NONE'} onClick={() => setStatusFilter('NONE')} className={statusFilter === 'NONE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Chưa đóng: {stats.none}</button>
+        </div>
+      </div>
+      <Badge variant={shift ? 'success' : 'warning'}>
+        {shift ? 'Có ca' : 'Chưa mở ca'}
+      </Badge>
+    </div>
+  )
+
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-5xl space-y-4">
@@ -242,102 +257,65 @@ export function MemberScreen() {
           />
         )}
 
-        <section className="grid grid-cols-4 gap-2">
-          <MemberStat label="Tất cả" value={stats.total} active={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} />
-          <MemberStat label="Còn hạn" value={stats.active} active={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} />
-          <MemberStat label="Hết hạn" value={stats.expired} active={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')} />
-          <MemberStat label="Chưa đóng" value={stats.none} active={statusFilter === 'NONE'} onClick={() => setStatusFilter('NONE')} />
-        </section>
+        <div className="flex gap-2">
+          <Button
+            variant="primary"
+            size="lg"
+            className="flex-1"
+            icon={UserPlus}
+            disabled={!shift}
+            onClick={() => setRegisterOpen(true)}
+          >
+            Đăng ký hội viên mới
+          </Button>
+          {canManagePlans && (
+            <Link
+              href="/membership-plans"
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+            >
+              <Ticket size={16} />
+              <span>Gói hội viên</span>
+            </Link>
+          )}
+        </div>
 
-        <section className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search
-                size={15}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-              />
-              <Input
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    setSearchQuery(searchInput)
-                  }
-                }}
-                className="pl-9"
-                placeholder="Tìm tên hoặc số điện thoại"
-              />
-            </div>
-            <Button variant="secondary" size="sm" onClick={() => setSearchQuery(searchInput)}>
-              Tìm
-            </Button>
-            {canManagePlans && (
-              <Link
-                href="/membership-plans"
-                className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-              >
-                <Ticket size={16} />
-                <span>Gói hội viên</span>
-              </Link>
-            )}
-          </div>
-        </section>
+        {/* Mobile: card list */}
+        <div className="md:hidden">
+          <SortableCardList
+            header={listHeader}
+            columns={memberCardColumns}
+            data={filteredMembers}
+            keyExtractor={(m) => m.id}
+            search={{
+              placeholder: 'Tìm tên hoặc số điện thoại',
+              getText: (m) => `${m.fullName} ${m.phone ?? ''}`,
+            }}
+            sortableKeys={['fullName', 'phone', 'membershipStatus']}
+            defaultSortKey="fullName"
+            emptyIcon={Users}
+            emptyMessage="Không có hội viên"
+            emptyDescription="Thử đổi bộ lọc hoặc đăng ký hội viên mới."
+          />
+        </div>
 
-        <Button
-          variant="primary"
-          size="lg"
-          fullWidth
-          icon={UserPlus}
-          disabled={!shift}
-          onClick={() => setRegisterOpen(true)}
-        >
-          Đăng ký hội viên mới
-        </Button>
-
-        <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
-                Danh sách hội viên
-              </h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {filteredMembers.length} người
-              </p>
-            </div>
-            <Badge variant={shift ? 'success' : 'warning'}>
-              {shift ? 'Có ca' : 'Chưa mở ca'}
-            </Badge>
-          </div>
-
-          {/* Mobile: card list */}
-          <div className="md:hidden">
-            <SortableCardList
-              columns={memberCardColumns}
-              data={filteredMembers}
-              keyExtractor={(m) => m.id}
-              sortableKeys={['fullName', 'phone', 'membershipStatus']}
-              defaultSortKey="fullName"
-              emptyIcon={Users}
-              emptyMessage="Không có hội viên"
-              emptyDescription="Thử đổi bộ lọc hoặc đăng ký hội viên mới."
-            />
-          </div>
-
-          {/* Desktop: table */}
-          <div className="hidden md:block">
-            <SortableTable
-              columns={memberColumns}
-              data={filteredMembers}
-              keyExtractor={(m) => m.id}
-              sortableKeys={['fullName', 'phone', 'membershipStatus']}
-              defaultSortKey="fullName"
-              emptyIcon={Users}
-              emptyMessage="Không có hội viên"
-              emptyDescription="Thử đổi bộ lọc hoặc đăng ký hội viên mới."
-            />
-          </div>
-        </section>
+        {/* Desktop: table */}
+        <div className="hidden md:block">
+          <SortableTable
+            header={listHeader}
+            columns={memberColumns}
+            data={filteredMembers}
+            keyExtractor={(m) => m.id}
+            search={{
+              placeholder: 'Tìm tên hoặc số điện thoại',
+              getText: (m) => `${m.fullName} ${m.phone ?? ''}`,
+            }}
+            sortableKeys={['fullName', 'phone', 'membershipStatus']}
+            defaultSortKey="fullName"
+            emptyIcon={Users}
+            emptyMessage="Không có hội viên"
+            emptyDescription="Thử đổi bộ lọc hoặc đăng ký hội viên mới."
+          />
+        </div>
       </div>
 
       <RegisterMemberDialog
@@ -370,41 +348,11 @@ export function MemberScreen() {
 
 function MemberScreenSkeleton() {
   return (
-    <SkeletonPage>
+      <SkeletonPage>
       <Skeleton className="h-9 w-32" />
-      <SkeletonStats className="grid grid-cols-2 gap-2 md:grid-cols-4" />
       <SkeletonPanel><Skeleton className="h-12 w-full" /></SkeletonPanel>
       <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
     </SkeletonPage>
-  )
-}
-
-function MemberStat({
-  label,
-  value,
-  active,
-  onClick,
-}: {
-  label: string
-  value: number
-  active: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl border p-3 text-left shadow-sm transition-colors ${
-        active
-          ? 'border-blue-300 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10'
-          : 'border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800'
-      }`}
-    >
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className="mt-1 text-xl font-bold tabular-nums text-zinc-950 dark:text-white">
-        {value}
-      </p>
-    </button>
   )
 }
 
