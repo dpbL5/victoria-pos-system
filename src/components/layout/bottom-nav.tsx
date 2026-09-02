@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   BarChart3,
+  CalendarClock,
   MoreHorizontal,
   Package,
   ShieldCheck,
@@ -20,6 +21,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/sessions', label: 'Ca', Icon: Timer },
   { href: '/customers', label: 'Hội viên', Icon: ShieldCheck },
+  { href: '/shifts', label: 'Ca làm', Icon: CalendarClock },
   { href: '/inventory', label: 'Kho', Icon: Package },
   { href: '/reports', label: 'Báo cáo', Icon: BarChart3 },
   { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
@@ -31,15 +33,15 @@ interface BottomNavProps {
 
 export function BottomNav({ userRole }: BottomNavProps) {
   const pathname = usePathname()
-  // STAFF: Ca, Hội viên, Thêm. MANAGER: thêm Kho. ADMIN: đủ 5 tab.
+  // STAFF: Ca, Hội viên, Thêm. MANAGER/ADMIN: Ca, Ca làm (/shifts), thay thế Hội viên bằng /shifts.
   const visibleItems = navItems.filter((item) => {
     if (userRole === 'STAFF') {
       return item.href === '/sessions' || item.href === '/customers' || item.href === '/settings'
     }
     if (userRole === 'MANAGER') {
-      return item.href !== '/reports'
+      return item.href !== '/reports' && item.href !== '/customers'
     }
-    return true
+    return item.href !== '/customers'
   })
 
   const isActive = (href: string) =>
