@@ -18,9 +18,11 @@ interface NavItem {
   Icon: LucideIcon
 }
 
+// /customers (Hội viên) được đưa lên đầu để STAFF thấy [Hội viên, Ca, Thêm].
+// MANAGER/ADMIN luôn loại trừ /customers nên thứ tự này chỉ ảnh hưởng STAFF.
 const navItems: NavItem[] = [
-  { href: '/sessions', label: 'Ca', Icon: Timer },
   { href: '/customers', label: 'Hội viên', Icon: ShieldCheck },
+  { href: '/sessions', label: 'Ca', Icon: Timer },
   { href: '/shifts', label: 'Ca làm', Icon: CalendarClock },
   { href: '/inventory', label: 'Kho', Icon: Package },
   { href: '/reports', label: 'Báo cáo', Icon: BarChart3 },
@@ -33,7 +35,7 @@ interface BottomNavProps {
 
 export function BottomNav({ userRole }: BottomNavProps) {
   const pathname = usePathname()
-  // STAFF: Ca, Hội viên, Thêm. MANAGER/ADMIN: Ca, Ca làm (/shifts), thay thế Hội viên bằng /shifts.
+  // STAFF: Hội viên, Ca, Thêm (Hội viên sang trái). MANAGER/ADMIN: Ca, Ca làm (/shifts), thay thế Hội viên bằng /shifts.
   const visibleItems = navItems.filter((item) => {
     if (userRole === 'STAFF') {
       return item.href === '/sessions' || item.href === '/customers' || item.href === '/settings'

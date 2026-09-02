@@ -14,7 +14,6 @@ import {
   LogOut,
   Monitor,
   Moon,
-  Package,
   Settings,
   ShieldCheck,
   Sun,
@@ -96,9 +95,6 @@ export function MoreScreen() {
       ? [{ href: '/shifts', label: 'Ca làm', Icon: CalendarClock, tone: 'blue' as const }]
       : []),
     { href: '/customers', label: 'Hội viên', Icon: ShieldCheck, tone: 'purple' },
-    ...(!canViewShifts
-      ? [{ href: '/inventory', label: 'Kho quầy', Icon: Package, tone: 'amber' as const }]
-      : []),
   ] as const
 
   const adminLinks = [
