@@ -19,7 +19,7 @@ import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { formatClock, money } from '@/features/pos/format'
-import { getVnDay } from '@/lib/shared/utils'
+import { today } from '@/lib/shared/utils'
 
 type ShiftStatusFilter = 'ALL' | 'OPEN' | 'CLOSED'
 
@@ -91,7 +91,7 @@ export function ShiftsScreen() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const todayWeekday = getVnDay(new Date())
+  const todayStr = today()
 
   const loadData = useCallback(async (page: number) => {
     setLoading(true)
@@ -144,8 +144,7 @@ export function ShiftsScreen() {
     })).filter((group) => group.shifts.length > 0)
   }, [searchQuery, dayGroups])
 
-  const isCurrentGroup = (group: DayGroup) =>
-    group.weekday !== undefined && group.weekday === todayWeekday
+  const isCurrentGroup = (group: DayGroup) => group.date === todayStr
 
   if (loading) return <ShiftsSkeleton />
 
