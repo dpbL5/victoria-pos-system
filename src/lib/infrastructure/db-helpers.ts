@@ -31,13 +31,13 @@ export function fail(code: string, detail?: string): never {
  */
 export async function runInTransaction<T>(
   work: (repos: Repositories) => Promise<T>,
-  options?: { isolationLevel?: Prisma.TransactionIsolationLevel }
+  options?: { isolationLevel?: Prisma.TransactionIsolationLevel; timeout?: number }
 ): Promise<Result<T>> {
   try {
-    const value = options?.isolationLevel
+    const value = options
       ? await prisma.$transaction(
           async (tx) => work(createRepositories(tx)),
-          { isolationLevel: options.isolationLevel }
+          options
         )
       : await prisma.$transaction(async (tx) => work(createRepositories(tx)))
     return ok(value)

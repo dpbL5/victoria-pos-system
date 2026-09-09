@@ -35,7 +35,24 @@ export interface LessonStudent {
   package: LessonPackage | null
 }
 
+export interface LessonSeries {
+  id: string
+  version: number
+  title: string
+  daysOfWeek: number[]
+  startTime: string
+  intervalWeeks: number
+  occurrenceCount: number | null
+  startsOn: string
+  endsOn: string | null
+}
 export interface Lesson {
+  version: number
+  originalStartAt: string | null
+  shareNote: boolean
+  isException: boolean
+  series: LessonSeries | null
+  syncStatus?: string
   id: string
   seriesId: string | null
   title: string
@@ -49,7 +66,11 @@ export interface Lesson {
 }
 
 export interface CalendarStatus {
+  lastSyncedAt?: string | null
   connected: boolean
+  needsReconnect?: boolean
+  pending?: number
+  failed?: number
   email?: string
   calendarId?: string | null
   connectedAt?: string

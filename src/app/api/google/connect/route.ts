@@ -2,11 +2,10 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/shared/auth'
 import { buildAuthUrl, getGoogleConfig } from '@/lib/google'
 import { cookies } from 'next/headers'
-import { ERR_UNAUTHORIZED, ERR_FORBIDDEN } from '@/lib/infrastructure/api-helpers'
 
 export async function GET() {
   try {
-    await requireAdmin()
+    const auth = await requireAdmin()
 
     const config = getGoogleConfig()
     if (!config.isConfigured) {
@@ -19,7 +18,7 @@ export async function GET() {
     // State chống CSRF — cookie httpOnly, verify ở callback
     const state = crypto.randomUUID()
     const cookieStore = await cookies()
-    cookieStore.set('qltrungcung_gcal_state', state, {
+    cookieStore.set('qltrungcung_gcal_state', `${auth.userId}:${state}`, {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',

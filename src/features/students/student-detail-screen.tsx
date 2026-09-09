@@ -72,9 +72,9 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fullName: form.fullName.trim(),
-          phone: form.phone.trim() || undefined,
+          phone: form.phone.trim(),
           birthYear: form.birthYear ? Number(form.birthYear) : null,
-          notes: form.notes.trim() || undefined,
+          notes: form.notes.trim(),
           status: form.status,
         }),
       })
@@ -171,7 +171,7 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
         <Card padding="none">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Lịch học</h2>
-            <Button variant="secondary" size="sm" icon={CalendarClock} onClick={() => router.push('/lessons')}>Xếp lịch</Button>
+            <Button variant="secondary" size="sm" icon={CalendarClock} onClick={() => router.push(`/lessons?studentId=${id}`)}>Xếp lịch</Button>
           </div>
           <div className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
             {upcoming.length === 0 && past.length === 0 && (

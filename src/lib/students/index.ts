@@ -10,6 +10,8 @@ export type {
   LessonSeriesRepository,
   LessonPackageRepository,
   CalendarConnectionRepository,
+  CalendarSyncRepository,
+  GoogleCalendarPort,
 } from './ports'
 export * from './validations'
 export * from './helpers/rrule'
@@ -19,3 +21,6 @@ export * from './use-cases/package-crud'
 export * from './use-cases/lesson-crud'
 export * from './use-cases/attendance'
 export * from './use-cases/calendar-connect'
+
+export * from './helpers/calendar'
+export * from './use-cases/calendar-sync'

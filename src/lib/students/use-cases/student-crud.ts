@@ -1,7 +1,7 @@
 // ── Use-cases: CRUD học viên ─────
 import { err } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
-import { runInTransaction } from '@/lib/infrastructure/db-helpers'
+import { fail, runInTransaction } from '@/lib/infrastructure/db-helpers'
 import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import { repositories } from '@/lib/infrastructure/repositories'
@@ -16,7 +16,8 @@ export interface CreateStudentInput {
   notes?: string
 }
 
-export async function createStudent(input: CreateStudentInput): Promise<Result<StudentRecord>> {
+export async function createStudent(input: CreateStudentInput, deps: Repositories = repositories): Promise<Result<StudentRecord>> {
+  void deps
   const result = await runInTransaction(async (tx) => {
     const student = await tx.student.create({
       fullName: input.fullName.trim(),
@@ -34,7 +35,7 @@ export async function createStudent(input: CreateStudentInput): Promise<Result<S
     })
 
     return student
-  })
+  }, { isolationLevel: 'Serializable' })
 
   return result
 }
@@ -76,7 +77,7 @@ export async function updateStudent(
     })
 
     return student
-  })
+  }, { isolationLevel: 'Serializable' })
 
   return result
 }
@@ -95,6 +96,9 @@ export async function deleteStudent(
   if (!existing || existing.deletedAt) return err('STUDENT_NOT_FOUND')
 
   const result = await runInTransaction(async (tx) => {
+    const future = await tx.lesson.findUpcomingByStudent(input.studentId, new Date(), 1)
+    const series = await tx.lessonSeries.findMany()
+    if (future.length || series.some(s => s.isActive && (!s.endsOn || s.endsOn > new Date()) && s.students.some(member => member.studentId === input.studentId))) fail('STUDENT_HAS_LESSONS')
     const student = await tx.student.softDelete(input.studentId)
 
     await tx.audit.append({
@@ -106,13 +110,14 @@ export async function deleteStudent(
     })
 
     return student
-  })
+  }, { isolationLevel: 'Serializable' })
 
   return result
 }
 
 // ── Error mapping ──
 function mapStudentError(error: DomainError): HttpErrorInfo {
+  if (error.code === 'STUDENT_HAS_LESSONS') return { code: error.code, message: 'Học viên còn lịch tương lai. Hãy mở lịch để đổi học viên hoặc huỷ buổi trước khi xoá', status: 409 }
   if (error.code === 'STUDENT_NOT_FOUND') {
     return { code: 'STUDENT_NOT_FOUND', message: 'Không tìm thấy học viên', status: 404 }
   }

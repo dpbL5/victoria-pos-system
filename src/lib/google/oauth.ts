@@ -4,7 +4,7 @@ import { getGoogleConfig } from './env'
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 
 const SCOPES = [
-  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
   'https://www.googleapis.com/auth/calendar.events',
 ].join(' ')
 
@@ -45,6 +45,7 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenResponse
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
+    signal: AbortSignal.timeout(8000),
   })
 
   if (!res.ok) {
@@ -67,6 +68,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<TokenRes
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
+    signal: AbortSignal.timeout(8000),
   })
 
   if (!res.ok) {

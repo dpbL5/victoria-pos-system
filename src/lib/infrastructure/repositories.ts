@@ -1,3 +1,4 @@
+import { googleCalendar } from './adapters/google-calendar-adapter'
 // ── Composition root — bundle các repository adapters ─────
 import { prisma } from './prisma'
 import { createBillingRepository } from './adapters/invoice-adapter'
@@ -19,6 +20,7 @@ import {
   createLessonSeriesRepository,
   createLessonPackageRepository,
   createCalendarConnectionRepository,
+  createCalendarSyncRepository,
 } from './adapters/student-adapter'
 import { createCachedSettingsRepository } from '@/lib/settings'
 import type { Prisma } from '@/generated/prisma/client'
@@ -40,6 +42,8 @@ import type {
   LessonSeriesRepository,
   LessonPackageRepository,
   CalendarConnectionRepository,
+  CalendarSyncRepository,
+  GoogleCalendarPort,
 } from '@/lib/students/ports'
 
 /**
@@ -67,6 +71,8 @@ export interface Repositories {
   lessonSeries: LessonSeriesRepository
   lessonPackage: LessonPackageRepository
   calendarConnection: CalendarConnectionRepository
+  calendarSync: CalendarSyncRepository
+  googleCalendar: GoogleCalendarPort
 }
 
 export function createRepositories(store: Prisma.TransactionClient): Repositories {
@@ -92,6 +98,8 @@ export function createRepositories(store: Prisma.TransactionClient): Repositorie
     lessonSeries: createLessonSeriesRepository(store),
     lessonPackage: createLessonPackageRepository(store),
     calendarConnection: createCalendarConnectionRepository(store),
+    calendarSync: createCalendarSyncRepository(store),
+    googleCalendar,
   }
 }
 

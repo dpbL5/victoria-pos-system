@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { requireAdmin } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
-import { disconnectCalendar } from '@/lib/students'
+import { disconnectCalendar, mapConnectCalendarError } from '@/lib/students'
 import {
   apiSuccess,
   apiError,
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const result = await disconnectCalendar({ staffId: auth.userId })
 
     if (!result.ok) {
-      return apiError({ code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 })
+      return apiError(mapConnectCalendarError(result.error))
     }
 
     return apiSuccess(result.value)

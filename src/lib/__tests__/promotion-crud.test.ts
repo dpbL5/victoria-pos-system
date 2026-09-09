@@ -48,9 +48,9 @@ const existingRule = {
 
 function resetMocks() {
   vi.clearAllMocks()
-  fakeStore.promotionRule.create.mockResolvedValue({ id: 'promo-1', ...existingRule })
+  fakeStore.promotionRule.create.mockResolvedValue(existingRule)
   fakeStore.promotionRule.findUnique.mockResolvedValue(existingRule)
-  fakeStore.promotionRule.update.mockResolvedValue({ id: 'promo-1', ...existingRule })
+  fakeStore.promotionRule.update.mockResolvedValue(existingRule)
   fakeStore.promotionRule.delete.mockResolvedValue(existingRule)
 }
 

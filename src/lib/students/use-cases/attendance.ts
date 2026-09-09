@@ -1,7 +1,7 @@
 // ── Use-case: điểm danh buổi học + trừ gói buổi ─────
 import { err } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
-import { runInTransaction } from '@/lib/infrastructure/db-helpers'
+import { fail, runInTransaction } from '@/lib/infrastructure/db-helpers'
 import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import { repositories } from '@/lib/infrastructure/repositories'
@@ -40,10 +40,13 @@ export async function markAttendance(
   }
 
   const result = await runInTransaction(async (tx) => {
+    const current = await tx.lesson.findById(input.lessonId)
+    if (!current || current.status === 'CANCELLED') fail('LESSON_CANCELLED')
+    if (input.entries.some(e => !current!.students.some(s => s.studentId === e.studentId))) fail('LESSON_STUDENT_MISMATCH')
     const remainingByStudent: Record<string, number> = {}
 
     for (const e of input.entries) {
-      const ls = lesson.students.find((s) => s.studentId === e.studentId)
+      const ls = current!.students.find((s) => s.studentId === e.studentId)
       if (!ls) continue
 
       // Cập nhật status + note cho LessonStudent này
@@ -51,7 +54,7 @@ export async function markAttendance(
         lessonId: input.lessonId,
         studentId: e.studentId,
         status: e.status,
-        note: e.note?.trim() || undefined,
+        note: e.note === undefined ? undefined : e.note.trim(),
       })
 
       // Khi chuyển sang COMPLETED và chưa có gói bị trừ → trừ 1 buổi từ gói
@@ -86,9 +89,11 @@ export async function markAttendance(
       },
     })
 
+    const statuses = current!.students.map(s => input.entries.find(e => e.studentId === s.studentId)?.status ?? s.status)
+    await tx.lesson.update(input.lessonId, { status: statuses.every(status => status !== 'SCHEDULED') ? 'COMPLETED' : 'SCHEDULED' })
     const updated = await tx.lesson.findById(input.lessonId)
     return { lesson: updated!, remainingByStudent }
-  })
+  }, { isolationLevel: 'Serializable' })
 
   return result
 }
@@ -104,6 +109,8 @@ async function currentRemaining(
 
 export function mapMarkAttendanceError(error: DomainError): HttpErrorInfo {
   switch (error.code) {
+    case 'LESSON_CANCELLED':
+      return { code: error.code, message: 'Buổi học đã huỷ, không thể điểm danh', status: 409 }
     case 'LESSON_NOT_FOUND':
       return { code: 'LESSON_NOT_FOUND', message: 'Không tìm thấy buổi học', status: 404 }
     case 'LESSON_STUDENT_MISMATCH':

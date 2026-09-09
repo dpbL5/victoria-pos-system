@@ -32,6 +32,11 @@ vi.mock('@/lib/infrastructure/db-helpers', async (importOriginal) => {
 function makeLesson(overrides: Partial<LessonRecord> = {}): LessonRecord {
   return {
     id: 'lesson-1',
+    version: 1,
+    originalStartAt: null,
+    isException: false,
+    shareNote: false,
+    googleCalendarId: null,
     seriesId: null,
     title: 'Buổi 1',
     coachName: null,
@@ -81,6 +86,7 @@ describe('markAttendance', () => {
   it('returns LESSON_NOT_FOUND when lesson missing', async () => {
     setup({
       lesson: {
+        update: vi.fn(),
         findById: vi.fn(async () => null),
       } as never,
     })
@@ -99,6 +105,7 @@ describe('markAttendance', () => {
   it('rejects an entry for a student not in the lesson', async () => {
     setup({
       lesson: {
+        update: vi.fn(),
         findById: vi.fn(async () => makeLesson()),
       } as never,
     })
@@ -121,6 +128,7 @@ describe('markAttendance', () => {
 
     setup({
       lesson: {
+        update: vi.fn(),
         findById: vi.fn(async () => lesson),
         upsertAttendance: vi.fn(async () => {}),
         setPackage: vi.fn(async () => {}),
@@ -157,6 +165,7 @@ describe('markAttendance', () => {
 
     setup({
       lesson: {
+        update: vi.fn(),
         findById: vi.fn(async () => makeLesson()),
         upsertAttendance: vi.fn(async () => {}),
         setPackage: vi.fn(async () => {}),

@@ -13,9 +13,9 @@ export interface RouteParams {
  * Gọi một route handler (POST/GET/PUT/DELETE) với body JSON và params.
  * Trả về { status, json } để assert hợp đồng HTTP.
  */
-export async function invoke(
-  handler: (req: NextRequest, ctx: { params: Promise<RouteParams> }) => Promise<Response>,
-  opts: { method?: string; body?: unknown; params?: RouteParams } = {}
+export async function invoke<P extends RouteParams = RouteParams>(
+  handler: (req: NextRequest, ctx: { params: Promise<P> }) => Promise<Response>,
+  opts: { method?: string; body?: unknown; params?: P } = {}
 ): Promise<{ status: number; json: { success: boolean; [key: string]: unknown } }> {
   const { method = 'POST', body, params = {} } = opts
 
@@ -25,7 +25,7 @@ export async function invoke(
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
   })
 
-  const res = await handler(req, { params: Promise.resolve(params) })
+  const res = await handler(req, { params: Promise.resolve(params as P) })
   const json = (await res.json()) as { success: boolean; [key: string]: unknown }
   return { status: res.status, json }
 }

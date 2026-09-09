@@ -1,12 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarClock, Edit3, GraduationCap, Plus, RefreshCw, Trash2, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input, Label } from '@/components/ui/input'
+import { Input, Label, Select } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
@@ -24,14 +24,18 @@ interface StudentForm {
   phone: string
   birthYear: string
   notes: string
+  status: 'ACTIVE' | 'INACTIVE'
 }
 
-const emptyForm: StudentForm = { fullName: '', phone: '', birthYear: '', notes: '' }
+const emptyForm: StudentForm = { fullName: '', phone: '', birthYear: '', notes: '', status: 'ACTIVE' }
 
 export function StudentsScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
   const router = useRouter()
-  const { data: studentsData, isLoading, mutate } = useApi<Student[]>('/api/students', { dedupingInterval: 60_000 })
+  const [query, setQuery] = useState('')
+  const [offset, setOffset] = useState(0)
+  const [filter, setFilter] = useState('')
+  const { data: studentsData, isLoading, mutate } = useApi<Student[]>(`/api/students?limit=20&offset=${offset}&search=${encodeURIComponent(query)}&status=${filter}`,  { dedupingInterval: 60_000 })
   const { data: calData, mutate: mutateCal } = useApi<CalendarStatus>('/api/google/status', { dedupingInterval: 60_000 })
 
   const { registerRefresh } = usePageRefresh()
@@ -63,6 +67,7 @@ export function StudentsScreen() {
       phone: s.phone ?? '',
       birthYear: s.birthYear ? String(s.birthYear) : '',
       notes: s.notes ?? '',
+      status: s.status,
     })
     setFormOpen(true)
   }
@@ -82,9 +87,10 @@ export function StudentsScreen() {
     try {
       const body = {
         fullName: form.fullName.trim(),
-        phone: form.phone.trim() || undefined,
-        birthYear: form.birthYear ? Number(form.birthYear) : undefined,
-        notes: form.notes.trim() || undefined,
+        phone: form.phone.trim(),
+        birthYear: form.birthYear ? Number(form.birthYear) : null,
+        notes: form.notes.trim(),
+        status: form.status,
       }
       const data = editStudent
         ? await apiJson<Student>(`/api/students/${editStudent.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -282,19 +288,12 @@ export function StudentsScreen() {
 
         {error && <NoticeCard tone="danger" title="Không tải được dữ liệu" description={error} />}
 
+        <div className="flex flex-wrap gap-2"><Input aria-label="Tìm học viên" placeholder="Tìm tên hoặc số điện thoại" value={query} onChange={e => { setQuery(e.target.value); setOffset(0) }} /><Select aria-label="Trạng thái học viên" value={filter} onChange={e => { setFilter(e.target.value); setOffset(0) }}><option value="">Tất cả trạng thái</option><option value="ACTIVE">Đang học</option><option value="INACTIVE">Đã nghỉ</option></Select></div>
         <div className="md:hidden">
           <SortableCardList
             columns={cardColumns}
             data={students}
             keyExtractor={(s) => s.id}
-            search={{
-              placeholder: 'Tìm tên hoặc số điện thoại',
-              getText: (s) => `${s.fullName} ${s.phone ?? ''}`,
-            }}
-            filters={[
-              { key: 'ACTIVE', label: 'Đang học', matches: (s) => s.status === 'ACTIVE' },
-              { key: 'INACTIVE', label: 'Đã nghỉ', matches: (s) => s.status === 'INACTIVE' },
-            ]}
             sortableKeys={['fullName']}
             defaultSortKey="fullName"
             defaultSortDir="asc"
@@ -309,10 +308,6 @@ export function StudentsScreen() {
             columns={columns}
             data={students}
             keyExtractor={(s) => s.id}
-            search={{
-              placeholder: 'Tìm tên hoặc số điện thoại',
-              getText: (s) => `${s.fullName} ${s.phone ?? ''}`,
-            }}
             sortableKeys={['fullName', 'phone']}
             defaultSortKey="fullName"
             defaultSortDir="asc"
@@ -322,6 +317,7 @@ export function StudentsScreen() {
           />
         </div>
 
+        <div className="flex items-center justify-between"><Button variant="secondary" disabled={offset === 0} onClick={() => setOffset(n => Math.max(0, n - 20))}>Trước</Button><span className="text-sm">Trang {offset / 20 + 1}</span><Button variant="secondary" disabled={students.length < 20} onClick={() => setOffset(n => n + 20)}>Tiếp</Button></div>
         <StudentFormModal
           open={formOpen}
           student={editStudent}
@@ -389,6 +385,7 @@ function StudentFormModal({
           <Label htmlFor="student-birth">Năm sinh</Label>
           <Input id="student-birth" type="number" min={1900} max={2100} value={form.birthYear} onChange={(e) => onChange({ ...form, birthYear: e.target.value })} placeholder="VD: 2005" />
         </div>
+        {student && <div><Label htmlFor="student-status">Trạng thái</Label><Select id="student-status" value={form.status} onChange={e => onChange({ ...form, status: e.target.value as StudentForm['status'] })}><option value="ACTIVE">Đang học</option><option value="INACTIVE">Dừng học</option></Select></div>}
         <div>
           <Label htmlFor="student-notes">Ghi chú</Label>
           <Input id="student-notes" value={form.notes} onChange={(e) => onChange({ ...form, notes: e.target.value })} placeholder="Ghi chú (tuỳ chọn)" />

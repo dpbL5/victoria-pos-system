@@ -1,0 +1,28 @@
+.lessons-calendar {
+  --fc-classic-background: var(--color-surface-primary, #fff);
+  --fc-classic-foreground: var(--color-text-primary, #18181b);
+  --fc-classic-border: var(--color-border-default, #e4e4e7);
+  --fc-classic-muted-foreground: var(--color-text-secondary, #52525b);
+  --fc-classic-primary: #1d4ed8;
+  --fc-classic-event: #1d4ed8;
+  --fc-classic-event-contrast: #fff;
+  --fc-classic-today: #2563eb0c;
+  --fc-classic-highlight: #2563eb24;
+  --fc-classic-now: #dc2626;
+  --fc-classic-background-event: #16a34a;
+  font-variant-numeric: tabular-nums;
+  caret-color: #2563eb;
+}
+.lessons-calendar main { font-size: 13px; }
+.lessons-calendar [data-lesson-event] { cursor: pointer; }
+.lessons-calendar [data-lesson-event]:focus-visible { outline: 2px solid var(--color-text-primary, #18181b); outline-offset: 2px; }
+.lessons-calendar .lesson-cancelled { opacity: .65; text-decoration: line-through; }
+.lessons-calendar ::selection { background: #bfdbfe; color: #172554; }
+.lessons-calendar .lesson-slot { height: 2.25rem; }
+@media (max-width: 767px) {
+  .lessons-calendar main { font-size: 12px; }
+  .lessons-calendar .lesson-slot { height: 2.5rem; }
+}
+
+.lessons-calendar .lesson-mini { font-size: 11px; }
+.lessons-calendar .lesson-mini-day { cursor: pointer; }

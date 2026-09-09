@@ -41,7 +41,7 @@ export const staffMenuItems: MenuItem[] = [
   { href: '/pricing', label: 'Bảng giá', Icon: Banknote, adminOnly: true },
   { href: '/promotions', label: 'Khuyến mại', Icon: Tag, adminOnly: true },
   { href: '/tools', label: 'Dụng cụ', Icon: Wrench, adminOnly: true },
-  { href: '/students', label: 'Học viên', Icon: GraduationCap, adminOnly: true },
+  { href: '/lessons', label: 'Đào tạo', Icon: GraduationCap, adminOnly: true },
   { href: '/staff', label: 'Nhân viên', Icon: UserCog, adminOnly: true },
   { href: '/cashflow', label: 'Thu chi', Icon: ArrowRightLeft, adminOnly: true },
   { href: '/settings', label: 'Cài đặt', Icon: Settings },
@@ -69,6 +69,8 @@ export function Sidebar({ collapsed, onToggle, userRole }: SidebarProps) {
     (href: string) =>
       href === '/sessions'
         ? pathname === '/sessions' || pathname === '/'
+        : href === '/lessons'
+          ? ['/lessons', '/students'].some(path => pathname === path || pathname.startsWith(`${path}/`))
         : pathname.startsWith(href),
     [pathname]
   )

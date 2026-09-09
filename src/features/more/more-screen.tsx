@@ -105,7 +105,7 @@ export function MoreScreen() {
     { href: '/staff', label: 'Nhân viên', Icon: UserCog, tone: 'blue' as const },
     { href: '/pricing', label: 'Bảng giá', Icon: Banknote, tone: 'blue' as const },
     { href: '/tools', label: 'Dụng cụ', Icon: Wrench, tone: 'amber' as const },
-    { href: '/students', label: 'Học viên', Icon: GraduationCap, tone: 'emerald' as const },
+    { href: '/lessons', label: 'Đào tạo', Icon: GraduationCap, tone: 'emerald' as const },
     { href: '/cashflow', label: 'Thu chi', Icon: ArrowRightLeft, tone: 'emerald' as const },
   ] as const
 

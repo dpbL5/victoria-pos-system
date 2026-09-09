@@ -19,9 +19,11 @@ export async function GET(request: NextRequest) {
     const search = request.nextUrl.searchParams.get('search') || undefined
     const statusParam = request.nextUrl.searchParams.get('status') || undefined
     const status = statusParam === 'ACTIVE' || statusParam === 'INACTIVE' ? statusParam : undefined
-    const limitParam = Number(request.nextUrl.searchParams.get('limit')) || undefined
+    const limitParam = Number(request.nextUrl.searchParams.get('limit') ?? 100)
+    const offset = Number(request.nextUrl.searchParams.get('offset') ?? 0)
+    if (!Number.isInteger(limitParam) || limitParam < 1 || limitParam > 100 || !Number.isInteger(offset) || offset < 0) return apiError({ code: 'VALIDATION', message: 'Phân trang không hợp lệ', status: 400 })
 
-    const students = await repositories.student.findMany({ search, status, limit: limitParam })
+    const students = await repositories.student.findMany({ search, status, limit: limitParam, offset })
 
     return apiSuccess(students)
   } catch (error) {

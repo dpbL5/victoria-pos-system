@@ -621,6 +621,7 @@ model Student {
 
   packages LessonPackage[]
   lessons  LessonStudent[]
+  series   LessonSeriesStudent[]
 
   @@index([status])
   @@map("students")
@@ -658,7 +659,14 @@ model LessonSeries {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
+  version Int @default(1)
+  intervalWeeks Int @default(1) @map("interval_weeks")
+  occurrenceCount Int? @map("occurrence_count")
+  timeZone String @default("Asia/Ho_Chi_Minh") @map("time_zone")
+  materializedUntil DateTime? @map("materialized_until")
+  googleCalendarId String? @map("google_calendar_id")
   lessons Lesson[]
+  students LessonSeriesStudent[]
 
   @@index([startsOn])
   @@map("lesson_series")
@@ -678,8 +686,14 @@ model Lesson {
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
 
+  version Int @default(1)
+  originalStartAt DateTime? @map("original_start_at")
+  isException Boolean @default(false) @map("is_exception")
+  shareNote Boolean @default(false) @map("share_note")
+  googleCalendarId String? @map("google_calendar_id")
   students LessonStudent[]
 
+  @@unique([seriesId, originalStartAt])
   @@index([startsAt])
   @@index([seriesId])
   @@map("lessons")
@@ -709,6 +723,44 @@ model CalendarConnection {
   tokenExpiresAt DateTime @map("token_expires_at")
   calendarId     String?  @map("calendar_id") @db.VarChar(200) // null = calendar "primary"
   connectedAt    DateTime @default(now()) @map("connected_at")
+  generation String @default(uuid())
+  needsReconnect Boolean @default(false) @map("needs_reconnect")
+  leaseUntil DateTime? @map("lease_until")
+  leaseOwner String? @map("lease_owner")
 
   @@map("calendar_connections")
+}
+
+model LessonSeriesStudent {
+  seriesId String @map("series_id")
+  studentId String @map("student_id")
+  series LessonSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id])
+  @@id([seriesId, studentId])
+  @@index([studentId])
+  @@map("lesson_series_students")
+}
+
+model CalendarSyncJob {
+  id String @id @default(uuid())
+  entityKey String @unique @map("entity_key")
+  entityId String @map("entity_id")
+  kind String
+  version Int @default(1)
+  status String @default("PENDING")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  lastError String? @map("last_error")
+  syncedAt DateTime? @map("synced_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([status, nextAttemptAt])
+  @@map("calendar_sync_jobs")
+}
+
+model CalendarEventMapping {
+  entityKey String @map("entity_key")
+  calendarId String @map("calendar_id")
+  eventId String @map("event_id")
+  @@id([entityKey, calendarId])
+  @@map("calendar_event_mappings")
 }
