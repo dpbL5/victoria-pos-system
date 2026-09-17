@@ -1,19 +1,26 @@
 // ── Ports — repository interfaces cho domain Học viên ─────
 import type { Prisma } from '@/generated/prisma/client'
 
-export type StudentRecord = Prisma.StudentGetPayload<{ include: { packages: true } }>
+export type StudentRecord = Prisma.StudentGetPayload<{
+  include: { packages: true; series: { include: { series: { include: { class: true } } } } }
+}>
 export type LessonRecord = Prisma.LessonGetPayload<{
-  include: { students: { include: { student: true; package: true } }; series: true }
+  include: { students: { include: { student: true; package: true } }; series: { include: { class: true } }; class: true }
 }>
 export type LessonSeriesRecord = Prisma.LessonSeriesGetPayload<{ include: { students: true } }>
 export type LessonPackageRecord = Prisma.LessonPackageGetPayload<object>
 export type CalendarConnectionRecord = Prisma.CalendarConnectionGetPayload<object>
+export type LessonClassRecord = Prisma.LessonClassGetPayload<{
+  include: { slots: { include: { students: { include: { student: true } } } }; _count: { select: { lessons: true } } }
+}>
 
 export interface StudentListInput {
   search?: string
   status?: 'ACTIVE' | 'INACTIVE'
   limit?: number
   offset?: number
+  /** Chỉ trả học viên chưa thuộc lớp nào (hoặc đang ở đúng lớp này) — dùng cho sổ lớp. */
+  availableForClassId?: string
 }
 
 export interface StudentRepository {
@@ -34,7 +41,7 @@ export interface StudentRepository {
 }
 
 export interface LessonRepository {
-  findManyBetween(from: Date, to: Date, filter?: { studentId?: string; coachName?: string; status?: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' }): Promise<LessonRecord[]>
+  findManyBetween(from: Date, to: Date, filter?: { studentId?: string; coachName?: string; status?: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED'; classId?: string }): Promise<LessonRecord[]>
   findById(id: string): Promise<LessonRecord | null>
   findBySeries(seriesId: string): Promise<LessonRecord[]>
   findUpcomingByStudent(studentId: string, from: Date, limit?: number): Promise<LessonRecord[]>
@@ -47,6 +54,10 @@ export interface LessonRepository {
   /** Xoá buổi tương lai của series (khi xoá series) — trả về số buổi đã xoá */
   deleteFutureBySeries(seriesId: string, from: Date): Promise<number>
   countLessonsByStudent(studentId: string): Promise<number>
+  /** Mọi buổi của một lớp (buổi lẻ gắn lớp + buổi sinh từ khung của lớp), không lọc theo thời gian. */
+  findByClass(classId: string): Promise<LessonRecord[]>
+  /** Xoá cứng (chỉ dùng cho lớp thêm nhầm — chưa có buổi điểm danh). */
+  deleteMany(ids: string[]): Promise<number>
   /** Cập nhật status/note cho LessonStudent (điểm danh). */
   upsertAttendance(input: {
     lessonId: string
@@ -65,6 +76,18 @@ export interface LessonSeriesRepository {
   update(id: string, data: Prisma.LessonSeriesUncheckedUpdateInput, version?: number): Promise<LessonSeriesRecord>
   replaceStudents(id: string, studentIds: string[]): Promise<void>
   delete(id: string): Promise<void>
+}
+
+export interface LessonClassRepository {
+  findMany(filter?: { status?: 'ACTIVE' | 'ENDED'; search?: string }): Promise<LessonClassRecord[]>
+  findById(id: string): Promise<LessonClassRecord | null>
+  create(data: { name: string; coachName?: string | null; note?: string | null }): Promise<LessonClassRecord>
+  update(id: string, data: { name?: string; coachName?: string | null; note?: string | null; isActive?: boolean }): Promise<LessonClassRecord>
+  delete(id: string): Promise<void>
+  /** Buổi sắp tới của nhiều lớp (đã sắp theo startsAt) — gom theo lớp ở tầng gọi. */
+  findUpcomingLessons(classIds: string[], from: Date): Promise<LessonRecord[]>
+  /** Lớp hiện tại của từng học viên — ràng buộc "một học viên chỉ thuộc một lớp". */
+  classesOfStudents(studentIds: string[]): Promise<{ studentId: string; studentName: string; classId: string; className: string }[]>
 }
 
 export interface LessonPackageRepository {

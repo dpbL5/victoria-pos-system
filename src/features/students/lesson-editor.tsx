@@ -9,27 +9,53 @@ import { useToast } from '@/components/ui/toast'
 import { apiJson } from '@/lib/api'
 import { StudentPicker } from './student-picker'
 import type { Lesson } from './types'
+import type { LessonClass } from '@/features/classes/types'
 
 export const localTime = (iso: string) => new Date(Date.parse(iso) + 7 * 3600000).toISOString().slice(0, 16)
 export const lockedLesson = (lesson: Lesson) => lesson.status !== 'SCHEDULED' || lesson.students.some(s => s.status !== 'SCHEDULED' || s.packageId)
 const weekday = (value: string) => new Date(`${value.slice(0, 10)}T00:00:00Z`).getUTCDay()
 const DAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
 
-export function LessonEditor({ lesson, start, end, studentId, onClose, onSaved }: {
-  lesson?: Lesson; start: string; end: string; studentId?: string; onClose: () => void; onSaved: () => void
+export function LessonEditor({ lesson, start, end, studentId, classId, defaultTitle, defaultStudents = [], onClose, onSaved }: {
+  lesson?: Lesson; start: string; end: string; studentId?: string; classId?: string; defaultTitle?: string; defaultStudents?: { id: string; fullName: string }[]; onClose: () => void; onSaved: () => void
 }) {
   const toast = useToast()
-  const [title, setTitle] = useState(lesson?.title ?? '')
+  const [title, setTitle] = useState(lesson?.title ?? defaultTitle ?? '')
   const [coachName, setCoachName] = useState(lesson?.coachName ?? '')
   const [startDay, setStartDay] = useState(localTime(start).slice(0, 10))
   const [startTime, setStartTime] = useState(localTime(start).slice(11))
   const [endTime, setEndTime] = useState(localTime(end).slice(11))
   const startsAt = `${startDay}T${startTime}`
   const endsAt = `${startDay}T${endTime}`
-  const [studentIds, setStudentIds] = useState(lesson?.students.map(s => s.studentId) ?? (studentId ? [studentId] : []))
+  const [studentIds, setStudentIds] = useState(lesson?.students.map(s => s.studentId) ?? (studentId ? [studentId] : defaultStudents.map(s => s.id)))
   const [note, setNote] = useState(lesson?.note ?? '')
   const [shareNote, setShareNote] = useState(lesson?.shareNote ?? false)
   const [repeat, setRepeat] = useState(false)
+  const [pickedClassId, setPickedClassId] = useState('')
+  const [pickedRoster, setPickedRoster] = useState<{ id: string; fullName: string }[]>([])
+  const [pickingClass, setPickingClass] = useState(false)
+  const { data: classOptions } = useApi<{ classes: LessonClass[] }>(!classId && !lesson ? '/api/classes?status=ACTIVE' : null)
+  const effectiveClassId = classId ?? pickedClassId
+  async function pickClass(nextId: string) {
+    setPickedClassId(nextId)
+    if (!nextId) return
+    setPickingClass(true)
+    try {
+      const detail = await apiJson<{ name: string; roster: { id: string; fullName: string }[] }>(`/api/classes/${nextId}`)
+      if (!detail.success || !detail.data) {
+        toast.error(detail.error || 'Không tải được sổ học viên của lớp')
+        return
+      }
+      setPickedRoster(detail.data.roster)
+      setStudentIds(detail.data.roster.map(member => member.id))
+      setTitle(current => current.trim() ? current : detail.data!.name)
+      setDirty(true)
+    } catch {
+      toast.error('Lỗi kết nối máy chủ')
+    } finally {
+      setPickingClass(false)
+    }
+  }
   const [scope, setScope] = useState('SINGLE')
   const [days, setDays] = useState(lesson?.series?.daysOfWeek.map(day => day === weekday(localTime(lesson.startsAt)) ? weekday(localTime(start)) : day) ?? [weekday(localTime(start))])
   const [interval, setInterval] = useState(lesson?.series?.intervalWeeks ?? 1)
@@ -58,10 +84,10 @@ export function LessonEditor({ lesson, start, end, studentId, onClose, onSaved }
     setSaving(true)
     try {
       let url = lesson ? `/api/lessons/${lesson.id}` : '/api/lessons'
-      let payload: Record<string, unknown> = remove ? { version: lesson?.version } : locked ? { version: lesson?.version, note, shareNote } : { title, coachName, startsAt: startDate.toISOString(), durationMin, studentIds, note, shareNote, ...(lesson ? { version: lesson.version } : {}) }
+      let payload: Record<string, unknown> = remove ? { version: lesson?.version } : locked ? { version: lesson?.version, note, shareNote } : { title, coachName, startsAt: startDate.toISOString(), durationMin, studentIds, note, shareNote, ...(lesson ? { version: lesson.version } : effectiveClassId ? { classId: effectiveClassId } : {}) }
       if (recurring) {
         url = lesson ? `/api/series/${lesson.seriesId}` : '/api/series'
-        payload = lesson ? { version: lesson.series!.version, scope, lessonId: lesson.id, ...(!remove ? { title, coachName, durationMin, studentIds } : {}) } : { title, coachName, durationMin, studentIds }
+        payload = lesson ? { version: lesson.series!.version, scope, lessonId: lesson.id, ...(!remove ? { title, coachName, durationMin, studentIds } : {}) } : { title, coachName, durationMin, studentIds, ...(effectiveClassId ? { classId: effectiveClassId } : {}) }
         if (!remove && (!lesson || changeRule)) Object.assign(payload, { startsOn: startsAt.slice(0, 10), startTime: startsAt.slice(11), daysOfWeek: days, intervalWeeks: interval, endsOn: ending === 'DATE' ? until : null, occurrenceCount: ending === 'COUNT' ? count : null })
       }
       const response = await apiJson(url, { method: remove ? 'DELETE' : lesson ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -100,13 +126,21 @@ export function LessonEditor({ lesson, start, end, studentId, onClose, onSaved }
             <div><Label htmlFor="lesson-start-time">Giờ bắt đầu (giờ Việt Nam)</Label><Input id="lesson-start-time" type="time" required value={startTime} onChange={e => { setStartTime(e.target.value); setChangeRule(true) }} /></div>
             <div><Label htmlFor="lesson-end-time">Giờ kết thúc (giờ Việt Nam)</Label><Input id="lesson-end-time" type="time" required value={endTime} onChange={e => setEndTime(e.target.value)} /></div>
           </div>
-          <StudentPicker value={studentIds} onChange={ids => { setStudentIds(ids); setDirty(true) }} initial={lesson?.students.map(s => s.student)} />
+          {!classId && !lesson && <div>
+            <Label htmlFor="lesson-class">Lớp (tuỳ chọn)</Label>
+            <Select id="lesson-class" value={pickedClassId} disabled={pickingClass} onChange={e => void pickClass(e.target.value)}>
+              <option value="">Buổi lẻ không thuộc lớp</option>
+              {classOptions?.data?.classes?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </Select>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Dùng cho chuyển lịch hoặc học bù: chọn lớp để tự điền sổ học viên và tiêu đề; buổi vẫn nằm trong lịch của lớp.</p>
+          </div>}
+          <StudentPicker key={effectiveClassId || 'free'} value={studentIds} onChange={ids => { setStudentIds(ids); setDirty(true) }} initial={lesson?.students.map(s => s.student) ?? (pickedClassId ? pickedRoster : defaultStudents)} />
         </fieldset>
         {!recurring && <><div><Label htmlFor="lesson-note">Ghi chú buổi học</Label><Textarea disabled={saving || lesson?.status === 'CANCELLED'} id="lesson-note" value={note} onChange={e => setNote(e.target.value)} maxLength={2000} rows={4} placeholder="Nội dung buổi học, tiến độ và điều cần lưu ý" /></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={saving || lesson?.status === 'CANCELLED'} checked={shareNote} onChange={e => setShareNote(e.target.checked)} />Đồng bộ ghi chú lên Google Calendar</label><p className="text-xs text-zinc-500">Ghi chú riêng từng học viên chỉ lưu trong ứng dụng.</p></>}
         {recurring && <p className="text-sm text-zinc-500">Ghi chú được lưu riêng từng buổi. Mở “Buổi này” để chỉnh ghi chú.</p>}
       </form>
     </Modal>
     <ConfirmDialog open={confirmClose} title="Bỏ thay đổi chưa lưu?" description="Các thay đổi trong biểu mẫu sẽ không được lưu." confirmLabel="Bỏ thay đổi" onClose={() => setConfirmClose(false)} onConfirm={onClose} />
-    <ConfirmDialog open={confirmDelete} title="Huỷ lịch học?" description={recurring ? 'Các buổi chưa diễn ra trong phạm vi đã chọn sẽ bị huỷ. Lịch sử được giữ lại.' : 'Buổi học này sẽ bị huỷ và cập nhật lên Google Calendar.'} confirmLabel="Huỷ lịch học" onClose={() => setConfirmDelete(false)} onConfirm={() => void save(true)} submitting={saving} />
+    <ConfirmDialog open={confirmDelete} title={recurring ? 'Huỷ chuỗi lịch học?' : 'Huỷ lịch học?'} description={recurring ? 'Các buổi chưa diễn ra trong phạm vi đã chọn sẽ bị huỷ. Lịch sử được giữ lại.' : 'Buổi học này sẽ bị huỷ và cập nhật lên Google Calendar.'} confirmLabel={recurring ? 'Huỷ theo chuỗi' : 'Huỷ lịch học'} onClose={() => setConfirmDelete(false)} onConfirm={() => void save(true)} submitting={saving} />
   </>
 }

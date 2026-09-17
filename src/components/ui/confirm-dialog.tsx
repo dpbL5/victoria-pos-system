@@ -34,7 +34,6 @@ export function ConfirmDialog({
       open={open}
       onClose={onClose}
       title={title}
-      description={description}
       size={size}
       footer={
         <div className="grid grid-cols-2 gap-2">
@@ -59,7 +58,15 @@ export function ConfirmDialog({
         </div>
       }
     >
-      {body}
+      {/* Nội dung nằm ở body; header chỉ giữ tiêu đề */}
+      <div className="space-y-3">
+        {description && (
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+            {description}
+          </p>
+        )}
+        {body}
+      </div>
     </Modal>
   )
 }

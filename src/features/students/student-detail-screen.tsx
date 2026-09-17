@@ -1,12 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, CalendarClock, GraduationCap, Plus } from 'lucide-react'
+import { ArrowLeft, CalendarClock, GraduationCap, Plus, School, UserMinus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input, Label } from '@/components/ui/input'
+import { Input, Label, Select } from '@/components/ui/input'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
@@ -14,7 +16,8 @@ import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
-import type { Student, LessonPackage, Lesson } from './types'
+import { studentClassOf, type Student, type LessonPackage, type Lesson } from './types'
+import type { LessonClass } from '@/features/classes/types'
 
 interface StudentDetailProps {
   id: string
@@ -30,6 +33,7 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
   const router = useRouter()
   const { data: studentData, isLoading, mutate } = useApi<Student>(`/api/students/${id}`)
   const { data: lessonsData, mutate: mutateLessons } = useApi<{ upcoming: Lesson[]; past: Lesson[] }>(`/api/students/${id}/lessons`)
+  const { data: classesData } = useApi<{ classes: LessonClass[] }>('/api/classes?status=ACTIVE', { dedupingInterval: 60_000 })
 
   const { registerRefresh } = usePageRefresh()
   useEffect(() => {
@@ -46,6 +50,50 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
   const [form, setForm] = useState({ fullName: '', phone: '', birthYear: '', notes: '', status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE' })
   const [pkgOpen, setPkgOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [classPick, setClassPick] = useState('')
+  const [leaveClassOpen, setLeaveClassOpen] = useState(false)
+
+  const currentClass = student ? studentClassOf(student) : null
+
+  async function assignClass() {
+    if (!classPick || !student) return
+    setSubmitting(true)
+    try {
+      const result = await apiJson<{ updatedLessons: number; skippedLocked: number }>(`/api/classes/${classPick}/students/${student.id}`, { method: 'POST' })
+      if (!result.success) {
+        notifyError(result.error || 'Không xếp được học viên vào lớp')
+        return
+      }
+      const skipped = result.data?.skippedLocked ?? 0
+      notifySuccess(skipped ? `Đã xếp vào lớp · bỏ qua ${skipped} buổi đã điểm danh` : 'Đã xếp học viên vào lớp')
+      setClassPick('')
+      await Promise.all([mutate(), mutateLessons()])
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function leaveClass() {
+    if (!currentClass || !student) return
+    setSubmitting(true)
+    try {
+      const result = await apiJson<{ updatedLessons: number; skippedLocked: number }>(`/api/classes/${currentClass.id}/students/${student.id}`, { method: 'DELETE' })
+      if (!result.success) {
+        notifyError(result.error || 'Không rút được học viên khỏi lớp')
+        return
+      }
+      const skipped = result.data?.skippedLocked ?? 0
+      notifySuccess(skipped ? `Đã rời lớp · bỏ qua ${skipped} buổi đã điểm danh` : 'Đã rút học viên khỏi lớp')
+      setLeaveClassOpen(false)
+      await Promise.all([mutate(), mutateLessons()])
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   const openEdit = useCallback(() => {
     if (!student) return
@@ -167,6 +215,33 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
           )}
         </Card>
 
+        {/* Class — mỗi học viên chỉ thuộc một lớp */}
+        <Card padding="md" className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
+              <School size={16} /> Lớp học
+            </h2>
+            {currentClass && <Button variant="outline-danger" size="sm" icon={UserMinus} disabled={submitting} onClick={() => setLeaveClassOpen(true)}>Rời lớp</Button>}
+          </div>
+          {currentClass ? (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Link href={`/classes/${currentClass.id}`} className="font-medium text-blue-700 hover:underline dark:text-blue-300">{currentClass.name}</Link>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">Học viên chỉ thuộc một lớp — bỏ khỏi lớp này trước khi xếp vào lớp khác.</span>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Select aria-label="Chọn lớp" className="max-w-64" value={classPick} onChange={(event) => setClassPick(event.target.value)}>
+                  <option value="">Chọn lớp…</option>
+                  {classesData?.data?.classes?.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </Select>
+                <Button variant="primary" size="sm" disabled={submitting || !classPick} onClick={() => void assignClass()}>{submitting ? 'Đang lưu...' : 'Xếp vào lớp'}</Button>
+              </div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Học viên đang ở lớp khác phải rời lớp đó trước khi xếp vào lớp mới.</p>
+            </div>
+          )}
+        </Card>
+
         {/* Lessons */}
         <Card padding="none">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -250,6 +325,16 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
         {pkgOpen && (
           <PackageModal student={student} onClose={() => setPkgOpen(false)} onSaved={() => { setPkgOpen(false); void mutate() }} />
         )}
+
+        <ConfirmDialog
+          open={leaveClassOpen}
+          onClose={() => setLeaveClassOpen(false)}
+          title="Rời lớp học?"
+          description={currentClass ? `Học viên sẽ bị bỏ khỏi mọi khung giờ của lớp "${currentClass.name}" và các buổi chưa điểm danh. Buổi đã điểm danh giữ nguyên.` : undefined}
+          confirmLabel="Rời lớp"
+          submitting={submitting}
+          onConfirm={leaveClass}
+        />
       </div>
     </div>
   )

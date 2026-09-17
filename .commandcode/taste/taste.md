@@ -1,4 +1,5 @@
 - Negative financial values in UI displays should be shown in red (e.g., `text-red-600`/`text-red-500`) with an explicit '-' prefix (e.g., `-{money(amount)}`) to make the deduction visually clear. Confidence: 0.70
+- Avoid experimental/unstable framework features in production code — the user explicitly removed React 19's `ViewTransition` component because it was experimental and unstable, preferring stable, well-established APIs over bleeding-edge ones. Confidence: 0.60
 - Financial records with linked transactions must be append-friendly/immutable: never hard-delete an invoice that has related payments, membership fees, or stock movements — doing so leaves orphaned references, doesn't reverse side-effects (inventory, balances, shift totals), and corrupts closed reports. Instead, use a void/cancel flow that marks the record and creates corrective entries (e.g., negative invoices, return stock movements) within a single transaction with audit logging. Hard-delete is permitted only for draft records with no linked transactions. Confidence: 0.85# Taste (Continuously Learned by [CommandCode][cmd])
 
 [cmd]: https://commandcode.ai/

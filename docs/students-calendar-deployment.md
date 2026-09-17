@@ -19,15 +19,15 @@ ADMIN mở **Lịch học → Google Calendar → Kết nối** rồi chọn l�
 
 ## Scheduler bắt buộc
 
-Hạ tầng cần gọi `POST /api/internal/calendar` mỗi phút với `Authorization: Bearer <CALENDAR_CRON_SECRET>`. Route có xác thực riêng, không cần cookie đăng nhập. Worker sinh tiếp lịch tuần rồi xử lý job; lease trong PostgreSQL ngăn hai worker đồng thời. Mỗi lượt xử lý tối đa 10 job theo thời gian cho phép, chuỗi trước buổi riêng. Job lỗi tạm thời tự retry có backoff; hết số lần thử hoặc lỗi quyền được hiển thị để admin xử lý.
+Hạ tầng ngoài Vercel nên gọi `POST /api/internal/calendar` mỗi 10 phút với `Authorization: Bearer <CALENDAR_CRON_SECRET>`. Route có xác thực riêng, không cần cookie đăng nhập. Worker sinh tiếp lịch tuần rồi xử lý job; lease trong PostgreSQL ngăn hai worker đồng thời. Mỗi lượt xử lý tối đa 10 job theo thời gian cho phép, chuỗi trước buổi riêng. Job lỗi tạm thời tự retry có backoff; hết số lần thử hoặc lỗi quyền được hiển thị để admin xử lý.
 
 Có thể dùng cron của máy chạy ứng dụng:
 
 ```cron
-* * * * * cd /duong-dan/qltruongcung && node --env-file=.env scripts/run-calendar-worker.mjs >> /var/log/qltruongcung-calendar.log 2>&1
+*/10 * * * * cd /duong-dan/qltruongcung && node --env-file=.env scripts/run-calendar-worker.mjs >> /var/log/qltruongcung-calendar.log 2>&1
 ```
 
-Hoặc scheduler có sẵn của hosting, cùng endpoint/header. Đặt `CALENDAR_WORKER_URL` nếu worker cần gọi URL nội bộ. Giới hạn thời gian thực thi route cần phù hợp với `maxDuration = 90`; xác nhận khả năng này trên hosting đang dùng. Không cài thêm Redis hay dịch vụ hàng đợi.
+Trên Vercel Hobby, `vercel.json` chạy một lượt lúc 20:00 UTC mỗi ngày với `?recover=1`; lượt này đưa các job lỗi vào hàng đợi lại trước khi xử lý. Cấu hình `CRON_SECRET` tối thiểu 32 ký tự trên Vercel. Vì Hobby không chạy cron mỗi 10 phút, dùng scheduler ngoài và `CALENDAR_CRON_SECRET` nếu cần độ trễ đồng bộ thấp hơn. Đặt `CALENDAR_WORKER_URL` cho URL ứng dụng. Không cài thêm Redis hay dịch vụ hàng đợi.
 
 Sau khi cấu hình, tạo một buổi trên lịch thử, đổi giờ, sửa/xoá ghi chú được chia sẻ, huỷ buổi; thử cả một buổi thuộc chuỗi. Kiểm tra trạng thái không còn chờ/lỗi và kết quả tương ứng trên Google. Việc chưa có scheduler sẽ để job ở trạng thái chờ.
 

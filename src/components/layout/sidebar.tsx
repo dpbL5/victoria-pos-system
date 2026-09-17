@@ -12,6 +12,7 @@ import {
   ChevronRight,
   GraduationCap,
   Package,
+  School,
   Settings,
   ShieldCheck,
   Tag,
@@ -21,7 +22,6 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useCallback } from 'react'
-import { Button } from '@/components/ui/button'
 import { isAdminOnly } from '@/lib/shared/roles'
 
 interface MenuItem {
@@ -41,7 +41,8 @@ export const staffMenuItems: MenuItem[] = [
   { href: '/pricing', label: 'Bảng giá', Icon: Banknote, adminOnly: true },
   { href: '/promotions', label: 'Khuyến mại', Icon: Tag, adminOnly: true },
   { href: '/tools', label: 'Dụng cụ', Icon: Wrench, adminOnly: true },
-  { href: '/lessons', label: 'Đào tạo', Icon: GraduationCap, adminOnly: true },
+  { href: '/lessons', label: 'Lịch học', Icon: GraduationCap, adminOnly: true },
+  { href: '/classes', label: 'Lớp học', Icon: School, adminOnly: true },
   { href: '/staff', label: 'Nhân viên', Icon: UserCog, adminOnly: true },
   { href: '/cashflow', label: 'Thu chi', Icon: ArrowRightLeft, adminOnly: true },
   { href: '/settings', label: 'Cài đặt', Icon: Settings },
@@ -77,7 +78,7 @@ export function Sidebar({ collapsed, onToggle, userRole }: SidebarProps) {
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-zinc-200 bg-white transition-all duration-200 dark:border-zinc-800 dark:bg-zinc-950 md:flex ${
+      className={`group fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-zinc-200 bg-white transition-all duration-200 dark:border-zinc-800 dark:bg-zinc-950 md:flex ${
         collapsed ? 'w-[4.5rem]' : 'w-60'
       }`}
     >
@@ -136,9 +137,16 @@ export function Sidebar({ collapsed, onToggle, userRole }: SidebarProps) {
         })}
       </nav>
 
-      <div className="border-t border-zinc-200 px-3 py-3 dark:border-zinc-800">
-        <Button variant="ghost" size="sm" icon={collapsed ? ChevronRight : ChevronLeft} onClick={onToggle} title={collapsed ? 'Mở rộng' : 'Thu gọn'} />
-      </div>
+      <button
+        type="button"
+        onClick={onToggle}
+        title={collapsed ? 'Mở rộng' : 'Thu gọn'}
+        aria-label={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
+        aria-expanded={!collapsed}
+        className="absolute -right-3.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 opacity-0 shadow-sm transition-opacity duration-150 hover:text-zinc-900 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+      >
+        {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+      </button>
     </aside>
   )
 }

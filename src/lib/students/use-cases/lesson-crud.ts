@@ -5,11 +5,12 @@ import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
 import { repositories, type Repositories } from '@/lib/infrastructure/repositories'
 import type { LessonRecord, LessonSeriesRecord } from '../ports'
 import { DAY_MS, lessonEnd, overlaps, SERIES_HORIZON_DAYS, weeklyOccurrences, weeklyRrule } from '../helpers/calendar'
+import { assertStudentsInSingleClass } from './class-guards'
 
 const isolation = { isolationLevel: 'Serializable', timeout: 30000 } as const
 export const isLessonLocked = (lesson: Pick<LessonRecord, 'students' | 'status'>) => lesson.status === 'COMPLETED' || lesson.students.some(s => s.status !== 'SCHEDULED' || s.packageId)
 
-async function studentsActive(tx: Repositories, ids: string[]) {
+export async function studentsActive(tx: Repositories, ids: string[]) {
   if (!ids.length || new Set(ids).size !== ids.length) fail('LESSON_NO_STUDENTS')
   for (const id of ids) {
     const student = await tx.student.findById(id)
@@ -34,7 +35,7 @@ async function available(tx: Repositories, input: { startsAt: Date; durationMin:
 }
 
 /** Lịch tuần lặp lại sau BCNN hai chu kỳ; kiểm tra cả tương lai chưa sinh. */
-async function seriesAvailable(tx: Repositories, candidate: LessonSeriesRecord, ignored: string[] = []) {
+export async function seriesAvailable(tx: Repositories, candidate: LessonSeriesRecord, ignored: string[] = []) {
   const ids = candidate.students.map(s => s.studentId)
   const concrete = await tx.lesson.findBySeries(candidate.id)
   const replaced = new Set(concrete.map(l => l.originalStartAt?.getTime()))
@@ -65,7 +66,7 @@ async function seriesAvailable(tx: Repositories, candidate: LessonSeriesRecord, 
 }
 
 export interface CreateLessonInput {
-  staffId: string; title: string; coachName?: string; startsAt: Date; durationMin: number; studentIds: string[]; note?: string; shareNote?: boolean
+  staffId: string; title: string; coachName?: string; startsAt: Date; durationMin: number; studentIds: string[]; note?: string; shareNote?: boolean; classId?: string
 }
 export async function createLesson(input: CreateLessonInput, deps: Repositories = repositories) {
   void deps
@@ -118,10 +119,10 @@ export async function deleteLesson(input: { staffId: string; lessonId: string; v
 }
 
 export interface CreateSeriesInput {
-  staffId: string; title: string; coachName?: string; daysOfWeek: number[]; startTime: string; durationMin: number; startsOn: Date; endsOn?: Date | null; studentIds: string[]; intervalWeeks?: number; occurrenceCount?: number | null
+  staffId: string; classId?: string; title: string; coachName?: string; daysOfWeek: number[]; startTime: string; durationMin: number; startsOn: Date; endsOn?: Date | null; studentIds: string[]; intervalWeeks?: number; occurrenceCount?: number | null
 }
 
-async function materialize(tx: Repositories, series: LessonSeriesRecord, to: Date) {
+export async function materialize(tx: Repositories, series: LessonSeriesRecord, to: Date) {
   if (!series.isActive || !series.students.length) return 0
   const from = series.materializedUntil ?? series.startsOn
   if (from >= to) return 0
@@ -191,6 +192,11 @@ export async function updateSeries(input: UpdateSeriesInput, deps: Repositories 
     if (patternChanges && affected.some(l => l.isException)) fail('SERIES_HAS_EXCEPTIONS')
     const studentIds = input.studentIds ?? series!.students.map(s => s.studentId)
     await studentsActive(tx, studentIds)
+    // Chuỗi thuộc lớp: chỉ chặn học viên MỚI thêm (thành viên đang có không bị chặn).
+    if (series!.classId) {
+      const current = new Set(series!.students.map(s => s.studentId))
+      await assertStudentsInSingleClass(tx, studentIds.filter(id => !current.has(id)), { excludeClassId: series!.classId })
+    }
     const schedule = {
       daysOfWeek: input.daysOfWeek ?? series!.daysOfWeek, startTime: input.startTime ?? series!.startTime,
       startsOn: input.startsOn ?? parseLocalDate(toInputDate(firstOriginal)), endsOn: input.endsOn !== undefined ? input.endsOn : series!.endsOn,
@@ -203,7 +209,7 @@ export async function updateSeries(input: UpdateSeriesInput, deps: Repositories 
     const oldEnd = new Date(firstOriginal.getTime() - 1000)
     await tx.lessonSeries.update(series!.id, { endsOn: oldEnd, occurrenceCount: null, rrule: weeklyRrule({ ...series!, occurrenceCount: null, endsOn: oldEnd }), isActive: oldEnd >= series!.startsOn }, input.version)
     await tx.calendarSync.enqueue('SERIES', series!.id)
-    const next = await tx.lessonSeries.create({ ...schedule, title: input.title ?? series!.title, coachName: input.coachName ?? series!.coachName, durationMin: input.durationMin ?? series!.durationMin, rrule: weeklyRrule(schedule), studentIds })
+    const next = await tx.lessonSeries.create({ ...schedule, classId: series!.classId, title: input.title ?? series!.title, coachName: input.coachName ?? series!.coachName, durationMin: input.durationMin ?? series!.durationMin, rrule: weeklyRrule(schedule), studentIds })
     const to = new Date(Math.max(Math.max(Date.now(), schedule.startsOn.getTime()) + SERIES_HORIZON_DAYS * DAY_MS, ...affected.map(l => (l.originalStartAt ?? l.startsAt).getTime() + DAY_MS)))
     const dates = weeklyOccurrences(schedule, schedule.startsOn, to)
     const excluded = affected.map(l => l.id)
@@ -228,6 +234,20 @@ export async function updateSeries(input: UpdateSeriesInput, deps: Repositories 
   }, isolation)
 }
 
+/** Huỷ các buổi từ mốc cutoff rồi đóng chuỗi — dùng chung cho xoá chuỗi và kết thúc lớp/khung giờ. */
+export async function closeSeriesFrom(tx: Repositories, input: { staffId: string; series: LessonSeriesRecord; cutoff: Date; version: number }) {
+  const affected = (await tx.lesson.findBySeries(input.series.id)).filter(l => (l.originalStartAt ?? l.startsAt) >= input.cutoff && l.status !== 'CANCELLED')
+  if (affected.some(isLessonLocked)) fail('LESSON_LOCKED')
+  for (const lesson of affected) {
+    await tx.lesson.update(lesson.id, { status: 'CANCELLED', isException: true }, lesson.version)
+    await tx.calendarSync.enqueue('LESSON', lesson.id)
+  }
+  const endsOn = new Date(input.cutoff.getTime() - 1000)
+  await tx.lessonSeries.update(input.series.id, { endsOn, occurrenceCount: null, isActive: endsOn >= input.series.startsOn, rrule: weeklyRrule({ ...input.series, endsOn, occurrenceCount: null }) }, input.version)
+  await tx.calendarSync.enqueue('SERIES', input.series.id)
+  return { cancelledLessons: affected.length }
+}
+
 export async function deleteSeries(input: { staffId: string; seriesId: string; version: number; scope: 'FOLLOWING' | 'ALL'; lessonId: string }, deps: Repositories = repositories) {
   void deps
   return runInTransaction(async tx => {
@@ -237,21 +257,16 @@ export async function deleteSeries(input: { staffId: string; seriesId: string; v
     if (series!.version !== input.version) fail('LESSON_CONFLICT')
     if (anchor!.startsAt < new Date()) fail('LESSON_PAST_SERIES')
     const cutoff = input.scope === 'FOLLOWING' ? anchor!.originalStartAt ?? anchor!.startsAt : new Date()
-    const affected = (await tx.lesson.findBySeries(series!.id)).filter(l => (l.originalStartAt ?? l.startsAt) >= cutoff && l.status !== 'CANCELLED')
-    if (affected.some(l => l.status !== 'CANCELLED' && isLessonLocked(l))) fail('LESSON_LOCKED')
-    for (const lesson of affected) {
-      await tx.lesson.update(lesson.id, { status: 'CANCELLED', isException: true }, lesson.version)
-      await tx.calendarSync.enqueue('LESSON', lesson.id)
-    }
-    const endsOn = new Date(cutoff.getTime() - 1000)
-    await tx.lessonSeries.update(series!.id, { endsOn, occurrenceCount: null, isActive: endsOn >= series!.startsOn, rrule: weeklyRrule({ ...series!, endsOn, occurrenceCount: null }) }, input.version)
-    await tx.calendarSync.enqueue('SERIES', series!.id)
-    await tx.audit.append({ userId: input.staffId, action: 'LESSON_SERIES_DELETE', entityType: 'LessonSeries', entityId: series!.id, details: { scope: input.scope, cancelledLessons: affected.length } })
-    return { deletedId: series!.id, cancelledLessons: affected.length }
+    const { cancelledLessons } = await closeSeriesFrom(tx, { staffId: input.staffId, series: series!, cutoff, version: input.version })
+    await tx.audit.append({ userId: input.staffId, action: 'LESSON_SERIES_DELETE', entityType: 'LessonSeries', entityId: series!.id, details: { scope: input.scope, cancelledLessons } })
+    return { deletedId: series!.id, cancelledLessons }
   }, isolation)
 }
 
 export function mapLessonError(error: DomainError): HttpErrorInfo {
+  if (error.code === 'CLASS_STUDENT_TAKEN') {
+    return { code: error.code, status: 409, message: `Học viên ${error.detail ?? ''} đã thuộc lớp khác. Hãy bỏ khỏi lớp cũ trước khi xếp vào lớp này` }
+  }
   const errors: Record<string, [number, string]> = {
     LESSON_NO_STUDENTS: [400, 'Chọn ít nhất một học viên, không chọn trùng'],
     STUDENT_INACTIVE: [400, 'Học viên không tồn tại hoặc đã ngừng học'],

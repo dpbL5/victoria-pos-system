@@ -38,6 +38,8 @@ function makeLesson(overrides: Partial<LessonRecord> = {}): LessonRecord {
     shareNote: false,
     googleCalendarId: null,
     seriesId: null,
+    classId: null,
+    class: null,
     title: 'Buổi 1',
     coachName: null,
     startsAt: new Date('2026-08-17T11:00:00Z'),

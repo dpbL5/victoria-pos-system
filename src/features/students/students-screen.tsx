@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { CalendarClock, Edit3, GraduationCap, Plus, RefreshCw, Trash2, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -17,7 +18,7 @@ import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
-import type { Student, CalendarStatus } from './types'
+import { studentClassOf, type Student, type CalendarStatus } from './types'
 
 interface StudentForm {
   fullName: string
@@ -157,6 +158,13 @@ export function StudentsScreen() {
     return total > 0 ? `${total} buổi` : 'Chưa có gói'
   }
 
+  const classCell = (s: Student) => {
+    const item = studentClassOf(s)
+    return item
+      ? <Link href={`/classes/${item.id}`} className="text-sm text-blue-700 hover:underline dark:text-blue-300">{item.name}</Link>
+      : <span className="text-sm text-zinc-400 dark:text-zinc-500">Chưa vào lớp</span>
+  }
+
   const columns: Column<Student>[] = useMemo(() => [
     {
       key: 'fullName',
@@ -174,6 +182,12 @@ export function StudentsScreen() {
       label: 'SĐT',
       cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
       render: (item) => item.phone || '—',
+    },
+    {
+      key: 'class',
+      label: 'Lớp',
+      cellClassName: 'px-4 py-3',
+      render: (item) => classCell(item),
     },
     {
       key: 'remaining',
@@ -206,6 +220,7 @@ export function StudentsScreen() {
       ),
     },
     { key: 'phone', label: 'SĐT', render: (item) => item.phone || '—' },
+    { key: 'class', label: 'Lớp', render: (item) => classCell(item) },
     { key: 'remaining', label: 'Còn lại', render: (item) => <span className="font-semibold tabular-nums">{remainingText(item)}</span> },
     {
       label: '',

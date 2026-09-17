@@ -32,7 +32,9 @@ export async function GET(request: NextRequest) {
     const status = statusParam === 'SCHEDULED' || statusParam === 'COMPLETED' || statusParam === 'CANCELLED' ? statusParam : undefined
     const rows = await repositories.lesson.findManyBetween(from, to, {
       studentId: request.nextUrl.searchParams.get('studentId') || undefined,
-      coachName: request.nextUrl.searchParams.get('coachName') || undefined, status,
+      coachName: request.nextUrl.searchParams.get('coachName') || undefined,
+      classId: request.nextUrl.searchParams.get('classId') || undefined,
+      status,
     })
     const jobs = await repositories.calendarSync.list(rows.flatMap(l => [l.id, ...(l.seriesId ? [l.seriesId] : [])]))
     const lessons = rows.map(l => ({ ...l, syncStatus: jobs.find(j => j.entityId === l.id)?.status ?? jobs.find(j => j.entityId === l.seriesId)?.status ?? 'PENDING' }))
@@ -60,6 +62,7 @@ export async function POST(request: NextRequest) {
 
     const result = await createLesson({
       staffId: auth.userId,
+      classId: parsed.data.classId,
       title: parsed.data.title,
       coachName: parsed.data.coachName,
       startsAt: new Date(parsed.data.startsAt),

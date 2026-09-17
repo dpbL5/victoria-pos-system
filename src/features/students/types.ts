@@ -11,7 +11,12 @@ export interface Student {
   createdAt: string
   updatedAt: string
   packages: LessonPackage[]
+  series?: { series: { class: { id: string; name: string } | null } }[]
 }
+
+/** Lớp hiện tại của học viên — ràng buộc: mỗi học viên chỉ thuộc một lớp. */
+export const studentClassOf = (student: Pick<Student, 'series'>): { id: string; name: string } | null =>
+  student.series?.find(row => row.series.class)?.series.class ?? null
 
 export interface LessonPackage {
   id: string
@@ -45,6 +50,7 @@ export interface LessonSeries {
   occurrenceCount: number | null
   startsOn: string
   endsOn: string | null
+  class?: { id: string; name: string } | null
 }
 export interface Lesson {
   version: number
@@ -53,6 +59,7 @@ export interface Lesson {
   isException: boolean
   series: LessonSeries | null
   syncStatus?: string
+  class?: { id: string; name: string } | null
   id: string
   seriesId: string | null
   title: string

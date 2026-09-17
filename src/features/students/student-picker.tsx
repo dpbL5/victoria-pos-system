@@ -5,17 +5,20 @@ import { Button } from '@/components/ui/button'
 import { useApi } from '@/hooks/use-api'
 import type { Student } from './types'
 
-export function StudentPicker({ value, onChange, disabled = false, initial = [] }: {
+export function StudentPicker({ value, onChange, disabled = false, initial = [], availableForClassId }: {
   value: string[]; onChange: (ids: string[]) => void; disabled?: boolean; initial?: { id: string; fullName: string }[]
+  /** Chỉ hiện học viên chưa thuộc lớp nào hoặc đang ở đúng lớp này (sổ lớp). */
+  availableForClassId?: string
 }) {
   const [search, setSearch] = useState('')
   const [offset, setOffset] = useState(0)
   const [names, setNames] = useState<Record<string, string>>(Object.fromEntries(initial.map(s => [s.id, s.fullName])))
-  const { data, isLoading } = useApi<Student[]>(`/api/students?status=ACTIVE&limit=20&offset=${offset}&search=${encodeURIComponent(search)}`)
+  const { data, isLoading } = useApi<Student[]>(`/api/students?status=ACTIVE&limit=20&offset=${offset}&search=${encodeURIComponent(search)}${availableForClassId ? `&classId=${availableForClassId}` : ''}`)
   const rows = data?.data ?? []
   return <fieldset disabled={disabled} className="space-y-2">
     <Label htmlFor="lesson-student-search" required>Học viên ({value.length})</Label>
     <Input id="lesson-student-search" placeholder="Tìm tên hoặc số điện thoại" value={search} onChange={e => { setSearch(e.target.value); setOffset(0) }} />
+    {availableForClassId && <p className="text-xs text-zinc-500 dark:text-zinc-400">Học viên đã thuộc lớp khác không hiện trong danh sách này.</p>}
     {value.length > 0 && <div className="flex flex-wrap gap-2">{value.map(id => <button key={id} type="button" disabled={disabled} className="rounded-md bg-blue-50 px-2 py-1 text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-100" onClick={() => onChange(value.filter(v => v !== id))} aria-label={`Bỏ ${names[id] ?? id}`}>{names[id] ?? rows.find(s => s.id === id)?.fullName ?? 'Học viên đã chọn'}</button>)}</div>}
     <div className="max-h-36 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
       {rows.map(student => <label key={student.id} className="flex min-h-10 cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">

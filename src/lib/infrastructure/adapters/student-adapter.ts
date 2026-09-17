@@ -5,6 +5,7 @@ import type {
   StudentRepository,
   LessonRepository,
   LessonSeriesRepository,
+  LessonClassRepository,
   LessonPackageRepository,
   CalendarConnectionRepository,
   CalendarSyncRepository,
@@ -15,6 +16,7 @@ type StudentStore = Pick<
   | 'student'
   | 'lesson'
   | 'lessonSeries'
+  | 'lessonClass'
   | 'lessonPackage'
   | 'lessonStudent'
   | 'calendarConnection'
@@ -25,14 +27,23 @@ type StudentStore = Pick<
 
 const lessonInclude = {
   students: { include: { student: true, package: true } },
-  series: true,
+  series: { include: { class: true } },
+  class: true,
 } as const
 
-const studentInclude = { packages: true } as const
+const classInclude = {
+  slots: { include: { students: { include: { student: true } } }, orderBy: { startsOn: 'asc' } },
+  _count: { select: { lessons: true } },
+} as const
+
+const studentInclude = {
+  packages: true,
+  series: { include: { series: { include: { class: true } } } },
+} as const
 
 export function createStudentRepository(store: StudentStore): StudentRepository {
   return {
-    findMany: ({ search, status, limit, offset } = {}) =>
+    findMany: ({ search, status, limit, offset, availableForClassId } = {}) =>
       store.student.findMany({
         where: {
           deletedAt: null,
@@ -42,6 +53,19 @@ export function createStudentRepository(store: StudentStore): StudentRepository 
                 OR: [
                   { fullName: { contains: search, mode: 'insensitive' } },
                   { phone: { contains: search, mode: 'insensitive' } },
+                ],
+              }
+            : {}),
+          // Chưa thuộc lớp nào, hoặc đang ở đúng lớp đang xét (HK còn lại của lớp đó).
+          ...(availableForClassId
+            ? {
+                AND: [
+                  {
+                    OR: [
+                      { series: { none: { series: { classId: { not: null } } } } },
+                      { series: { some: { series: { classId: availableForClassId } } } },
+                    ],
+                  },
                 ],
               }
             : {}),
@@ -69,6 +93,7 @@ export function createLessonRepository(store: StudentStore): LessonRepository {
           status: filter.status ?? { not: 'CANCELLED' },
           ...(filter.studentId ? { students: { some: { studentId: filter.studentId } } } : {}),
           ...(filter.coachName ? { coachName: { contains: filter.coachName, mode: 'insensitive' } } : {}),
+          ...(filter.classId ? { OR: [{ classId: filter.classId }, { series: { classId: filter.classId } }] } : {}),
         },
         include: lessonInclude,
         orderBy: { startsAt: 'asc' },
@@ -133,6 +158,16 @@ export function createLessonRepository(store: StudentStore): LessonRepository {
     },
     countLessonsByStudent: (studentId) =>
       store.lessonStudent.count({ where: { studentId } }),
+    findByClass: (classId) =>
+      store.lesson.findMany({
+        where: { OR: [{ classId }, { series: { classId } }] },
+        include: lessonInclude,
+        orderBy: { startsAt: 'asc' },
+      }),
+    deleteMany: async (ids) => {
+      const result = await store.lesson.deleteMany({ where: { id: { in: ids } } })
+      return result.count
+    },
     upsertAttendance: async ({ lessonId, studentId, status, note }) => {
       await store.lessonStudent.upsert({
         where: { lessonId_studentId: { lessonId, studentId } },
@@ -165,6 +200,49 @@ export function createLessonSeriesRepository(store: StudentStore): LessonSeriesR
     },
     delete: async (id) => {
       await store.lessonSeries.delete({ where: { id } })
+    },
+  }
+}
+
+export function createLessonClassRepository(store: StudentStore): LessonClassRepository {
+  return {
+    findMany: ({ status, search } = {}) =>
+      store.lessonClass.findMany({
+        where: {
+          ...(status === 'ACTIVE' ? { isActive: true } : {}),
+          ...(status === 'ENDED' ? { isActive: false } : {}),
+          ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
+        },
+        include: classInclude,
+        orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+      }),
+    findById: (id) => store.lessonClass.findUnique({ where: { id }, include: classInclude }),
+    create: (data) => store.lessonClass.create({ data, include: classInclude }),
+    update: (id, data) => store.lessonClass.update({ where: { id }, data, include: classInclude }),
+    delete: async (id) => {
+      await store.lessonClass.delete({ where: { id } })
+    },
+    findUpcomingLessons: (classIds, from) =>
+      store.lesson.findMany({
+        where: {
+          startsAt: { gte: from },
+          status: 'SCHEDULED',
+          OR: [{ classId: { in: classIds } }, { series: { classId: { in: classIds } } }],
+        },
+        include: lessonInclude,
+        orderBy: { startsAt: 'asc' },
+      }),
+    classesOfStudents: async studentIds => {
+      const rows = await store.lessonSeriesStudent.findMany({
+        where: { studentId: { in: studentIds }, series: { classId: { not: null } } },
+        select: { studentId: true, student: { select: { fullName: true } }, series: { select: { classId: true, class: { select: { name: true } } } } },
+      })
+      return rows.map(row => ({
+        studentId: row.studentId,
+        studentName: row.student.fullName,
+        classId: row.series.classId!,
+        className: row.series.class?.name ?? '',
+      }))
     },
   }
 }

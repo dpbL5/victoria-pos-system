@@ -12,7 +12,9 @@ import type { CalendarStatus } from './types'
 import { localTime } from './lesson-editor'
 
 export function CalendarConnection() {
-  const { data, mutate } = useApi<CalendarStatus>('/api/google/status', { refreshInterval: 30000 })
+  const { data, mutate } = useApi<CalendarStatus>('/api/google/status', {
+    refreshInterval: latest => latest?.success && (latest.data?.pending ?? 0) > 0 ? 10000 : 0,
+  })
   const [open, setOpen] = useState(false)
   const [chosen, setChosen] = useState('')
   const [busy, setBusy] = useState(false)
@@ -36,8 +38,8 @@ export function CalendarConnection() {
     finally { setBusy(false) }
   }
   return <>
-    <Button variant="secondary" size="sm" icon={status?.connected && !status.needsReconnect ? CalendarCheck : Settings2} onClick={() => setOpen(true)}>
-      {status?.needsReconnect ? 'Kết nối lại Google' : status?.failed ? `Google: ${status.failed} lỗi` : status?.pending ? `Google: ${status.pending} chờ` : 'Google Calendar'}
+    <Button variant="secondary" size="sm" icon={status?.connected && !status.needsReconnect ? CalendarCheck : Settings2} aria-label="Google Calendar" title="Google Calendar" onClick={() => setOpen(true)}>
+      <span className="hidden lg:inline">{status?.needsReconnect ? 'Kết nối lại Google' : status?.failed ? `Google: ${status.failed} lỗi` : status?.pending ? `Google: ${status.pending} chờ` : 'Google Calendar'}</span>
     </Button>
     <Modal open={open} onClose={() => setOpen(false)} title="Google Calendar" variant="sheet">
       <div className="space-y-4 dark:[&_input]:[color-scheme:dark]">

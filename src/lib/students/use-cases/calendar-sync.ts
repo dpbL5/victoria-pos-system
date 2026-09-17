@@ -156,8 +156,9 @@ export async function retryCalendar(input: { staffId: string; from: Date; to: Da
   })
 }
 
-export async function maintainCalendar(deps: Repositories = repositories) {
+export async function maintainCalendar(recoverFailed = false, deps: Repositories = repositories) {
   const expanded = await ensureLessonsUntil(new Date(Date.now() + SERIES_HORIZON_DAYS * DAY_MS), deps)
+  if (recoverFailed) await deps.calendarSync.retry()
   const synced = await processCalendarJobs(deps)
   if (!synced.ok) return synced
   return ok({ ...synced.value, ...(expanded.ok ? {} : { warning: 'Chưa sinh tiếp được một chuỗi lịch. Kiểm tra trùng giờ và thử lại' }) })

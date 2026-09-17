@@ -644,8 +644,28 @@ model LessonPackage {
   @@map("lesson_packages")
 }
 
+// ── Lớp học — danh tính + sổ học viên; lịch là các LessonSeries (khung giờ) ──
+
+model LessonClass {
+  id        String   @id @default(uuid())
+  name      String   @db.VarChar(150)
+  coachName String?  @map("coach_name") @db.VarChar(100)
+  note      String?  @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  slots   LessonSeries[]
+  lessons Lesson[]
+
+  @@index([isActive])
+  @@map("lesson_classes")
+}
+
 model LessonSeries {
   id            String    @id @default(uuid())
+  classId       String?   @map("class_id")
+  class         LessonClass? @relation(fields: [classId], references: [id], onDelete: SetNull)
   title         String    @db.VarChar(150)
   coachName     String?   @map("coach_name") @db.VarChar(100)
   daysOfWeek    Int[]     @map("days_of_week") // [1,4] = T2, T5 (0=CN)
@@ -669,6 +689,7 @@ model LessonSeries {
   students LessonSeriesStudent[]
 
   @@index([startsOn])
+  @@index([classId])
   @@map("lesson_series")
 }
 
@@ -676,6 +697,8 @@ model Lesson {
   id            String         @id @default(uuid())
   seriesId      String?        @map("series_id")
   series        LessonSeries?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  classId       String?        @map("class_id")
+  class         LessonClass?   @relation(fields: [classId], references: [id], onDelete: SetNull)
   title         String         @db.VarChar(150)
   coachName     String?        @map("coach_name") @db.VarChar(100)
   startsAt      DateTime       @map("starts_at")
@@ -696,6 +719,7 @@ model Lesson {
   @@unique([seriesId, originalStartAt])
   @@index([startsAt])
   @@index([seriesId])
+  @@index([classId])
   @@map("lessons")
 }
 

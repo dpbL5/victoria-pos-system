@@ -89,9 +89,52 @@ POST            /api/google/disconnect
 - `students-package.test.ts` — `remaining`, đếm trùng.
 - `students-attendance.test.ts` — use-case `markAttendance` với fake repo: COMPLETED trừ `used` đúng 1 lần/HV, ABSENT không trừ, note lưu, audit append.
 
+## Lớp học (LessonClass)
+
+Lớp là **danh tính + sổ học viên**; lịch của lớp là các **khung giờ** (mỗi khung = 1 `LessonSeries`), nên toàn bộ máy sinh buổi / kiểm tra trùng giờ / Google sync / tách chuỗi khi sửa lịch được tái dùng nguyên vẹn.
+
+- Schema: `LessonClass` (name, coachName, note, isActive) + `LessonSeries.classId` (khung giờ) + `Lesson.classId` (buổi lẻ kiểu học bù gắn thẳng lớp). Không có bảng sổ riêng: **sổ của lớp = hợp nhất `LessonSeriesStudent` của mọi khung** (`classRosterIds`).
+- Use-case `src/lib/students/use-cases/class-crud.ts`: `createClass`, `updateClass` (đổi tên kéo theo tiêu đề khung + buổi chưa điểm danh), `endClass` (đóng mọi khung từ mốc chọn, huỷ buổi tương lai), `deleteClass` (xoá lớp thêm nhầm — xem mục dưới), `setClassRoster` (áp cho mọi khung + buổi tương lai chưa điểm danh, trả `skippedLocked`), `addClassStudent` / `removeClassStudent`, `createClassSlot`, `updateClassSlot` / `endClassSlot` (uỷ quyền `updateSeries` / `deleteSeries` với buổi neo gần nhất, giữ logic tách chuỗi một chỗ), `listClasses`, `getClassDetail`.
+- API admin-only: `GET/POST /api/classes`, `GET/PUT/DELETE /api/classes/[id]`, `PUT /api/classes/[id]/students`, `POST/DELETE /api/classes/[id]/students/[studentId]` (xếp/rút **một** học viên — tránh client đọc-rồi-ghi cả sổ), `POST /api/classes/[id]/slots`, `PATCH/DELETE /api/classes/[id]/slots/[slotId]`, `POST /api/classes/[id]/end`. `GET /api/lessons?classId=` lọc theo lớp (buổi lẻ hoặc buổi sinh từ khung của lớp).
+- UI `src/features/classes/`: `classes-screen.tsx` (danh sách + tạo lớp kèm khung đầu + học viên), `class-detail-screen.tsx` (tab Thông tin · Sổ học viên · Lịch của lớp). Tab lịch tái dùng `LessonsCalendar` với props `classId` / `classTitle` / `classRoster` / `basePath`; `LessonEditor` nhận `classId` để buổi hoặc chuỗi tạo từ lịch lớp tự thuộc lớp.
+- **Bắt buộc:** `updateSeries` phải kế thừa `classId` sang chuỗi mới khi tách — nếu không, lớp mất khung sau mỗi lần sửa lịch theo phạm vi FOLLOWING.
+- Migration dữ liệu cũ: `npm run migrate:lesson-classes` (idempotent) — mỗi `LessonSeries` đang `isActive` thành 1 lớp, lấy luôn `series.id` làm `class.id`. Chuỗi đã kết thúc để `class_id = null` (vẫn hiện trên lịch toàn cục). Chuỗi bị tách do sửa lịch thành nhiều lớp cùng tên → admin tự sửa/kết thúc trong UI.
+- Test: `src/lib/__tests__/classes.test.ts` (fake repo): tạo lớp nhiều khung, thêm khung dùng sổ lớp, sổ học viên bỏ qua buổi đã điểm danh, đổi tên kéo theo tiêu đề, tách chuỗi giữ `classId`, xoá cứng kể cả buổi đã điểm danh, chặn học viên thuộc lớp khác (lưu sổ + xếp lẻ + sửa chuỗi của lớp), chuỗi tự do vẫn cho phép.
+
+## Xoá lớp thêm nhầm
+
+`deleteClass` XOÁ CỨNG lớp + mọi khung giờ + mọi buổi của lớp (kể cả buổi đã điểm danh), dùng khi tạo lớp sai. Ba điểm phải nhớ:
+
+- **Không có ngoại lệ**: bất kể buổi nào đã điểm danh cũng đều bị xoá. Muốn giữ lịch sử thì dùng "Kết thúc lớp". Xoá cứng buổi có `packageId` làm mất luôn dấu vết trừ gói — chỉ hợp lý với lớp thật sự thêm nhầm, chưa vận hành.
+- **Dọn Google Calendar trước khi xoá DB**: worker đồng bộ chỉ xoá event khi còn đọc được row (`if (series)` / `if (lesson)`), nên `deleteClassEvents` gọi `googleCalendar.deleteEvent` cho event của khung và của buổi *trước* transaction (best-effort, lỗi từng event bỏ qua; chưa kết nối Google thì bỏ qua bước này). Thứ tự trong transaction: xoá buổi → xoá khung → xoá lớp (FK `classId`/`seriesId` là `SetNull` nên phải xoá tường minh, không dựa vào cascade).
+- UI: nút "Xoá lớp" ở danh sách lớp (mọi dòng) và ở đầu trang chi tiết, kèm ConfirmDialog nói rõ sẽ mất gì; xoá xong quay về `/classes`.
+
+## Ràng buộc: một học viên chỉ thuộc một lớp
+
+- Guard dùng chung `assertStudentsInSingleClass` (`use-cases/class-guards.ts`) gọi trong transaction ở `createClass`, `setClassRoster`, `addClassStudent` và `updateSeries` **khi chuỗi thuộc lớp**. Vi phạm → `fail('CLASS_STUDENT_TAKEN', "Tên HV (Lớp X)")` → `mapLessonError` trả 409 với message nêu đúng tên HV + lớp.
+- Guard chỉ xét **học viên mới thêm** (không tính thành viên đang có), nên dữ liệu cũ vi phạm vẫn lưu sổ/lịch bình thường; chỉ chặn việc tạo vi phạm mới.
+- Ô chọn học viên của lớp (`StudentPicker` + `classId=` xuống `GET /api/students`) chỉ hiện HV chưa có lớp hoặc đang ở đúng lớp đó.
+- Học viên của **buổi lẻ** không bị ràng buộc này — buổi học bù được phép mời HV lớp khác dự (điểm danh buổi ≠ thành viên lớp).
+
+## Liên kết với Lịch học và Học viên
+
+- Payload buổi học mang theo lớp: `LessonSeries.class` và `Lesson.class` (`lessonInclude` trong adapter) → lịch hiển thị tooltip/`aria-label` có "Lớp: …"; panel bộ lọc `/lessons` có thêm mục "Lớp" (chỉ hiện ngoài ngữ cảnh lớp).
+- Tạo buổi lẻ từ `/lessons` (`LessonEditor`) có ô "Lớp (tuỳ chọn)": chọn lớp thì tự điền tiêu đề + sổ học viên của lớp và gửi kèm `classId` — dùng cho chuyển lịch/học bù. Buổi đó nằm trong "Lịch của lớp" và trong `/lessons` khi lọc theo lớp.
+- `/students` có cột "Lớp"; trang chi tiết học viên có thẻ "Lớp học" để xếp vào lớp hoặc rời lớp (gọi 2 route ở trên). Học viên chỉ thuộc một lớp nên thẻ này chỉ hiển thị một lớp.
+
+## Kiểm tra dữ liệu cũ (một lần)
+
+```bash
+npx tsx -e "import 'dotenv/config'; import { prisma } from '@/lib/infrastructure/prisma'; ..."
+```
+Kết quả 2026-09-17 (sau backfill): 4 lớp, 2 học viên thuộc ≥1 lớp, **2 học viên thuộc nhiều lớp** — đều là dữ liệu test ("HV Test 1", "HV Test 2" trong các lớp Testtt/Cơ bản/Test/Thiếu nhi). Không sửa tự động; admin bỏ các em khỏi lớp trùng trong UI. Guard mới không ảnh hưởng các bản ghi này.
+
 ## Deliberate simplifications (ponytail)
 
 - `ponytail:` token Google lưu **plaintext** trong `CalendarConnection` — thêm encryption khi cần.
 - `ponytail:` **1 recurring event** GCal cho cả series, không sync per-occurrence — sửa buổi lẻ chỉ trong app.
 - `ponytail:` RRULE chỉ hỗ trợ **weekly + daysOfWeek** — đủ nhu cầu CLB.
 - `ponytail:` GCal sync **best-effort** — fail chỉ warning, không chặn nghiệp vụ.
+- `ponytail:` sổ học viên của lớp **không có ngày hiệu lực** vào/ra lớp — thêm `ClassEnrollment` khi cần thống kê theo giai đoạn.
+- `ponytail:` sửa cấu trúc khung giờ (thứ/giờ) đổi lịch cả chuỗi tương lai như `updateSeries`; chưa hỗ trợ nhiều quy tắc lặp trong một khung.
+- `ponytail:` lớp chưa gắn học phí/gói buổi — gói vẫn theo từng học viên (`LessonPackage`).

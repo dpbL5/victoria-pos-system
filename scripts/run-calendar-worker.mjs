@@ -1,4 +1,4 @@
-// Gọi từ cron mỗi phút: node --env-file=.env scripts/run-calendar-worker.mjs
+// Gọi từ cron mỗi 10 phút: node --env-file=.env scripts/run-calendar-worker.mjs
 const base = process.env.CALENDAR_WORKER_URL || process.env.NEXT_PUBLIC_APP_URL
 const secret = process.env.CALENDAR_CRON_SECRET
 if (!base || !secret || secret.length < 32) throw new Error('Cần URL ứng dụng và CALENDAR_CRON_SECRET tối thiểu 32 ký tự')

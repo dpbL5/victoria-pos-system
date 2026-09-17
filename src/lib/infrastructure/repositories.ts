@@ -18,6 +18,7 @@ import {
   createStudentRepository,
   createLessonRepository,
   createLessonSeriesRepository,
+  createLessonClassRepository,
   createLessonPackageRepository,
   createCalendarConnectionRepository,
   createCalendarSyncRepository,
@@ -40,6 +41,7 @@ import type {
   StudentRepository,
   LessonRepository,
   LessonSeriesRepository,
+  LessonClassRepository,
   LessonPackageRepository,
   CalendarConnectionRepository,
   CalendarSyncRepository,
@@ -69,6 +71,7 @@ export interface Repositories {
   student: StudentRepository
   lesson: LessonRepository
   lessonSeries: LessonSeriesRepository
+  lessonClass: LessonClassRepository
   lessonPackage: LessonPackageRepository
   calendarConnection: CalendarConnectionRepository
   calendarSync: CalendarSyncRepository
@@ -96,6 +99,7 @@ export function createRepositories(store: Prisma.TransactionClient): Repositorie
     student: createStudentRepository(store),
     lesson: createLessonRepository(store),
     lessonSeries: createLessonSeriesRepository(store),
+    lessonClass: createLessonClassRepository(store),
     lessonPackage: createLessonPackageRepository(store),
     calendarConnection: createCalendarConnectionRepository(store),
     calendarSync: createCalendarSyncRepository(store),
