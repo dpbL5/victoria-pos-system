@@ -73,6 +73,35 @@ export function getVnDay(date: Date): number {
   return new Date(date.getTime() + VN_OFFSET_MS).getUTCDay()
 }
 
+const toMs = (value: string | Date) => (typeof value === 'string' ? Date.parse(value) : value.getTime())
+
+/** 'YYYY-MM-DDTHH:mm' theo giờ Việt Nam — nguồn chung cho mọi hàm hiển thị bên dưới. */
+const vnIso = (value: string | Date) => new Date(toMs(value) + VN_OFFSET_MS).toISOString()
+
+/** dd/MM/yyyy theo giờ Việt Nam (cố định, không phụ thuộc múi giờ máy người dùng). */
+export function formatVnDate(value: string | Date): string {
+  const [y, m, d] = vnIso(value).slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
+}
+
+/** dd/MM/yyyy HH:mm theo giờ Việt Nam. */
+export function formatVnDateTime(value: string | Date): string {
+  const [date, time] = vnIso(value).slice(0, 16).split('T')
+  const [y, m, d] = date.split('-')
+  return `${d}/${m}/${y} ${time}`
+}
+
+/** HH:mm theo giờ Việt Nam. */
+function formatVnTime(value: string | Date): string {
+  return vnIso(value).slice(11, 16)
+}
+
+/** Khoảng giờ của một buổi: 'HH:mm–HH:mm' theo giờ Việt Nam. */
+export function formatVnTimeRange(start: string | Date, durationMin: number): string {
+  const end = new Date(toMs(start) + durationMin * 60_000)
+  return `${formatVnTime(start)}–${formatVnTime(end)}`
+}
+
 // ── Date-only string → local-time Date (tránh lệch múi giờ UTC) ──
 // new Date("2026-07-11") → midnight UTC = 7:00 sáng giờ VN → sai với mong đợi người dùng.
 // Các hàm bên dưới dùng constructor (year, month-1, day) để lấy midnight theo giờ địa phương.

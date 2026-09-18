@@ -23,7 +23,7 @@ vi.mock('@fullcalendar/react', () => ({
 }))
 vi.mock('@/hooks/use-api', () => ({ useApi: (url: string | null) => url?.startsWith('/api/students') ? {} : { data: { data: { lessons: lessonData.current } } } }))
 vi.mock('@/components/ui/toast', () => ({ useToast: () => ({}) }))
-vi.mock('./calendar-connection', () => ({ CalendarConnection: () => null }))
+vi.mock('./calendar-connection', () => ({ CalendarConnection: () => null, useCalendarStatus: () => ({ needsAttention: false }) }))
 afterEach(() => { vi.unstubAllGlobals(); lessonData.current = [] })
 
 it('hiển thị vùng kéo chọn chưa có buổi học và giữ trạng thái buổi đã huỷ', () => {

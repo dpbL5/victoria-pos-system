@@ -1,5 +1,6 @@
 // ── Adapter: implement các repository của domain Học viên bằng Prisma ─────
 import { fail } from '../db-helpers'
+import { latestNotesPerStudent } from '@/lib/students/helpers/attendance-notes'
 import type { Prisma } from '@/generated/prisma/client'
 import type {
   StudentRepository,
@@ -43,7 +44,7 @@ const studentInclude = {
 
 export function createStudentRepository(store: StudentStore): StudentRepository {
   return {
-    findMany: ({ search, status, limit, offset, availableForClassId } = {}) =>
+    findMany: ({ search, status, limit, offset, availableForClassId, unassigned } = {}) =>
       store.student.findMany({
         where: {
           deletedAt: null,
@@ -69,6 +70,8 @@ export function createStudentRepository(store: StudentStore): StudentRepository 
                 ],
               }
             : {}),
+          // Chưa thuộc lớp nào — dùng khi tạo lớp mới để không chọn nhầm học viên của lớp khác.
+          ...(unassigned ? { series: { none: { series: { classId: { not: null } } } } } : {}),
         },
         include: studentInclude,
         orderBy: { fullName: 'asc' },
@@ -180,6 +183,19 @@ export function createLessonRepository(store: StudentStore): LessonRepository {
         where: { lessonId_studentId: { lessonId, studentId } },
         data: { packageId },
       })
+    },
+    lastNotesByStudent: async (studentIds, before) => {
+      if (!studentIds.length) return []
+      const rows = await store.lessonStudent.findMany({
+        where: {
+          studentId: { in: studentIds },
+          note: { not: null },
+          lesson: { startsAt: { lt: before }, status: { not: 'CANCELLED' } },
+        },
+        select: { studentId: true, note: true, lesson: { select: { startsAt: true, title: true } } },
+        orderBy: { lesson: { startsAt: 'desc' } },
+      })
+      return latestNotesPerStudent(rows)
     },
   }
 }

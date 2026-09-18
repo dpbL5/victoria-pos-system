@@ -1,5 +1,6 @@
 // ── Ports — repository interfaces cho domain Học viên ─────
 import type { Prisma } from '@/generated/prisma/client'
+import type { PreviousAttendanceNote } from './helpers/attendance-notes'
 
 export type StudentRecord = Prisma.StudentGetPayload<{
   include: { packages: true; series: { include: { series: { include: { class: true } } } } }
@@ -21,6 +22,8 @@ export interface StudentListInput {
   offset?: number
   /** Chỉ trả học viên chưa thuộc lớp nào (hoặc đang ở đúng lớp này) — dùng cho sổ lớp. */
   availableForClassId?: string
+  /** Chỉ trả học viên chưa thuộc lớp nào — dùng khi tạo lớp mới. */
+  unassigned?: boolean
 }
 
 export interface StudentRepository {
@@ -67,6 +70,8 @@ export interface LessonRepository {
   }): Promise<void>
   /** Gắn gói buổi đã bị trừ cho LessonStudent (chống đếm trùng). */
   setPackage(input: { lessonId: string; studentId: string; packageId: string }): Promise<void>
+  /** Note khác rỗng của buổi gần nhất trước `before` cho từng học viên. */
+  lastNotesByStudent(studentIds: string[], before: Date): Promise<PreviousAttendanceNote[]>
 }
 
 export interface LessonSeriesRepository {

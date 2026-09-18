@@ -1,11 +1,12 @@
 // ── Use-case: điểm danh buổi học + trừ gói buổi ─────
-import { err } from '@/lib/shared/result'
+import { err, ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
 import { fail, runInTransaction } from '@/lib/infrastructure/db-helpers'
 import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { pickChargeablePackage } from '../helpers/package-math'
+import type { PreviousAttendanceNote } from '../helpers/attendance-notes'
 import type { LessonRecord } from '../ports'
 
 export interface AttendanceEntry {
@@ -105,6 +106,21 @@ async function currentRemaining(
   const packages = await tx.lessonPackage.findActiveByStudent(studentId)
   const totalRemaining = packages.reduce((sum, p) => sum + Math.max(0, p.total - p.used), 0)
   return totalRemaining
+}
+
+export interface PreviousNotesResult {
+  notes: PreviousAttendanceNote[]
+}
+
+/** Note của buổi gần nhất trước buổi này cho từng học viên trong buổi — hiển thị khi điểm danh. */
+export async function previousAttendanceNotes(
+  input: { lessonId: string },
+  deps: Repositories = repositories
+): Promise<Result<PreviousNotesResult>> {
+  const lesson = await deps.lesson.findById(input.lessonId)
+  if (!lesson) return err('LESSON_NOT_FOUND')
+  const notes = await deps.lesson.lastNotesByStudent(lesson.students.map(s => s.studentId), lesson.startsAt)
+  return ok({ notes })
 }
 
 export function mapMarkAttendanceError(error: DomainError): HttpErrorInfo {

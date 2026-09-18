@@ -23,7 +23,14 @@ export async function GET(request: NextRequest) {
     const offset = Number(request.nextUrl.searchParams.get('offset') ?? 0)
     if (!Number.isInteger(limitParam) || limitParam < 1 || limitParam > 100 || !Number.isInteger(offset) || offset < 0) return apiError({ code: 'VALIDATION', message: 'Phân trang không hợp lệ', status: 400 })
 
-    const students = await repositories.student.findMany({ search, status, limit: limitParam, offset, availableForClassId: request.nextUrl.searchParams.get('classId') || undefined })
+    const students = await repositories.student.findMany({
+      search,
+      status,
+      limit: limitParam,
+      offset,
+      availableForClassId: request.nextUrl.searchParams.get('classId') || undefined,
+      unassigned: request.nextUrl.searchParams.get('unassigned') === '1',
+    })
 
     return apiSuccess(students)
   } catch (error) {

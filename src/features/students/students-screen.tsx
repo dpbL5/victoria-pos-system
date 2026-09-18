@@ -7,9 +7,8 @@ import { CalendarClock, Edit3, GraduationCap, Plus, RefreshCw, Trash2, Users } f
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input, Label, Select } from '@/components/ui/input'
+import { Input, Select } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton, SkeletonPage, SkeletonRows } from '@/components/ui/skeleton'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
@@ -18,17 +17,10 @@ import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { emptyStudentForm, studentFormBody, StudentFormModal, studentToForm, type StudentForm } from './student-form-modal'
 import { studentClassOf, type Student, type CalendarStatus } from './types'
 
-interface StudentForm {
-  fullName: string
-  phone: string
-  birthYear: string
-  notes: string
-  status: 'ACTIVE' | 'INACTIVE'
-}
-
-const emptyForm: StudentForm = { fullName: '', phone: '', birthYear: '', notes: '', status: 'ACTIVE' }
+const emptyForm = emptyStudentForm()
 
 export function StudentsScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
@@ -63,13 +55,7 @@ export function StudentsScreen() {
 
   const openEdit = (s: Student) => {
     setEditStudent(s)
-    setForm({
-      fullName: s.fullName,
-      phone: s.phone ?? '',
-      birthYear: s.birthYear ? String(s.birthYear) : '',
-      notes: s.notes ?? '',
-      status: s.status,
-    })
+    setForm(studentToForm(s))
     setFormOpen(true)
   }
 
@@ -86,13 +72,7 @@ export function StudentsScreen() {
     }
     setSubmitting(true)
     try {
-      const body = {
-        fullName: form.fullName.trim(),
-        phone: form.phone.trim(),
-        birthYear: form.birthYear ? Number(form.birthYear) : null,
-        notes: form.notes.trim(),
-        status: form.status,
-      }
+      const body = studentFormBody(form)
       const data = editStudent
         ? await apiJson<Student>(`/api/students/${editStudent.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         : await apiJson<Student>('/api/students', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -354,58 +334,5 @@ export function StudentsScreen() {
         />
       </div>
     </div>
-  )
-}
-
-// ── Form thêm/sửa học viên ──
-function StudentFormModal({
-  open,
-  student,
-  form,
-  submitting,
-  onChange,
-  onClose,
-  onSubmit,
-}: {
-  open: boolean
-  student: Student | null
-  form: StudentForm
-  submitting: boolean
-  onChange: (f: StudentForm) => void
-  onClose: () => void
-  onSubmit: () => void
-}) {
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={student ? 'Sửa học viên' : 'Thêm học viên'}
-      size="md"
-      footer={
-        <Button variant="inverse" size="lg" fullWidth disabled={submitting || !form.fullName.trim()} onClick={onSubmit}>
-          {submitting ? 'Đang lưu...' : student ? 'Cập nhật' : 'Thêm học viên'}
-        </Button>
-      }
-    >
-      <div className="space-y-3">
-        <div>
-          <Label htmlFor="student-name" required>Tên học viên</Label>
-          <Input id="student-name" value={form.fullName} onChange={(e) => onChange({ ...form, fullName: e.target.value })} placeholder="Họ và tên" />
-        </div>
-        <div>
-          <Label htmlFor="student-phone">Số điện thoại</Label>
-          <Input id="student-phone" value={form.phone} onChange={(e) => onChange({ ...form, phone: e.target.value })} placeholder="0xxxxxxxxx" />
-        </div>
-        <div>
-          <Label htmlFor="student-birth">Năm sinh</Label>
-          <Input id="student-birth" type="number" min={1900} max={2100} value={form.birthYear} onChange={(e) => onChange({ ...form, birthYear: e.target.value })} placeholder="VD: 2005" />
-        </div>
-        {student && <div><Label htmlFor="student-status">Trạng thái</Label><Select id="student-status" value={form.status} onChange={e => onChange({ ...form, status: e.target.value as StudentForm['status'] })}><option value="ACTIVE">Đang học</option><option value="INACTIVE">Dừng học</option></Select></div>}
-        <div>
-          <Label htmlFor="student-notes">Ghi chú</Label>
-          <Input id="student-notes" value={form.notes} onChange={(e) => onChange({ ...form, notes: e.target.value })} placeholder="Ghi chú (tuỳ chọn)" />
-        </div>
-      </div>
-    </Modal>
   )
 }

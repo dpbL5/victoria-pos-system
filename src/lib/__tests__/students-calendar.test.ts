@@ -18,7 +18,7 @@ vi.mock('@/lib/infrastructure/db-helpers', async original => {
     }
   }) }
 })
-import { weeklyOccurrences, weeklyRrule, overlaps, createLesson, updateLesson, createSeries, updateSeries, deleteLesson, ensureLessonsUntil, processCalendarJobs } from '@/lib/students'
+import { weeklyOccurrences, weeklyRrule, overlaps, createLesson, updateLesson, createSeries, updateSeries, deleteLesson, ensureLessonsUntil, processCalendarJobs, retryCalendar } from '@/lib/students'
 import { fail } from '@/lib/infrastructure/db-helpers'
 
 const future = () => new Date(Date.now() + 30 * 86400000)
@@ -58,6 +58,7 @@ beforeEach(() => {
       }),
     },
     audit: { append: vi.fn() },
+    lessonClass: { classesOfStudents: vi.fn(async () => []) },
     calendarSync: {
       summary: vi.fn(), getMapping: vi.fn(async () => null), setMapping: vi.fn(), remapPrimary: vi.fn(),
       enqueue: vi.fn(async (kind: string, entityId: string) => {
@@ -71,7 +72,7 @@ beforeEach(() => {
         const job = state.jobs.find(j => j.id === id)!
         if (job.version === version) Object.assign(job, { status: error ? error.retry ? 'PENDING' : 'ERROR' : 'SYNCED', lastError: error?.message ?? null })
       }),
-      acquire: vi.fn(async () => true), release: vi.fn(), reconnectRequired: vi.fn(),
+      acquire: vi.fn(async () => true), release: vi.fn(), reconnectRequired: vi.fn(), retry: vi.fn(),
     },
     calendarConnection: {
       find: vi.fn(async () => ({ id: 'single', generation: 'g', calendarId: 'club', accessToken: 'encrypted', refreshToken: 'encrypted-refresh', tokenExpiresAt: new Date(Date.now() + 3600000), needsReconnect: false })),
@@ -170,6 +171,27 @@ describe('chuỗi và ngoại lệ', () => {
   })
 })
 
+describe('ràng buộc một học viên chỉ thuộc một lớp (module Lịch)', () => {
+  it('chặn tạo chuỗi gắn lớp với học viên đang ở lớp khác', async () => {
+    vi.mocked(state.repos.lessonClass.classesOfStudents).mockResolvedValue([{ studentId: 'a', studentName: 'A', classId: 'class-other', className: 'Lớp khác' }])
+
+    const result = await createSeries({ staffId: 'admin', classId: 'class-1', title: 'Lịch lớp', studentIds: ['a'], startsOn: future(), daysOfWeek: [1], startTime: '18:00', durationMin: 60 }, state.repos)
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'CLASS_STUDENT_TAKEN' } })
+    expect(state.series).toHaveLength(0)
+  })
+  it('chặn buổi lẻ gắn lớp với học viên lớp khác, nhưng cho qua học viên của chính lớp đó', async () => {
+    vi.mocked(state.repos.lessonClass.classesOfStudents).mockResolvedValue([{ studentId: 'a', studentName: 'A', classId: 'class-1', className: 'Lớp 1' }])
+    expect((await createLesson({ ...base(), classId: 'class-1' }, state.repos)).ok).toBe(true)
+
+    vi.mocked(state.repos.lessonClass.classesOfStudents).mockResolvedValue([{ studentId: 'a', studentName: 'A', classId: 'class-2', className: 'Lớp 2' }])
+    const blocked = await createLesson({ ...base(), classId: 'class-1' }, state.repos)
+
+    expect(blocked).toMatchObject({ ok: false, error: { code: 'CLASS_STUDENT_TAKEN' } })
+    expect(state.lessons).toHaveLength(1)
+  })
+})
+
 describe('đồng bộ bền vững', () => {
   it('lỗi Google giữ lịch và job để thử lại', async () => {
     await createLesson(base(), state.repos)
@@ -200,5 +222,16 @@ describe('đồng bộ bền vững', () => {
     await processCalendarJobs(state.repos)
     expect(state.repos.calendarSync.reconnectRequired).toHaveBeenCalledOnce()
     expect(state.jobs[0].status).toBe('ERROR')
+  })
+  it('đồng bộ theo nút xử lý job ngay trong request, không cần worker nền', async () => {
+    await createLesson(base(), state.repos)
+    expect(state.jobs[0].status).toBe('PENDING')
+
+    const result = await retryCalendar({ staffId: 'admin', from: new Date(Date.now() - 86400000), to: new Date(Date.now() + 60 * 86400000) }, state.repos)
+
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.value.processed).toBeGreaterThan(0)
+    expect(state.jobs.every(j => j.status === 'SYNCED')).toBe(true)
+    expect(state.repos.googleCalendar.putEvent).toHaveBeenCalledOnce()
   })
 })

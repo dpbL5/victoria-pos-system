@@ -141,7 +141,7 @@ export async function selectCalendar(input: { staffId: string; calendarId: strin
 export async function retryCalendar(input: { staffId: string; from: Date; to: Date }, deps: Repositories = repositories) {
   const expanded = await ensureLessonsUntil(input.to, deps)
   if (!expanded.ok) return expanded
-  return runInTransaction(async tx => {
+  const queued = await runInTransaction(async tx => {
     const conn = await tx.calendarConnection.find()
     if (!conn) fail('CALENDAR_NOT_CONNECTED')
     for (const series of await tx.lessonSeries.findMany()) await tx.calendarSync.enqueue('SERIES', series.id)
@@ -154,6 +154,14 @@ export async function retryCalendar(input: { staffId: string; from: Date; to: Da
     await tx.audit.append({ userId: input.staffId, action: 'GOOGLE_CALENDAR_RETRY', entityType: 'CalendarConnection', entityId: conn!.generation, details: { from: input.from.toISOString(), to: input.to.toISOString() } })
     return { queued: true }
   })
+  if (!queued.ok) return queued
+  return ok({ ...queued.value, ...await syncQueuedJobs(deps) })
+}
+
+/** Xử lý job ngay trong request — nút đồng bộ có hiệu lực tức thì, không cần worker nền. */
+async function syncQueuedJobs(deps: Repositories) {
+  const synced = await processCalendarJobs(deps)
+  return synced.ok ? { processed: synced.value.processed, syncError: undefined } : { processed: 0, syncError: mapCalendarError(synced.error).message }
 }
 
 export async function maintainCalendar(recoverFailed = false, deps: Repositories = repositories) {
@@ -173,8 +181,7 @@ export function mapCalendarError(error: DomainError): HttpErrorInfo {
 }
 
 export async function retryLessonSync(input: { staffId: string; lessonId: string }, deps: Repositories = repositories) {
-  void deps
-  return runInTransaction(async tx => {
+  const queued = await runInTransaction(async tx => {
     const connection = await tx.calendarConnection.find()
     if (!connection?.calendarId) fail('CALENDAR_NOT_CONNECTED')
     const lesson = await tx.lesson.findById(input.lessonId)
@@ -184,4 +191,6 @@ export async function retryLessonSync(input: { staffId: string; lessonId: string
     await tx.audit.append({ userId: input.staffId, action: 'GOOGLE_CALENDAR_RETRY', entityType: 'Lesson', entityId: lesson!.id })
     return { queued: true }
   })
+  if (!queued.ok) return queued
+  return ok({ ...queued.value, ...await syncQueuedJobs(deps) })
 }

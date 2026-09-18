@@ -5,6 +5,9 @@ import {
   toInputDate,
   parseStartOfDay,
   parseEndOfDay,
+  formatVnDate,
+  formatVnDateTime,
+  formatVnTimeRange,
 } from '@/lib/shared/utils'
 
 // ── formatVND ───────────────────────────────────────────
@@ -105,5 +108,27 @@ describe('parseEndOfDay', () => {
   it('ngày đầu năm', () => {
     const result = parseEndOfDay('2026-01-01')
     expect(result.toISOString()).toBe('2026-01-01T16:59:59.999Z')
+  })
+})
+
+// ── Định dạng ngày giờ Việt Nam (dùng chung cho HV/Lớp/Lịch) ──
+
+describe('formatVnDate / formatVnDateTime / formatVnTimeRange', () => {
+  it('hiển thị theo giờ Việt Nam bất kể múi giờ máy chạy', () => {
+    // 18:00 giờ VN = 11:00 UTC
+    expect(formatVnDateTime('2026-09-10T11:00:00Z')).toBe('10/09/2026 18:00')
+    expect(formatVnDate('2026-09-10T11:00:00Z')).toBe('10/09/2026')
+  })
+
+  it('ngày rìa: 17:00 UTC đã sang ngày mới ở VN', () => {
+    expect(formatVnDate('2026-09-10T17:00:00Z')).toBe('11/09/2026')
+  })
+
+  it('khoảng giờ của buổi học tính từ giờ bắt đầu + thời lượng', () => {
+    expect(formatVnTimeRange('2026-09-10T11:00:00Z', 90)).toBe('18:00–19:30')
+  })
+
+  it('nhận cả Date', () => {
+    expect(formatVnDate(new Date('2026-01-01T00:00:00+07:00'))).toBe('01/01/2026')
   })
 })

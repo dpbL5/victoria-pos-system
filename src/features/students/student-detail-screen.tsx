@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, CalendarClock, GraduationCap, Plus, School, UserMinus } from 'lucide-react'
+import { ArrowLeft, CalendarClock, ClipboardCheck, GraduationCap, Plus, School, UserMinus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input, Label, Select } from '@/components/ui/input'
+import { Input, Select } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
@@ -15,17 +15,15 @@ import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
+import { formatVnDate, formatVnTimeRange } from '@/lib/shared/utils'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { AttendanceDialog } from './attendance-dialog'
+import { emptyStudentForm, studentFormBody, StudentFormModal, studentToForm, type StudentForm } from './student-form-modal'
 import { studentClassOf, type Student, type LessonPackage, type Lesson } from './types'
 import type { LessonClass } from '@/features/classes/types'
 
 interface StudentDetailProps {
   id: string
-}
-
-function fmtDate(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 export function StudentDetailScreen({ id }: StudentDetailProps) {
@@ -47,11 +45,12 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
   const past = lessonsData?.data?.past ?? []
 
   const [formOpen, setFormOpen] = useState(false)
-  const [form, setForm] = useState({ fullName: '', phone: '', birthYear: '', notes: '', status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE' })
+  const [form, setForm] = useState<StudentForm>(emptyStudentForm())
   const [pkgOpen, setPkgOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [classPick, setClassPick] = useState('')
   const [leaveClassOpen, setLeaveClassOpen] = useState(false)
+  const [attendanceLesson, setAttendanceLesson] = useState<Lesson | null>(null)
 
   const currentClass = student ? studentClassOf(student) : null
 
@@ -97,13 +96,7 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
 
   const openEdit = useCallback(() => {
     if (!student) return
-    setForm({
-      fullName: student.fullName,
-      phone: student.phone ?? '',
-      birthYear: student.birthYear ? String(student.birthYear) : '',
-      notes: student.notes ?? '',
-      status: student.status,
-    })
+    setForm(studentToForm(student))
     setFormOpen(true)
   }, [student])
 
@@ -118,13 +111,7 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
       const data = await apiJson<Student>(`/api/students/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fullName: form.fullName.trim(),
-          phone: form.phone.trim(),
-          birthYear: form.birthYear ? Number(form.birthYear) : null,
-          notes: form.notes.trim(),
-          status: form.status,
-        }),
+        body: JSON.stringify(studentFormBody(form)),
       })
       if (!data.success) {
         notifyError(data.error || 'Không cập nhật được')
@@ -256,71 +243,45 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
               <div key={l.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">{l.title}</p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{fmtDate(l.startsAt)} · {l.durationMin} phút</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{formatVnDate(l.startsAt)} · {formatVnTimeRange(l.startsAt, l.durationMin)}</p>
                 </div>
-                <Badge variant="blue">Sắp tới</Badge>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Badge variant="blue">Sắp tới</Badge>
+                  <Button variant="secondary" size="sm" icon={ClipboardCheck} aria-label="Điểm danh" title="Điểm danh" onClick={() => setAttendanceLesson(l)} />
+                </div>
               </div>
             ))}
             {past.map((l) => (
               <div key={l.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">{l.title}</p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{fmtDate(l.startsAt)} · {l.durationMin} phút</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{formatVnDate(l.startsAt)} · {formatVnTimeRange(l.startsAt, l.durationMin)}</p>
                   {l.students.find((s) => s.studentId === id)?.note && (
-                    <p className="text-xs text-zinc-600 dark:text-zinc-300">Note: {l.students.find((s) => s.studentId === id)?.note}</p>
+                    <p className="text-xs text-zinc-600 dark:text-zinc-300">Ghi chú: {l.students.find((s) => s.studentId === id)?.note}</p>
                   )}
                 </div>
-                <Badge variant={l.students.find((s) => s.studentId === id)?.status === 'COMPLETED' ? 'success' : l.students.find((s) => s.studentId === id)?.status === 'ABSENT' ? 'danger' : 'default'}>
-                  {l.students.find((s) => s.studentId === id)?.status === 'COMPLETED' ? 'Hoàn thành' : l.students.find((s) => s.studentId === id)?.status === 'ABSENT' ? 'Vắng' : '—'}
-                </Badge>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Badge variant={l.students.find((s) => s.studentId === id)?.status === 'COMPLETED' ? 'success' : l.students.find((s) => s.studentId === id)?.status === 'ABSENT' ? 'danger' : 'default'}>
+                    {l.students.find((s) => s.studentId === id)?.status === 'COMPLETED' ? 'Hoàn thành' : l.students.find((s) => s.studentId === id)?.status === 'ABSENT' ? 'Vắng' : '—'}
+                  </Badge>
+                  <Button variant="secondary" size="sm" icon={ClipboardCheck} aria-label="Điểm danh" title="Điểm danh" onClick={() => setAttendanceLesson(l)} />
+                </div>
               </div>
             ))}
           </div>
         </Card>
 
-        {/* Edit modal */}
-        <Modal
+        <StudentFormModal
           open={formOpen}
+          student={student}
+          form={form}
+          submitting={submitting}
+          onChange={setForm}
           onClose={() => setFormOpen(false)}
-          title="Sửa học viên"
-          size="md"
-          footer={
-            <Button variant="inverse" size="lg" fullWidth disabled={submitting || !form.fullName.trim()} onClick={handleSubmit}>
-              {submitting ? 'Đang lưu...' : 'Cập nhật'}
-            </Button>
-          }
-        >
-          <div className="space-y-3">
-            <div>
-              <Label htmlFor="detail-name" required>Tên học viên</Label>
-              <Input id="detail-name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
-            </div>
-            <div>
-              <Label htmlFor="detail-phone">Số điện thoại</Label>
-              <Input id="detail-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </div>
-            <div>
-              <Label htmlFor="detail-birth">Năm sinh</Label>
-              <Input id="detail-birth" type="number" min={1900} max={2100} value={form.birthYear} onChange={(e) => setForm({ ...form, birthYear: e.target.value })} />
-            </div>
-            <div>
-              <Label htmlFor="detail-notes">Ghi chú</Label>
-              <Input id="detail-notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-            </div>
-            <div>
-              <Label htmlFor="detail-status">Trạng thái</Label>
-              <select
-                id="detail-status"
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value as 'ACTIVE' | 'INACTIVE' })}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-              >
-                <option value="ACTIVE">Đang học</option>
-                <option value="INACTIVE">Dừng học</option>
-              </select>
-            </div>
-          </div>
-        </Modal>
+          onSubmit={() => void handleSubmit()}
+        />
+
+        {attendanceLesson && <AttendanceDialog lesson={attendanceLesson} onClose={() => setAttendanceLesson(null)} onSaved={() => { setAttendanceLesson(null); void mutateLessons() }} />}
 
         {pkgOpen && (
           <PackageModal student={student} onClose={() => setPkgOpen(false)} onSaved={() => { setPkgOpen(false); void mutate() }} />
@@ -330,7 +291,7 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
           open={leaveClassOpen}
           onClose={() => setLeaveClassOpen(false)}
           title="Rời lớp học?"
-          description={currentClass ? `Học viên sẽ bị bỏ khỏi mọi khung giờ của lớp "${currentClass.name}" và các buổi chưa điểm danh. Buổi đã điểm danh giữ nguyên.` : undefined}
+          description={currentClass ? `Học viên sẽ bị bỏ khỏi mọi lịch lặp của lớp "${currentClass.name}" và các buổi chưa điểm danh. Buổi đã điểm danh giữ nguyên.` : undefined}
           confirmLabel="Rời lớp"
           submitting={submitting}
           onConfirm={leaveClass}

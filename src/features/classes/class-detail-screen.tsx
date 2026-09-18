@@ -1,6 +1,6 @@
 'use client'
 import dynamic from 'next/dynamic'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, CalendarClock, Edit3, Plus, StopCircle, Trash2 } from 'lucide-react'
@@ -14,8 +14,10 @@ import { Skeleton, SkeletonPage, SkeletonRows } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
+import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { StudentPicker } from '@/features/students/student-picker'
-import { emptySlot, formatDate, formatSlot, SlotFields, slotBody, slotToForm, todayInput, type SlotFormState } from './slot-form'
+import { emptySchedule, scheduleBody, scheduleError, ScheduleFields, scheduleToForm, type ScheduleFormState } from '@/features/students/schedule-fields'
+import { formatDate, formatSlot, todayInput } from './slot-form'
 import type { ClassDetail, ClassSlot } from './types'
 
 const LessonsCalendar = dynamic(() => import('@/features/students/lessons-calendar'), {
@@ -35,6 +37,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
   const { success: notifySuccess, error: notifyError } = useToast()
   const router = useRouter()
   const { data, isLoading, mutate } = useApi<ClassDetail>(`/api/classes/${id}`)
+  const { registerRefresh } = usePageRefresh()
   const [tab, setTab] = useState<TabKey>('info')
   const [infoOpen, setInfoOpen] = useState(false)
   const [slotTarget, setSlotTarget] = useState<ClassSlot | 'new' | null>(null)
@@ -49,6 +52,10 @@ export function ClassDetailScreen({ id }: { id: string }) {
   const slots = detail?.slots ?? []
   const selectedStudents = rosterIds ?? detail?.roster.map(student => student.id) ?? []
   const rosterChanged = rosterIds !== null && rosterIds.join() !== (detail?.roster.map(student => student.id).join() ?? '')
+
+  useEffect(() => {
+    return registerRefresh(() => void mutate())
+  }, [registerRefresh, mutate])
 
 
   async function saveInfo(payload: { name: string; coachName: string; note: string }) {
@@ -92,10 +99,10 @@ export function ClassDetailScreen({ id }: { id: string }) {
     }
   }
 
-  async function saveSlot(scope: 'FOLLOWING' | 'ALL', form: SlotFormState) {
-    const body = slotBody(form)
+  async function saveSlot(scope: 'FOLLOWING' | 'ALL', form: ScheduleFormState) {
+    const body = scheduleBody(form)
     if (!body) {
-      notifyError('Chọn ít nhất một thứ, giờ bắt đầu và ngày bắt đầu hợp lệ')
+      notifyError(scheduleError(form) ?? 'Lịch chưa hợp lệ')
       return
     }
     setSubmitting(true)
@@ -104,10 +111,10 @@ export function ClassDetailScreen({ id }: { id: string }) {
         ? await apiJson(`/api/classes/${id}/slots`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         : await apiJson(`/api/classes/${id}/slots/${(slotTarget as ClassSlot).id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, version: (slotTarget as ClassSlot).version, scope }) })
       if (!result.success) {
-        notifyError(result.error || 'Không lưu được khung giờ')
+        notifyError(result.error || 'Không lưu được lịch lặp')
         return
       }
-      notifySuccess(slotTarget === 'new' ? 'Đã thêm khung giờ' : 'Đã cập nhật khung giờ')
+      notifySuccess(slotTarget === 'new' ? 'Đã thêm lịch lặp' : 'Đã cập nhật lịch lặp')
       setSlotTarget(null)
       await mutate()
     } catch {
@@ -127,10 +134,10 @@ export function ClassDetailScreen({ id }: { id: string }) {
         body: JSON.stringify({ version: endSlotTarget.version, scope: 'FOLLOWING' }),
       })
       if (!result.success) {
-        notifyError(result.error || 'Không kết thúc được khung giờ')
+        notifyError(result.error || 'Không kết thúc được lịch lặp')
         return
       }
-      notifySuccess('Đã kết thúc khung giờ từ hôm nay')
+      notifySuccess('Đã kết thúc lịch lặp từ hôm nay')
       setEndSlotTarget(null)
       await mutate()
     } catch {
@@ -197,7 +204,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
             {detail.isActive ? <Badge variant="success">Đang hoạt động</Badge> : <Badge variant="default">Đã kết thúc</Badge>}
           </h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-            {detail.coachName ? `HLV ${detail.coachName} · ` : ''}{detail.studentCount} học viên · {slots.length} khung giờ
+            {detail.coachName ? `HLV ${detail.coachName} · ` : ''}{detail.studentCount} học viên · {slots.length} lịch lặp
           </p>
         </div>
         <div className="flex gap-2">
@@ -225,7 +232,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
 
       {tab === 'info' && <div className="space-y-4">
         <section className="rounded-xl bg-white p-4 ring-1 ring-border-default dark:bg-zinc-900">
-          <div className="flex items-center justify-between"><h2 className="font-semibold text-zinc-950 dark:text-white">Khung giờ của lớp</h2><Button variant="secondary" size="sm" icon={Plus} onClick={() => setSlotTarget('new')}>Thêm khung giờ</Button></div>
+          <div className="flex items-center justify-between"><h2 className="font-semibold text-zinc-950 dark:text-white">Lịch lặp của lớp</h2><Button variant="secondary" size="sm" icon={Plus} onClick={() => setSlotTarget('new')}>Thêm lịch lặp</Button></div>
           <div className="mt-3 space-y-2">
             {slots.map(slot => (
               <div key={slot.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
@@ -234,12 +241,12 @@ export function ClassDetailScreen({ id }: { id: string }) {
                   <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Từ {formatDate(slot.startsOn)} → {formatDate(slot.endsOn)} · {slot.students.length} học viên</p>
                 </div>
                 <div className="flex gap-1.5">
-                  <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => setSlotTarget(slot)} title="Sửa khung giờ" />
-                  {slot.isActive && <Button variant="outline-danger" size="sm" icon={StopCircle} disabled={submitting} onClick={() => setEndSlotTarget(slot)} title="Kết thúc khung giờ" />}
+                  <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => setSlotTarget(slot)} title="Sửa lịch lặp" />
+                  {slot.isActive && <Button variant="outline-danger" size="sm" icon={StopCircle} disabled={submitting} onClick={() => setEndSlotTarget(slot)} title="Kết thúc lịch lặp" />}
                 </div>
               </div>
             ))}
-            {!slots.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">Lớp chưa có khung giờ. Thêm khung giờ để sinh buổi học hằng tuần.</p>}
+            {!slots.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">Lớp chưa có lịch lặp. Thêm lịch lặp để sinh buổi học hằng tuần.</p>}
           </div>
         </section>
 
@@ -254,7 +261,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
           <h2 className="font-semibold text-zinc-950 dark:text-white">Sổ học viên ({selectedStudents.length})</h2>
           <Button variant="primary" size="sm" disabled={submitting || !rosterChanged} onClick={() => void saveRoster()}>{submitting ? 'Đang lưu...' : 'Lưu sổ học viên'}</Button>
         </div>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">Thêm hoặc bớt học viên áp cho mọi khung giờ của lớp và các buổi chưa điểm danh. Buổi đã điểm danh được giữ nguyên. Mỗi học viên chỉ thuộc một lớp.</p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">Thêm hoặc bớt học viên áp cho mọi lịch lặp của lớp và các buổi chưa điểm danh. Buổi đã điểm danh được giữ nguyên. Mỗi học viên chỉ thuộc một lớp.</p>
         <StudentPicker key={detail.id} value={selectedStudents} onChange={setRosterIds} initial={detail.roster} availableForClassId={detail.id} />
       </section>}
 
@@ -270,9 +277,9 @@ export function ClassDetailScreen({ id }: { id: string }) {
     <ConfirmDialog
       open={!!endSlotTarget}
       onClose={() => setEndSlotTarget(null)}
-      title="Kết thúc khung giờ?"
-      description={endSlotTarget ? `Khung ${formatSlot(endSlotTarget)} sẽ ngừng sinh buổi mới từ hôm nay và các buổi chưa diễn ra bị huỷ. Lịch sử được giữ lại.` : undefined}
-      confirmLabel="Kết thúc khung giờ"
+      title="Kết thúc lịch lặp?"
+      description={endSlotTarget ? `Lịch ${formatSlot(endSlotTarget)} sẽ ngừng sinh buổi mới từ hôm nay và các buổi chưa diễn ra bị huỷ. Lịch sử được giữ lại.` : undefined}
+      confirmLabel="Kết thúc lịch lặp"
       submitting={submitting}
       onConfirm={endSlot}
     />
@@ -291,7 +298,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
       open={deleteOpen}
       onClose={() => setDeleteOpen(false)}
       title="Xoá lớp học?"
-      description={`Xoá vĩnh viễn lớp "${detail.name}", ${slots.length} khung giờ và TOÀN BỘ buổi học (kể cả buổi đã điểm danh), cùng sự kiện trên Google Calendar. Chỉ dùng khi thêm nhầm — muốn giữ lịch sử thì dùng "Kết thúc lớp".`}
+      description={`Xoá vĩnh viễn lớp "${detail.name}", ${slots.length} lịch lặp và TOÀN BỘ buổi học (kể cả buổi đã điểm danh), cùng sự kiện trên Google Calendar. Chỉ dùng khi thêm nhầm — muốn giữ lịch sử thì dùng "Kết thúc lớp".`}
       confirmLabel="Xoá lớp"
       submitting={submitting}
       onConfirm={deleteClass}
@@ -318,7 +325,7 @@ function ClassInfoModal({ lessonClass, submitting, onClose, onSubmit }: {
       <div><Label htmlFor="class-info-name" required>Tên lớp</Label><Input autoFocus id="class-info-name" maxLength={150} value={name} onChange={event => setName(event.target.value)} /></div>
       <div><Label htmlFor="class-info-coach">Huấn luyện viên</Label><Input id="class-info-coach" maxLength={100} value={coachName} onChange={event => setCoachName(event.target.value)} /></div>
       <div><Label htmlFor="class-info-note">Ghi chú</Label><Textarea id="class-info-note" rows={3} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} /></div>
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">Đổi tên lớp sẽ cập nhật tiêu đề các khung giờ và buổi chưa điểm danh.</p>
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">Đổi tên lớp sẽ cập nhật tiêu đề các lịch lặp và buổi chưa điểm danh.</p>
     </div>
   </Modal>
 }
@@ -327,21 +334,21 @@ function SlotModal({ slot, submitting, onClose, onSubmit }: {
   slot: ClassSlot | null
   submitting: boolean
   onClose: () => void
-  onSubmit: (scope: 'FOLLOWING' | 'ALL', form: SlotFormState) => Promise<void>
+  onSubmit: (scope: 'FOLLOWING' | 'ALL', form: ScheduleFormState) => Promise<void>
 }) {
-  const [form, setForm] = useState<SlotFormState>(() => slot ? slotToForm(slot) : emptySlot(todayInput()))
+  const [form, setForm] = useState<ScheduleFormState>(() => slot ? scheduleToForm(slot) : emptySchedule(todayInput()))
   const [scope, setScope] = useState<'FOLLOWING' | 'ALL'>('FOLLOWING')
 
-  const valid = Boolean(slotBody(form))
+  const error = scheduleError(form)
 
-  return <Modal open onClose={onClose} title={slot ? 'Sửa khung giờ' : 'Thêm khung giờ'} size="md" footer={
-    <Button variant="inverse" size="lg" fullWidth disabled={submitting || !valid} onClick={() => void onSubmit(scope, form)}>
-      {submitting ? 'Đang lưu...' : slot ? 'Cập nhật khung giờ' : 'Thêm khung giờ'}
+  return <Modal open onClose={onClose} title={slot ? 'Sửa lịch lặp' : 'Thêm lịch lặp'} size="md" footer={
+    <Button variant="inverse" size="lg" fullWidth disabled={submitting || Boolean(error)} onClick={() => void onSubmit(scope, form)}>
+      {submitting ? 'Đang lưu...' : slot ? 'Cập nhật lịch' : 'Thêm lịch'}
     </Button>
   }>
     <div className="space-y-4">
-      <SlotFields idPrefix={slot ? `slot-${slot.id}` : 'slot-new'} form={form} onChange={setForm} />
-      {!valid && <p className="text-sm text-red-600 dark:text-red-400">Chọn ít nhất một thứ, giờ bắt đầu và ngày bắt đầu hợp lệ.</p>}
+      <ScheduleFields idPrefix={slot ? `slot-${slot.id}` : 'slot-new'} form={form} onChange={setForm} />
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       {slot && <div>
         <Label htmlFor="slot-scope">Phạm vi thay đổi</Label>
         <Select id="slot-scope" value={scope} onChange={event => setScope(event.target.value as 'FOLLOWING' | 'ALL')}>
@@ -350,7 +357,7 @@ function SlotModal({ slot, submitting, onClose, onSubmit }: {
         </Select>
         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Buổi đã điểm danh không bị đổi lịch; nếu có buổi như vậy, hãy xử lý riêng trên lịch.</p>
       </div>}
-      {!slot && <p className="text-xs text-zinc-500 dark:text-zinc-400">Khung giờ dùng sổ học viên hiện tại của lớp. Sinh buổi tối đa 12 tuần tới.</p>}
+      {!slot && <p className="text-xs text-zinc-500 dark:text-zinc-400">Lịch dùng sổ học viên hiện tại của lớp. Sinh buổi tối đa 12 tuần tới.</p>}
     </div>
   </Modal>
 }

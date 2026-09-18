@@ -6,8 +6,22 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
+import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import type { Lesson } from './types'
+
+interface PreviousNote {
+  studentId: string
+  note: string
+  startsAt: string
+  lessonTitle: string
+}
+
+const dayLabel = (iso: string) => {
+  const day = localTime(iso).slice(0, 10)
+  return `${day.slice(8, 10)}/${day.slice(5, 7)}`
+}
+
 // ── Dialog điểm danh + note từng học viên ──
 export function AttendanceDialog({
   lesson,
@@ -20,6 +34,8 @@ export function AttendanceDialog({
 }) {
   const { success: notifySuccess, error: notifyError } = useToast()
   const [submitting, setSubmitting] = useState(false)
+  const { data: history } = useApi<{ notes: PreviousNote[] }>(`/api/lessons/${lesson.id}/previous-notes`)
+  const previousByStudent = new Map((history?.data?.notes ?? []).map(note => [note.studentId, note]))
   const [entries, setEntries] = useState<Record<string, { status: 'COMPLETED' | 'ABSENT' | 'SCHEDULED'; note: string }>>(() => {
     const init: Record<string, { status: 'COMPLETED' | 'ABSENT' | 'SCHEDULED'; note: string }> = {}
     for (const ls of lesson.students) {
@@ -71,6 +87,7 @@ export function AttendanceDialog({
       <ul className="space-y-3">
         {lesson.students.map((ls) => {
           const entry = entries[ls.studentId]
+          const previous = previousByStudent.get(ls.studentId)
           return (
             <li key={ls.studentId} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
               <div className="flex items-center justify-between gap-2">
@@ -94,6 +111,11 @@ export function AttendanceDialog({
                   </button>
                 </div>
               </div>
+              {previous && (
+                <p className="mt-1.5 rounded-md bg-zinc-50 px-2 py-1 text-xs leading-relaxed text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300" title={`${previous.lessonTitle} · ${localTime(previous.startsAt).replace('T', ' ')}`}>
+                  <span className="font-medium">Buổi trước {dayLabel(previous.startsAt)}:</span> {previous.note}
+                </p>
+              )}
               <Textarea
                 className="mt-2"
                 rows={1}

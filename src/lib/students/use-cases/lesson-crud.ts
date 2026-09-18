@@ -72,6 +72,8 @@ export async function createLesson(input: CreateLessonInput, deps: Repositories 
   void deps
   return runInTransaction(async tx => {
     await studentsActive(tx, input.studentIds)
+    // Buổi gắn lớp phải giữ ràng buộc "một học viên chỉ thuộc một lớp" như khi lập sổ ở module Lớp học.
+    if (input.classId) await assertStudentsInSingleClass(tx, input.studentIds, { excludeClassId: input.classId })
     await available(tx, input)
     const { staffId, ...data } = input
     const lesson = await tx.lesson.create(data)
@@ -95,6 +97,11 @@ export async function updateLesson(input: UpdateLessonInput, deps: Repositories 
     const studentIds = input.studentIds ?? existing!.students.map(s => s.studentId)
     if (structural) {
       await studentsActive(tx, studentIds)
+      const classId = existing!.classId ?? existing!.series?.classId ?? undefined
+      if (classId && input.studentIds) {
+        const current = new Set(existing!.students.map(s => s.studentId))
+        await assertStudentsInSingleClass(tx, studentIds.filter(id => !current.has(id)), { excludeClassId: classId })
+      }
       await available(tx, { startsAt: input.startsAt ?? existing!.startsAt, durationMin: input.durationMin ?? existing!.durationMin, studentIds }, [existing!.id])
     }
     const { staffId, lessonId, version, studentIds: changedStudents, ...changes } = input
@@ -156,6 +163,8 @@ export async function createSeries(input: CreateSeriesInput, deps: Repositories 
   void deps
   return runInTransaction(async tx => {
     await studentsActive(tx, input.studentIds)
+    // Chuỗi gắn lớp phải giữ ràng buộc "một học viên chỉ thuộc một lớp" như khi lập sổ ở module Lớp học.
+    if (input.classId) await assertStudentsInSingleClass(tx, input.studentIds, { excludeClassId: input.classId })
     const { staffId, ...data } = input
     const schedule = { ...data, intervalWeeks: input.intervalWeeks ?? 1 }
     const first = weeklyOccurrences(schedule, input.startsOn, new Date(input.startsOn.getTime() + 90 * DAY_MS))[0]

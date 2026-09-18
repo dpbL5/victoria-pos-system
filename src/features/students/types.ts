@@ -46,6 +46,7 @@ export interface LessonSeries {
   title: string
   daysOfWeek: number[]
   startTime: string
+  durationMin: number
   intervalWeeks: number
   occurrenceCount: number | null
   startsOn: string

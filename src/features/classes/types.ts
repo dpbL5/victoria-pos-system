@@ -7,6 +7,8 @@ export interface ClassSlot {
   durationMin: number
   startsOn: string
   endsOn: string | null
+  intervalWeeks: number
+  occurrenceCount: number | null
   isActive: boolean
   materializedUntil: string | null
   students: { studentId: string }[]

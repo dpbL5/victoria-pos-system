@@ -17,9 +17,11 @@ ADMIN mở **Lịch học → Google Calendar → Kết nối** rồi chọn l�
 
 Ứng dụng là nguồn dữ liệu chính, chỉ đồng bộ app → Google. Ghi chú buổi chỉ được đưa lên Google khi bật chia sẻ; note riêng từng học viên không được gửi. Đồng bộ lại các buổi cũ trong khoảng mong muốn sẽ xoá mô tả đã chia sẻ trước đây nếu tuỳ chọn chia sẻ hiện tắt.
 
-## Scheduler bắt buộc
+## Đồng bộ và scheduler
 
-Hạ tầng ngoài Vercel nên gọi `POST /api/internal/calendar` mỗi 10 phút với `Authorization: Bearer <CALENDAR_CRON_SECRET>`. Route có xác thực riêng, không cần cookie đăng nhập. Worker sinh tiếp lịch tuần rồi xử lý job; lease trong PostgreSQL ngăn hai worker đồng thời. Mỗi lượt xử lý tối đa 10 job theo thời gian cho phép, chuỗi trước buổi riêng. Job lỗi tạm thời tự retry có backoff; hết số lần thử hoặc lỗi quyền được hiển thị để admin xử lý.
+Nút **Đồng bộ với Google Calendar** (Lịch học → ⋯ → Google Calendar) xử lý job ngay trong request: chọn khoảng ngày rồi bấm là lịch được đẩy lên Google, không cần worker nền. Nút "Đồng bộ lại" trong chi tiết buổi học cũng xử lý ngay như vậy. Job sinh ra từ thao tác sửa lịch nằm ở trạng thái chờ cho tới khi bấm nút hoặc scheduler bên dưới chạy.
+
+Scheduler là tuỳ chọn — chỉ cần khi muốn các job chờ tự chạy nền. Hạ tầng ngoài Vercel có thể gọi `POST /api/internal/calendar` mỗi 10 phút với `Authorization: Bearer <CALENDAR_CRON_SECRET>`. Route có xác thực riêng, không cần cookie đăng nhập. Lượt chạy sinh tiếp lịch tuần rồi xử lý job; lease trong PostgreSQL ngăn hai lượt đồng thời. Mỗi lượt xử lý tối đa 10 job theo thời gian cho phép, chuỗi trước buổi riêng. Job lỗi tạm thời tự retry có backoff; hết số lần thử hoặc lỗi quyền được hiển thị để admin xử lý.
 
 Có thể dùng cron của máy chạy ứng dụng:
 
@@ -29,7 +31,7 @@ Có thể dùng cron của máy chạy ứng dụng:
 
 Trên Vercel Hobby, `vercel.json` chạy một lượt lúc 20:00 UTC mỗi ngày với `?recover=1`; lượt này đưa các job lỗi vào hàng đợi lại trước khi xử lý. Cấu hình `CRON_SECRET` tối thiểu 32 ký tự trên Vercel. Vì Hobby không chạy cron mỗi 10 phút, dùng scheduler ngoài và `CALENDAR_CRON_SECRET` nếu cần độ trễ đồng bộ thấp hơn. Đặt `CALENDAR_WORKER_URL` cho URL ứng dụng. Không cài thêm Redis hay dịch vụ hàng đợi.
 
-Sau khi cấu hình, tạo một buổi trên lịch thử, đổi giờ, sửa/xoá ghi chú được chia sẻ, huỷ buổi; thử cả một buổi thuộc chuỗi. Kiểm tra trạng thái không còn chờ/lỗi và kết quả tương ứng trên Google. Việc chưa có scheduler sẽ để job ở trạng thái chờ.
+Sau khi cấu hình, tạo một buổi trên lịch thử, đổi giờ, sửa/xoá ghi chú được chia sẻ, huỷ buổi; thử cả một buổi thuộc chuỗi. Bấm **Đồng bộ với Google Calendar** và kiểm tra trạng thái không còn chờ/lỗi cùng kết quả tương ứng trên Google. Không cấu hình scheduler thì job vẫn nằm chờ cho tới lần bấm nút kế tiếp.
 
 ## Kiểm tra và khôi phục
 

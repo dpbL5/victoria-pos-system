@@ -16,10 +16,11 @@ import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { StudentPicker } from '@/features/students/student-picker'
-import { emptySlot, formatDateTime, formatSlot, SlotFields, slotBody, todayInput, type SlotFormState } from './slot-form'
+import { emptySchedule, scheduleBody, scheduleError, ScheduleFields, type ScheduleFormState } from '@/features/students/schedule-fields'
+import { formatDateTime, formatSlot, todayInput } from './slot-form'
 import type { LessonClass } from './types'
 
-type SlotPayload = NonNullable<ReturnType<typeof slotBody>>
+type SlotPayload = NonNullable<ReturnType<typeof scheduleBody>>
 
 interface ClassFormPayload {
   name: string
@@ -135,7 +136,7 @@ export function ClassesScreen() {
     },
     {
       key: 'slots',
-      label: 'Khung giờ',
+      label: 'Lịch lặp',
       cellClassName: 'px-4 py-3 text-xs text-zinc-600 dark:text-zinc-300',
       render: item => item.slots.length ? item.slots.map(slot => formatSlot(slot)).join(' • ') : '—',
     },
@@ -176,7 +177,7 @@ export function ClassesScreen() {
       ),
     },
     { key: 'coachName', label: 'Huấn luyện viên', render: item => item.coachName || '—' },
-    { key: 'slots', label: 'Khung giờ', render: item => item.slots.length ? item.slots.map(slot => formatSlot(slot)).join(' • ') : '—' },
+    { key: 'slots', label: 'Lịch lặp', render: item => item.slots.length ? item.slots.map(slot => formatSlot(slot)).join(' • ') : '—' },
     { key: 'studentCount', label: 'Học viên', render: item => <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">{item.studentCount}</span> },
     { key: 'nextLessonAt', label: 'Buổi tới', render: item => item.nextLessonAt ? formatDateTime(item.nextLessonAt) : '—' },
     {
@@ -272,7 +273,7 @@ export function ClassesScreen() {
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         title="Xoá lớp học?"
-        description={deleteTarget ? `Xoá vĩnh viễn lớp "${deleteTarget.name}", ${deleteTarget.slots.length} khung giờ và TOÀN BỘ buổi học (kể cả buổi đã điểm danh), cùng sự kiện trên Google Calendar. Chỉ dùng khi thêm nhầm — muốn giữ lịch sử thì dùng "Kết thúc lớp".` : undefined}
+        description={deleteTarget ? `Xoá vĩnh viễn lớp "${deleteTarget.name}", ${deleteTarget.slots.length} lịch lặp và TOÀN BỘ buổi học (kể cả buổi đã điểm danh), cùng sự kiện trên Google Calendar. Chỉ dùng khi thêm nhầm — muốn giữ lịch sử thì dùng "Kết thúc lớp".` : undefined}
         confirmLabel="Xoá lớp"
         submitting={submitting}
         onConfirm={deleteClass}
@@ -291,10 +292,11 @@ function ClassFormModal({ lessonClass, submitting, onClose, onSubmit }: {
   const [coachName, setCoachName] = useState(lessonClass?.coachName ?? '')
   const [note, setNote] = useState(lessonClass?.note ?? '')
   const [withSlot, setWithSlot] = useState(!lessonClass)
-  const [slot, setSlot] = useState<SlotFormState>(() => emptySlot(todayInput()))
+  const [slot, setSlot] = useState<ScheduleFormState>(() => emptySchedule(todayInput()))
   const [studentIds, setStudentIds] = useState<string[]>([])
 
-  const slotPayload = slotBody(slot)
+  const slotPayload = scheduleBody(slot)
+  const slotError = scheduleError(slot)
   const invalidSlot = !lessonClass && withSlot && !slotPayload
 
   return <Modal
@@ -325,15 +327,15 @@ function ClassFormModal({ lessonClass, submitting, onClose, onSubmit }: {
       <div><Label htmlFor="class-note">Ghi chú</Label><Textarea id="class-note" rows={3} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} placeholder="Trình độ, địa điểm, lưu ý của lớp" /></div>
 
       {!lessonClass && <>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={withSlot} onChange={event => setWithSlot(event.target.checked)} />Đặt khung giờ ngay</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={withSlot} onChange={event => setWithSlot(event.target.checked)} />Đặt lịch lặp ngay</label>
         {withSlot && <div className="space-y-4 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
-          <SlotFields idPrefix="class-slot" form={slot} onChange={setSlot} />
-          {!slotPayload && <p className="text-sm text-red-600 dark:text-red-400">Chọn ít nhất một thứ, giờ bắt đầu và ngày bắt đầu hợp lệ.</p>}
+          <ScheduleFields idPrefix="class-slot" form={slot} onChange={setSlot} />
+          {slotError && <p className="text-sm text-red-600 dark:text-red-400">{slotError}</p>}
         </div>}
-        <StudentPicker value={studentIds} onChange={setStudentIds} />
+        <StudentPicker value={studentIds} onChange={setStudentIds} unassignedOnly />
       </>}
 
-      {lessonClass && <p className="text-xs text-zinc-500 dark:text-zinc-400">Khung giờ và sổ học viên quản lý ở trang chi tiết lớp.</p>}
+      {lessonClass && <p className="text-xs text-zinc-500 dark:text-zinc-400">Lịch lặp và sổ học viên quản lý ở trang chi tiết lớp.</p>}
     </div>
   </Modal>
 }
