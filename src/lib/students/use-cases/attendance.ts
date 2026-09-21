@@ -123,6 +123,71 @@ export async function previousAttendanceNotes(
   return ok({ notes })
 }
 
+export interface UpdateLessonNotesInput {
+  staffId: string
+  lessonId: string
+  entries: { studentId: string; note: string }[]
+}
+
+export interface UpdateLessonNotesResult {
+  lesson: LessonRecord
+}
+
+/** Ghi note riêng từng học viên cho buổi học — không điểm danh, không trừ gói, không đổi status buổi. */
+export async function updateLessonStudentNotes(
+  input: UpdateLessonNotesInput,
+  deps: Repositories = repositories
+): Promise<Result<UpdateLessonNotesResult>> {
+  const lesson = await deps.lesson.findById(input.lessonId)
+  if (!lesson) return err('LESSON_NOT_FOUND')
+
+  const lessonStudentIds = new Set(lesson.students.map((ls) => ls.studentId))
+  for (const e of input.entries) {
+    if (!lessonStudentIds.has(e.studentId)) return err('LESSON_STUDENT_MISMATCH')
+  }
+
+  const result = await runInTransaction(async (tx) => {
+    const current = await tx.lesson.findById(input.lessonId)
+    if (!current || current.status === 'CANCELLED') fail('LESSON_CANCELLED')
+    if (input.entries.some(e => !current!.students.some(s => s.studentId === e.studentId))) fail('LESSON_STUDENT_MISMATCH')
+
+    for (const e of input.entries) {
+      const note = e.note.trim()
+      await tx.lesson.setStudentNote({
+        lessonId: input.lessonId,
+        studentId: e.studentId,
+        note: note === '' ? null : note,
+      })
+    }
+
+    await tx.audit.append({
+      userId: input.staffId,
+      action: 'LESSON_STUDENT_NOTE',
+      entityType: 'Lesson',
+      entityId: input.lessonId,
+      details: { entries: input.entries.map((e) => ({ studentId: e.studentId })) },
+    })
+
+    const updated = await tx.lesson.findById(input.lessonId)
+    return { lesson: updated! }
+  }, { isolationLevel: 'Serializable' })
+
+  return result
+}
+
+export function mapLessonNotesError(error: DomainError): HttpErrorInfo {
+  switch (error.code) {
+    case 'LESSON_CANCELLED':
+      return { code: error.code, message: 'Buổi học đã huỷ, không thể ghi chú', status: 409 }
+    case 'LESSON_NOT_FOUND':
+      return { code: 'LESSON_NOT_FOUND', message: 'Không tìm thấy buổi học', status: 404 }
+    case 'LESSON_STUDENT_MISMATCH':
+      return { code: 'LESSON_STUDENT_MISMATCH', message: 'Có học viên không thuộc buổi học này', status: 400 }
+    default:
+      return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
+  }
+}
+
 export function mapMarkAttendanceError(error: DomainError): HttpErrorInfo {
   switch (error.code) {
     case 'LESSON_CANCELLED':

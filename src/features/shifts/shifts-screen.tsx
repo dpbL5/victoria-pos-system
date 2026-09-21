@@ -151,8 +151,12 @@ export function ShiftsScreen() {
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-6xl space-y-4">
-        <header className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
+        <header
+          className={`items-end justify-between gap-3 md:flex ${
+            pagination.totalPages > 1 ? 'flex' : 'hidden'
+          }`}
+        >
+          <div className="hidden min-w-0 md:block">
             <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
               <CalendarClock size={24} className="text-blue-500" />
               Ca làm
@@ -164,7 +168,7 @@ export function ShiftsScreen() {
             </p>
           </div>
           {pagination.totalPages > 1 && (
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2">
               <span className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
                 Trang {pagination.page}/{pagination.totalPages}
               </span>

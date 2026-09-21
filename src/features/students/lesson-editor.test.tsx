@@ -40,3 +40,15 @@ it('mở được điểm danh từ chi tiết buổi học', () => {
 it('buổi đã huỷ không hiện nút điểm danh', () => {
   expect(render({ ...lesson, status: 'CANCELLED' })).not.toContain('Điểm danh')
 })
+
+it('buổi đã lưu hiện mục ghi chú từng học viên', () => {
+  const html = render({ ...lesson, students: [{ ...lesson.students[0], note: 'Tiến bộ tốt' }] })
+
+  expect(html).toContain('Ghi chú từng học viên')
+  expect(html).toContain('Nguyễn Văn A')
+  expect(html).toContain('Tiến bộ tốt')
+})
+
+it('buổi đã huỷ không hiện mục ghi chú từng học viên', () => {
+  expect(render({ ...lesson, status: 'CANCELLED' })).not.toContain('Ghi chú từng học viên')
+})

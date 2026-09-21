@@ -7,7 +7,7 @@ import type { LessonRecord, LessonSeriesRecord } from '../ports'
 import { DAY_MS, lessonEnd, overlaps, SERIES_HORIZON_DAYS, weeklyOccurrences, weeklyRrule } from '../helpers/calendar'
 import { assertStudentsInSingleClass } from './class-guards'
 
-const isolation = { isolationLevel: 'Serializable', timeout: 30000 } as const
+const isolation = { isolationLevel: 'Serializable', timeout: 60000 } as const
 export const isLessonLocked = (lesson: Pick<LessonRecord, 'students' | 'status'>) => lesson.status === 'COMPLETED' || lesson.students.some(s => s.status !== 'SCHEDULED' || s.packageId)
 
 export async function studentsActive(tx: Repositories, ids: string[]) {
@@ -135,11 +135,36 @@ export async function materialize(tx: Repositories, series: LessonSeriesRecord, 
   if (from >= to) return 0
   const existing = await tx.lesson.findBySeries(series.id)
   const originals = new Set(existing.map(l => l.originalStartAt?.getTime()))
-  let count = 0
   const studentIds = series.students.map(s => s.studentId)
-  for (const startsAt of weeklyOccurrences(series, from, to)) {
-    if (originals.has(startsAt.getTime())) continue
-    await available(tx, { startsAt, durationMin: series.durationMin, studentIds }, [], series.id)
+  const starts = weeklyOccurrences(series, from, to).filter(d => !originals.has(d.getTime()))
+  if (!starts.length) {
+    await tx.lessonSeries.update(series.id, { materializedUntil: to })
+    return 0
+  }
+  // Đọc gộp một lần cho mọi buổi: trước đây mỗi buổi gọi available() quét lại toàn bộ DB
+  // (findManyBetween + findMany + findBySeries từng chuỗi khác) → hàng trăm query trong một
+  // transaction Serializable 30s nên hết hạn giữa chừng và rollback toàn bộ (P2028).
+  const lastEnd = Math.max(...starts.map(d => d.getTime())) + series.durationMin * 60000
+  const inRange = await tx.lesson.findManyBetween(new Date(from.getTime() - DAY_MS), new Date(lastEnd + DAY_MS))
+  const candidates = starts.map(startsAt => ({ startsAt, durationMin: series.durationMin }))
+  for (let i = 0; i < candidates.length; i++) {
+    if (inRange.some(row => overlaps(candidates[i]!, row) && row.students.some(s => studentIds.includes(s.studentId)))) fail('LESSON_OVERLAP')
+    for (let j = 0; j < i; j++) {
+      if (overlaps(candidates[i]!, candidates[j]!)) fail('LESSON_OVERLAP')
+    }
+  }
+  for (const other of (await tx.lessonSeries.findMany()).filter(s => s.isActive && s.id !== series.id && s.students.some(st => studentIds.includes(st.studentId)))) {
+    const occurrences = weeklyOccurrences(other, new Date(from.getTime() - DAY_MS), new Date(lastEnd + DAY_MS))
+    if (!occurrences.length) continue
+    const claimed = new Set((await tx.lesson.findBySeries(other.id)).map(l => l.originalStartAt?.getTime()))
+    for (const startsAt of occurrences) {
+      if (claimed.has(startsAt.getTime())) continue
+      const probe = { startsAt, durationMin: other.durationMin }
+      if (candidates.some(input => overlaps(input, probe))) fail('LESSON_OVERLAP')
+    }
+  }
+  let count = 0
+  for (const startsAt of starts) {
     await tx.lesson.create({ title: series.title, coachName: series.coachName, startsAt, originalStartAt: startsAt, durationMin: series.durationMin, seriesId: series.id, studentIds })
     count++
   }

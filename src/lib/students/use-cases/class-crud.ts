@@ -19,7 +19,7 @@ import {
 import { assertStudentsInSingleClass } from './class-guards'
 import { calendarAccessToken } from './calendar-sync'
 
-const isolation = { isolationLevel: 'Serializable', timeout: 30000 } as const
+const isolation = { isolationLevel: 'Serializable', timeout: 60000 } as const
 
 const toSchedule = (slot: ClassSlotInput): WeeklySchedule => ({
   daysOfWeek: slot.daysOfWeek,
@@ -172,27 +172,38 @@ export async function endClass(input: { staffId: string; classId: string; from?:
 /**
  * Dọn event Google của lớp trước khi xoá DB.
  * Worker chỉ xoá event khi còn đọc được row, nên phải xoá ở đây; lỗi từng event bỏ qua (best-effort).
+ * Mỗi ADMIN có kết nối riêng nên phải gỡ event trên MỌI connection đã chọn lịch đích.
  */
 async function deleteClassEvents(lessonClass: LessonClassRecord, lessons: LessonRecord[], deps: Repositories) {
-  const connection = await deps.calendarConnection.find()
-  if (!connection?.calendarId || connection.needsReconnect) return 0
-  const ids = new Set<string>()
-  for (const slot of lessonClass.slots) if (slot.googleEventId && slot.googleCalendarId === connection.calendarId) ids.add(slot.googleEventId)
-  for (const lesson of lessons) if (lesson.googleEventId && lesson.googleCalendarId === connection.calendarId) ids.add(lesson.googleEventId)
-  if (!ids.size) return 0
-  let accessToken: string
-  try {
-    ({ accessToken } = await calendarAccessToken(deps))
-  } catch {
-    return 0
-  }
   let deleted = 0
-  for (const id of ids) {
+  for (const connection of await deps.calendarConnection.listReady()) {
+    const calendarId = connection.calendarId!
+    const ids = new Set<string>()
+    // Cột googleEventId chỉ giữ lần sync gần nhất; mapping theo từng lịch mới là nguồn chuẩn.
+    for (const slot of lessonClass.slots) {
+      const mapped = await deps.calendarSync.getMapping(`SERIES:${slot.id}`, calendarId)
+      if (mapped) ids.add(mapped)
+      else if (slot.googleEventId && slot.googleCalendarId === calendarId) ids.add(slot.googleEventId)
+    }
+    for (const lesson of lessons) {
+      const mapped = await deps.calendarSync.getMapping(`LESSON:${lesson.id}`, calendarId)
+      if (mapped) ids.add(mapped)
+      else if (lesson.googleEventId && lesson.googleCalendarId === calendarId) ids.add(lesson.googleEventId)
+    }
+    if (!ids.size) continue
+    let accessToken: string
     try {
-      await deps.googleCalendar.deleteEvent(accessToken, connection.calendarId, id)
-      deleted++
+      ({ accessToken } = await calendarAccessToken(connection.userId, deps))
     } catch {
-      // Event đã bị xoá/không còn quyền — bỏ qua, không chặn việc xoá lớp.
+      continue
+    }
+    for (const id of ids) {
+      try {
+        await deps.googleCalendar.deleteEvent(accessToken, calendarId, id)
+        deleted++
+      } catch {
+        // Event đã bị xoá/không còn quyền — bỏ qua, không chặn việc xoá lớp.
+      }
     }
   }
   return deleted

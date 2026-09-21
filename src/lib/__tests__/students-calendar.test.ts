@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LessonRecord, LessonSeriesRecord, CalendarSyncJobRecord } from '@/lib/students/ports'
+import type { LessonRecord, LessonSeriesRecord, CalendarSyncJobRecord, CalendarConnectionRecord } from '@/lib/students/ports'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 
 vi.mock('@/lib/infrastructure/prisma', () => ({ prisma: {} }))
 const state = vi.hoisted(() => ({
-  lessons: [] as LessonRecord[], series: [] as LessonSeriesRecord[], jobs: [] as CalendarSyncJobRecord[], repos: null as unknown as Repositories,
+  lessons: [] as LessonRecord[], series: [] as LessonSeriesRecord[], jobs: [] as CalendarSyncJobRecord[],
+  connections: [] as CalendarConnectionRecord[], repos: null as unknown as Repositories,
 }))
 vi.mock('@/lib/infrastructure/db-helpers', async original => {
   const actual = await original<typeof import('@/lib/infrastructure/db-helpers')>()
@@ -18,15 +19,20 @@ vi.mock('@/lib/infrastructure/db-helpers', async original => {
     }
   }) }
 })
-import { weeklyOccurrences, weeklyRrule, overlaps, createLesson, updateLesson, createSeries, updateSeries, deleteLesson, ensureLessonsUntil, processCalendarJobs, retryCalendar } from '@/lib/students'
+import { weeklyOccurrences, weeklyRrule, overlaps, createLesson, updateLesson, createSeries, updateSeries, deleteLesson, ensureLessonsUntil, getCalendarStatus, maintainCalendar, retryCalendar } from '@/lib/students'
 import { fail } from '@/lib/infrastructure/db-helpers'
 
 const future = () => new Date(Date.now() + 30 * 86400000)
 const member = (id: string) => ({ id, studentId: id, lessonId: '', status: 'SCHEDULED', note: null, packageId: null, package: null, student: { id, fullName: id } })
 const base = () => ({ staffId: 'admin', title: 'Lớp cung', studentIds: ['a'], startsAt: future(), durationMin: 60 })
+const connection = (id: string, userId: string, calendarId: string | null): CalendarConnectionRecord => ({
+  id, userId, email: `${userId}@gmail.com`, accessToken: 'encrypted', refreshToken: 'encrypted-refresh', tokenExpiresAt: future(),
+  calendarId, connectedAt: new Date(), generation: `g-${id}`, needsReconnect: false, leaseUntil: null, leaseOwner: null,
+})
 
 beforeEach(() => {
   state.lessons = []; state.series = []; state.jobs = []
+  state.connections = [connection('conn-admin', 'admin', 'club')]
   state.repos = {
     student: { findById: vi.fn(async (id: string) => ({ id, status: 'ACTIVE', deletedAt: null })) },
     lesson: {
@@ -60,23 +66,45 @@ beforeEach(() => {
     audit: { append: vi.fn() },
     lessonClass: { classesOfStudents: vi.fn(async () => []) },
     calendarSync: {
-      summary: vi.fn(), getMapping: vi.fn(async () => null), setMapping: vi.fn(), remapPrimary: vi.fn(),
+      summary: vi.fn(async (connectionId: string) => ({
+        pending: state.jobs.filter(j => j.connectionId === connectionId && j.status === 'PENDING').length,
+        failed: state.jobs.filter(j => j.connectionId === connectionId && j.status === 'ERROR').length,
+        lastSyncedAt: null,
+      })),
+      getMapping: vi.fn(async () => null), setMapping: vi.fn(), remapPrimary: vi.fn(),
+      // Fan-out: mỗi connection đã chọn lịch đích nhận 1 job.
       enqueue: vi.fn(async (kind: string, entityId: string) => {
-        const old = state.jobs.find(j => j.entityKey === `${kind}:${entityId}`)
-        if (old) Object.assign(old, { version: old.version + 1, status: 'PENDING' })
-        else state.jobs.push({ id: crypto.randomUUID(), kind, entityId, entityKey: `${kind}:${entityId}`, version: 1, status: 'PENDING', attempts: 0, nextAttemptAt: new Date(), lastError: null, syncedAt: null, updatedAt: new Date() })
+        const entityKey = `${kind}:${entityId}`
+        for (const conn of state.connections.filter(c => c.calendarId)) {
+          const old = state.jobs.find(j => j.connectionId === conn.id && j.entityKey === entityKey)
+          if (old) Object.assign(old, { version: old.version + 1, status: 'PENDING' })
+          else state.jobs.push({ id: crypto.randomUUID(), connectionId: conn.id, kind, entityId, entityKey, version: 1, status: 'PENDING', attempts: 0, nextAttemptAt: new Date(), lastError: null, syncedAt: null, updatedAt: new Date() } as CalendarSyncJobRecord)
+        }
       }),
-      pending: vi.fn(async () => state.jobs.filter(j => j.status === 'PENDING').map(j => ({ ...j }))),
-      list: vi.fn(async (ids?: string[]) => state.jobs.filter(j => !ids || ids.includes(j.entityId))),
-      finish: vi.fn(async (id: string, version: number, error?: { retry: boolean; message: string }) => {
+      pending: vi.fn(async (connectionId: string) => state.jobs.filter(j => j.connectionId === connectionId && j.status === 'PENDING' && j.nextAttemptAt <= new Date()).map(j => ({ ...j }))),
+      list: vi.fn(async (connectionId: string, ids?: string[]) => state.jobs.filter(j => j.connectionId === connectionId && (!ids || ids.includes(j.entityId)))),
+      finish: vi.fn(async (id: string, version: number, error?: { retry: boolean; message: string; attempts: number }) => {
         const job = state.jobs.find(j => j.id === id)!
-        if (job.version === version) Object.assign(job, { status: error ? error.retry ? 'PENDING' : 'ERROR' : 'SYNCED', lastError: error?.message ?? null })
+        if (job.version !== version) return
+        Object.assign(job, error
+          ? { status: error.retry ? 'PENDING' : 'ERROR', lastError: error.message, attempts: job.attempts + 1, nextAttemptAt: new Date(Date.now() + (error.retry ? 30_000 : 0)) }
+          : { status: 'SYNCED', lastError: null })
       }),
-      acquire: vi.fn(async () => true), release: vi.fn(), reconnectRequired: vi.fn(), retry: vi.fn(),
+      retry: vi.fn(async (connectionId: string) => { for (const job of state.jobs) if (job.connectionId === connectionId && job.status !== 'SYNCED') Object.assign(job, { status: 'PENDING', attempts: 0, nextAttemptAt: new Date(), lastError: null }) }),
+      acquire: vi.fn(async () => true), release: vi.fn(), reconnectRequired: vi.fn(),
     },
     calendarConnection: {
-      find: vi.fn(async () => ({ id: 'single', generation: 'g', calendarId: 'club', accessToken: 'encrypted', refreshToken: 'encrypted-refresh', tokenExpiresAt: new Date(Date.now() + 3600000), needsReconnect: false })),
-      updateToken: vi.fn(async () => ({ id: 'single', generation: 'g', calendarId: 'club', tokenExpiresAt: future() })),
+      findByUser: vi.fn(async (userId: string) => state.connections.find(c => c.userId === userId) ?? null),
+      findById: vi.fn(async (id: string) => state.connections.find(c => c.id === id) ?? null),
+      listReady: vi.fn(async () => state.connections.filter(c => c.calendarId && !c.needsReconnect)),
+      upsertForUser: vi.fn(async (userId: string, data: Record<string, unknown>) => {
+        const found = state.connections.find(c => c.userId === userId)
+        if (found) Object.assign(found, data)
+        else state.connections.push(connection(crypto.randomUUID(), userId, null))
+        return state.connections.find(c => c.userId === userId)!
+      }),
+      updateToken: vi.fn(async (id: string, data: Record<string, unknown>) => Object.assign(state.connections.find(c => c.id === id)!, data)),
+      delete: vi.fn(async (id: string) => { state.connections = state.connections.filter(c => c.id !== id) }),
     },
     googleCalendar: { encrypt: vi.fn(v => v), decrypt: vi.fn(v => v), refresh: vi.fn(), putEvent: vi.fn(async () => 'google-id'), deleteEvent: vi.fn(), instance: vi.fn(async () => 'instance-id') },
   } as unknown as Repositories
@@ -193,45 +221,100 @@ describe('ràng buộc một học viên chỉ thuộc một lớp (module Lịc
 })
 
 describe('đồng bộ bền vững', () => {
-  it('lỗi Google giữ lịch và job để thử lại', async () => {
+  /** Nút "Đồng bộ với Google Calendar" — đường duy nhất đẩy lịch lên Google. */
+  const press = (staffId = 'admin') => retryCalendar({ staffId, from: new Date(Date.now() - 86400000), to: new Date(Date.now() + 60 * 86400000) }, state.repos)
+
+  it('lỗi Google giữ lịch và job để bấm lại', async () => {
     await createLesson(base(), state.repos)
     vi.mocked(state.repos.googleCalendar.putEvent).mockRejectedValueOnce(Object.assign(new Error('Tạm lỗi'), { status: 503 }))
-    await processCalendarJobs(state.repos)
+    await press()
     expect(state.lessons).toHaveLength(1); expect(state.jobs[0].status).toBe('PENDING')
-    await processCalendarJobs(state.repos)
+    await press()
     expect(state.jobs[0].status).toBe('SYNCED')
     const calls = vi.mocked(state.repos.googleCalendar.putEvent).mock.calls
     expect(calls[0][2]).toBe(calls[1][2])
   })
   it('ghi chú riêng không ra Google; xoá ghi chú gửi description rỗng', async () => {
     await createLesson({ ...base(), note: 'Nội bộ' }, state.repos)
-    await processCalendarJobs(state.repos)
+    await press()
     expect(vi.mocked(state.repos.googleCalendar.putEvent).mock.calls[0][3]).toMatchObject({ description: '' })
   })
   it('huỷ trước khi sync không tạo sự kiện', async () => {
     await createLesson(base(), state.repos)
     const lesson = state.lessons[0]
     await deleteLesson({ staffId: 'admin', lessonId: lesson.id, version: lesson.version }, state.repos)
-    await processCalendarJobs(state.repos)
+    await press()
     expect(state.repos.googleCalendar.putEvent).not.toHaveBeenCalled()
     expect(state.repos.googleCalendar.deleteEvent).toHaveBeenCalledOnce()
   })
   it('token bị thu hồi hiển thị yêu cầu kết nối lại', async () => {
     await createLesson(base(), state.repos)
     vi.mocked(state.repos.googleCalendar.putEvent).mockRejectedValue(Object.assign(new Error('Token hết hiệu lực'), { status: 401 }))
-    await processCalendarJobs(state.repos)
+    await press()
     expect(state.repos.calendarSync.reconnectRequired).toHaveBeenCalledOnce()
     expect(state.jobs[0].status).toBe('ERROR')
   })
-  it('đồng bộ theo nút xử lý job ngay trong request, không cần worker nền', async () => {
+  it('sửa lịch chỉ đánh dấu chờ đồng bộ, không tự gọi Google', async () => {
+    await createLesson(base(), state.repos)
+    state.jobs.length = 0
+    const lesson = state.lessons[0]
+    expect((await updateLesson({ staffId: 'admin', lessonId: lesson.id, version: lesson.version, startsAt: new Date(+lesson.startsAt + 3600000) }, state.repos)).ok).toBe(true)
+    expect(state.jobs).toHaveLength(1)
+    expect(state.jobs[0].status).toBe('PENDING')
+    expect(state.repos.googleCalendar.putEvent).not.toHaveBeenCalled()
+  })
+  it('cron chỉ sinh tiếp buổi học, không đẩy job lên Google', async () => {
+    await createLesson(base(), state.repos)
+    const result = await maintainCalendar(state.repos)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.value.processed).toBe(0)
+    expect(state.repos.googleCalendar.putEvent).not.toHaveBeenCalled()
+    expect(state.jobs[0].status).toBe('PENDING')
+  })
+  it('bấm đồng bộ xử lý job ngay trong request, không cần worker nền', async () => {
     await createLesson(base(), state.repos)
     expect(state.jobs[0].status).toBe('PENDING')
 
-    const result = await retryCalendar({ staffId: 'admin', from: new Date(Date.now() - 86400000), to: new Date(Date.now() + 60 * 86400000) }, state.repos)
+    const result = await press()
 
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.value.processed).toBeGreaterThan(0)
     expect(state.jobs.every(j => j.status === 'SYNCED')).toBe(true)
     expect(state.repos.googleCalendar.putEvent).toHaveBeenCalledOnce()
+  })
+})
+
+describe('mỗi ADMIN một kết nối Google', () => {
+  it('job tách theo connection; connection chưa chọn lịch không nhận job', async () => {
+    state.connections.push(connection('conn-b', 'admin-b', 'club-b'), connection('conn-empty', 'admin-c', null))
+    await createLesson(base(), state.repos)
+
+    expect(state.jobs.map(j => j.connectionId)).toEqual(['conn-admin', 'conn-b'])
+  })
+
+  it('bấm đồng bộ chỉ xử lý connection của người bấm', async () => {
+    state.connections.push(connection('conn-b', 'admin-b', 'club-b'))
+    await createLesson(base(), state.repos)
+
+    const mine = await retryCalendar({ staffId: 'admin', from: new Date(Date.now() - 86400000), to: new Date(Date.now() + 60 * 86400000) }, state.repos)
+
+    expect(mine.ok && mine.value.processed).toBeGreaterThan(0)
+    expect(state.jobs.find(j => j.connectionId === 'conn-admin')!.status).toBe('SYNCED')
+    expect(state.jobs.find(j => j.connectionId === 'conn-b')!.status).toBe('PENDING')
+    expect(state.repos.googleCalendar.putEvent).toHaveBeenCalledOnce()
+
+    expect((await retryCalendar({ staffId: 'admin-b', from: new Date(Date.now() - 86400000), to: new Date(Date.now() + 60 * 86400000) }, state.repos)).ok).toBe(true)
+    expect(state.jobs.find(j => j.connectionId === 'conn-b')!.status).toBe('SYNCED')
+    expect(state.repos.googleCalendar.putEvent).toHaveBeenCalledTimes(2)
+  })
+
+  it('trạng thái chỉ đọc connection của chính người xem', async () => {
+    state.connections.push(connection('conn-b', 'admin-b', 'club-b'))
+
+    const mine = await getCalendarStatus('admin-b', state.repos)
+    expect(mine.ok && mine.value.calendarId).toBe('club-b')
+
+    const nobody = await getCalendarStatus('admin-c', state.repos)
+    expect(nobody.ok && nobody.value.connected).toBe(false)
   })
 })

@@ -10,10 +10,10 @@ import {
 
 export async function GET() {
   try {
-    await requireAdmin()
+    const auth = await requireAdmin()
 
     const { isConfigured } = getGoogleConfig()
-    const result = await getCalendarStatus()
+    const result = await getCalendarStatus(auth.userId)
 
     if (!result.ok) {
       return apiError({ code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 })

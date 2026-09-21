@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
     if (message === 'FORBIDDEN') return apiError(ERR_FORBIDDEN)
     if (message === 'CSRF_MISMATCH') return apiError(ERR_CSRF)
     if ((error as { code?: string }).code === 'P2034') return apiError({ code: 'CONFLICT', message: 'Dữ liệu vừa thay đổi. Hãy tải lại và thử lại', status: 409 })
+    if ((error as { code?: string }).code === 'P2028') return apiError({ code: 'BUSY', message: 'Hệ thống đang bận. Hãy thử lại sau ít phút', status: 503 })
     console.error('POST /api/classes error:', error)
     return apiError({ code: 'UNKNOWN', message: 'Không tạo được lớp học', status: 500 })
   }

@@ -3,8 +3,10 @@ import { repositories } from '@/lib/infrastructure/repositories'
 import { apiError, apiSuccess, ERR_UNAUTHORIZED, ERR_FORBIDDEN } from '@/lib/infrastructure/api-helpers'
 export async function GET() {
   try {
-    await requireAdmin()
-    const jobs = await repositories.calendarSync.list()
+    const auth = await requireAdmin()
+    const connection = await repositories.calendarConnection.findByUser(auth.userId)
+    if (!connection) return apiSuccess([])
+    const jobs = await repositories.calendarSync.list(connection.id)
     return apiSuccess(await Promise.all(jobs.map(async j => {
       const entity = j.kind === 'SERIES' ? await repositories.lessonSeries.findById(j.entityId) : await repositories.lesson.findById(j.entityId)
       return { entityKey: j.entityKey, title: entity?.title ?? 'Lịch đã xoá', status: j.status, lastError: j.lastError, syncedAt: j.syncedAt }

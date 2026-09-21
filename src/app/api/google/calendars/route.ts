@@ -11,8 +11,8 @@ function errorResponse(error: unknown) {
 }
 export async function GET() {
   try {
-    await requireAdmin()
-    const { accessToken } = await calendarAccessToken()
+    const auth = await requireAdmin()
+    const { accessToken } = await calendarAccessToken(auth.userId)
     return apiSuccess(await repositories.googleCalendar.listCalendars(accessToken))
   } catch (error) { return errorResponse(error) }
 }

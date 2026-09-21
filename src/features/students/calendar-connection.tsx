@@ -22,8 +22,8 @@ export function useCalendarStatus() {
   return { status, mutate, needsAttention }
 }
 
-export function CalendarConnection({ menuItem = false, onOpen }: { menuItem?: boolean; onOpen?: () => void } = {}) {
-  const { status, mutate } = useCalendarStatus()
+export function CalendarConnection({ menuItem = false, onOpen, compact = false }: { menuItem?: boolean; onOpen?: () => void; compact?: boolean } = {}) {
+  const { status, mutate, needsAttention } = useCalendarStatus()
   const [open, setOpen] = useState(false)
   const [chosen, setChosen] = useState('')
   const [busy, setBusy] = useState(false)
@@ -49,20 +49,23 @@ export function CalendarConnection({ menuItem = false, onOpen }: { menuItem?: bo
   async function syncNow() {
     setBusy(true)
     try {
-      const result = await apiJson<{ queued: boolean; processed: number; syncError?: string }>('/api/google/retry', {
+      const result = await apiJson<{ queued: boolean; processed: number; remaining?: number; syncError?: string }>('/api/google/retry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ from: `${from}T00:00:00+07:00`, to: `${to}T23:59:59+07:00` }),
       })
       if (!result.success) { toast.error(result.error || 'Không đồng bộ được Google Calendar'); return }
       const processed = result.data?.processed ?? 0
+      const remaining = result.data?.remaining ?? 0
       if (result.data?.syncError) toast.error(processed ? `Đã đồng bộ ${processed} mục · ${result.data.syncError}` : result.data.syncError)
+      else if (remaining > 0) toast.success(`Đã đồng bộ ${processed} mục · còn ${remaining} mục đang chờ, bấm lại để tiếp tục`)
       else toast.success(processed ? `Đã đồng bộ ${processed} mục lên Google Calendar` : 'Không có mục nào cần đồng bộ')
       await mutate()
     } catch { toast.error('Không kết nối được máy chủ') }
     finally { setBusy(false) }
   }
   const triggerLabel = status?.needsReconnect ? 'Kết nối lại Google' : status?.failed ? `Google: ${status.failed} lỗi` : status?.pending ? `Google: ${status.pending} chờ` : 'Google Calendar'
+  const triggerText = status?.needsReconnect ? 'Kết nối lại Google Calendar' : status?.connected ? status.email ?? 'Tài khoản Google đã kết nối' : 'Kết nối Google Calendar'
   const TriggerIcon = status?.connected && !status.needsReconnect ? CalendarCheck : Settings2
   return <>
     {menuItem ? (
@@ -74,14 +77,20 @@ export function CalendarConnection({ menuItem = false, onOpen }: { menuItem?: bo
         <TriggerIcon size={16} className="shrink-0" aria-hidden />
         <span className="min-w-0 flex-1 truncate">{triggerLabel}</span>
       </button>
+    ) : compact ? (
+      <span className="relative inline-flex">
+        <Button variant="ghost" icon={TriggerIcon} size="sm" aria-label="Liên kết tài khoản Google" title={triggerText} onClick={() => setOpen(true)} />
+        {needsAttention && <span className="pointer-events-none absolute right-0.5 top-0.5 size-2 rounded-full bg-amber-500 ring-2 ring-surface-secondary" aria-hidden />}
+      </span>
     ) : (
       <Button variant="secondary" size="sm" icon={TriggerIcon} aria-label="Google Calendar" title="Google Calendar" onClick={() => setOpen(true)}>
-        <span className="hidden lg:inline">{triggerLabel}</span>
+        <span className="lg:inline">{triggerText}</span>
       </Button>
     )}
     <Modal open={open} onClose={() => setOpen(false)} title="Google Calendar" variant="sheet">
       <div className="space-y-4 dark:[&_input]:[color-scheme:dark]">
-        <p className="text-sm text-zinc-600 dark:text-zinc-300">Lịch học đồng bộ một chiều từ ứng dụng lên lịch CLB. Hãy chỉnh lịch trong ứng dụng; các thay đổi trên Google không được nhập về.</p>
+        <p className="text-sm text-zinc-600 dark:text-zinc-300">Lịch học đồng bộ một chiều từ ứng dụng lên lịch của bạn. Hãy chỉnh lịch trong ứng dụng; các thay đổi trên Google không được nhập về.</p>
+        <p className="text-sm text-zinc-600 dark:text-zinc-300">Mỗi quản trị viên kết nối tài khoản Google của riêng mình. Sửa lịch trong ứng dụng không tự đồng bộ — bấm “Đồng bộ với Google Calendar” thì lịch mới được đẩy lên.</p>
         {!status?.isConfigured && <p className="text-sm text-amber-700 dark:text-amber-300">Google Calendar chưa được cấu hình. Liên hệ người quản trị hệ thống.</p>}
         {status?.isConfigured && <Button disabled={busy} onClick={() => { window.location.href = '/api/google/connect' }}>{status.connected ? 'Kết nối lại tài khoản Google' : 'Kết nối Google Calendar'}</Button>}
         {status?.connected && <>

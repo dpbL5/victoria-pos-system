@@ -75,6 +75,17 @@ export const markAttendanceSchema = z.object({
     .min(1, 'Không có học viên nào để điểm danh'),
 })
 
+export const updateLessonNotesSchema = z.object({
+  entries: z
+    .array(
+      z.object({
+        studentId: z.string().uuid('Mã học viên không hợp lệ'),
+        note: z.string().max(2000),
+      })
+    )
+    .min(1, 'Không có học viên nào để lưu ghi chú'),
+})
+
 export const connectCalendarSchema = z.object({
   code: z.string().trim().min(1, 'Thiếu mã xác thực'),
   state: z.string().trim().min(1, 'Thiếu state'),
@@ -88,6 +99,7 @@ export type LessonCreateInput = z.infer<typeof createLessonSchema>
 export type LessonUpdateInput = z.infer<typeof updateLessonSchema>
 export type SeriesCreateInput = z.infer<typeof createSeriesSchema>
 export type AttendanceMarkInput = z.infer<typeof markAttendanceSchema>
+export type LessonNotesUpdateInput = z.infer<typeof updateLessonNotesSchema>
 export type CalendarConnectInput = z.infer<typeof connectCalendarSchema>
 
 export const seriesMutationSchema = createSeriesSchema.partial().extend({

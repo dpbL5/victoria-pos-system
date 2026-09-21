@@ -30,9 +30,9 @@ export async function connectCalendar(input: ConnectCalendarInput, deps: Reposit
   const tokenExpiresAt = new Date(Date.now() + tokens.expires_in * 1000)
 
   const result = await runInTransaction(async (tx) => {
-    const previous = await tx.calendarConnection.find()
+    const previous = await tx.calendarConnection.findByUser(input.staffId)
     if (previous?.leaseUntil && previous.leaseUntil > new Date()) fail('CALENDAR_BUSY')
-    const conn = await tx.calendarConnection.upsert({
+    const conn = await tx.calendarConnection.upsertForUser(input.staffId, {
       email: input.email || 'Google Calendar',
       accessToken: deps.googleCalendar.encrypt(tokens.access_token),
       refreshToken: deps.googleCalendar.encrypt(refreshToken),
@@ -64,11 +64,11 @@ export async function disconnectCalendar(
   input: DisconnectCalendarInput,
   deps: Repositories = repositories
 ): Promise<Result<{ deleted: boolean }>> {
-  const conn = await deps.calendarConnection.find()
+  const conn = await deps.calendarConnection.findByUser(input.staffId)
   if (!conn) return ok({ deleted: false })
 
   const result = await runInTransaction(async (tx) => {
-    const current = await tx.calendarConnection.find()
+    const current = await tx.calendarConnection.findByUser(input.staffId)
     if (current?.leaseUntil && current.leaseUntil > new Date()) fail('CALENDAR_BUSY')
     await tx.calendarConnection.delete(conn.id)
 
@@ -97,11 +97,12 @@ export interface CalendarStatus {
 }
 
 export async function getCalendarStatus(
+  userId: string,
   deps: Repositories = repositories
 ): Promise<Result<CalendarStatus>> {
-  const conn = await deps.calendarConnection.find()
+  const conn = await deps.calendarConnection.findByUser(userId)
   if (!conn) return ok({ connected: false })
-  const summary = await deps.calendarSync.summary()
+  const summary = await deps.calendarSync.summary(conn.id)
   return ok({
     connected: true,
     needsReconnect: conn.needsReconnect,

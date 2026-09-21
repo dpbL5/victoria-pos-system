@@ -70,6 +70,8 @@ export interface LessonRepository {
   }): Promise<void>
   /** Gắn gói buổi đã bị trừ cho LessonStudent (chống đếm trùng). */
   setPackage(input: { lessonId: string; studentId: string; packageId: string }): Promise<void>
+  /** Ghi note riêng của một học viên cho buổi học (không đụng status/gói). */
+  setStudentNote(input: { lessonId: string; studentId: string; note: string | null }): Promise<void>
   /** Note khác rỗng của buổi gần nhất trước `before` cho từng học viên. */
   lastNotesByStudent(studentIds: string[], before: Date): Promise<PreviousAttendanceNote[]>
 }
@@ -105,8 +107,11 @@ export interface LessonPackageRepository {
 }
 
 export interface CalendarConnectionRepository {
-  find(): Promise<CalendarConnectionRecord | null>
-  upsert(data: {
+  findByUser(userId: string): Promise<CalendarConnectionRecord | null>
+  findById(id: string): Promise<CalendarConnectionRecord | null>
+  /** Mọi connection đã chọn lịch đích và không cần kết nối lại — dùng cho cron dọn dẹp. */
+  listReady(): Promise<CalendarConnectionRecord[]>
+  upsertForUser(userId: string, data: {
     email: string
     accessToken: string
     refreshToken: string
@@ -125,18 +130,22 @@ export interface CalendarConnectionRepository {
 
 export type CalendarSyncJobRecord = Prisma.CalendarSyncJobGetPayload<object>
 export interface CalendarSyncRepository {
-  summary(): Promise<{ pending: number; failed: number; lastSyncedAt: Date | null }>
+  summary(connectionId: string): Promise<{ pending: number; failed: number; lastSyncedAt: Date | null }>
   getMapping(entityKey: string, calendarId: string): Promise<string | null>
   setMapping(entityKey: string, calendarId: string, eventId: string): Promise<void>
   remapPrimary(calendarId: string): Promise<void>
+  /**
+   * Đánh dấu "cần đồng bộ" cho MỖI connection đã chọn lịch đích (fan-out 1 job/connection).
+   * Không gọi Google — chỉ đẩy lên khi admin bấm đồng bộ.
+   */
   enqueue(kind: 'LESSON' | 'SERIES', entityId: string): Promise<void>
-  pending(): Promise<CalendarSyncJobRecord[]>
-  list(entityIds?: string[]): Promise<CalendarSyncJobRecord[]>
+  pending(connectionId: string): Promise<CalendarSyncJobRecord[]>
+  list(connectionId: string, entityIds?: string[]): Promise<CalendarSyncJobRecord[]>
   finish(id: string, version: number, error?: { message: string; retry: boolean; attempts: number }): Promise<void>
-  retry(): Promise<void>
-  acquire(owner: string): Promise<boolean>
-  release(owner: string): Promise<void>
-  reconnectRequired(): Promise<void>
+  retry(connectionId: string): Promise<void>
+  acquire(connectionId: string, owner: string): Promise<boolean>
+  release(connectionId: string, owner: string): Promise<void>
+  reconnectRequired(connectionId: string): Promise<void>
 }
 
 export interface GoogleCalendarPort {

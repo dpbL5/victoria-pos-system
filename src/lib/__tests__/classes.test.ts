@@ -143,7 +143,10 @@ beforeEach(() => {
     },
     audit: { append: vi.fn() },
     calendarConnection: {
-      find: vi.fn(async () => null),
+      findByUser: vi.fn(async () => null),
+      findById: vi.fn(async () => null),
+      listReady: vi.fn(async () => []),
+      upsertForUser: vi.fn(),
       updateToken: vi.fn(async (id: string, data: object) => ({ id, ...data, generation: 'g' })),
     },
     googleCalendar: {
@@ -152,8 +155,9 @@ beforeEach(() => {
       deleteEvent: vi.fn(),
     },
     calendarSync: {
+      getMapping: vi.fn(async () => null),
       enqueue: vi.fn(async (kind: string, entityId: string) => {
-        state.jobs.push({ id: crypto.randomUUID(), kind, entityId, entityKey: `${kind}:${entityId}`, version: 1, status: 'PENDING', attempts: 0, nextAttemptAt: new Date(), lastError: null, syncedAt: null, updatedAt: new Date() })
+        state.jobs.push({ id: crypto.randomUUID(), connectionId: 'conn', kind, entityId, entityKey: `${kind}:${entityId}`, version: 1, status: 'PENDING', attempts: 0, nextAttemptAt: new Date(), lastError: null, syncedAt: null, updatedAt: new Date() })
       }),
     },
   } as unknown as Repositories
@@ -244,10 +248,12 @@ describe('đổi thông tin lớp', () => {
     const created = await createClass({ staffId: 'admin', name: 'Lớp nhầm', slots: [slot(2, '18:00')] })
     const classId = created.ok ? created.value.lessonClass.id : ''
     Object.assign(state.series[0], { googleEventId: 'g-event-1', googleCalendarId: 'club' })
-    state.repos.calendarConnection.find = vi.fn(async () => ({
-      id: 'single', email: 'club@example.com', calendarId: 'club', needsReconnect: false, accessToken: 'enc', refreshToken: 'enc',
+    const clubConnection = {
+      id: 'conn', userId: 'admin', email: 'club@example.com', calendarId: 'club', needsReconnect: false, accessToken: 'enc', refreshToken: 'enc',
       tokenExpiresAt: new Date(Date.now() + 3_600_000), generation: 'g', connectedAt: new Date(), leaseUntil: null, leaseOwner: null,
-    }))
+    }
+    state.repos.calendarConnection.listReady = vi.fn(async () => [clubConnection])
+    state.repos.calendarConnection.findByUser = vi.fn(async () => clubConnection)
 
     const result = await deleteClass({ staffId: 'admin', classId }, state.repos)
     expect(result.ok).toBe(true)

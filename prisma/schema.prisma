@@ -137,6 +137,7 @@ model User {
   stockMovements     StockMovement[]
   activityLogs       ActivityLog[]
   cashflowEntries    CashflowEntry[]
+  calendarConnection CalendarConnection?
 
   @@map("users")
 }
@@ -741,6 +742,7 @@ model LessonStudent {
 
 model CalendarConnection {
   id             String   @id @default(uuid())
+  userId         String   @unique @map("user_id") // mỗi ADMIN một kết nối Google của riêng mình
   email          String   @db.VarChar(200)
   accessToken    String   @map("access_token") @db.Text
   refreshToken   String   @map("refresh_token") @db.Text
@@ -751,6 +753,9 @@ model CalendarConnection {
   needsReconnect Boolean @default(false) @map("needs_reconnect")
   leaseUntil DateTime? @map("lease_until")
   leaseOwner String? @map("lease_owner")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs CalendarSyncJob[]
 
   @@map("calendar_connections")
 }
@@ -767,7 +772,8 @@ model LessonSeriesStudent {
 
 model CalendarSyncJob {
   id String @id @default(uuid())
-  entityKey String @unique @map("entity_key")
+  connectionId String @map("connection_id")
+  entityKey String @map("entity_key")
   entityId String @map("entity_id")
   kind String
   version Int @default(1)
@@ -777,7 +783,9 @@ model CalendarSyncJob {
   lastError String? @map("last_error")
   syncedAt DateTime? @map("synced_at")
   updatedAt DateTime @updatedAt @map("updated_at")
-  @@index([status, nextAttemptAt])
+  connection CalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  @@unique([connectionId, entityKey])
+  @@index([connectionId, status, nextAttemptAt])
   @@map("calendar_sync_jobs")
 }
 

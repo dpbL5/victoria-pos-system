@@ -3,10 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { CalendarClock, Edit3, GraduationCap, Plus, RefreshCw, Trash2, Users } from 'lucide-react'
+import { CalendarClock, Edit3, GraduationCap, Plus, Trash2, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Input, Select } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { NoticeCard } from '@/components/ui/notice-card'
@@ -18,7 +17,7 @@ import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { emptyStudentForm, studentFormBody, StudentFormModal, studentToForm, type StudentForm } from './student-form-modal'
-import { studentClassOf, type Student, type CalendarStatus } from './types'
+import { studentClassOf, studentRowOf, remainingLabel, type Student, type StudentRow } from './types'
 
 const emptyForm = emptyStudentForm()
 
@@ -29,17 +28,15 @@ export function StudentsScreen() {
   const [offset, setOffset] = useState(0)
   const [filter, setFilter] = useState('')
   const { data: studentsData, isLoading, mutate } = useApi<Student[]>(`/api/students?limit=20&offset=${offset}&search=${encodeURIComponent(query)}&status=${filter}`,  { dedupingInterval: 60_000 })
-  const { data: calData, mutate: mutateCal } = useApi<CalendarStatus>('/api/google/status', { dedupingInterval: 60_000 })
 
   const { registerRefresh } = usePageRefresh()
   useEffect(() => {
     return registerRefresh(() => void mutate())
   }, [registerRefresh, mutate])
 
-  const students = studentsData?.data ?? []
+  const students = useMemo(() => (studentsData?.data ?? []).map(studentRowOf), [studentsData])
   const error = !studentsData?.success ? (studentsData?.error ?? '') : ''
   const loading = isLoading
-  const calStatus = calData?.data
 
   const [submitting, setSubmitting] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
@@ -109,43 +106,17 @@ export function StudentsScreen() {
     }
   }
 
-  const handleConnect = () => {
-    window.location.href = '/api/google/connect'
-  }
-
-  const handleDisconnect = async () => {
-    setSubmitting(true)
-    try {
-      const data = await apiJson('/api/google/disconnect', { method: 'POST' })
-      if (!data.success) {
-        notifyError(data.error || 'Không ngắt kết nối được')
-        return
-      }
-      notifySuccess('Đã ngắt kết nối Google Calendar')
-      await mutateCal()
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   const statusBadge = (s: Student) =>
     s.status === 'ACTIVE' ? <Badge variant="success">Đang học</Badge> : <Badge variant="default">Dừng học</Badge>
 
-  const remainingText = (s: Student) => {
-    const total = s.packages.filter((p) => p.isActive).reduce((sum, p) => sum + (p.total - p.used), 0)
-    return total > 0 ? `${total} buổi` : 'Chưa có gói'
-  }
-
-  const classCell = (s: Student) => {
+  const classCell = (s: StudentRow) => {
     const item = studentClassOf(s)
     return item
       ? <Link href={`/classes/${item.id}`} className="text-sm text-blue-700 hover:underline dark:text-blue-300">{item.name}</Link>
       : <span className="text-sm text-zinc-400 dark:text-zinc-500">Chưa vào lớp</span>
   }
 
-  const columns: Column<Student>[] = useMemo(() => [
+  const columns: Column<StudentRow>[] = useMemo(() => [
     {
       key: 'fullName',
       label: 'Học viên',
@@ -170,10 +141,10 @@ export function StudentsScreen() {
       render: (item) => classCell(item),
     },
     {
-      key: 'remaining',
+      key: 'remainingSessions',
       label: 'Còn lại',
       cellClassName: 'px-4 py-3 text-sm tabular-nums text-zinc-950 dark:text-white',
-      render: (item) => remainingText(item),
+      render: (item) => remainingLabel(item),
     },
     {
       label: 'Thao tác',
@@ -188,7 +159,7 @@ export function StudentsScreen() {
     },
   ], [submitting, router])
 
-  const cardColumns: CardColumn<Student>[] = useMemo(() => [
+  const cardColumns: CardColumn<StudentRow>[] = useMemo(() => [
     {
       key: 'fullName',
       label: 'Học viên',
@@ -201,7 +172,7 @@ export function StudentsScreen() {
     },
     { key: 'phone', label: 'SĐT', render: (item) => item.phone || '—' },
     { key: 'class', label: 'Lớp', render: (item) => classCell(item) },
-    { key: 'remaining', label: 'Còn lại', render: (item) => <span className="font-semibold tabular-nums">{remainingText(item)}</span> },
+    { key: 'remainingSessions', label: 'Còn lại', render: (item) => <span className="font-semibold tabular-nums">{remainingLabel(item)}</span> },
     {
       label: '',
       render: (item) => (
@@ -253,34 +224,6 @@ export function StudentsScreen() {
           </Button>
         </div>
 
-        {/* Google Calendar connect */}
-        <Card padding="md" className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <RefreshCw size={20} className={`shrink-0 ${calStatus?.connected ? 'text-emerald-500' : 'text-zinc-400'}`} />
-            <div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-white">
-                Google Calendar {calStatus?.connected ? `(${calStatus.email ?? ''})` : ''}
-              </p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {calStatus?.connected
-                  ? 'Đã kết nối — buổi học sẽ đồng bộ sang calendar CLB.'
-                  : calStatus?.isConfigured
-                    ? 'Kết nối để đồng bộ buổi học sang Google Calendar.'
-                    : 'Chưa cấu hình Google Calendar (cần GOOGLE_CLIENT_ID/SECRET).'}
-              </p>
-            </div>
-          </div>
-          {calStatus?.connected ? (
-            <Button variant="outline-danger" size="sm" disabled={submitting} onClick={handleDisconnect}>
-              Ngắt kết nối
-            </Button>
-          ) : (
-            <Button variant="secondary" size="sm" disabled={!calStatus?.isConfigured} onClick={handleConnect}>
-              Kết nối Google
-            </Button>
-          )}
-        </Card>
-
         {error && <NoticeCard tone="danger" title="Không tải được dữ liệu" description={error} />}
 
         <div className="flex flex-wrap gap-2"><Input aria-label="Tìm học viên" placeholder="Tìm tên hoặc số điện thoại" value={query} onChange={e => { setQuery(e.target.value); setOffset(0) }} /><Select aria-label="Trạng thái học viên" value={filter} onChange={e => { setFilter(e.target.value); setOffset(0) }}><option value="">Tất cả trạng thái</option><option value="ACTIVE">Đang học</option><option value="INACTIVE">Đã nghỉ</option></Select></div>
@@ -289,7 +232,7 @@ export function StudentsScreen() {
             columns={cardColumns}
             data={students}
             keyExtractor={(s) => s.id}
-            sortableKeys={['fullName']}
+            sortableKeys={['fullName', 'remainingSessions']}
             defaultSortKey="fullName"
             defaultSortDir="asc"
             emptyIcon={Users}
@@ -303,7 +246,7 @@ export function StudentsScreen() {
             columns={columns}
             data={students}
             keyExtractor={(s) => s.id}
-            sortableKeys={['fullName', 'phone']}
+            sortableKeys={['fullName', 'phone', 'remainingSessions']}
             defaultSortKey="fullName"
             defaultSortDir="asc"
             emptyIcon={Users}

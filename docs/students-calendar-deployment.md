@@ -13,15 +13,15 @@
 
 Thiết lập Google Cloud project có Calendar API, OAuth client loại Web application, redirect URI chính xác `${NEXT_PUBLIC_APP_URL}/api/google/callback`. Cấu hình `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXT_PUBLIC_APP_URL`, `GOOGLE_TOKEN_ENCRYPTION_KEY` (64 ký tự hex) và `CALENDAR_CRON_SECRET` (tối thiểu 32 ký tự). Hai secret được sinh độc lập; giữ khoá mã hoá qua các lần deploy để đọc được token đã lưu.
 
-ADMIN mở **Lịch học → Google Calendar → Kết nối** rồi chọn lịch có quyền ghi. Scope là `calendar.events` và `calendar.calendarlist.readonly`. Chọn lịch đích sẽ xếp lịch tương lai vào hàng đợi; có thể chọn khoảng khác để đưa lịch cũ vào hàng đợi. Xác nhận riêng khi đổi lịch, vì event trên lịch cũ được giữ lại. Mapping được lưu theo từng lịch đích để quay lại lịch trước không tạo bản sao.
+Mỗi ADMIN mở **Lịch học → Google Calendar → Kết nối** bằng tài khoản Google của chính mình rồi chọn lịch có quyền ghi. Kết nối thuộc riêng tài khoản đó: chỉ người tạo thấy và quản lý được email, lịch đích, hàng đợi và lỗi của nó; ADMIN khác vẫn xem **Lịch học** bình thường nhưng muốn có lịch trên Google thì phải tự kết nối một tài khoản khác. Scope là `calendar.events` và `calendar.calendarlist.readonly`. Chọn lịch đích sẽ xếp lịch tương lai vào hàng đợi; có thể chọn khoảng khác để đưa lịch cũ vào hàng đợi. Xác nhận riêng khi đổi lịch, vì event trên lịch cũ được giữ lại. Mapping được lưu theo từng lịch đích để quay lại lịch trước không tạo bản sao.
 
-Ứng dụng là nguồn dữ liệu chính, chỉ đồng bộ app → Google. Ghi chú buổi chỉ được đưa lên Google khi bật chia sẻ; note riêng từng học viên không được gửi. Đồng bộ lại các buổi cũ trong khoảng mong muốn sẽ xoá mô tả đã chia sẻ trước đây nếu tuỳ chọn chia sẻ hiện tắt.
+Ứng dụng là nguồn dữ liệu chính, chỉ đồng bộ app → Google. Sửa lịch trong ứng dụng chỉ đánh dấu “cần đồng bộ”; lịch chỉ lên Google khi có người bấm nút đồng bộ. Ghi chú buổi chỉ được đưa lên Google khi bật chia sẻ; note riêng từng học viên không được gửi. Đồng bộ lại các buổi cũ trong khoảng mong muốn sẽ xoá mô tả đã chia sẻ trước đây nếu tuỳ chọn chia sẻ hiện tắt.
 
 ## Đồng bộ và scheduler
 
-Nút **Đồng bộ với Google Calendar** (Lịch học → ⋯ → Google Calendar) xử lý job ngay trong request: chọn khoảng ngày rồi bấm là lịch được đẩy lên Google, không cần worker nền. Nút "Đồng bộ lại" trong chi tiết buổi học cũng xử lý ngay như vậy. Job sinh ra từ thao tác sửa lịch nằm ở trạng thái chờ cho tới khi bấm nút hoặc scheduler bên dưới chạy.
+Nút **Đồng bộ với Google Calendar** (Lịch học → ⋯ → Google Calendar) xử lý job ngay trong request: chọn khoảng ngày rồi bấm là lịch được đẩy lên Google, không cần worker nền. Mỗi lần bấm chỉ xử lý kết nối của người bấm, theo từng vòng 10 mục trong ngân sách ~45 giây; còn mục chờ thì modal hiện “Đang chờ: N” và toast nhắc bấm lại. Nút "Đồng bộ lại" trong chi tiết buổi học cũng xử lý ngay như vậy. Job sinh ra từ thao tác sửa lịch chỉ nằm chờ — không có tiến trình nền nào tự đẩy.
 
-Scheduler là tuỳ chọn — chỉ cần khi muốn các job chờ tự chạy nền. Hạ tầng ngoài Vercel có thể gọi `POST /api/internal/calendar` mỗi 10 phút với `Authorization: Bearer <CALENDAR_CRON_SECRET>`. Route có xác thực riêng, không cần cookie đăng nhập. Lượt chạy sinh tiếp lịch tuần rồi xử lý job; lease trong PostgreSQL ngăn hai lượt đồng thời. Mỗi lượt xử lý tối đa 10 job theo thời gian cho phép, chuỗi trước buổi riêng. Job lỗi tạm thời tự retry có backoff; hết số lần thử hoặc lỗi quyền được hiển thị để admin xử lý.
+Scheduler là tuỳ chọn — chỉ còn nhiệm vụ sinh tiếp lịch tuần cho các chuỗi, **không** đẩy lịch lên Google. Hạ tầng ngoài Vercel có thể gọi `POST /api/internal/calendar` mỗi 10 phút với `Authorization: Bearer <CALENDAR_CRON_SECRET>`. Route có xác thực riêng, không cần cookie đăng nhập. Job lỗi tạm thời được thử lại ở lần bấm kế tiếp (có backoff nên không gọi liên tục); hết số lần thử hoặc lỗi quyền được hiển thị để admin kết nối lại.
 
 Có thể dùng cron của máy chạy ứng dụng:
 
@@ -29,9 +29,9 @@ Có thể dùng cron của máy chạy ứng dụng:
 */10 * * * * cd /duong-dan/qltruongcung && node --env-file=.env scripts/run-calendar-worker.mjs >> /var/log/qltruongcung-calendar.log 2>&1
 ```
 
-Trên Vercel Hobby, `vercel.json` chạy một lượt lúc 20:00 UTC mỗi ngày với `?recover=1`; lượt này đưa các job lỗi vào hàng đợi lại trước khi xử lý. Cấu hình `CRON_SECRET` tối thiểu 32 ký tự trên Vercel. Vì Hobby không chạy cron mỗi 10 phút, dùng scheduler ngoài và `CALENDAR_CRON_SECRET` nếu cần độ trễ đồng bộ thấp hơn. Đặt `CALENDAR_WORKER_URL` cho URL ứng dụng. Không cài thêm Redis hay dịch vụ hàng đợi.
+Trên Vercel Hobby, `vercel.json` chạy một lượt lúc 20:00 UTC mỗi ngày (không còn tham số `?recover=1`) chỉ để sinh tiếp lịch tuần. Cấu hình `CRON_SECRET` tối thiểu 32 ký tự trên Vercel. Đặt `CALENDAR_WORKER_URL` cho URL ứng dụng. Không cài thêm Redis hay dịch vụ hàng đợi.
 
-Sau khi cấu hình, tạo một buổi trên lịch thử, đổi giờ, sửa/xoá ghi chú được chia sẻ, huỷ buổi; thử cả một buổi thuộc chuỗi. Bấm **Đồng bộ với Google Calendar** và kiểm tra trạng thái không còn chờ/lỗi cùng kết quả tương ứng trên Google. Không cấu hình scheduler thì job vẫn nằm chờ cho tới lần bấm nút kế tiếp.
+Sau khi cấu hình, tạo một buổi trên lịch thử, đổi giờ, sửa/xoá ghi chú được chia sẻ, huỷ buổi; thử cả một buổi thuộc chuỗi. Sửa lịch xong kiểm tra Google **chưa** đổi (chỉ hiện “Đang chờ đồng bộ”), rồi bấm **Đồng bộ với Google Calendar** và kiểm tra trạng thái không còn chờ/lỗi cùng kết quả tương ứng trên Google. Muốn xác nhận scheduler không tự đẩy, gọi `POST /api/internal/calendar` sau khi sửa lịch và kiểm tra Google vẫn giữ nguyên. Với nhiều ADMIN, mỗi người kết nối một tài khoản Google riêng và chỉ thấy trạng thái của mình; thay đổi chỉ sang lịch của người đã bấm đồng bộ.
 
 ## Kiểm tra và khôi phục
 

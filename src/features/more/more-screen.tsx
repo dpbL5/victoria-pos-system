@@ -14,6 +14,7 @@ import {
   LogOut,
   Monitor,
   Moon,
+  School,
   Settings,
   ShieldCheck,
   Sun,
@@ -21,6 +22,7 @@ import {
   Ticket,
   Timer,
   UserCog,
+  Users,
   Wrench,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -34,6 +36,7 @@ import { apiJson } from '@/lib/api'
 import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
 import { formatClock, money } from '@/features/pos/format'
 import type { Shift, UserSession } from '@/features/pos/types'
+import { CalendarConnection } from '@/features/students/calendar-connection'
 import { useTheme, type Theme } from '@/hooks/use-theme'
 
 interface ThemeOption {
@@ -105,7 +108,9 @@ export function MoreScreen() {
     { href: '/staff', label: 'Nhân viên', Icon: UserCog, tone: 'blue' as const },
     { href: '/pricing', label: 'Bảng giá', Icon: Banknote, tone: 'blue' as const },
     { href: '/tools', label: 'Dụng cụ', Icon: Wrench, tone: 'amber' as const },
-    { href: '/lessons', label: 'Đào tạo', Icon: GraduationCap, tone: 'emerald' as const },
+    { href: '/lessons', label: 'Lịch học', Icon: GraduationCap, tone: 'emerald' as const },
+    { href: '/classes', label: 'Lớp học', Icon: School, tone: 'emerald' as const },
+    { href: '/students', label: 'Học viên', Icon: Users, tone: 'emerald' as const },
     { href: '/cashflow', label: 'Thu chi', Icon: ArrowRightLeft, tone: 'emerald' as const },
   ] as const
 
@@ -205,6 +210,18 @@ export function MoreScreen() {
             ))}
           </div>
         </section>
+
+        {isAdmin && (
+          <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <SectionTitle title="Google Calendar" />
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+              Kết nối tài khoản Google của bạn để đồng bộ lịch học lên Google Calendar.
+            </p>
+            <div className="mt-3">
+              <CalendarConnection />
+            </div>
+          </section>
+        )}
 
         {isAdmin && (
           <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

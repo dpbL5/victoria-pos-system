@@ -18,8 +18,9 @@ import { apiJson } from '@/lib/api'
 import { formatVnDate, formatVnTimeRange } from '@/lib/shared/utils'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { AttendanceDialog } from './attendance-dialog'
+import { StudentLessonNote } from './lesson-notes'
 import { emptyStudentForm, studentFormBody, StudentFormModal, studentToForm, type StudentForm } from './student-form-modal'
-import { studentClassOf, type Student, type LessonPackage, type Lesson } from './types'
+import { studentClassOf, studentRemaining, type Student, type LessonPackage, type Lesson } from './types'
 import type { LessonClass } from '@/features/classes/types'
 
 interface StudentDetailProps {
@@ -147,7 +148,7 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
     )
   }
 
-  const totalRemaining = student.packages.filter((p) => p.isActive).reduce((sum, p) => sum + Math.max(0, p.total - p.used), 0)
+  const totalRemaining = studentRemaining(student)
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
@@ -239,35 +240,58 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
             {upcoming.length === 0 && past.length === 0 && (
               <p className="px-4 py-6 text-sm text-zinc-500 dark:text-zinc-400">Chưa có buổi học nào.</p>
             )}
-            {upcoming.map((l) => (
-              <div key={l.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-white">{l.title}</p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{formatVnDate(l.startsAt)} · {formatVnTimeRange(l.startsAt, l.durationMin)}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Badge variant="blue">Sắp tới</Badge>
-                  <Button variant="secondary" size="sm" icon={ClipboardCheck} aria-label="Điểm danh" title="Điểm danh" onClick={() => setAttendanceLesson(l)} />
-                </div>
-              </div>
-            ))}
-            {past.map((l) => (
-              <div key={l.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-white">{l.title}</p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{formatVnDate(l.startsAt)} · {formatVnTimeRange(l.startsAt, l.durationMin)}</p>
-                  {l.students.find((s) => s.studentId === id)?.note && (
-                    <p className="text-xs text-zinc-600 dark:text-zinc-300">Ghi chú: {l.students.find((s) => s.studentId === id)?.note}</p>
+            {upcoming.map((l) => {
+              const row = l.students.find((s) => s.studentId === id)
+              return (
+                <div key={l.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-zinc-900 dark:text-white">{l.title}</p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">{formatVnDate(l.startsAt)} · {formatVnTimeRange(l.startsAt, l.durationMin)}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Badge variant="blue">Sắp tới</Badge>
+                      <Button variant="secondary" size="sm" icon={ClipboardCheck} aria-label="Điểm danh" title="Điểm danh" onClick={() => setAttendanceLesson(l)} />
+                    </div>
+                  </div>
+                  {row?.note && (
+                    <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Ghi chú: {row.note}</p>
+                  )}
+                  {l.status !== 'CANCELLED' && (
+                    <div className="mt-1">
+                      <StudentLessonNote lessonId={l.id} studentId={id} studentName={student.fullName} note={row?.note ?? null} onSaved={() => void mutateLessons()} />
+                    </div>
                   )}
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Badge variant={l.students.find((s) => s.studentId === id)?.status === 'COMPLETED' ? 'success' : l.students.find((s) => s.studentId === id)?.status === 'ABSENT' ? 'danger' : 'default'}>
-                    {l.students.find((s) => s.studentId === id)?.status === 'COMPLETED' ? 'Hoàn thành' : l.students.find((s) => s.studentId === id)?.status === 'ABSENT' ? 'Vắng' : '—'}
-                  </Badge>
-                  <Button variant="secondary" size="sm" icon={ClipboardCheck} aria-label="Điểm danh" title="Điểm danh" onClick={() => setAttendanceLesson(l)} />
+              )
+            })}
+            {past.map((l) => {
+              const row = l.students.find((s) => s.studentId === id)
+              return (
+                <div key={l.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-zinc-900 dark:text-white">{l.title}</p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">{formatVnDate(l.startsAt)} · {formatVnTimeRange(l.startsAt, l.durationMin)}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Badge variant={row?.status === 'COMPLETED' ? 'success' : row?.status === 'ABSENT' ? 'danger' : 'default'}>
+                        {row?.status === 'COMPLETED' ? 'Hoàn thành' : row?.status === 'ABSENT' ? 'Vắng' : '—'}
+                      </Badge>
+                      <Button variant="secondary" size="sm" icon={ClipboardCheck} aria-label="Điểm danh" title="Điểm danh" onClick={() => setAttendanceLesson(l)} />
+                    </div>
+                  </div>
+                  {row?.note && (
+                    <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Ghi chú: {row.note}</p>
+                  )}
+                  {l.status !== 'CANCELLED' && (
+                    <div className="mt-1">
+                      <StudentLessonNote lessonId={l.id} studentId={id} studentName={student.fullName} note={row?.note ?? null} onSaved={() => void mutateLessons()} />
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </Card>
 

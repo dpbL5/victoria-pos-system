@@ -11,17 +11,18 @@ import { apiJson } from '@/lib/api'
 import { AttendanceDialog } from './attendance-dialog'
 import { emptySchedule, scheduleBody, scheduleError, scheduleToForm, ScheduleFields, weekdayOf, type ScheduleFormState } from './schedule-fields'
 import { StudentPicker } from './student-picker'
+import { LessonStudentNotes } from './lesson-notes'
 import type { Lesson } from './types'
 import type { LessonClass } from '@/features/classes/types'
 
 export const localTime = (iso: string) => new Date(Date.parse(iso) + 7 * 3600000).toISOString().slice(0, 16)
 export const lockedLesson = (lesson: Lesson) => lesson.status !== 'SCHEDULED' || lesson.students.some(s => s.status !== 'SCHEDULED' || s.packageId)
 
-export function LessonEditor({ lesson, start, end, studentId, classId, defaultTitle, defaultStudents = [], onClose, onSaved }: {
-  lesson?: Lesson; start: string; end: string; studentId?: string; classId?: string; defaultTitle?: string; defaultStudents?: { id: string; fullName: string }[]; onClose: () => void; onSaved: () => void
+export function LessonEditor({ lesson, start, end, studentId, onClose, onSaved, onNotesSaved }: {
+  lesson?: Lesson; start: string; end: string; studentId?: string; onClose: () => void; onSaved: () => void; onNotesSaved?: () => void
 }) {
   const toast = useToast()
-  const [title, setTitle] = useState(lesson?.title ?? defaultTitle ?? '')
+  const [title, setTitle] = useState(lesson?.title ?? '')
   const [coachName, setCoachName] = useState(lesson?.coachName ?? '')
   const [schedule, setSchedule] = useState<ScheduleFormState>(() => {
     const startDay = localTime(start).slice(0, 10)
@@ -34,15 +35,14 @@ export function LessonEditor({ lesson, start, end, studentId, classId, defaultTi
   const { startsOn: startDay, startTime, endTime } = schedule
   const startsAt = `${startDay}T${startTime}`
   const endsAt = `${startDay}T${endTime}`
-  const [studentIds, setStudentIds] = useState(lesson?.students.map(s => s.studentId) ?? (studentId ? [studentId] : defaultStudents.map(s => s.id)))
+  const [studentIds, setStudentIds] = useState(lesson?.students.map(s => s.studentId) ?? (studentId ? [studentId] : []))
   const [note, setNote] = useState(lesson?.note ?? '')
   const [shareNote, setShareNote] = useState(lesson?.shareNote ?? false)
   const [repeat, setRepeat] = useState(false)
   const [pickedClassId, setPickedClassId] = useState('')
   const [pickedRoster, setPickedRoster] = useState<{ id: string; fullName: string }[]>([])
   const [pickingClass, setPickingClass] = useState(false)
-  const { data: classOptions } = useApi<{ classes: LessonClass[] }>(!classId && !lesson ? '/api/classes?status=ACTIVE' : null)
-  const effectiveClassId = classId ?? pickedClassId
+  const { data: classOptions } = useApi<{ classes: LessonClass[] }>(!lesson ? '/api/classes?status=ACTIVE' : null)
   async function pickClass(nextId: string) {
     setPickedClassId(nextId)
     if (!nextId) return
@@ -91,10 +91,10 @@ export function LessonEditor({ lesson, start, end, studentId, classId, defaultTi
     setSaving(true)
     try {
       let url = lesson ? `/api/lessons/${lesson.id}` : '/api/lessons'
-      let payload: Record<string, unknown> = remove ? { version: lesson?.version } : locked ? { version: lesson?.version, note, shareNote } : { title, coachName, startsAt: startDate.toISOString(), durationMin, studentIds, note, shareNote, ...(lesson ? { version: lesson.version } : effectiveClassId ? { classId: effectiveClassId } : {}) }
+      let payload: Record<string, unknown> = remove ? { version: lesson?.version } : locked ? { version: lesson?.version, note, shareNote } : { title, coachName, startsAt: startDate.toISOString(), durationMin, studentIds, note, shareNote, ...(lesson ? { version: lesson.version } : pickedClassId ? { classId: pickedClassId } : {}) }
       if (recurring) {
         url = lesson ? `/api/series/${lesson.seriesId}` : '/api/series'
-        payload = lesson ? { version: lesson.series!.version, scope, lessonId: lesson.id, ...(!remove ? { title, coachName, durationMin, studentIds } : {}) } : { title, coachName, durationMin, studentIds, ...(effectiveClassId ? { classId: effectiveClassId } : {}) }
+        payload = lesson ? { version: lesson.series!.version, scope, lessonId: lesson.id, ...(!remove ? { title, coachName, durationMin, studentIds } : {}) } : { title, coachName, durationMin, studentIds, ...(pickedClassId ? { classId: pickedClassId } : {}) }
         if (!remove && editingRule) {
           const rule = scheduleBody(schedule)!
           Object.assign(payload, { startsOn: rule.startsOn, startTime: rule.startTime, daysOfWeek: rule.daysOfWeek, intervalWeeks: rule.intervalWeeks, endsOn: rule.endsOn, occurrenceCount: rule.occurrenceCount })
@@ -138,7 +138,7 @@ export function LessonEditor({ lesson, start, end, studentId, classId, defaultTi
             />
             {ruleError && <p className="text-sm text-red-600 dark:text-red-400">{ruleError}</p>}
           </div>
-          {!classId && !lesson && <div>
+          {!lesson && <div>
             <Label htmlFor="lesson-class">Lớp (tuỳ chọn)</Label>
             <Select id="lesson-class" value={pickedClassId} disabled={pickingClass} onChange={e => void pickClass(e.target.value)}>
               <option value="">Buổi lẻ không thuộc lớp</option>
@@ -146,11 +146,18 @@ export function LessonEditor({ lesson, start, end, studentId, classId, defaultTi
             </Select>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Dùng cho chuyển lịch hoặc học bù: chọn lớp để tự điền sổ học viên và tiêu đề; buổi vẫn nằm trong lịch của lớp.</p>
           </div>}
-          <StudentPicker key={effectiveClassId || 'free'} value={studentIds} onChange={ids => { setStudentIds(ids); setDirty(true) }} initial={lesson?.students.map(s => s.student) ?? (pickedClassId ? pickedRoster : defaultStudents)} />
+          <StudentPicker key={pickedClassId || 'free'} value={studentIds} onChange={ids => { setStudentIds(ids); setDirty(true) }} initial={lesson?.students.map(s => s.student) ?? (pickedClassId ? pickedRoster : [])} />
         </fieldset>
         {!recurring && <><div><Label htmlFor="lesson-note">Ghi chú buổi học</Label><Textarea disabled={saving || lesson?.status === 'CANCELLED'} id="lesson-note" value={note} onChange={e => setNote(e.target.value)} maxLength={2000} rows={4} placeholder="Nội dung buổi học, tiến độ và điều cần lưu ý" /></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={saving || lesson?.status === 'CANCELLED'} checked={shareNote} onChange={e => setShareNote(e.target.checked)} />Đồng bộ ghi chú lên Google Calendar</label><p className="text-xs text-zinc-500">Ghi chú riêng từng học viên chỉ lưu trong ứng dụng.</p></>}
         {recurring && <p className="text-sm text-zinc-500">Ghi chú được lưu riêng từng buổi. Mở “Buổi này” để chỉnh ghi chú.</p>}
       </form>
+      {lesson && !recurring && lesson.status !== 'CANCELLED' && lesson.students.length > 0 && (
+        <LessonStudentNotes
+          lessonId={lesson.id}
+          students={lesson.students.map(ls => ({ studentId: ls.studentId, fullName: ls.student.fullName, note: ls.note }))}
+          onSaved={onNotesSaved}
+        />
+      )}
     </Modal>
     <ConfirmDialog open={confirmClose} title="Bỏ thay đổi chưa lưu?" description="Các thay đổi trong biểu mẫu sẽ không được lưu." confirmLabel="Bỏ thay đổi" onClose={() => setConfirmClose(false)} onConfirm={onClose} />
     <ConfirmDialog open={confirmDelete} title={recurring ? 'Huỷ chuỗi lịch học?' : 'Huỷ lịch học?'} description={recurring ? 'Các buổi chưa diễn ra trong phạm vi đã chọn sẽ bị huỷ. Lịch sử được giữ lại.' : 'Buổi học này sẽ bị huỷ và cập nhật lên Google Calendar.'} confirmLabel={recurring ? 'Huỷ theo chuỗi' : 'Huỷ lịch học'} onClose={() => setConfirmDelete(false)} onConfirm={() => void save(true)} submitting={saving} />

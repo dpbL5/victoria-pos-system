@@ -184,6 +184,12 @@ export function createLessonRepository(store: StudentStore): LessonRepository {
         data: { packageId },
       })
     },
+    setStudentNote: async ({ lessonId, studentId, note }) => {
+      await store.lessonStudent.update({
+        where: { lessonId_studentId: { lessonId, studentId } },
+        data: { note },
+      })
+    },
     lastNotesByStudent: async (studentIds, before) => {
       if (!studentIds.length) return []
       const rows = await store.lessonStudent.findMany({
@@ -286,12 +292,18 @@ export function createCalendarConnectionRepository(
   store: StudentStore
 ): CalendarConnectionRepository {
   return {
-    find: () => store.calendarConnection.findFirst({ orderBy: { connectedAt: 'desc' } }),
-    upsert: (data) =>
+    findByUser: (userId) => store.calendarConnection.findUnique({ where: { userId } }),
+    findById: (id) => store.calendarConnection.findUnique({ where: { id } }),
+    listReady: () =>
+      store.calendarConnection.findMany({
+        where: { calendarId: { not: null }, needsReconnect: false },
+        orderBy: { connectedAt: 'asc' },
+      }),
+    upsertForUser: (userId, data) =>
       store.calendarConnection.upsert({
-        where: { id: 'single' },
-        create: { ...data, id: 'single' },
-        update: data,
+        where: { userId },
+        create: { ...data, userId },
+        update: { ...data, userId },
       }),
     updateToken: async (id, data, generation) => {
       const updated = await store.calendarConnection.updateMany({ where: { id, ...(generation ? { generation } : {}) }, data })
@@ -306,11 +318,11 @@ export function createCalendarConnectionRepository(
 
 export function createCalendarSyncRepository(store: StudentStore): CalendarSyncRepository {
   return {
-    summary: async () => {
+    summary: async (connectionId) => {
       const [pending, failed, last] = await Promise.all([
-        store.calendarSyncJob.count({ where: { status: 'PENDING' } }),
-        store.calendarSyncJob.count({ where: { status: 'ERROR' } }),
-        store.calendarSyncJob.aggregate({ _max: { syncedAt: true } }),
+        store.calendarSyncJob.count({ where: { connectionId, status: 'PENDING' } }),
+        store.calendarSyncJob.count({ where: { connectionId, status: 'ERROR' } }),
+        store.calendarSyncJob.aggregate({ where: { connectionId }, _max: { syncedAt: true } }),
       ])
       return { pending, failed, lastSyncedAt: last._max.syncedAt }
     },
@@ -320,25 +332,30 @@ export function createCalendarSyncRepository(store: StudentStore): CalendarSyncR
       const old = await store.calendarEventMapping.findMany({ where: { calendarId: 'primary' } })
       for (const mapping of old) await store.calendarEventMapping.upsert({ where: { entityKey_calendarId: { entityKey: mapping.entityKey, calendarId } }, create: { entityKey: mapping.entityKey, calendarId, eventId: mapping.eventId }, update: {} })
     },
+    // Fan-out: mỗi connection đã chọn lịch đích nhận 1 job. Connection đang needsReconnect vẫn nhận
+    // để thay đổi không bị mất; connection chưa chọn lịch thì chưa có đích để đẩy.
     enqueue: async (kind, entityId) => {
       const entityKey = `${kind}:${entityId}`
-      await store.calendarSyncJob.upsert({
-        where: { entityKey },
-        create: { entityKey, entityId, kind },
-        update: { version: { increment: 1 }, status: 'PENDING', attempts: 0, lastError: null, nextAttemptAt: new Date() },
-      })
+      const connections = await store.calendarConnection.findMany({ where: { calendarId: { not: null } }, select: { id: true } })
+      for (const { id: connectionId } of connections) {
+        await store.calendarSyncJob.upsert({
+          where: { connectionId_entityKey: { connectionId, entityKey } },
+          create: { connectionId, entityKey, entityId, kind },
+          update: { version: { increment: 1 }, status: 'PENDING', attempts: 0, lastError: null, nextAttemptAt: new Date() },
+        })
+      }
     },
-    pending: () => store.calendarSyncJob.findMany({ where: { status: 'PENDING', nextAttemptAt: { lte: new Date() } }, orderBy: [{ kind: 'desc' }, { updatedAt: 'asc' }], take: 10 }),
-    list: (entityIds) => store.calendarSyncJob.findMany({ where: entityIds ? { entityId: { in: entityIds } } : { status: { not: 'SYNCED' } }, orderBy: { updatedAt: 'desc' }, take: 500 }),
+    pending: (connectionId) => store.calendarSyncJob.findMany({ where: { connectionId, status: 'PENDING', nextAttemptAt: { lte: new Date() } }, orderBy: [{ kind: 'desc' }, { updatedAt: 'asc' }], take: 10 }),
+    list: (connectionId, entityIds) => store.calendarSyncJob.findMany({ where: { connectionId, ...(entityIds ? { entityId: { in: entityIds } } : { status: { not: 'SYNCED' } }) }, orderBy: { updatedAt: 'desc' }, take: 500 }),
     finish: async (id, version, error) => {
       await store.calendarSyncJob.updateMany({ where: { id, version }, data: error ? {
         status: error.retry ? 'PENDING' : 'ERROR', lastError: error.message, attempts: { increment: 1 },
         nextAttemptAt: new Date(Date.now() + Math.min(3_600_000, 30_000 * 2 ** Math.min(error.attempts, 7))),
       } : { status: 'SYNCED', syncedAt: new Date(), lastError: null } })
     },
-    retry: async () => { await store.calendarSyncJob.updateMany({ where: { status: { not: 'SYNCED' } }, data: { status: 'PENDING', nextAttemptAt: new Date(), attempts: 0, lastError: null } }) },
-    acquire: async (owner) => (await store.calendarConnection.updateMany({ where: { id: 'single', OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }] }, data: { leaseOwner: owner, leaseUntil: new Date(Date.now() + 90_000) } })).count === 1,
-    release: async (owner) => { await store.calendarConnection.updateMany({ where: { id: 'single', leaseOwner: owner }, data: { leaseOwner: null, leaseUntil: null } }) },
-    reconnectRequired: async () => { await store.calendarConnection.updateMany({ data: { needsReconnect: true } }) },
+    retry: async (connectionId) => { await store.calendarSyncJob.updateMany({ where: { connectionId, status: { not: 'SYNCED' } }, data: { status: 'PENDING', nextAttemptAt: new Date(), attempts: 0, lastError: null } }) },
+    acquire: async (connectionId, owner) => (await store.calendarConnection.updateMany({ where: { id: connectionId, OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }] }, data: { leaseOwner: owner, leaseUntil: new Date(Date.now() + 90_000) } })).count === 1,
+    release: async (connectionId, owner) => { await store.calendarConnection.updateMany({ where: { id: connectionId, leaseOwner: owner }, data: { leaseOwner: null, leaseUntil: null } }) },
+    reconnectRequired: async (connectionId) => { await store.calendarConnection.updateMany({ where: { id: connectionId }, data: { needsReconnect: true } }) },
   }
 }

@@ -18,6 +18,21 @@ export interface Student {
 export const studentClassOf = (student: Pick<Student, 'series'>): { id: string; name: string } | null =>
   student.series?.find(row => row.series.class)?.series.class ?? null
 
+/** Số buổi còn lại của học viên — tổng các gói đang hoạt động, kẹp ở 0 (gói bị hạ `total` dưới `used` không ra số âm). */
+export const studentRemaining = (student: Pick<Student, 'packages'>): number =>
+  student.packages.filter((p) => p.isActive).reduce((sum, p) => sum + Math.max(0, p.total - p.used), 0)
+
+/** Dòng danh sách học viên — kèm số buổi còn lại đã tính sẵn để sort được theo cột "Còn lại". */
+export interface StudentRow extends Student {
+  remainingSessions: number
+}
+
+export const studentRowOf = (student: Student): StudentRow => ({ ...student, remainingSessions: studentRemaining(student) })
+
+/** Nhãn cột "Còn lại": phân biệt chưa mua gói với gói đã hết buổi. */
+export const remainingLabel = (row: Pick<StudentRow, 'remainingSessions' | 'packages'>): string =>
+  row.remainingSessions > 0 ? `${row.remainingSessions} buổi` : row.packages.length ? 'Hết buổi' : 'Chưa có gói'
+
 export interface LessonPackage {
   id: string
   studentId: string

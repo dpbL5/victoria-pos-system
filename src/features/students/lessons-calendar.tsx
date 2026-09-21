@@ -41,9 +41,7 @@ export function getOverlapStackIndex(lesson: Lesson, lessons: Lesson[]) {
     .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt) || a.id.localeCompare(b.id))
     .findIndex(candidate => candidate.id === lesson.id)
 }
-export default function LessonsCalendar({ classId, classTitle, classRoster = [], basePath = '/lessons' }: {
-  classId?: string; classTitle?: string; classRoster?: { id: string; fullName: string }[]; basePath?: string
-}) {
+export default function LessonsCalendar() {
   const hour12 = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 ?? false
   const [initial] = useState(() => new URLSearchParams(window.location.search))
   const [view, setView] = useState(() => initial.get('view') ?? (window.innerWidth < 768 ? 'timeGridDay' : 'timeGridWeek'))
@@ -52,7 +50,7 @@ export default function LessonsCalendar({ classId, classTitle, classRoster = [],
   const [range, setRange] = useState<{ from: string; to: string } | null>(null)
   const [studentId, setStudentId] = useState(initial.get('studentId') ?? '')
   const [status, setStatus] = useState(initial.get('status') ?? '')
-  const [classFilter, setClassFilter] = useState(classId ?? initial.get('classId') ?? '')
+  const [classFilter, setClassFilter] = useState(initial.get('classId') ?? '')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [editor, setEditor] = useState<{ lesson?: Lesson; start: string; end: string } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -64,13 +62,24 @@ export default function LessonsCalendar({ classId, classTitle, classRoster = [],
   const toast = useToast()
   const { registerRefresh } = usePageRefresh()
   const { mutate: mutateCache } = useSWRConfig()
-  const effectiveClassId = classId ?? classFilter
-  const params = new URLSearchParams({ from: range?.from ?? '', to: range?.to ?? '', studentId, status, ...(effectiveClassId ? { classId: effectiveClassId } : {}) })
+  // Kết quả OAuth Google trả về qua ?gcal=connected|failed|error — báo một lần rồi xoá khỏi URL.
+  useEffect(() => {
+    const result = initial.get('gcal')
+    if (!result) return
+    if (result === 'connected') toast.success('Đã kết nối Google Calendar. Hãy chọn lịch CLB rồi bấm đồng bộ')
+    else toast.error('Không kết nối được Google Calendar. Hãy thử lại')
+    const query = new URLSearchParams(window.location.search)
+    query.delete('gcal')
+    window.history.replaceState(null, '', `/lessons?${query}`)
+    void mutateCache('/api/google/status')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const params = new URLSearchParams({ from: range?.from ?? '', to: range?.to ?? '', studentId, status, ...(classFilter ? { classId: classFilter } : {}) })
   const { data, error, isLoading, mutate } = useApi<{ lessons: Lesson[]; warning?: string }>(range ? `/api/lessons?${params}` : null)
-  const { data: students } = useApi<Student[]>(classId ? null : '/api/students?limit=100')
-  const { data: classes } = useApi<{ classes: LessonClass[] }>(classId ? null : '/api/classes')
+  const { data: students } = useApi<Student[]>('/api/students?limit=100')
+  const { data: classes } = useApi<{ classes: LessonClass[] }>('/api/classes')
   const lessons = data?.data?.lessons ?? []
-  const activeFilterCount = [studentId, status, classId ? '' : classFilter].filter(Boolean).length
+  const activeFilterCount = [studentId, status, classFilter].filter(Boolean).length
   useEffect(() => {
     const update = () => setIsMobile(window.innerWidth < 768)
     window.addEventListener('resize', update)
@@ -99,8 +108,8 @@ export default function LessonsCalendar({ classId, classTitle, classRoster = [],
   const persist = useCallback((values: Record<string, string>) => {
     const query = new URLSearchParams(window.location.search)
     for (const [key, value] of Object.entries(values)) { if (value) query.set(key, value); else query.delete(key) }
-    window.history.replaceState(null, '', `${basePath}?${query}`)
-  }, [basePath])
+    window.history.replaceState(null, '', `/lessons?${query}`)
+  }, [])
   const openNew = (start: string, end?: string) => {
     const actual = start.length === 10 ? `${start}T18:00:00+07:00` : start
     startTransition(() => setEditor({ start: actual, end: end ?? new Date(Date.parse(actual) + 3600000).toISOString() }))
@@ -133,6 +142,7 @@ export default function LessonsCalendar({ classId, classTitle, classRoster = [],
       </div>
       <p className="min-w-0 flex-1 truncate text-center text-sm font-semibold md:text-base">{title}</p>
       <div ref={menuRef} className="relative flex shrink-0 items-center gap-1">
+        <CalendarConnection compact />
         <Select aria-label="Chế độ xem lịch" className="!w-auto max-w-20 border-0 bg-transparent !px-1.5 shadow-none lg:max-w-24" value={view} onChange={e => { setView(e.target.value); ref.current?.getApi().changeView(e.target.value) }}>{Object.entries(VIEWS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select>
         <Button variant="ghost" icon={SlidersHorizontal} size="sm" aria-label={activeFilterCount ? `Bộ lọc lịch, đang áp dụng ${activeFilterCount}` : 'Bộ lọc lịch'} aria-expanded={filtersOpen} className="md:hidden" onClick={() => setFiltersOpen(v => !v)}>{activeFilterCount ? <span className="text-[10px]">{activeFilterCount}</span> : null}</Button>
         <span className="relative inline-flex">
@@ -155,8 +165,8 @@ export default function LessonsCalendar({ classId, classTitle, classRoster = [],
     <div className="calendar-body flex min-h-0 flex-1 flex-col gap-4 md:flex-row"><aside className={`${filtersOpen ? 'filter-panel-open' : 'hidden'} space-y-4 md:block md:w-48 md:shrink-0`}><div className="flex items-center justify-between md:hidden"><h2 className="font-semibold">Bộ lọc lịch</h2><Button variant="ghost" size="sm" icon={X} aria-label="Đóng bộ lọc" onClick={() => setFiltersOpen(false)} /></div>
       <div><Label htmlFor="calendar-date">Đến ngày</Label><Input id="calendar-date" type="date" value={date} onChange={e => { if (e.target.value) ref.current?.getApi().gotoDate(e.target.value) }} /></div>
       <div className="lesson-mini" aria-label="Chọn ngày trong tháng"><FullCalendar key={date.slice(0, 7)} plugins={[theme, dayGrid, interaction]} locale={vi} timeZone="Asia/Ho_Chi_Minh" initialView="dayGridMonth" initialDate={date} headerToolbar={false} height="auto" fixedWeekCount={false} firstDay={1} dayHeaderFormat={{ weekday: 'narrow' }} dayCellClass="lesson-mini-day" dateClick={info => ref.current?.getApi().gotoDate(info.dateStr)} /></div>
-      {!classId && <div><Label htmlFor="calendar-class">Lớp</Label><Select id="calendar-class" value={classFilter} onChange={e => { setClassFilter(e.target.value); persist({ classId: e.target.value }) }}><option value="">Tất cả lớp</option>{classes?.data?.classes?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></div>}
-      {!classId && <div><Label htmlFor="calendar-student">Học viên</Label><Select id="calendar-student" value={studentId} onChange={e => { setStudentId(e.target.value); persist({ studentId: e.target.value }) }}><option value="">Tất cả học viên</option>{studentId && !students?.data?.some(s => s.id === studentId) && <option value={studentId}>Học viên đang chọn</option>}{students?.data?.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}</Select></div>}
+      <div><Label htmlFor="calendar-class">Lớp</Label><Select id="calendar-class" value={classFilter} onChange={e => { setClassFilter(e.target.value); persist({ classId: e.target.value }) }}><option value="">Tất cả lớp</option>{classes?.data?.classes?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></div>
+      <div><Label htmlFor="calendar-student">Học viên</Label><Select id="calendar-student" value={studentId} onChange={e => { setStudentId(e.target.value); persist({ studentId: e.target.value }) }}><option value="">Tất cả học viên</option>{studentId && !students?.data?.some(s => s.id === studentId) && <option value={studentId}>Học viên đang chọn</option>}{students?.data?.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}</Select></div>
       <div><Label htmlFor="calendar-status">Trạng thái</Label><Select id="calendar-status" value={status} onChange={e => { setStatus(e.target.value); persist({ status: e.target.value }) }}><option value="">Các buổi chưa huỷ</option><option value="SCHEDULED">Đã xếp lịch</option><option value="COMPLETED">Hoàn thành</option><option value="CANCELLED">Đã huỷ</option></Select></div>
       <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Giờ Việt Nam · Kéo chọn để tạo buổi. Bấm buổi học để chỉnh sửa và ghi chú.</p>
     </aside><main className="calendar-main flex min-h-0 min-w-0 flex-1 flex-col">
@@ -175,6 +185,6 @@ export default function LessonsCalendar({ classId, classTitle, classRoster = [],
         eventDidMount={info => { const lesson = info.event.extendedProps.lesson as Lesson | undefined; if (!lesson || info.isMirror) return; const startsAt = info.event.start?.toISOString() ?? lesson.startsAt; const endsAt = info.event.end?.toISOString() ?? new Date(Date.parse(lesson.startsAt) + lesson.durationMin * 60000).toISOString(); const startLabel = localTime(startsAt).replace('T', ' '); const endLabel = localTime(endsAt).slice(11); const studentsLabel = lesson.students.map(s => s.student.fullName).join(', '); info.el.setAttribute('data-lesson-event', lesson.id); if (lesson.seriesId) info.el.setAttribute('data-lesson-series', lesson.seriesId); info.el.setAttribute('tabindex', '0'); info.el.setAttribute('role', 'button'); info.el.setAttribute('aria-label', `${lesson.title}, từ ${startLabel} đến ${endLabel}${lesson.series?.class?.name ?? lesson.class?.name ? `, lớp ${lesson.series?.class?.name ?? lesson.class?.name}` : ''}${lesson.seriesId ? ', thuộc chuỗi lặp' : ''}, mở để chỉnh sửa`); info.el.setAttribute('title', [lesson.title, `${startLabel} - ${endLabel}`, `Lớp: ${lesson.series?.class?.name ?? lesson.class?.name ?? 'chưa gán'}`, studentsLabel && `Học viên: ${studentsLabel}`, lesson.coachName && `Huấn luyện viên: ${lesson.coachName}`].filter(Boolean).join('\n')); info.el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); info.el.click() } } }}
       /><Button className="add-lesson-fab md:hidden" aria-label="Thêm buổi học" title="Thêm buổi học" icon={Plus} onClick={() => openNew(date)} /></div>
     </main></div>
-    {editor && <LessonEditor key={`${editor.lesson?.id ?? 'new'}:${editor.start}`} {...editor} studentId={studentId} classId={classId} defaultTitle={classTitle} defaultStudents={classRoster} onClose={() => startTransition(() => setEditor(null))} onSaved={() => { startTransition(() => setEditor(null)); void mutate(); void mutateCache('/api/google/status') }} />}
+    {editor && <LessonEditor key={`${editor.lesson?.id ?? 'new'}:${editor.start}`} {...editor} studentId={studentId} onClose={() => startTransition(() => setEditor(null))} onSaved={() => { startTransition(() => setEditor(null)); void mutate(); void mutateCache('/api/google/status') }} onNotesSaved={() => void mutate()} />}
   </div>
 }

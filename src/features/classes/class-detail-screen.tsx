@@ -1,5 +1,4 @@
 'use client'
-import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -20,15 +19,9 @@ import { emptySchedule, scheduleBody, scheduleError, ScheduleFields, scheduleToF
 import { formatDate, formatSlot, todayInput } from './slot-form'
 import type { ClassDetail, ClassSlot } from './types'
 
-const LessonsCalendar = dynamic(() => import('@/features/students/lessons-calendar'), {
-  ssr: false,
-  loading: () => <div className="p-5"><Skeleton className="h-12 w-64" /><Skeleton className="mt-5 h-[70vh] w-full" /></div>,
-})
-
 const TABS = [
   { key: 'info', label: 'Thông tin' },
   { key: 'roster', label: 'Sổ học viên' },
-  { key: 'calendar', label: 'Lịch của lớp' },
 ] as const
 
 type TabKey = typeof TABS[number]['key']
@@ -264,10 +257,6 @@ export function ClassDetailScreen({ id }: { id: string }) {
         <p className="text-xs text-zinc-500 dark:text-zinc-400">Thêm hoặc bớt học viên áp cho mọi lịch lặp của lớp và các buổi chưa điểm danh. Buổi đã điểm danh được giữ nguyên. Mỗi học viên chỉ thuộc một lớp.</p>
         <StudentPicker key={detail.id} value={selectedStudents} onChange={setRosterIds} initial={detail.roster} availableForClassId={detail.id} />
       </section>}
-
-      {tab === 'calendar' && <div className="overflow-hidden rounded-xl bg-white ring-1 ring-border-default dark:bg-zinc-900">
-        <LessonsCalendar classId={detail.id} classTitle={detail.name} classRoster={detail.roster} basePath={`/classes/${detail.id}`} />
-      </div>}
     </div>
 
     {infoOpen && <ClassInfoModal key={detail.id} lessonClass={detail} submitting={submitting} onClose={() => setInfoOpen(false)} onSubmit={saveInfo} />}

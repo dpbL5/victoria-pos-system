@@ -15,7 +15,7 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin()
+    const auth = await requireAdmin()
 
     const fromParam = request.nextUrl.searchParams.get('from') ?? ''
     const toParam = request.nextUrl.searchParams.get('to') ?? ''
@@ -36,8 +36,12 @@ export async function GET(request: NextRequest) {
       classId: request.nextUrl.searchParams.get('classId') || undefined,
       status,
     })
-    const jobs = await repositories.calendarSync.list(rows.flatMap(l => [l.id, ...(l.seriesId ? [l.seriesId] : [])]))
-    const lessons = rows.map(l => ({ ...l, syncStatus: jobs.find(j => j.entityId === l.id)?.status ?? jobs.find(j => j.entityId === l.seriesId)?.status ?? 'PENDING' }))
+    // Trạng thái đồng bộ là của riêng connection người đang xem; chưa kết nối thì không gắn nhãn.
+    const connection = await repositories.calendarConnection.findByUser(auth.userId)
+    const jobs = connection ? await repositories.calendarSync.list(connection.id, rows.flatMap(l => [l.id, ...(l.seriesId ? [l.seriesId] : [])])) : []
+    const lessons = rows.map(l => connection
+      ? { ...l, syncStatus: jobs.find(j => j.entityId === l.id)?.status ?? jobs.find(j => j.entityId === l.seriesId)?.status ?? 'PENDING' }
+      : { ...l, syncStatus: undefined })
 
     return apiSuccess({ lessons, warning })
   } catch (error) {
