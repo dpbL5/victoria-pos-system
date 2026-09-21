@@ -31,7 +31,8 @@
 .lessons-calendar .fc-timegrid-slot-label-cushion { color: var(--color-text-tertiary, #71717a); font-size: 11px; }
 .lessons-calendar .fc-col-header-cell { background: var(--color-surface-secondary, #f8fafc); }
 .lessons-calendar .fc-col-header-cell-cushion { padding-block: .5rem; color: var(--color-text-secondary, #52525b); font-weight: 600; }
-.lessons-calendar .fc-scroller { scrollbar-color: var(--color-border-strong, #cbd5e1) transparent; scrollbar-width: thin; }
+.lessons-calendar .fc-scroller { scrollbar-width: none; -ms-overflow-style: none; }
+.lessons-calendar .fc-scroller::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .lessons-calendar .fc-timegrid-now-indicator-line { border-width: 2px 0 0; }
 @media (max-width: 767px) {
   .lessons-calendar-shell { height: calc(100dvh - 7rem); }
