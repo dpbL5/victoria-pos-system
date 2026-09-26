@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSWRConfig } from 'swr'
 import {
   ShieldCheck,
   Timer,
@@ -13,6 +14,7 @@ import { useToast } from '@/components/ui/toast'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { TodayShiftSkeleton } from './today-shift-skeleton'
+import { useApi } from '@/hooks/use-api'
 import { QuickActions } from './quick-actions'
 import { SellPickDialog } from './sell-pick-dialog'
 import { ShiftRail } from './shift-rail'
@@ -32,18 +34,21 @@ import type {
 
 type CheckInMode = 'WALK_IN' | 'MEMBER'
 
+const SHIFT_KEY = '/api/shifts?current=true&openOperational=true'
+const SESSIONS_KEY = '/api/sessions?status=ACTIVE&limit=50'
+const AUTH_KEY = '/api/auth/me'
+const PRODUCTS_KEY = '/api/products?isActive=true'
+const TOOLS_KEY = '/api/tools'
+
+function hasApiError(value: unknown) {
+  return !!value && typeof value === 'object' && 'success' in value && value.success === false
+}
+
 export function TodayShiftScreen() {
   const router = useRouter()
   const { success: notifySuccess, error: notifyError } = useToast()
+  const { mutate: mutateCache } = useSWRConfig()
 
-  const [shift, setShift] = useState<Shift | null>(null)
-  const [openOperationalShift, setOpenOperationalShift] = useState<Shift | null>(null)
-  const [sessions, setSessions] = useState<SessionRow[]>([])
-  const [products, setProducts] = useState<Product[]>([])
-  const [authUserId, setAuthUserId] = useState<string | null>(null)
-  const [authRole, setAuthRole] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const [openShiftDialog, setOpenShiftDialog] = useState(false)
@@ -56,66 +61,82 @@ export function TodayShiftScreen() {
   const [sellSession, setSellSession] = useState<SessionRow | null>(null)
   const [sellPickOpen, setSellPickOpen] = useState(false)
   const [retailOpen, setRetailOpen] = useState(false)
-  const [tools, setTools] = useState<{ id: string; name: string; quantity: number; isRequired: boolean }[]>([])
+  const [refreshError, setRefreshError] = useState('')
 
+  const shiftQuery = useApi<{ myShift: Shift | null; openShift: Shift | null }>(SHIFT_KEY)
+  const sessionsQuery = useApi<SessionRow[]>(SESSIONS_KEY)
+  const authQuery = useApi<{ userId: string; role: string }>(AUTH_KEY)
+  const shouldLoadProducts = !!checkoutSession || !!sellSession || retailOpen
+  const shouldLoadTools = closeShiftDialog || countToolsDialog
+  const productsQuery = useApi<Product[]>(shouldLoadProducts ? PRODUCTS_KEY : null, { revalidateOnMount: true })
+  const toolsQuery = useApi<{ id: string; name: string; quantity: number; isRequired: boolean }[]>(shouldLoadTools ? TOOLS_KEY : null, { revalidateOnMount: true })
+
+  const shift = shiftQuery.data?.success ? shiftQuery.data.data?.myShift ?? null : null
+  const openOperationalShift = shiftQuery.data?.success ? shiftQuery.data.data?.openShift ?? null : null
+  const sessions = sessionsQuery.data?.success ? sessionsQuery.data.data ?? [] : []
+  const products = productsQuery.data?.success ? productsQuery.data.data ?? [] : []
+  const tools = toolsQuery.data?.success ? toolsQuery.data.data ?? [] : []
+  const authUserId = authQuery.data?.success ? authQuery.data.data?.userId ?? null : null
+  const authRole = authQuery.data?.success ? authQuery.data.data?.role ?? null : null
+  const loading = shiftQuery.isLoading || sessionsQuery.isLoading || authQuery.isLoading
+  const error = refreshError
+    || shiftQuery.error?.message
+    || sessionsQuery.error?.message
+    || authQuery.error?.message
+    || (!shiftQuery.data?.success ? shiftQuery.data?.error : undefined)
+    || (!sessionsQuery.data?.success ? sessionsQuery.data?.error : undefined)
+    || (!authQuery.data?.success ? authQuery.data?.error : undefined)
+    || ''
+  const productsError = productsQuery.error?.message
+    ?? (!productsQuery.data?.success ? productsQuery.data?.error : undefined)
+    ?? ''
+  const toolsError = toolsQuery.error?.message
+    ?? (!toolsQuery.data?.success ? toolsQuery.data?.error : undefined)
+    ?? ''
+  const productsLoading = productsQuery.isLoading && !productsQuery.data
+  const toolsLoading = toolsQuery.isLoading && !toolsQuery.data
   const [, setTick] = useState(0)
   useEffect(() => {
     const id = window.setInterval(() => setTick((value) => value + 1), 1000)
     return () => window.clearInterval(id)
   }, [])
 
-  // ── Tải dữ liệu phụ (products/tools) không chặn màn hình ──
-  // Màn hình chính chỉ cần shift + sessions + auth. Products/tools chỉ dùng
-  // khi mở dialog (checkout/sell/close-shift) → tải sau, không kéo dài thời gian load.
-  const loadAuxData = useCallback(async () => {
-    try {
-      const [productData, toolsData] = await Promise.all([
-        apiJson<Product[]>('/api/products?isActive=true'),
-        apiJson<{ id: string; name: string; quantity: number; isRequired: boolean }[]>('/api/tools'),
-      ])
-      if (productData.success) setProducts(productData.data ?? [])
-      if (toolsData.success) setTools(toolsData.data ?? [])
-    } catch {
-      // Không chặn màn hình — khi mở dialog sẽ tự thử lại
-    }
-  }, [])
+  const refreshResources = useCallback(async (keys: string[]) => {
+    const results = await Promise.allSettled(keys.map((key) => Promise.resolve().then(() => mutateCache(key))))
+    return results.every((result) => result.status === 'fulfilled' && !hasApiError(result.value))
+  }, [mutateCache])
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const [shiftData, sessionData, authData] = await Promise.all([
-        apiJson<{ myShift: Shift | null; openShift: Shift | null }>('/api/shifts?current=true&openOperational=true'),
-        apiJson<SessionRow[]>('/api/sessions?status=ACTIVE&limit=50'),
-        apiJson<{ userId: string; role: string }>('/api/auth/me'),
-      ])
+  const retryProducts = useCallback(() => {
+    void productsQuery.mutate().catch(() => undefined)
+  }, [productsQuery.mutate])
 
-      if (!shiftData.success) throw new Error(shiftData.error || 'Không tải được ca làm')
-      if (!sessionData.success) throw new Error(sessionData.error || 'Không tải được phiên chơi')
-      if (!authData.success) throw new Error(authData.error || 'Không tải được thông tin đăng nhập')
+  const retryTools = useCallback(() => {
+    void toolsQuery.mutate().catch(() => undefined)
+  }, [toolsQuery.mutate])
 
-      setShift(shiftData.data?.myShift ?? null)
-      setOpenOperationalShift(shiftData.data?.openShift ?? null)
-      setSessions(sessionData.data ?? [])
-      setAuthUserId(authData.data?.userId ?? null)
-      setAuthRole(authData.data?.role ?? null)
-      // Tải products/tools sau — không chờ
-      void loadAuxData()
-    } catch (err) {
-      setError((err as Error).message || 'Lỗi kết nối máy chủ')
-    } finally {
-      setLoading(false)
-    }
-  }, [loadAuxData])
+  const refreshHome = useCallback(async () => {
+    setRefreshError('')
+    const refreshed = await refreshResources([SHIFT_KEY, SESSIONS_KEY, AUTH_KEY])
+    if (!refreshed) setRefreshError('Không làm mới được dữ liệu. Hãy thử tải lại.')
+  }, [refreshResources])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadData() }, [loadData])
+  const refreshAfterMutation = useCallback(async (keys: string[], message: string) => {
+    const refreshed = await refreshResources(keys)
+    setRefreshError(refreshed ? '' : message)
+    return refreshed
+  }, [refreshResources])
+
+  const updateSessions = useCallback((update: (current: SessionRow[]) => SessionRow[]) => {
+    void sessionsQuery.mutate((current) => current?.success
+      ? { ...current, data: update(current.data ?? []) }
+      : current, { revalidate: false })
+  }, [sessionsQuery.mutate])
 
   const { registerRefresh } = usePageRefresh()
 
   useEffect(() => {
-    return registerRefresh(() => void loadData())
-  }, [registerRefresh, loadData])
+    return registerRefresh(() => void refreshHome())
+  }, [registerRefresh, refreshHome])
 
   const activeWalkIns = sessions.filter((session) => session.customer?.type === 'WALK_IN').length
   const activeMembers = sessions.filter((session) => session.customer?.type === 'MEMBER').length
@@ -136,9 +157,9 @@ export function TodayShiftScreen() {
         notifyError(data.error || 'Không mở được ca')
         return
       }
-      notifySuccess(data.message || 'Đã mở hoặc tham gia ca')
       setOpenShiftDialog(false)
-      await loadData()
+      const refreshed = await refreshAfterMutation([SHIFT_KEY], 'Đã mở ca nhưng trạng thái chưa cập nhật. Hãy tải lại màn hình trước khi thao tác tiếp.')
+      notifySuccess(refreshed ? data.message || 'Đã mở hoặc tham gia ca' : 'Đã mở ca; trạng thái đang được làm mới.')
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -159,9 +180,9 @@ export function TodayShiftScreen() {
         notifyError(data.error || 'Không đóng được ca')
         return
       }
-      notifySuccess('Đã đóng ca')
       setCloseShiftDialog(false)
-      await loadData()
+      const refreshed = await refreshAfterMutation([SHIFT_KEY, SESSIONS_KEY], 'Đã đóng ca nhưng dữ liệu chưa cập nhật. Hãy tải lại màn hình.')
+      notifySuccess(refreshed ? 'Đã đóng ca' : 'Đã đóng ca; trạng thái đang được làm mới.')
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -174,14 +195,14 @@ export function TodayShiftScreen() {
     // chỉ revert nếu API thất bại.
     const pausedAt = new Date().toISOString()
     const previousPausedAt = session.pausedAt
-    setSessions((current) => current.map((s) => (
+    updateSessions((current) => current.map((s) => (
       s.id === session.id ? { ...s, pausedAt } : s
     )))
     setSubmitting(true)
     try {
       const data = await apiJson(`/api/sessions/${session.id}/pause`, jsonRequest({}))
       if (!data.success) {
-        setSessions((current) => current.map((s) => (
+        updateSessions((current) => current.map((s) => (
           s.id === session.id ? { ...s, pausedAt: previousPausedAt } : s
         )))
         notifyError(data.error || 'Không tạm dừng được')
@@ -189,7 +210,7 @@ export function TodayShiftScreen() {
       }
       notifySuccess('Đã cho phiên nghỉ')
     } catch {
-      setSessions((current) => current.map((s) => (
+      updateSessions((current) => current.map((s) => (
         s.id === session.id ? { ...s, pausedAt: previousPausedAt } : s
       )))
       notifyError('Lỗi kết nối máy chủ')
@@ -203,7 +224,7 @@ export function TodayShiftScreen() {
     // (server trả về pausedSeconds thật; chênh lệch chỉ vài giây, không đáng để flicker).
     const previousPausedAt = session.pausedAt
     const previousTotalPaused = session.totalPausedSeconds ?? 0
-    setSessions((current) => current.map((s) => {
+    updateSessions((current) => current.map((s) => {
       if (s.id !== session.id) return s
       const optimisticPausedSeconds = previousPausedAt
         ? Math.max(0, Math.floor((Date.now() - new Date(previousPausedAt).getTime()) / 1000))
@@ -214,7 +235,7 @@ export function TodayShiftScreen() {
     try {
       const data = await apiJson<{ pausedSeconds?: number }>(`/api/sessions/${session.id}/resume`, jsonRequest({}))
       if (!data.success) {
-        setSessions((current) => current.map((s) => (
+        updateSessions((current) => current.map((s) => (
           s.id === session.id
             ? { ...s, pausedAt: previousPausedAt, totalPausedSeconds: previousTotalPaused }
             : s
@@ -224,14 +245,14 @@ export function TodayShiftScreen() {
       }
       // Reconciliation: thay optimistic bằng pausedSeconds thật từ server
       const resumedSeconds = data.data?.pausedSeconds ?? 0
-      setSessions((current) => current.map((s) => (
+      updateSessions((current) => current.map((s) => (
         s.id === session.id
           ? { ...s, pausedAt: null, totalPausedSeconds: previousTotalPaused + resumedSeconds }
           : s
       )))
       notifySuccess('Đã tiếp tục phiên')
     } catch {
-      setSessions((current) => current.map((s) => (
+      updateSessions((current) => current.map((s) => (
         s.id === session.id
           ? { ...s, pausedAt: previousPausedAt, totalPausedSeconds: previousTotalPaused }
           : s
@@ -246,7 +267,7 @@ export function TodayShiftScreen() {
   // Không reload toàn bộ — chỉ cập nhật state cục bộ cho đúng player để
   // tab đó dừng/tiếp tục ngay, các tab khác giữ nguyên.
   const updatePlayerInSession = (sessionId: string, playerId: string, updater: (p: NonNullable<NonNullable<SessionRow['pricingGroups']>[number]['players']>[number]) => NonNullable<NonNullable<SessionRow['pricingGroups']>[number]['players']>[number]) => {
-    setSessions((current) => current.map((s) => {
+    updateSessions((current) => current.map((s) => {
       if (s.id !== sessionId) return s
       return {
         ...s,
@@ -262,7 +283,7 @@ export function TodayShiftScreen() {
     // Optimistic update — flip pausedAt trước khi gọi API để UI react tức thì.
     const pausedAt = new Date().toISOString()
     let previousPausedAt: string | null | undefined
-    setSessions((current) => current.map((s) => {
+    updateSessions((current) => current.map((s) => {
       if (s.id !== session.id) return s
       return {
         ...s,
@@ -393,6 +414,7 @@ export function TodayShiftScreen() {
             tone="danger"
             title="Không tải được dữ liệu"
             description={error}
+            action={<Button variant="secondary" size="sm" onClick={() => void refreshHome()}>Thử lại</Button>}
           />
         )}
 
@@ -525,6 +547,9 @@ export function TodayShiftScreen() {
         open={closeShiftDialog}
         shift={shift}
         tools={tools}
+        toolsLoading={toolsLoading}
+        toolsError={toolsError}
+        onRetryTools={retryTools}
         submitting={submitting}
         onClose={() => setCloseShiftDialog(false)}
         onSubmit={handleCloseShift}
@@ -534,13 +559,16 @@ export function TodayShiftScreen() {
         open={countToolsDialog}
         shift={shift}
         tools={tools}
+        toolsLoading={toolsLoading}
+        toolsError={toolsError}
+        onRetryTools={retryTools}
         hasCounted={hasCountedTools}
         submitting={submitting}
         setSubmitting={setSubmitting}
         onClose={() => setCountToolsDialog(false)}
         onDone={async () => {
           setCountToolsDialog(false)
-          await loadData()
+          await refreshAfterMutation([SHIFT_KEY], 'Đã lưu số dụng cụ nhưng ca chưa cập nhật. Hãy tải lại màn hình.')
         }}
       />
 
@@ -554,7 +582,7 @@ export function TodayShiftScreen() {
         onClose={() => setCheckInDialog(false)}
         onDone={async () => {
           setCheckInDialog(false)
-          await loadData()
+          await refreshAfterMutation([SESSIONS_KEY], 'Đã check-in thành công nhưng danh sách phiên chưa cập nhật. Hãy tải lại màn hình.')
         }}
       />
 
@@ -562,27 +590,39 @@ export function TodayShiftScreen() {
         session={checkoutSession}
         frozenAt={checkoutFrozenAt}
         products={products}
+        productsLoading={productsLoading}
+        productsError={productsError}
+        onRetryProducts={retryProducts}
+        onSellItemsChanged={() => refreshAfterMutation(
+          [SESSIONS_KEY, PRODUCTS_KEY],
+          'Đã bỏ dòng bán kèm nhưng danh sách chưa cập nhật. Hãy tải lại màn hình.'
+        )}
         shiftReady={shiftReady}
         submitting={submitting}
         setSubmitting={setSubmitting}
         onClose={() => { setCheckoutSession(null); setCheckoutFrozenAt(null) }}
         onDone={async () => {
+          const refreshed = await refreshAfterMutation([SESSIONS_KEY, PRODUCTS_KEY], 'Đã ghi nhận thanh toán nhưng dữ liệu chưa cập nhật. Không thu lại; hãy tải lại màn hình.')
           setCheckoutSession(null)
           setCheckoutFrozenAt(null)
-          await loadData()
+          return refreshed
         }}
       />
 
       <SellDialog
         session={sellSession}
         products={products}
+        productsLoading={productsLoading}
+        productsError={productsError}
+        onRetryProducts={retryProducts}
         shiftReady={shiftReady}
         submitting={submitting}
         setSubmitting={setSubmitting}
         onClose={() => setSellSession(null)}
         onDone={async () => {
+          const refreshed = await refreshAfterMutation([SESSIONS_KEY, PRODUCTS_KEY], 'Đã thêm hàng vào phiên nhưng danh sách chưa cập nhật. Hãy tải lại màn hình.')
           setSellSession(null)
-          await loadData()
+          return refreshed
         }}
       />
 
@@ -599,17 +639,20 @@ export function TodayShiftScreen() {
       <RetailDialog
         open={retailOpen}
         products={products}
+        productsLoading={productsLoading}
+        productsError={productsError}
+        onRetryProducts={retryProducts}
         shiftReady={!!shift}
         submitting={submitting}
         setSubmitting={setSubmitting}
         onClose={() => setRetailOpen(false)}
         onDone={async () => {
+          const refreshed = await refreshAfterMutation([PRODUCTS_KEY], 'Đã ghi nhận giao dịch nhưng danh sách hàng chưa cập nhật. Không thu lại; hãy tải lại màn hình.')
           setRetailOpen(false)
-          await loadData()
+          return refreshed
         }}
       />
 
     </div>
   )
 }
-

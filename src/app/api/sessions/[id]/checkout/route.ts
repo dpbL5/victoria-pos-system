@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { requireMutationAuth } from '@/lib/shared/auth'
+import { withApiDiagnostics } from '@/lib/infrastructure/api-diagnostics'
 import { checkoutSessionSchema } from '@/lib/sessions'
 import { checkOut, mapCheckoutError } from '@/lib/sessions'
 import {
@@ -9,7 +10,7 @@ import {
   ERR_CSRF,
 } from '@/lib/infrastructure/api-helpers'
 
-export async function POST(
+async function postCheckout(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -49,3 +50,5 @@ export async function POST(
     return apiError({ code: 'SERVER_ERROR', message: 'Lỗi máy chủ', status: 500 })
   }
 }
+
+export const POST = withApiDiagnostics('POST /api/sessions/[id]/checkout', postCheckout)

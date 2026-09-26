@@ -58,6 +58,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     },
     shift: {
       findOpenForStaff: vi.fn(async () => ({ id: 'shift-1' }) as never),
+      findOpenIdForStaff: vi.fn(async () => ({ id: 'shift-1' })),
       findOpenOperational: vi.fn(),
       findByIdForClose: vi.fn(),
       calculateExpectedCash: vi.fn(),
@@ -77,6 +78,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     pricing: {
       findApplicableRule: vi.fn(),
       findByIdWithTiers: vi.fn(),
+      findManyByIdsWithTiers: vi.fn(async () => []),
       getApplicableRules: vi.fn(),
       countApplicable: vi.fn(),
       countAll: vi.fn(),

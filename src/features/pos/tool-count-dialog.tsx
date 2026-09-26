@@ -22,6 +22,9 @@ export function ToolCountDialog({
   open,
   shift,
   tools,
+  toolsLoading,
+  toolsError,
+  onRetryTools,
   hasCounted,
   submitting,
   setSubmitting,
@@ -31,6 +34,9 @@ export function ToolCountDialog({
   open: boolean
   shift: Shift | null
   tools: ToolInfo[]
+  toolsLoading: boolean
+  toolsError: string
+  onRetryTools: () => void
   hasCounted: boolean
   submitting: boolean
   setSubmitting: (value: boolean) => void
@@ -90,7 +96,7 @@ export function ToolCountDialog({
           variant="primary"
           size="lg"
           fullWidth
-          disabled={submitting || !shift || hasCounted}
+          disabled={submitting || toolsLoading || !!toolsError || !shift || hasCounted}
           onClick={() => void handleSubmit()}
         >
           {hasCounted ? 'Đã đếm dụng cụ' : submitting ? 'Đang lưu...' : 'Lưu số dụng cụ'}
@@ -113,7 +119,14 @@ export function ToolCountDialog({
           </div>
         ) : (
           <>
-            {tools.length === 0 ? (
+            {toolsLoading ? (
+              <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">Đang tải dụng cụ...</p>
+            ) : toolsError ? (
+              <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                <p>Không tải được danh sách dụng cụ: {toolsError}</p>
+                <button type="button" className="mt-2 font-medium underline" onClick={onRetryTools}>Thử lại</button>
+              </div>
+            ) : tools.length === 0 ? (
               <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
                 Chưa có dụng cụ nào được khai báo.
               </p>

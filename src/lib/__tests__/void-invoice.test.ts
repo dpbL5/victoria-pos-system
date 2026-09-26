@@ -72,6 +72,7 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
     customer: { findById: vi.fn(), findByIdIncludingDeleted: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), softDelete: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), findByPhone: vi.fn(), countWalkInsBetween: vi.fn() },
     shift: {
       findOpenForStaff: vi.fn(),
+      findOpenIdForStaff: vi.fn(),
       findOpenOperational: vi.fn(),
       findByIdForClose: vi.fn(),
       calculateExpectedCash: vi.fn(),
@@ -91,6 +92,7 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
     pricing: {
       findApplicableRule: vi.fn(),
       findByIdWithTiers: vi.fn(),
+      findManyByIdsWithTiers: vi.fn(async () => []),
       getApplicableRules: vi.fn(),
       countApplicable: vi.fn(),
       countAll: vi.fn(),

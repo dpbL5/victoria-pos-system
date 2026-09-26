@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { requireMutationAuth } from '@/lib/shared/auth'
+import { withApiDiagnostics } from '@/lib/infrastructure/api-diagnostics'
 import { isAdminOnly } from '@/lib/shared/roles'
 import { renewMembership, mapRenewMembershipError, renewMembershipSchema } from '@/lib/memberships'
 import {
@@ -9,7 +10,7 @@ import {
   ERR_CSRF,
 } from '@/lib/infrastructure/api-helpers'
 
-export async function POST(request: NextRequest) {
+async function postMembershipRenewal(request: NextRequest) {
   try {
     const auth = await requireMutationAuth(request)
 
@@ -47,3 +48,5 @@ export async function POST(request: NextRequest) {
     return apiError({ code: 'SERVER_ERROR', message: 'Lỗi máy chủ', status: 500 })
   }
 }
+
+export const POST = withApiDiagnostics('POST /api/memberships/renew', postMembershipRenewal)

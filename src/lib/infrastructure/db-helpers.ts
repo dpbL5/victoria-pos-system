@@ -4,6 +4,7 @@ import { createRepositories, type Repositories } from './repositories'
 import type { DomainError, Result } from '@/lib/shared/result'
 import { ok, err } from '@/lib/shared/result'
 import type { Prisma } from '@/generated/prisma/client'
+import { startApiTransaction } from './api-diagnostics'
 
 /**
  * RollbackSignal — ném bên trong $transaction callback để trigger rollback.
@@ -33,16 +34,18 @@ export async function runInTransaction<T>(
   work: (repos: Repositories) => Promise<T>,
   options?: { isolationLevel?: Prisma.TransactionIsolationLevel; timeout?: number }
 ): Promise<Result<T>> {
+  const timing = startApiTransaction()
   try {
+    const callback = (tx: Prisma.TransactionClient) =>
+      timing.measureCallback(() => work(createRepositories(tx)))
     const value = options
-      ? await prisma.$transaction(
-          async (tx) => work(createRepositories(tx)),
-          options
-        )
-      : await prisma.$transaction(async (tx) => work(createRepositories(tx)))
+      ? await prisma.$transaction(callback, options)
+      : await prisma.$transaction(callback)
     return ok(value)
   } catch (error) {
     if (error instanceof RollbackSignal) return err(error.error.code, error.error.detail)
     throw error
+  } finally {
+    timing.finish()
   }
 }

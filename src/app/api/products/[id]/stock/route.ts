@@ -30,7 +30,7 @@ export async function POST(
       return apiError({ code: 'VALIDATION', message: 'Nhập kho phải có số lượng lớn hơn 0', status: 400 })
     }
 
-    const openShift = await repositories.shift.findOpenForStaff(auth.userId)
+    const openShift = await repositories.shift.findOpenIdForStaff(auth.userId)
 
     const result = await applyStockMovement({
       productId: id,

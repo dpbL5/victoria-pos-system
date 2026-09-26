@@ -1,9 +1,10 @@
 // ── Prisma Client singleton (Prisma 7 + PostgreSQL) ─────
 import { PrismaClient } from "../../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { recordApiSqlQuery } from './api-diagnostics'
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+  prisma: PrismaClient<'query'> | undefined;
 };
 
 function getSchemaFromUrl(url: string): string | undefined {
@@ -36,7 +37,7 @@ function isPgBouncerUrl(url: string): boolean {
   }
 }
 
-function createPrismaClient(): PrismaClient {
+function createPrismaClient(): PrismaClient<'query'> {
   const dbUrl = process.env.DATABASE_URL!;
   const schema = getSchemaFromUrl(dbUrl);
   const usePgBouncer = isPgBouncerUrl(dbUrl);
@@ -67,7 +68,15 @@ function createPrismaClient(): PrismaClient {
     { schema }
   );
 
-  return new PrismaClient({ adapter });
+  const diagnosticsEnabled = process.env.API_PERF_SQL_DIAGNOSTICS === '1'
+  const client = new PrismaClient<'query'>({
+    adapter,
+    ...(diagnosticsEnabled ? { log: [{ level: 'query', emit: 'event' }] } : {}),
+  })
+  if (diagnosticsEnabled) {
+    client.$on('query', (event) => recordApiSqlQuery(event.duration))
+  }
+  return client
 }
 
 // ── Singleton: tái sử dụng PrismaClient giữa các lần HMR để tránh

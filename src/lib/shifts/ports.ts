@@ -25,6 +25,8 @@ export interface CloseShiftData {
 export interface ShiftRepository {
   /** Ca mở mà nhân viên đang tham gia (mở bởi staffId hoặc participant chưa rời ca) */
   findOpenForStaff(staffId: string): Promise<OpenShiftDetail | null>
+  /** Chỉ lấy ID ca mở cho nghiệp vụ */
+  findOpenIdForStaff(staffId: string): Promise<{ id: string } | null>
   /** Ca quầy đang mở (bất kỳ nhân viên nào) */
   findOpenOperational(): Promise<OpenShiftDetail | null>
   /** Shift + participants đang hoạt động — dùng cho closeShift check quyền */

@@ -13,6 +13,9 @@ import type { Product, SessionRow } from './types'
 export function SellDialog({
   session,
   products,
+  productsLoading,
+  productsError,
+  onRetryProducts,
   shiftReady,
   submitting,
   setSubmitting,
@@ -21,11 +24,14 @@ export function SellDialog({
 }: {
   session: SessionRow | null
   products: Product[]
+  productsLoading: boolean
+  productsError: string
+  onRetryProducts: () => void
   shiftReady: boolean
   submitting: boolean
   setSubmitting: (value: boolean) => void
   onClose: () => void
-  onDone: () => Promise<void>
+  onDone: () => Promise<boolean | void>
 }) {
   const { success: notifySuccess, error: notifyError } = useToast()
   const [cart, setCart] = useState<Record<string, number>>({})
@@ -87,8 +93,10 @@ export function SellDialog({
         return
       }
 
-      notifySuccess(`Đã thêm ${money(grandTotal)} vào phiên`)
-      await onDone()
+      const refreshed = await onDone()
+      notifySuccess(refreshed === false
+        ? 'Đã thêm hàng vào phiên; danh sách chưa cập nhật. Hãy tải lại màn hình.'
+        : `Đã thêm ${money(grandTotal)} vào phiên`)
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -108,7 +116,7 @@ export function SellDialog({
           variant="primary"
           size="lg"
           fullWidth
-          disabled={submitting || !shiftReady || cartLines.length === 0}
+          disabled={submitting || productsLoading || !!productsError || !shiftReady || cartLines.length === 0}
           onClick={handleSell}
         >
           {submitting ? 'Đang xử lý...' : `Thêm vào phiên ${money(grandTotal)}`}
@@ -125,7 +133,14 @@ export function SellDialog({
               </span>
             </div>
             <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-              {products.length === 0 ? (
+              {productsLoading ? (
+                <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">Đang tải danh sách sản phẩm...</p>
+              ) : productsError ? (
+                <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                  <p>Không tải được sản phẩm: {productsError}</p>
+                  <button type="button" className="mt-2 font-medium underline" onClick={onRetryProducts}>Thử lại</button>
+                </div>
+              ) : products.length === 0 ? (
                 <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
                   Chưa có sản phẩm hoặc dịch vụ.
                 </p>

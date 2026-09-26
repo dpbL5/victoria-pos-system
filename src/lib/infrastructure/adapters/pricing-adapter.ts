@@ -30,6 +30,15 @@ export function createPricingRepository(store: PricingStore): PricingRepository 
       return rule
     },
 
+    async findManyByIdsWithTiers(ruleIds: string[]): Promise<PricingRuleWithTiers[]> {
+      const ids = Array.from(new Set(ruleIds))
+      if (ids.length === 0) return []
+      return store.pricingRule.findMany({
+        where: { id: { in: ids } },
+        include: { tiers: { orderBy: { minHours: 'asc' } } },
+      })
+    },
+
     async getApplicableRules(at: Date) {
       return store.pricingRule.findMany({
         where: pricingRuleWhere(getVnHour(at), getDayType(at), at),

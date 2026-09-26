@@ -71,13 +71,15 @@ export async function sellItems(
 
   const result = await runInTransaction(async (tx) => {
     // ── Kiểm tra ca làm trong transaction để tránh TOCTOU race ──
-    const openShift = await tx.shift.findOpenForStaff(staffId)
+    const openShift = await tx.shift.findOpenIdForStaff(staffId)
     if (!openShift) fail('SHIFT_REQUIRED')
 
     // ── Ghi dòng bán kèm tạm (chưa phải hóa đơn) + trừ kho ngay ──
+    const latestProducts = await tx.product.findManyByIds(productIds)
+    const latestProductsById = new Map(latestProducts.map((product) => [product.id, product]))
     for (const line of lines) {
-      const latestProduct = await tx.product.findByIdForSale(line.productId)
-      if (!latestProduct || !latestProduct.isActive) {
+      const latestProduct = latestProductsById.get(line.productId)
+      if (!latestProduct) {
         fail('PRODUCT_UNAVAILABLE')
       }
 
@@ -158,7 +160,7 @@ export async function removeSellItems(
   }
 
   const result = await runInTransaction(async (tx) => {
-    const openShift = await tx.shift.findOpenForStaff(staffId)
+    const openShift = await tx.shift.findOpenIdForStaff(staffId)
     if (!openShift) fail('SHIFT_REQUIRED')
 
     // Chỉ xoá các dòng thuộc đúng phiên này

@@ -35,7 +35,7 @@ export async function registerMember(
   // Validation trước transaction → return err
   const [plan, openShift] = await Promise.all([
     deps.membershipPlan.findById(planId),
-    deps.shift.findOpenForStaff(staffId),
+    deps.shift.findOpenIdForStaff(staffId),
   ])
   if (!openShift) return err('SHIFT_REQUIRED')
   if (!plan || !plan.isActive) return err('PLAN_NOT_FOUND')

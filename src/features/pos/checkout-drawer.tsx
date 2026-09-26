@@ -176,6 +176,10 @@ export function CheckoutDrawer({
   session,
   frozenAt,
   products,
+  productsLoading,
+  productsError,
+  onRetryProducts,
+  onSellItemsChanged,
   shiftReady,
   submitting,
   setSubmitting,
@@ -185,11 +189,15 @@ export function CheckoutDrawer({
   session: SessionRow | null;
   frozenAt: string | null;
   products: Product[];
+  productsLoading: boolean;
+  productsError: string;
+  onRetryProducts: () => void;
+  onSellItemsChanged: () => Promise<boolean>;
   shiftReady: boolean;
   submitting: boolean;
   setSubmitting: (value: boolean) => void;
   onClose: () => void;
-  onDone: () => Promise<void>;
+  onDone: () => Promise<boolean | void>;
 }) {
   const { success: notifySuccess, error: notifyError } = useToast();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
@@ -209,6 +217,7 @@ export function CheckoutDrawer({
   // Luồng chọn người + bảng giá thống nhất
   const [pickerGroups, setPickerGroups] = useState<PickerGroup[]>([]);
   const nextGroupKey = useRef(0);
+  const lastPreviewSessionId = useRef<string | null>(null);
   // Legacy: session cũ không có player rows — giữ stepper số người như trước
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [checkoutPlayerCount, setCheckoutPlayerCount] = useState(1);
@@ -413,14 +422,18 @@ export function CheckoutDrawer({
     if (!session) {
       setPlayQuote(null);
       setQuoteError("");
+      lastPreviewSessionId.current = null;
       return;
     }
 
     let cancelled = false;
+    const controller = new AbortController();
+    const delay = lastPreviewSessionId.current === session.id ? 250 : 0;
+    lastPreviewSessionId.current = session.id;
     setPlayQuote(null);
+    setQuoteLoading(true);
+    setQuoteError("");
     const loadQuote = async () => {
-      setQuoteLoading(true);
-      setQuoteError("");
       try {
         const params = new URLSearchParams();
         if (promotionRuleId) params.set("promotionRuleId", promotionRuleId);
@@ -445,25 +458,28 @@ export function CheckoutDrawer({
         const qs = params.toString();
         const data = await apiJson<PlayTimeQuote>(
           `/api/sessions/${session.id}/checkout-preview${qs ? `?${qs}` : ""}`,
+          { signal: controller.signal },
         );
         if (!data.success || !data.data) {
           throw new Error(data.error || "Không tính được tiền giờ chơi");
         }
         if (!cancelled) setPlayQuote(data.data);
       } catch (quoteLoadError) {
-        if (!cancelled)
+        if (!cancelled && !controller.signal.aborted)
           setQuoteError(
             (quoteLoadError as Error).message ||
               "Không tính được tiền giờ chơi",
           );
       } finally {
-        if (!cancelled) setQuoteLoading(false);
+        if (!cancelled && !controller.signal.aborted) setQuoteLoading(false);
       }
     };
 
-    void loadQuote();
+    const timer = window.setTimeout(() => void loadQuote(), delay);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
+      controller.abort();
     };
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [
@@ -686,6 +702,10 @@ export function CheckoutDrawer({
         notifyError(data.error || "Không bỏ được dòng bán kèm");
         return;
       }
+      const refreshed = await onSellItemsChanged();
+      if (!refreshed) {
+        notifyError("Đã bỏ dòng bán kèm nhưng danh sách chưa cập nhật. Không thao tác lại; hãy tải lại màn hình.");
+      }
       setQuoteReloadKey((k) => k + 1);
     } catch {
       notifyError("Lỗi kết nối máy chủ");
@@ -754,8 +774,10 @@ export function CheckoutDrawer({
         return;
       }
 
-      notifySuccess(`Đã thu ${money(data.data?.grandTotal ?? grandTotal)}`);
-      await onDone();
+      const refreshed = await onDone();
+      notifySuccess(refreshed === false
+        ? "Đã ghi nhận thanh toán; dữ liệu chưa cập nhật. Không thu lại, hãy tải lại màn hình."
+        : `Đã thu ${money(data.data?.grandTotal ?? grandTotal)}`);
     } catch {
       notifyError("Lỗi kết nối máy chủ");
     } finally {
@@ -865,6 +887,7 @@ export function CheckoutDrawer({
                   !shiftReady ||
                   quoteLoading ||
                   !!quoteError ||
+                  (!!productsError && Object.values(cart).some((quantity) => quantity > 0)) ||
                   !playQuote ||
                   pricingBlocked ||
                   freshMultiGroupPartial ||
@@ -1077,7 +1100,9 @@ export function CheckoutDrawer({
                 products={products.filter(
                   (product) => product.type === "SERVICE" || product.stockQuantity > 0,
                 )}
-                loading={false}
+                loading={productsLoading}
+                error={productsError}
+                onRetry={onRetryProducts}
                 onAdd={(product) => changeCart(product, 1)}
                 onDecrease={(productId) => {
                   const product = products.find((item) => item.id === productId);

@@ -3,6 +3,7 @@ import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
 import { checkIn, mapCheckInError } from '@/lib/sessions'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { createSessionSchema } from '@/lib/sessions'
+import { withApiDiagnostics } from '@/lib/infrastructure/api-diagnostics'
 import {
   apiSuccess,
   apiError,
@@ -11,7 +12,7 @@ import {
   ERR_CSRF,
 } from '@/lib/infrastructure/api-helpers'
 
-export async function GET(request: NextRequest) {
+async function getSessions(request: NextRequest) {
   try {
     await requireAuth()
 
@@ -48,6 +49,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export const GET = withApiDiagnostics('GET /api/sessions', getSessions)
+
 function clampPositiveInt(
   value: string | null,
   fallback: number,
@@ -59,7 +62,7 @@ function clampPositiveInt(
   return Math.min(max, Math.max(min, parsed))
 }
 
-export async function POST(request: NextRequest) {
+async function postSession(request: NextRequest) {
   try {
     const auth = await requireMutationAuth(request)
 
@@ -88,3 +91,5 @@ export async function POST(request: NextRequest) {
     return apiError({ code: 'SERVER_ERROR', message: 'Lỗi máy chủ', status: 500 })
   }
 }
+
+export const POST = withApiDiagnostics('POST /api/sessions', postSession)

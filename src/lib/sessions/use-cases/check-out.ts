@@ -9,7 +9,7 @@ import {
   toPromotionMetadata,
   type PromotionSnapshot,
 } from '@/lib/promotion-calculation'
-import { calculatePlayerPrice, calculateSessionPrice, calculateSessionPriceFromLoaded, type PendingGroupPricing, type PricingResult } from '../pricing-engine'
+import { calculatePlayerPrice, calculateSessionPriceFromLoaded, type PendingGroupPricing, type PricingResult } from '../pricing-engine'
 import { generateInvoiceNo } from '@/lib/invoicing'
 import { getDayType, getVnDay, getVnHour } from '@/lib/shared/utils'
 import { SETTING_KEYS } from '@/lib/settings'
@@ -404,7 +404,7 @@ export async function checkOut(
         0,
         pausedSeconds
       )
-    : await calculateSessionPrice(deps, sessionId, endTime, selectedPromotion, targetGroupId, undefined, 0, pausedSeconds)
+    : await calculateSessionPriceFromLoaded(deps, session, endTime, selectedPromotion, targetGroupId, undefined, 0, pausedSeconds)
   if (!pricingResult.ok) return pricingResult
   const pricing = pricingResult.value
   if (pricing.membershipExpired) {
@@ -617,11 +617,15 @@ async function resolveCheckoutPricing(
       return err('GROUP_PLAYER_COUNT_MISMATCH')
     }
 
+    const rules = await deps.pricing.findManyByIdsWithTiers(
+      input.groups.map((group) => group.pricingRuleId)
+    )
+    const rulesById = new Map(rules.map((rule) => [rule.id, rule]))
     const pendingAssignments: PendingAssignment[] = []
     const pendingGroups: PendingGroupPricing[] = []
     for (let i = 0; i < input.groups.length; i += 1) {
       const groupInput = input.groups[i]
-      const rule = await deps.pricing.findByIdWithTiers(groupInput.pricingRuleId)
+      const rule = rulesById.get(groupInput.pricingRuleId)
       if (!rule) return err('PRICING_RULE_NOT_FOUND')
       if (!isEffective(rule)) return err('PRICING_RULE_NOT_EFFECTIVE')
 
@@ -646,7 +650,7 @@ async function resolveCheckoutPricing(
   }
 
   if (input.pricingRuleId) {
-    const rule = await deps.pricing.findByIdWithTiers(input.pricingRuleId)
+    const [rule] = await deps.pricing.findManyByIdsWithTiers([input.pricingRuleId])
     if (!rule) return err('PRICING_RULE_NOT_FOUND')
     if (!isEffective(rule)) return err('PRICING_RULE_NOT_EFFECTIVE')
 
@@ -754,7 +758,7 @@ export async function runCheckOutTx(
     invoiceGrandTotal,
   } = state
 
-  const openShift = await tx.shift.findOpenForStaff(staffId)
+  const openShift = await tx.shift.findOpenIdForStaff(staffId)
   if (!openShift) fail('SHIFT_REQUIRED')
 
   const shiftId = openShift.id
@@ -1028,10 +1032,13 @@ export async function runCheckOutTx(
     }
   }
 
+  const currentProducts = await tx.product.findManyByIds(productIds)
+  const currentProductsById = new Map(currentProducts.map((product) => [product.id, product]))
+
   // ── Tạo InvoiceItem cho các dòng bán kèm đã chờ thu (không trừ kho — đã trừ lúc bán kèm) ──
   for (const sellLine of sellItemLines) {
-    const sellProduct = await tx.product.findByIdForSale(sellLine.productId)
-    if (!sellProduct || !sellProduct.isActive) {
+    const sellProduct = currentProductsById.get(sellLine.productId)
+    if (!sellProduct) {
       fail('PRODUCT_UNAVAILABLE')
     }
     await tx.billing.createInvoiceItem({
@@ -1048,8 +1055,8 @@ export async function runCheckOutTx(
   }
 
   for (const line of checkoutLines) {
-    const latestProduct = await tx.product.findByIdForSale(line.productId)
-    if (!latestProduct || !latestProduct.isActive) {
+    const latestProduct = currentProductsById.get(line.productId)
+    if (!latestProduct) {
       fail('PRODUCT_UNAVAILABLE')
     }
 

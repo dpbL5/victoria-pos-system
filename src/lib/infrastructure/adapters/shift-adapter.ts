@@ -6,6 +6,7 @@ import {
   calculateExpectedCash as calculateExpectedCashHelper,
   findOpenOperationalShift,
   findOpenShiftForStaff,
+  findOpenShiftIdForStaff,
   shiftWithAllParticipantsInclude,
   shiftWithParticipantsInclude,
 } from '@/lib/shifts'
@@ -16,6 +17,7 @@ type ShiftAdapterStore = ShiftStore & Pick<Prisma.TransactionClient, 'payment'>
 export function createShiftRepository(store: ShiftAdapterStore): ShiftRepository {
   return {
     findOpenForStaff: (staffId) => findOpenShiftForStaff(store, staffId),
+    findOpenIdForStaff: (staffId) => findOpenShiftIdForStaff(store, staffId),
     findOpenOperational: () => findOpenOperationalShift(store),
 
     async findByIdForClose(shiftId) {

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/shared/auth'
+import { withApiDiagnostics } from '@/lib/infrastructure/api-diagnostics'
 import { SETTING_KEYS } from '@/lib/settings'
-import { calculatePlayerPrice, calculateSessionPrice, calculateSessionPriceFromLoaded, groupPausedSeconds, playerPausedSeconds, sessionPauseSeconds } from '@/lib/sessions'
+import { calculatePlayerPrice, calculateSessionPriceFromLoaded, groupPausedSeconds, playerPausedSeconds, sessionPauseSeconds } from '@/lib/sessions'
 import type { PendingGroupPricing } from '@/lib/sessions'
 import { repositories } from '@/lib/infrastructure/repositories'
 import type { PlayTimeQuote, PricingRuleSnapshot } from '@/types'
 import { getDayType, getVnDay, getVnHour } from '@/lib/shared/utils'
 
-export async function GET(
+async function getCheckoutPreview(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -88,6 +89,14 @@ export async function GET(
         } catch { /* groups không hợp lệ → để null, fallback theo pricingRuleId/auto */ }
       }
 
+      const ruleIds = rawGroups
+        ? rawGroups.map((group) => group.pricingRuleId)
+        : pricingRuleIdParam ? [pricingRuleIdParam] : []
+      const rules = ruleIds.length > 0
+        ? await repositories.pricing.findManyByIdsWithTiers(ruleIds)
+        : []
+      const rulesById = new Map(rules.map((rule) => [rule.id, rule]))
+
       if (rawGroups) {
         const totalPlayers = rawGroups.reduce((sum, g) => sum + g.playerCount, 0)
         // Thu trước (subset) cho phép totalPlayers < session.playerCount — chỉ chặn khi vượt quá
@@ -98,7 +107,7 @@ export async function GET(
           )
         }
         for (const g of rawGroups) {
-          const rule = await repositories.pricing.findByIdWithTiers(g.pricingRuleId)
+          const rule = rulesById.get(g.pricingRuleId)
           if (!rule) {
             return NextResponse.json({ success: false, error: 'Không tìm thấy bảng giá' }, { status: 409 })
           }
@@ -108,7 +117,7 @@ export async function GET(
           resolved.push({ playerCount: g.playerCount, pricingRuleId: rule.id, playerIds: g.playerIds, snapshot: snapshotOf(rule) })
         }
       } else if (pricingRuleIdParam) {
-        const rule = await repositories.pricing.findByIdWithTiers(pricingRuleIdParam)
+        const rule = rulesById.get(pricingRuleIdParam)
         if (!rule) {
           return NextResponse.json({ success: false, error: 'Không tìm thấy bảng giá' }, { status: 409 })
         }
@@ -164,7 +173,7 @@ export async function GET(
           pendingIndex,
           pausedSeconds
         )
-      : await calculateSessionPrice(repositories, id, endTime, promotion, pricingGroupId ?? undefined, undefined, 0, pausedSeconds)
+      : await calculateSessionPriceFromLoaded(repositories, session, endTime, promotion, pricingGroupId ?? undefined, undefined, 0, pausedSeconds)
 
     if (!pricingResult.ok) {
       return pricingResult.error.code === 'PRICING_RULE_NOT_FOUND'
@@ -420,3 +429,5 @@ export async function GET(
     return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
   }
 }
+
+export const GET = withApiDiagnostics('GET /api/sessions/[id]/checkout-preview', getCheckoutPreview)

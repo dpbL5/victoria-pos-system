@@ -37,6 +37,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     customer: { findById: vi.fn(), findByIdIncludingDeleted: vi.fn(), findByIdWithCount: vi.fn(), create: vi.fn(), findMany: vi.fn(), update: vi.fn(), softDelete: vi.fn(), addSpend: vi.fn(), recordPlay: vi.fn(), findByPhone: vi.fn(), countWalkInsBetween: vi.fn() },
     shift: {
       findOpenForStaff: vi.fn(async () => ({ id: 'shift-1' }) as never),
+      findOpenIdForStaff: vi.fn(async () => ({ id: 'shift-1' })),
       findOpenOperational: vi.fn(),
       findByIdForClose: vi.fn(),
       calculateExpectedCash: vi.fn(),
@@ -56,6 +57,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     pricing: {
       findApplicableRule: vi.fn(),
       findByIdWithTiers: vi.fn(),
+      findManyByIdsWithTiers: vi.fn(async () => []),
       getApplicableRules: vi.fn(),
       countApplicable: vi.fn(),
       countAll: vi.fn(),
@@ -190,6 +192,7 @@ describe('runCheckInTx', () => {
       shift: {
         ...makeRepositories().shift,
         findOpenForStaff: vi.fn(async () => null),
+        findOpenIdForStaff: vi.fn(async () => null),
       },
     })
     await expectTxError(repos, makeInput(), 'SHIFT_REQUIRED')

@@ -3,6 +3,16 @@ import { Prisma } from '@/generated/prisma/client'
 
 type ShiftLookupStore = Pick<Prisma.TransactionClient, 'shift'>
 
+function openShiftWhereForStaff(staffId: string) {
+  return {
+    status: 'OPEN' as const,
+    OR: [
+      { staffId },
+      { participants: { some: { staffId, leftAt: null } } },
+    ],
+  }
+}
+
 export const shiftWithParticipantsInclude = {
   staff: { select: { id: true, fullName: true } },
   participants: {
@@ -35,21 +45,19 @@ export async function findOpenShiftForStaff(
   staffId: string
 ) {
   return db.shift.findFirst({
-    where: {
-      status: 'OPEN',
-      OR: [
-        { staffId },
-        {
-          participants: {
-            some: {
-              staffId,
-              leftAt: null,
-            },
-          },
-        },
-      ],
-    },
+    where: openShiftWhereForStaff(staffId),
     include: shiftWithParticipantsInclude,
+    orderBy: { openedAt: 'desc' },
+  })
+}
+
+export async function findOpenShiftIdForStaff(
+  db: ShiftLookupStore,
+  staffId: string
+) {
+  return db.shift.findFirst({
+    where: openShiftWhereForStaff(staffId),
+    select: { id: true },
     orderBy: { openedAt: 'desc' },
   })
 }
