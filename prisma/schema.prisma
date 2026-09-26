@@ -33,7 +33,6 @@ enum BookingStatus {
   BOOKED
   CHECKED_IN
   CANCELLED
-  NO_SHOW
 }
 
 enum DayType {

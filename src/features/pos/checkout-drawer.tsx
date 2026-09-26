@@ -658,6 +658,9 @@ export function CheckoutDrawer({
   const productSubtotal = cartLines.reduce((sum, line) => sum + line.total, 0);
   const sellableTotal = pendingSellTotal + productSubtotal;
   const grandTotal = Math.max(0, playTotal + sellableTotal - parkingFeeTotal);
+  const depositRemaining = Math.max(0, Number(session?.booking?.depositAmount ?? 0) - Number(session?.booking?.depositAppliedAmount ?? 0) - Number(session?.booking?.depositRefundedAmount ?? 0));
+  const depositApplied = Math.min(depositRemaining, grandTotal);
+  const payableTotal = grandTotal - depositApplied;
 
   const pricingBlocked = needsPricing && applicablePricingRules.length === 0;
   // Chọn ít nhất 1 người khi dùng picker
@@ -777,7 +780,7 @@ export function CheckoutDrawer({
       const refreshed = await onDone();
       notifySuccess(refreshed === false
         ? "Đã ghi nhận thanh toán; dữ liệu chưa cập nhật. Không thu lại, hãy tải lại màn hình."
-        : `Đã thu ${money(data.data?.grandTotal ?? grandTotal)}`);
+        : `Đã thu ${money(data.data?.grandTotal ?? payableTotal)}`);
     } catch {
       notifyError("Lỗi kết nối máy chủ");
     } finally {
@@ -872,10 +875,10 @@ export function CheckoutDrawer({
             <div className="overflow-hidden rounded-xl border-2 border-zinc-950 dark:border-white">
               <div className="flex items-end justify-between gap-3 bg-zinc-100 px-4 py-3 dark:bg-zinc-800">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
-                  Tổng cộng
+                  Cần thu
                 </span>
                 <span className="text-[26px] font-extrabold leading-none tabular-nums text-zinc-950 dark:text-white">
-                  {quoteError ? "—" : money(grandTotal)}
+                  {quoteError ? "—" : money(payableTotal)}
                 </span>
               </div>
               <Button
@@ -1136,6 +1139,13 @@ export function CheckoutDrawer({
                   amount={money(sellableTotal)}
                   tone={sellableTotal > 0 ? "plain" : "muted"}
                 />
+                {depositApplied > 0 && (
+                  <SumRow
+                    label="Khấu trừ tiền cọc"
+                    amount={`-${money(depositApplied)}`}
+                    tone="minus"
+                  />
+                )}
                 {!isMember && (
                   <SumRow
                     label="Khuyến mại giờ chơi"
@@ -1225,7 +1235,7 @@ export function CheckoutDrawer({
               <PaymentMethodPicker
                 key={session?.id ?? "retail"}
                 id="payment-method"
-                amount={grandTotal}
+                amount={payableTotal}
                 method={paymentMethod}
                 onMethodChange={setPaymentMethod}
               />

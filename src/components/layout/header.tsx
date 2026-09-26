@@ -12,6 +12,7 @@ interface HeaderProps {
 
 const TITLES: Record<string, string> = {
   '/sessions': 'Ca hôm nay',
+  '/bookings': 'Đặt lịch',
   '/shifts': 'Ca làm',
   '/customers': 'Hội viên',
   '/inventory': 'Kho quầy',

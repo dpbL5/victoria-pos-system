@@ -5,9 +5,12 @@ import { err } from '@/lib/shared/result'
 import { runCheckInTx } from './check-in'
 
 export async function checkInBooking(
-  input: { bookingId: string; staffId: string },
+  input: { bookingId: string; staffId: string; startTime?: Date },
   deps: Repositories = repositories
 ) {
+  const checkInAt = input.startTime ?? new Date()
+  if (Number.isNaN(checkInAt.getTime())) return err('CHECK_IN_TIME_INVALID')
+
   const booking = await deps.booking!.findById(input.bookingId)
   if (!booking) return err('BOOKING_NOT_FOUND')
   if (booking.status !== 'BOOKED') return err('BOOKING_NOT_EDITABLE')
@@ -17,7 +20,7 @@ export async function checkInBooking(
     const customer = await deps.customer.findById(booking.customerId)
     if (!customer) return err('CUSTOMER_NOT_FOUND')
     if (customer.type === 'MEMBER') {
-      const membership = await deps.membership.findActive(customer.id, new Date())
+      const membership = await deps.membership.findActive(customer.id, checkInAt)
       if (!membership) return err('MEMBERSHIP_REQUIRED')
       membershipId = membership.id
     }
@@ -25,11 +28,15 @@ export async function checkInBooking(
 
   try {
     return await runInTransaction(async (tx) => {
+      const openShift = await tx.shift.findOpenForStaff(input.staffId)
+      if (!openShift) fail('SHIFT_REQUIRED')
+      if (checkInAt < openShift.openedAt || checkInAt > new Date()) fail('CHECK_IN_TIME_INVALID')
+
       if (booking.customerId && await tx.session.findActiveByCustomer(booking.customerId)) {
         fail('ACTIVE_SESSION_EXISTS')
       }
       if (booking.customerId && membershipId) {
-        const activeMembership = await tx.membership.findActive(booking.customerId, new Date())
+        const activeMembership = await tx.membership.findActive(booking.customerId, checkInAt)
         if (!activeMembership) fail('MEMBERSHIP_REQUIRED')
         membershipId = activeMembership.id
       }
@@ -39,7 +46,7 @@ export async function checkInBooking(
         customerName: booking.customerId ? null : booking.customerName,
         customerPhone: booking.customerId ? null : booking.customerPhone,
         playerCount: booking.playerCount,
-        now: new Date(),
+        now: checkInAt,
         membershipId,
         totalPlayers: booking.playerCount,
       })
@@ -50,7 +57,7 @@ export async function checkInBooking(
         action: 'BOOKING_CHECK_IN',
         entityType: 'Booking',
         entityId: booking.id,
-        details: { sessionId: session.id },
+        details: { sessionId: session.id, startTime: checkInAt.toISOString() },
       })
       return session
     }, { isolationLevel: 'Serializable' })

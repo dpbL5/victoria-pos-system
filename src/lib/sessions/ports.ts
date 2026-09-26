@@ -77,6 +77,13 @@ export type SessionListRow = Prisma.SessionGetPayload<{
     promotionName: true
     promotionDiscountType: true
     promotionDiscountValue: true
+    booking: {
+      select: {
+        depositAmount: true
+        depositAppliedAmount: true
+        depositRefundedAmount: true
+      }
+    }
     customer: { select: { id: true; fullName: true; phone: true; type: true } }
     customerPhone: true
     staff: { select: { id: true; fullName: true } }

@@ -13,6 +13,8 @@ export async function createBooking(
   const customer = input.customerId ? await deps.customer.findById(input.customerId) : null
   if (input.customerId && !customer) return err('CUSTOMER_NOT_FOUND')
   if (new Date(input.scheduledAt) <= new Date()) return err('BOOKING_TIME_INVALID')
+  const depositAmount = input.depositAmount
+  const depositPaymentMethod = input.depositPaymentMethod
 
   const result = await runInTransaction(async (tx) => {
     const booking = await tx.booking!.create({
@@ -21,6 +23,8 @@ export async function createBooking(
       customerPhone: customer ? null : (input.customerPhone?.trim() || null),
       scheduledAt: new Date(input.scheduledAt),
       playerCount: input.playerCount,
+      depositAmount,
+      depositPaymentMethod: depositAmount > 0 ? depositPaymentMethod! : null,
       staffId: input.staffId,
       notes: input.notes?.trim() || null,
     })
@@ -34,6 +38,7 @@ export async function createBooking(
         customerId: customer?.id ?? null,
         scheduledAt: input.scheduledAt,
         playerCount: input.playerCount,
+        depositAmount,
       },
     })
     return { id: booking.id, depositInvoiceId: null }
@@ -71,9 +76,9 @@ export async function updateBooking(
 }
 
 export async function setBookingStatus(
-  input: { bookingId: string; staffId: string; status: 'CANCELLED' | 'NO_SHOW' },
+  input: { bookingId: string; staffId: string; status: 'CANCELLED' },
   deps: Repositories = repositories
-): Promise<Result<{ id: string; status: 'CANCELLED' | 'NO_SHOW' }>> {
+): Promise<Result<{ id: string; status: 'CANCELLED' }>> {
   const booking = await deps.booking!.findById(input.bookingId)
   if (!booking) return err('BOOKING_NOT_FOUND')
   if (Number(booking.depositAmount) > 0) return err('BOOKING_HAS_DEPOSIT')
@@ -96,6 +101,7 @@ export function mapBookingError(error: DomainError): HttpErrorInfo {
     case 'ACTIVE_SESSION_EXISTS': return { code: error.code, message: 'Khách đang có phiên chơi chưa kết thúc', status: 409 }
     case 'MEMBERSHIP_REQUIRED': return { code: error.code, message: 'Hội viên chưa có gói còn hiệu lực. Vui lòng gia hạn trước khi check-in.', status: 409 }
     case 'SHIFT_REQUIRED': return { code: error.code, message: 'Mở ca trước khi xác nhận khách bắt đầu phiên', status: 409 }
+    case 'CHECK_IN_TIME_INVALID': return { code: error.code, message: 'Thời điểm check-in phải nằm từ lúc mở ca đến hiện tại', status: 400 }
     default: return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
   }
 }

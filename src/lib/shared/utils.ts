@@ -61,6 +61,16 @@ export function getVnCalendarRange(period: 'day' | 'week' | 'month' | 'year', no
   return { from: start.toISOString().slice(0, 10), to }
 }
 
+/** Khoảng tuần thứ Hai đến trước thứ Hai kế tiếp của một ngày theo lịch Việt Nam. */
+export function getVnWeekRange(value: string): { from: string; to: string } {
+  const [year, month, day] = value.split('-').map(Number)
+  const start = new Date(Date.UTC(year, month - 1, day))
+  start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7))
+  const end = new Date(start)
+  end.setUTCDate(end.getUTCDate() + 7)
+  return { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) }
+}
+
 /** Trả về thời điểm 00:00:00.000 giờ Việt Nam của ngày `value` (UTC+7). */
 export function parseStartOfDay(value: string): Date {
   const [y, m, d] = value.split('-').map(Number)

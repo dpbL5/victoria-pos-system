@@ -8,7 +8,7 @@ export type BookingRow = Prisma.BookingGetPayload<{
 }>
 
 export interface BookingRepository {
-  findMany(input: { from: Date; to: Date; statuses?: Array<'BOOKED' | 'CHECKED_IN' | 'CANCELLED' | 'NO_SHOW'> }): Promise<BookingRow[]>
+  findMany(input: { from: Date; to: Date; statuses?: Array<'BOOKED' | 'CHECKED_IN' | 'CANCELLED'> }): Promise<BookingRow[]>
   findById(id: string): Promise<BookingRow | null>
   findForSession(sessionId: string): Promise<{
     id: string
@@ -23,6 +23,8 @@ export interface BookingRepository {
     customerPhone: string | null
     scheduledAt: Date
     playerCount: number
+    depositAmount: number
+    depositPaymentMethod: 'CASH' | 'TRANSFER' | 'CARD' | null
     staffId: string
     notes: string | null
   }): Promise<{ id: string }>
@@ -36,7 +38,7 @@ export interface BookingRepository {
     customerPhone?: string | null
     notes?: string | null
   }): Promise<{ count: number }>
-  transition(id: string, from: 'BOOKED', to: 'CANCELLED' | 'NO_SHOW'): Promise<{ count: number }>
+  transition(id: string, from: 'BOOKED', to: 'CANCELLED'): Promise<{ count: number }>
   markCheckedIn(id: string, sessionId: string): Promise<{ count: number }>
   applyDeposit(id: string, expectedApplied: number, amount: number): Promise<{ count: number }>
   reverseDeposit(id: string, amount: number): Promise<{ count: number }>

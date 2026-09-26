@@ -141,12 +141,12 @@ export function TodayShiftScreen() {
       : current, { revalidate: false })
   }, [sessionsQuery.mutate])
 
-  const handleBookingCheckIn = async (booking: BookingItem) => {
+  const handleBookingCheckIn = async (booking: BookingItem, startTime: string) => {
     setBusyBookingId(booking.id)
     setSubmitting(true)
     try {
       const response = await apiJson(`/api/bookings/${booking.id}`, {
-        ...jsonRequest({ action: 'check-in' }),
+        ...jsonRequest({ action: 'check-in', startTime }),
         method: 'PATCH',
       })
       if (!response.success) {
@@ -172,8 +172,12 @@ export function TodayShiftScreen() {
     return registerRefresh(() => void refreshHome())
   }, [registerRefresh, refreshHome])
 
-  const activeWalkIns = sessions.filter((session) => session.customer?.type === 'WALK_IN').length
-  const activeMembers = sessions.filter((session) => session.customer?.type === 'MEMBER').length
+  const activePlayers = sessions.reduce(
+    (total, session) => total + (session.pricingGroups?.length
+      ? session.pricingGroups.reduce((count, group) => count + group.remainingCount, 0)
+      : session.playerCount),
+    0
+  )
   const isAdmin = authRole === 'ADMIN'
   const shiftReady = isAdmin || !!shift
   const canJoinCurrentShift = isAdmin && !!authUserId && !!shift && shift.status === 'OPEN'
@@ -455,9 +459,6 @@ export function TodayShiftScreen() {
         <div className="animate-slide-up">
           <ShiftRail
             shift={shift}
-            activeCount={sessions.length}
-            walkInCount={activeWalkIns}
-            memberCount={activeMembers}
             onOpen={() => setOpenShiftDialog(true)}
             onClose={() => setCloseShiftDialog(true)}
             onViewTransactions={() => {
@@ -522,11 +523,10 @@ export function TodayShiftScreen() {
           <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
             <div>
               <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Lịch đặt trong ngày</h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Các lịch chưa xác nhận</p>
             </div>
             <Button variant="secondary" size="sm" onClick={() => router.push('/bookings')}>Quản lý</Button>
           </div>
-          <BookingCards bookings={bookings} onCheckIn={(booking) => void handleBookingCheckIn(booking)} busyId={busyBookingId} actionDisabled={!shift} />
+          <BookingCards bookings={bookings} onCheckIn={(booking, startTime) => void handleBookingCheckIn(booking, startTime)} busyId={busyBookingId} actionDisabled={!shift} shiftOpenedAt={shift?.openedAt} />
         </section>
 
         <section
@@ -539,7 +539,7 @@ export function TodayShiftScreen() {
                 Đang chơi
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {sessions.length} phiên đang hoạt động
+                {activePlayers} người chơi đang hoạt động
               </p>
             </div>
           </div>

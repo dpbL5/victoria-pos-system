@@ -1109,6 +1109,54 @@ export async function runCheckOutTx(
     }
   }
 
+  let depositInvoiceId = bookingDeposit?.depositInvoiceId ?? null
+  if (bookingDeposit && bookingDeposit.remaining > 0 && !depositInvoiceId) {
+    const depositInvoice = await tx.billing.createPaidInvoice({
+      invoiceNo: generateInvoiceNo('DEP', paidAt),
+      customerId,
+      shiftId,
+      staffId,
+      paidAt,
+      notes: `Tiền đặt cọc lịch ${bookingDeposit.bookingId}`,
+      subtotal: bookingDeposit.remaining,
+      discountTotal: 0,
+      grandTotal: bookingDeposit.remaining,
+      lines: [{
+        type: 'DEPOSIT',
+        description: 'Tiền đặt cọc lịch check-in',
+        quantity: 1,
+        unitPrice: bookingDeposit.remaining,
+        subtotal: bookingDeposit.remaining,
+        discountAmount: 0,
+        total: bookingDeposit.remaining,
+        metadata: { bookingId: bookingDeposit.bookingId },
+      }],
+    })
+    await tx.billing.createPayment({
+      kind: 'DEPOSIT',
+      invoiceId: depositInvoice.id,
+      sessionId,
+      shiftId,
+      staffId,
+      totalHours: 0,
+      subtotal: bookingDeposit.remaining,
+      discountTotal: 0,
+      grandTotal: bookingDeposit.remaining,
+      paymentMethod: bookingDeposit.paymentMethod ?? paymentMethod,
+      paidAt,
+      notes: `Tiền cọc lịch ${bookingDeposit.bookingId}`,
+    })
+    await tx.booking!.setDepositInvoice(bookingDeposit.bookingId, depositInvoice.id)
+    await tx.audit.append({
+      userId: staffId,
+      action: 'BOOKING_DEPOSIT_CAPTURE',
+      entityType: 'Booking',
+      entityId: bookingDeposit.bookingId,
+      details: { invoiceId: depositInvoice.id, amount: bookingDeposit.remaining, paymentMethod: bookingDeposit.paymentMethod ?? paymentMethod },
+    })
+    depositInvoiceId = depositInvoice.id
+  }
+
   // ── Áp dụng cọc đã thu cho lịch này, tối đa bằng số tiền checkout ──
   const depositApplied = bookingDeposit
     ? Math.min(bookingDeposit.remaining, Math.max(0, invoiceGrandTotal))
@@ -1133,7 +1181,7 @@ export async function runCheckOutTx(
       total: -depositApplied,
       metadata: {
         bookingId: bookingDeposit.bookingId,
-        depositInvoiceId: bookingDeposit.depositInvoiceId,
+        depositInvoiceId,
       },
     })
     await tx.billing.updateInvoiceTotals(invoice.id, invoiceSubtotal, invoiceGrandTotal)

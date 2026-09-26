@@ -2,14 +2,10 @@ import { useState } from 'react'
 import { ChevronDown, ClipboardList, Clock, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatClock, formatDay, money } from './format'
-import { MiniStat } from './mini-stat'
 import type { Shift } from './types'
 
 export function ShiftRail({
   shift,
-  activeCount,
-  walkInCount,
-  memberCount,
   onOpen,
   onClose,
   onViewTransactions,
@@ -20,9 +16,6 @@ export function ShiftRail({
   submitting,
 }: {
   shift: Shift | null
-  activeCount: number
-  walkInCount: number
-  memberCount: number
   onOpen: () => void
   onClose: () => void
   onViewTransactions: () => void
@@ -93,19 +86,10 @@ export function ShiftRail({
                     </p>
                   )}
 
-                  {/* Số liệu live — đặt TRƯỚC thao tác để staff glance nhanh.
-                      "Đang chơi" là stat dominant (focal point) — staff mở ca cần biết
-                      ngay có bao nhiêu phiên đang chạy để quyết định tiếp khách. */}
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    <MiniStat label="Đang chơi" value={activeCount} variant="accent" />
-                    <MiniStat label="Vãng lai" value={walkInCount} />
-                    <MiniStat label="Hội viên" value={memberCount} />
-                  </div>
-
                   {/* Thao tác — mobile 2 cột, desktop hàng ngang.
                       "Đếm dụng cụ" primary khi chưa đếm (hành động đầu ca quan trọng nhất);
                       secondary khi đã đếm. "Đóng ca" luôn cuối — hành động phá hủy xa tay nhất. */}
-                  <div className="mt-3 grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2">
+                  <div className="mt-4 grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center md:justify-end md:gap-2">
                     <Button
                       variant={hasCounted ? 'secondary' : 'primary'}
                       size="sm"
@@ -128,7 +112,7 @@ export function ShiftRail({
                     <Button variant="secondary" size="sm" onClick={onViewTransactions}>
                       Xem giao dịch
                     </Button>
-                    <Button variant="secondary" size="sm" onClick={onClose}>
+                    <Button variant="danger" size="sm" onClick={onClose}>
                       Đóng ca
                     </Button>
                   </div>

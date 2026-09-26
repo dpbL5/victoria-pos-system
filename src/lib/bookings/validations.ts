@@ -10,10 +10,15 @@ export const createBookingSchema = z.object({
   ...customerFields,
   scheduledAt: z.string().datetime('Giờ hẹn không hợp lệ'),
   playerCount: z.number().int().min(1, 'Số người chơi tối thiểu là 1').max(50, 'Số người chơi tối đa là 50').default(1),
-  notes: z.string().trim().max(500, 'Ghi chú tối đa 500 ký tự').optional(),
+  depositAmount: z.number().int().min(0, 'Tiền cọc không được âm').max(999_999_999_999, 'Tiền cọc quá lớn').default(0),
+  depositPaymentMethod: z.enum(['CASH', 'TRANSFER', 'CARD'], { message: 'Phương thức thanh toán không hợp lệ' }).optional(),
+  notes: z.string().trim().max(500, 'Ghi chú tối đa 500 ký tự').nullable().optional(),
 }).superRefine((data, ctx) => {
   if (!data.customerId && !data.customerName?.trim()) {
     ctx.addIssue({ code: 'custom', path: ['customerName'], message: 'Nhập tên khách hoặc chọn khách đã có' })
+  }
+  if (data.depositAmount > 0 && !data.depositPaymentMethod) {
+    ctx.addIssue({ code: 'custom', path: ['depositPaymentMethod'], message: 'Chọn phương thức nhận tiền cọc' })
   }
 })
 
@@ -31,7 +36,7 @@ export const updateBookingSchema = z.object({
 })
 
 export const bookingStatusSchema = z.object({
-  status: z.enum(['CANCELLED', 'NO_SHOW']),
+  status: z.literal('CANCELLED'),
 })
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>

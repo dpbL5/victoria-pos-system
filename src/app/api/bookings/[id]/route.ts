@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { z } from 'zod'
 import { apiError, apiSuccess, ERR_CSRF, ERR_UNAUTHORIZED, resultToResponse } from '@/lib/infrastructure/api-helpers'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { bookingStatusSchema, mapBookingError, setBookingStatus, updateBooking, updateBookingSchema } from '@/lib/bookings'
@@ -24,7 +25,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params
     const body = await request.json()
     if (body.action === 'check-in') {
-      return resultToResponse(await checkInBooking({ bookingId: id, staffId: auth.userId }), mapBookingError)
+      const parsed = z.object({ action: z.literal('check-in'), startTime: z.string().datetime().optional() }).safeParse(body)
+      if (!parsed.success) return apiError({ code: 'VALIDATION', message: 'Thời điểm check-in không hợp lệ', status: 400 })
+      return resultToResponse(await checkInBooking({
+        bookingId: id,
+        staffId: auth.userId,
+        startTime: parsed.data.startTime ? new Date(parsed.data.startTime) : undefined,
+      }), mapBookingError)
     }
     const status = bookingStatusSchema.safeParse(body)
     if (status.success) {

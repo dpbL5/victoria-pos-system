@@ -12,8 +12,8 @@
 | `/api/customers` | GET, POST | Danh sách + tạo khách hàng |
 | `/api/customers/[id]` | GET, PUT | Chi tiết + cập nhật khách hàng |
 | `/api/customers/[id]/history` | GET | Lịch sử đóng phí + giao dịch của hội viên (cho màn chi tiết hội viên) |
-| `/api/bookings` | GET, POST | Xem lịch theo ngày + tạo lịch đặt dạng nháp, không cần ca mở |
-| `/api/bookings/[id]` | GET, PATCH | Chi tiết, sửa, hủy/đánh dấu không đến hoặc xác nhận lịch để bắt đầu phiên |
+| `/api/bookings` | GET, POST | Xem lịch theo tuần + tạo lịch đặt dạng nháp, không cần ca mở |
+| `/api/bookings/[id]` | GET, PATCH | Chi tiết, sửa, hủy hoặc xác nhận lịch để bắt đầu phiên |
 | `/api/sessions` | GET, POST | Danh sách + tạo phiên bắn |
 | `/api/sessions/[id]` | GET, PUT | Chi tiết + cập nhật phiên |
 | `/api/sessions/[id]/checkout` | POST | Checkout phiên bắn (hỗ trợ thu trước: `pricingGroupId`+`playerCount` hoặc `playerIds`, nhiều nhóm qua `groups`) |

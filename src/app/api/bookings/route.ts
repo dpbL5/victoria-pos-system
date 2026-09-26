@@ -3,19 +3,20 @@ import { apiError, apiSuccess, ERR_CSRF, ERR_UNAUTHORIZED, resultToResponse } fr
 import { repositories } from '@/lib/infrastructure/repositories'
 import { createBooking, createBookingSchema, mapBookingError } from '@/lib/bookings'
 import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
-import { parseEndOfDay, parseStartOfDay, today } from '@/lib/shared/utils'
+import { getVnWeekRange, parseStartOfDay, today } from '@/lib/shared/utils'
 
 export async function GET(request: NextRequest) {
   try {
     await requireAuth()
-    const date = request.nextUrl.searchParams.get('date') || today()
-    const parsedDate = new Date(`${date}T00:00:00.000Z`)
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) {
-      return apiError({ code: 'VALIDATION', message: 'Ngày không hợp lệ', status: 400 })
+    const weekStart = request.nextUrl.searchParams.get('weekStart') || getVnWeekRange(today()).from
+    const parsedDate = new Date(`${weekStart}T00:00:00.000Z`)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== weekStart || getVnWeekRange(weekStart).from !== weekStart) {
+      return apiError({ code: 'VALIDATION', message: 'Tuần phải bắt đầu từ thứ Hai', status: 400 })
     }
+    const range = getVnWeekRange(weekStart)
     const rows = await repositories.booking!.findMany({
-      from: parseStartOfDay(date),
-      to: new Date(parseEndOfDay(date).getTime() + 1),
+      from: parseStartOfDay(range.from),
+      to: parseStartOfDay(range.to),
     })
     return apiSuccess(rows)
   } catch (error) {
