@@ -187,14 +187,18 @@ export async function ensureLessonsUntil(to: Date, deps: Repositories = reposito
 export async function createSeries(input: CreateSeriesInput, deps: Repositories = repositories) {
   void deps
   return runInTransaction(async tx => {
-    await studentsActive(tx, input.studentIds)
+    const lessonClass = input.classId ? await tx.lessonClass.findById(input.classId) : null
+    if (input.classId && (!lessonClass || !lessonClass.isActive)) fail('LESSON_LOCKED')
+    const studentIds = lessonClass ? lessonClass.students.map(member => member.studentId) : input.studentIds
+    if (lessonClass && input.studentIds && [...input.studentIds].sort().join() !== [...studentIds].sort().join()) fail('CLASS_ROSTER_REQUIRED')
+    await studentsActive(tx, studentIds)
     // Chuỗi gắn lớp phải giữ ràng buộc "một học viên chỉ thuộc một lớp" như khi lập sổ ở module Lớp học.
-    if (input.classId) await assertStudentsInSingleClass(tx, input.studentIds, { excludeClassId: input.classId })
+    if (input.classId) await assertStudentsInSingleClass(tx, studentIds, { excludeClassId: input.classId })
     const { staffId, ...data } = input
     const schedule = { ...data, intervalWeeks: input.intervalWeeks ?? 1 }
     const first = weeklyOccurrences(schedule, input.startsOn, new Date(input.startsOn.getTime() + 90 * DAY_MS))[0]
     if (!first) fail('SERIES_NO_OCCURRENCES')
-    const series = await tx.lessonSeries.create({ ...schedule, rrule: weeklyRrule(schedule) })
+    const series = await tx.lessonSeries.create({ ...schedule, studentIds, rrule: weeklyRrule(schedule) })
     await seriesAvailable(tx, series)
     const generatedCount = await materialize(tx, series, new Date(Math.max(Date.now(), input.startsOn.getTime()) + SERIES_HORIZON_DAYS * DAY_MS))
     await tx.calendarSync.enqueue('SERIES', series.id)
@@ -224,7 +228,11 @@ export async function updateSeries(input: UpdateSeriesInput, deps: Repositories 
     const firstOriginal = new Date(Math.min(...affected.map(l => (l.originalStartAt ?? l.startsAt).getTime())))
     const patternChanges = input.daysOfWeek !== undefined || input.startTime !== undefined || input.intervalWeeks !== undefined || input.startsOn !== undefined || input.endsOn !== undefined || input.occurrenceCount !== undefined
     if (patternChanges && affected.some(l => l.isException)) fail('SERIES_HAS_EXCEPTIONS')
-    const studentIds = input.studentIds ?? series!.students.map(s => s.studentId)
+    const lessonClass = series!.classId ? await tx.lessonClass.findById(series!.classId) : null
+    if (series!.classId && (!lessonClass || !lessonClass.isActive)) fail('LESSON_LOCKED')
+    const classStudentIds = lessonClass?.students.map(member => member.studentId)
+    const studentIds = classStudentIds ?? input.studentIds ?? series!.students.map(s => s.studentId)
+    if (lessonClass && input.studentIds && [...input.studentIds].sort().join() !== [...studentIds].sort().join()) fail('CLASS_ROSTER_REQUIRED')
     await studentsActive(tx, studentIds)
     // Chuỗi thuộc lớp: chỉ chặn học viên MỚI thêm (thành viên đang có không bị chặn).
     if (series!.classId) {
@@ -307,6 +315,8 @@ export function mapLessonError(error: DomainError): HttpErrorInfo {
     LESSON_NOT_FOUND: [404, 'Không tìm thấy buổi học'], SERIES_NOT_FOUND: [404, 'Không tìm thấy lịch lặp'],
     LESSON_OVERLAP: [409, 'Học viên đã có buổi học trùng giờ. Hãy chọn thời gian khác'],
     LESSON_CONFLICT: [409, 'Lịch đã thay đổi. Hãy tải lại trước khi sửa'],
+    LESSON_STUDENT_HAS_HISTORY: [409, 'Không thể bỏ học viên đã có ghi chú, điểm danh hoặc sử dụng gói khỏi buổi học'],
+    CLASS_ROSTER_REQUIRED: [409, 'Hãy thay đổi học viên tại sổ lớp, sau đó tải lại lịch'],
     LESSON_LOCKED: [409, 'Buổi đã điểm danh chỉ được sửa ghi chú. Hãy chọn các buổi chưa điểm danh'],
     LESSON_CANCELLED: [409, 'Buổi học đã huỷ'], SERIES_NO_OCCURRENCES: [400, 'Không có buổi học trong khoảng đã chọn'],
     SERIES_HAS_EXCEPTIONS: [409, 'Chuỗi có buổi đã sửa riêng. Hãy giữ quy tắc lặp và sửa từng buổi để bảo toàn các ngoại lệ'],

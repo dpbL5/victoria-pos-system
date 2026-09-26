@@ -14,6 +14,7 @@ import { createCashflowRepository } from './adapters/cashflow-adapter'
 import { createUserRepository } from './adapters/user-adapter'
 import { createToolRepository } from './adapters/tool-adapter'
 import { createReportingRepository } from './adapters/reporting-adapter'
+import { createBookingRepository } from './adapters/booking-adapter'
 import {
   createStudentRepository,
   createLessonRepository,
@@ -37,6 +38,7 @@ import type { CashflowRepository } from '@/lib/cashflow/ports'
 import type { UserRepository } from '@/lib/users/ports'
 import type { ToolRepository } from '@/lib/tools/ports'
 import type { ReportingRepository } from '@/lib/reports/ports'
+import type { BookingRepository } from '@/lib/bookings/ports'
 import type {
   StudentRepository,
   LessonRepository,
@@ -68,6 +70,8 @@ export interface Repositories {
   user: UserRepository
   tool: ToolRepository
   reporting: ReportingRepository
+  /** Optional only for legacy test doubles; createRepositories always supplies it. */
+  booking?: BookingRepository
   student: StudentRepository
   lesson: LessonRepository
   lessonSeries: LessonSeriesRepository
@@ -96,6 +100,7 @@ export function createRepositories(store: Prisma.TransactionClient): Repositorie
     user: createUserRepository(store),
     tool: createToolRepository(store),
     reporting: createReportingRepository(store),
+    booking: createBookingRepository(store),
     student: createStudentRepository(store),
     lesson: createLessonRepository(store),
     lessonSeries: createLessonSeriesRepository(store),

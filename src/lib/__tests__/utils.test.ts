@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   formatVND,
   formatHours,
+  getVnCalendarRange,
   toInputDate,
   parseStartOfDay,
   parseEndOfDay,
@@ -31,6 +32,18 @@ describe('formatVND', () => {
 
   it('định dạng số âm (nếu có)', () => {
     expect(formatVND(-50000)).toBe('-50.000đ')
+  })
+})
+
+// ── getVnCalendarRange ──────────────────────────────────
+
+describe('getVnCalendarRange', () => {
+  const now = new Date('2026-09-22T10:00:00+07:00')
+
+  it('tính từ thứ Hai, đầu tháng và đầu năm đến hôm nay theo giờ Việt Nam', () => {
+    expect(getVnCalendarRange('week', now)).toEqual({ from: '2026-09-21', to: '2026-09-22' })
+    expect(getVnCalendarRange('month', now)).toEqual({ from: '2026-09-01', to: '2026-09-22' })
+    expect(getVnCalendarRange('year', now)).toEqual({ from: '2026-01-01', to: '2026-09-22' })
   })
 })
 

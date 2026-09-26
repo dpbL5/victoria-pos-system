@@ -3,7 +3,7 @@ import type { Prisma } from '@/generated/prisma/client'
 import type { PreviousAttendanceNote } from './helpers/attendance-notes'
 
 export type StudentRecord = Prisma.StudentGetPayload<{
-  include: { packages: true; series: { include: { series: { include: { class: true } } } } }
+  include: { packages: true; classMemberships: { include: { lessonClass: true } } }
 }>
 export type LessonRecord = Prisma.LessonGetPayload<{
   include: { students: { include: { student: true; package: true } }; series: { include: { class: true } }; class: true }
@@ -12,7 +12,7 @@ export type LessonSeriesRecord = Prisma.LessonSeriesGetPayload<{ include: { stud
 export type LessonPackageRecord = Prisma.LessonPackageGetPayload<object>
 export type CalendarConnectionRecord = Prisma.CalendarConnectionGetPayload<object>
 export type LessonClassRecord = Prisma.LessonClassGetPayload<{
-  include: { slots: { include: { students: { include: { student: true } } } }; _count: { select: { lessons: true } } }
+  include: { slots: { include: { students: { include: { student: true } } } }; students: { include: { student: true } }; _count: { select: { lessons: true } } }
 }>
 
 export interface StudentListInput {
@@ -69,7 +69,7 @@ export interface LessonRepository {
     note?: string
   }): Promise<void>
   /** Gắn gói buổi đã bị trừ cho LessonStudent (chống đếm trùng). */
-  setPackage(input: { lessonId: string; studentId: string; packageId: string }): Promise<void>
+  setPackage(input: { lessonId: string; studentId: string; packageId: string | null }): Promise<void>
   /** Ghi note riêng của một học viên cho buổi học (không đụng status/gói). */
   setStudentNote(input: { lessonId: string; studentId: string; note: string | null }): Promise<void>
   /** Note khác rỗng của buổi gần nhất trước `before` cho từng học viên. */
@@ -89,12 +89,13 @@ export interface LessonClassRepository {
   findMany(filter?: { status?: 'ACTIVE' | 'ENDED'; search?: string }): Promise<LessonClassRecord[]>
   findById(id: string): Promise<LessonClassRecord | null>
   create(data: { name: string; coachName?: string | null; note?: string | null }): Promise<LessonClassRecord>
+  replaceStudents(classId: string, studentIds: string[]): Promise<void>
   update(id: string, data: { name?: string; coachName?: string | null; note?: string | null; isActive?: boolean }): Promise<LessonClassRecord>
   delete(id: string): Promise<void>
   /** Buổi sắp tới của nhiều lớp (đã sắp theo startsAt) — gom theo lớp ở tầng gọi. */
   findUpcomingLessons(classIds: string[], from: Date): Promise<LessonRecord[]>
   /** Lớp hiện tại của từng học viên — ràng buộc "một học viên chỉ thuộc một lớp". */
-  classesOfStudents(studentIds: string[]): Promise<{ studentId: string; studentName: string; classId: string; className: string }[]>
+  classesOfStudents(studentIds: string[], activeOnly?: boolean): Promise<{ studentId: string; studentName: string; classId: string; className: string }[]>
 }
 
 export interface LessonPackageRepository {
@@ -104,6 +105,7 @@ export interface LessonPackageRepository {
   update(id: string, data: { name?: string; total?: number; isActive?: boolean }): Promise<LessonPackageRecord>
   /** Tăng used thêm 1 (điều kiện: còn buổi, tức used < total) */
   incrementUsed(id: string): Promise<LessonPackageRecord>
+  decrementUsed(id: string): Promise<LessonPackageRecord>
 }
 
 export interface CalendarConnectionRepository {

@@ -3,11 +3,9 @@ import { parseLocalDate, parseLocalDateEnd } from '@/lib/shared/utils'
 import type { LessonClassRecord, StudentRecord } from '../ports'
 
 /** Lớp hiện tại của học viên (ràng buộc: mỗi học viên chỉ thuộc một lớp). */
-export function studentClass(student: Pick<StudentRecord, 'series'>): { id: string; name: string } | null {
-  for (const row of student.series) {
-    if (row.series.class) return { id: row.series.class.id, name: row.series.class.name }
-  }
-  return null
+export function studentClass(student: Pick<StudentRecord, 'classMemberships'>): { id: string; name: string } | null {
+  const membership = student.classMemberships.find(row => row.lessonClass.isActive)
+  return membership ? { id: membership.lessonClass.id, name: membership.lessonClass.name } : null
 }
 
 export interface ClassSlotInput {
@@ -28,22 +26,12 @@ export function parseSlotDates(input: { startsOn: string; endsOn?: string | null
   return { startsOn, endsOn }
 }
 
-/** Sổ học viên của lớp = hợp nhất học viên của mọi khung giờ (không trùng). */
-export function classRosterIds(lessonClass: Pick<LessonClassRecord, 'slots'>): string[] {
-  const ids = new Set<string>()
-  for (const slot of lessonClass.slots) for (const member of slot.students) ids.add(member.studentId)
-  return [...ids]
+/** Sổ học viên chính thức của lớp, độc lập với khung giờ. */
+export function classRosterIds(lessonClass: Pick<LessonClassRecord, 'students'>): string[] {
+  return lessonClass.students.map(member => member.studentId)
 }
 
 /** Sổ học viên kèm tên — để hiển thị ở màn hình lớp. */
-export function classRoster(lessonClass: Pick<LessonClassRecord, 'slots'>) {
-  const map = new Map<string, { id: string; fullName: string; phone: string | null }>()
-  for (const slot of lessonClass.slots) {
-    for (const member of slot.students) {
-      if (!map.has(member.studentId)) {
-        map.set(member.studentId, { id: member.studentId, fullName: member.student.fullName, phone: member.student.phone })
-      }
-    }
-  }
-  return [...map.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'))
+export function classRoster(lessonClass: Pick<LessonClassRecord, 'students'>) {
+  return lessonClass.students.map(member => ({ id: member.studentId, fullName: member.student.fullName, phone: member.student.phone }))
 }

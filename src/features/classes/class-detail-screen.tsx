@@ -9,7 +9,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonRows } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
@@ -177,7 +177,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
   }
 
   if (isLoading) {
-    return <SkeletonPage maxWidth="max-w-4xl"><Skeleton className="h-10 w-64" /><SkeletonRows count={3} /></SkeletonPage>
+    return <AppSkeleton />
   }
 
   if (!detail) {
@@ -185,7 +185,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
   }
 
   return <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-    <div className="mx-auto max-w-5xl space-y-4">
+    <div className="mx-auto max-w-content space-y-4">
       <div className="flex items-center gap-2">
         <Link href="/classes" className="inline-flex items-center gap-1 text-sm text-zinc-600 hover:underline dark:text-zinc-300"><ArrowLeft size={16} />Danh sách lớp</Link>
       </div>
@@ -201,6 +201,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="secondary" size="sm" icon={CalendarClock} onClick={() => router.push(`/lessons?classId=${id}`)}>Xem lịch</Button>
           <Button variant="secondary" size="sm" icon={Edit3} onClick={() => setInfoOpen(true)}>Sửa thông tin</Button>
           {detail.isActive && <Button variant="outline-danger" size="sm" icon={StopCircle} onClick={() => setEndOpen(true)}>Kết thúc lớp</Button>}
           <Button variant="outline-danger" size="sm" icon={Trash2} onClick={() => setDeleteOpen(true)} title="Xoá lớp thêm nhầm">Xoá lớp</Button>
@@ -225,7 +226,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
 
       {tab === 'info' && <div className="space-y-4">
         <section className="rounded-xl bg-white p-4 ring-1 ring-border-default dark:bg-zinc-900">
-          <div className="flex items-center justify-between"><h2 className="font-semibold text-zinc-950 dark:text-white">Lịch lặp của lớp</h2><Button variant="secondary" size="sm" icon={Plus} onClick={() => setSlotTarget('new')}>Thêm lịch lặp</Button></div>
+          <div className="flex items-center justify-between"><h2 className="font-semibold text-zinc-950 dark:text-white">Lịch lặp của lớp</h2>{detail.isActive && <Button variant="secondary" size="sm" icon={Plus} onClick={() => setSlotTarget('new')}>Thêm lịch lặp</Button>}</div>
           <div className="mt-3 space-y-2">
             {slots.map(slot => (
               <div key={slot.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
@@ -234,8 +235,8 @@ export function ClassDetailScreen({ id }: { id: string }) {
                   <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Từ {formatDate(slot.startsOn)} → {formatDate(slot.endsOn)} · {slot.students.length} học viên</p>
                 </div>
                 <div className="flex gap-1.5">
-                  <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => setSlotTarget(slot)} title="Sửa lịch lặp" />
-                  {slot.isActive && <Button variant="outline-danger" size="sm" icon={StopCircle} disabled={submitting} onClick={() => setEndSlotTarget(slot)} title="Kết thúc lịch lặp" />}
+                  {detail.isActive && <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => setSlotTarget(slot)} title="Sửa lịch lặp" />}
+                  {detail.isActive && slot.isActive && <Button variant="outline-danger" size="sm" icon={StopCircle} disabled={submitting} onClick={() => setEndSlotTarget(slot)} title="Kết thúc lịch lặp" />}
                 </div>
               </div>
             ))}
@@ -252,10 +253,10 @@ export function ClassDetailScreen({ id }: { id: string }) {
       {tab === 'roster' && <section className="space-y-3 rounded-xl bg-white p-4 ring-1 ring-border-default dark:bg-zinc-900">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold text-zinc-950 dark:text-white">Sổ học viên ({selectedStudents.length})</h2>
-          <Button variant="primary" size="sm" disabled={submitting || !rosterChanged} onClick={() => void saveRoster()}>{submitting ? 'Đang lưu...' : 'Lưu sổ học viên'}</Button>
+          {detail.isActive && <Button variant="primary" size="sm" disabled={submitting || !rosterChanged} onClick={() => void saveRoster()}>{submitting ? 'Đang lưu...' : 'Lưu sổ học viên'}</Button>}
         </div>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">Thêm hoặc bớt học viên áp cho mọi lịch lặp của lớp và các buổi chưa điểm danh. Buổi đã điểm danh được giữ nguyên. Mỗi học viên chỉ thuộc một lớp.</p>
-        <StudentPicker key={detail.id} value={selectedStudents} onChange={setRosterIds} initial={detail.roster} availableForClassId={detail.id} />
+        <StudentPicker key={detail.id} value={selectedStudents} disabled={!detail.isActive} onChange={setRosterIds} initial={detail.roster} availableForClassId={detail.id} />
       </section>}
     </div>
 
@@ -287,7 +288,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
       open={deleteOpen}
       onClose={() => setDeleteOpen(false)}
       title="Xoá lớp học?"
-      description={`Xoá vĩnh viễn lớp "${detail.name}", ${slots.length} lịch lặp và TOÀN BỘ buổi học (kể cả buổi đã điểm danh), cùng sự kiện trên Google Calendar. Chỉ dùng khi thêm nhầm — muốn giữ lịch sử thì dùng "Kết thúc lớp".`}
+      description={`Chỉ xoá được lớp "${detail.name}" khi chưa có điểm danh hoặc ghi chú. Nếu lớp đã hoạt động, hãy kết thúc lớp để giữ lại lịch sử học viên.`}
       confirmLabel="Xoá lớp"
       submitting={submitting}
       onConfirm={deleteClass}

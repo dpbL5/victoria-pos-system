@@ -295,6 +295,8 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
                   { key: 'SERVICE', label: 'Dịch vụ', color: 'bg-amber-500' },
                   { key: 'DISCOUNT', label: 'Giảm giá', color: 'bg-red-500' },
                   { key: 'SURCHARGE', label: 'Phí gửi xe', color: 'bg-rose-500' },
+                  { key: 'DEPOSIT', label: 'Tiền cọc', color: 'bg-sky-500' },
+                  { key: 'DEPOSIT_APPLIED', label: 'Khấu trừ cọc', color: 'bg-teal-500' },
                 ].map(({ key, label, color }) => {
                   const value = detail.byItemType[key as keyof typeof detail.byItemType] ?? 0
                   const max = Math.max(...Object.values(detail.byItemType), 1)

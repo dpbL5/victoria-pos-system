@@ -45,7 +45,7 @@ async function main() {
     }
     await prisma.$transaction(async tx => {
       await tx.lessonClass.create({
-        data: { id: item.id, name: item.title, coachName: item.coachName, isActive: true },
+        data: { id: item.id, name: item.title, coachName: item.coachName, isActive: true, students: { create: item.students.map(row => ({ studentId: row.studentId })) } },
       })
       await tx.lessonSeries.update({ where: { id: item.id }, data: { classId: item.id } })
     })

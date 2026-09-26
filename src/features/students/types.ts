@@ -11,12 +11,12 @@ export interface Student {
   createdAt: string
   updatedAt: string
   packages: LessonPackage[]
-  series?: { series: { class: { id: string; name: string } | null } }[]
+  classMemberships?: { lessonClass: { id: string; name: string; isActive: boolean } }[]
 }
 
 /** Lớp hiện tại của học viên — ràng buộc: mỗi học viên chỉ thuộc một lớp. */
-export const studentClassOf = (student: Pick<Student, 'series'>): { id: string; name: string } | null =>
-  student.series?.find(row => row.series.class)?.series.class ?? null
+export const studentClassOf = (student: Pick<Student, 'classMemberships'>): { id: string; name: string } | null =>
+  student.classMemberships?.find(row => row.lessonClass.isActive)?.lessonClass ?? null
 
 /** Số buổi còn lại của học viên — tổng các gói đang hoạt động, kẹp ở 0 (gói bị hạ `total` dưới `used` không ra số âm). */
 export const studentRemaining = (student: Pick<Student, 'packages'>): number =>

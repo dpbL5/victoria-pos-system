@@ -12,7 +12,7 @@ import { Input, Label } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { Skeleton, SkeletonPanel } from '@/components/ui/skeleton'
 import { money } from '@/features/pos/format'
-import { toInputDate } from '@/lib/shared/utils'
+import { getVnCalendarRange, toInputDate } from '@/lib/shared/utils'
 
 interface TopProductRow {
   productId: string
@@ -56,12 +56,8 @@ export function ReportsInventory() {
     }
   }, [])
 
-  const applyQuickRange = (days: number) => {
-    const end = new Date()
-    const start = new Date()
-    start.setDate(end.getDate() - days + 1)
-    const nextFrom = toInputDate(start)
-    const nextTo = toInputDate(end)
+  const applyQuickRange = (period: 'day' | 'week' | 'month' | 'year') => {
+    const { from: nextFrom, to: nextTo } = getVnCalendarRange(period)
     setFrom(nextFrom)
     setTo(nextTo)
     void load(nextFrom, nextTo)
@@ -117,10 +113,11 @@ export function ReportsInventory() {
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Button variant="secondary" size="sm" onClick={() => applyQuickRange(1)}>Hôm nay</Button>
-          <Button variant="secondary" size="sm" onClick={() => applyQuickRange(7)}>7 ngày</Button>
-          <Button variant="secondary" size="sm" onClick={() => applyQuickRange(30)}>30 ngày</Button>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <Button variant="secondary" size="sm" onClick={() => applyQuickRange('day')}>Hôm nay</Button>
+          <Button variant="secondary" size="sm" onClick={() => applyQuickRange('week')}>Tuần này</Button>
+          <Button variant="secondary" size="sm" onClick={() => applyQuickRange('month')}>Tháng này</Button>
+          <Button variant="secondary" size="sm" onClick={() => applyQuickRange('year')}>Năm này</Button>
           <Button variant="inverse" size="sm" disabled={loading} onClick={handleView}>
             {loading ? 'Đang tải' : 'Xem'}
           </Button>

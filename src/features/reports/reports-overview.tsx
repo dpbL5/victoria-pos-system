@@ -15,17 +15,17 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label, Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
+import { AppSkeleton, Skeleton } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
 import { formatClock, money, paymentMethodLabel } from '@/features/pos/format'
 import type { PaymentMethod, UserSession } from '@/features/pos/types'
-import { shortInvoiceNo, toInputDate } from '@/lib/shared/utils'
+import { getVnCalendarRange, shortInvoiceNo, toInputDate } from '@/lib/shared/utils'
 import { AreaChart, DonutChart, HourlyBarChart, DailyVolumeChart } from './reports-charts'
 import { isAdminOnly } from '@/lib/shared/roles'
 
-type ItemType = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT' | 'SURCHARGE'
+type ItemType = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT' | 'SURCHARGE' | 'DEPOSIT' | 'DEPOSIT_APPLIED'
 type Scope = 'STAFF' | 'ALL'
-type Range = 'today' | '7d' | '30d'
+type Range = 'today' | 'week' | 'month' | 'year'
 
 interface PaymentBreakdown {
   CASH: { total: number; count: number }
@@ -125,10 +125,11 @@ export interface ReportsOverviewHandle {
   refresh: () => void
 }
 
-const RANGES: Array<{ key: Range; label: string; days: number }> = [
-  { key: 'today', label: 'Hôm nay', days: 1 },
-  { key: '7d', label: '7 ngày', days: 7 },
-  { key: '30d', label: '30 ngày', days: 30 },
+const RANGES: Array<{ key: Range; label: string; period: 'day' | 'week' | 'month' | 'year' }> = [
+  { key: 'today', label: 'Hôm nay', period: 'day' },
+  { key: 'week', label: 'Tuần này', period: 'week' },
+  { key: 'month', label: 'Tháng này', period: 'month' },
+  { key: 'year', label: 'Năm này', period: 'year' },
 ]
 
 export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverviewProps>(
@@ -227,16 +228,13 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
 
   const applyRange = (nextRange: Range) => {
     setRange(nextRange)
-    const active = RANGES.find((r) => r.key === nextRange)!
-    const end = new Date()
-    const start = new Date()
-    start.setDate(end.getDate() - active.days + 1)
-    setFrom(toInputDate(start))
-    setTo(toInputDate(end))
+    const { from, to } = getVnCalendarRange(RANGES.find((r) => r.key === nextRange)!.period)
+    setFrom(from)
+    setTo(to)
   }
 
   if (loading) {
-    return <ReportsOverviewSkeleton />
+    return <AppSkeleton />
   }
 
   return (
@@ -496,20 +494,10 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
   }
 )
 
-function ReportsOverviewSkeleton() {
-  return (
-    <div className="space-y-4">
-      <SkeletonPanel><Skeleton className="h-16 w-full" /></SkeletonPanel>
-      <SkeletonStats />
-      <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
-    </div>
-  )
-}
-
 // ── Tabs chọn khoảng thời gian ──
 function RangeTabs({ range, onChange }: { range: Range; onChange: (range: Range) => void }) {
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {RANGES.map((r) => (
         <button
           key={r.key}
@@ -683,6 +671,8 @@ const itemColors: Record<ItemType, string> = {
   SERVICE: '#f59e0b', // amber-500
   DISCOUNT: '#ef4444', // red-500
   SURCHARGE: '#f43f5e', // rose-500
+  DEPOSIT: '#0ea5e9',
+  DEPOSIT_APPLIED: '#14b8a6',
 }
 
 function buildPaymentSlices(rows: TrendData['byPaymentMethod']): Array<{ label: string; value: number; color: string }> {
@@ -709,6 +699,8 @@ function buildItemSlices(items: ItemBreakdown): Array<{ label: string; value: nu
     SERVICE: 'Dịch vụ',
     DISCOUNT: 'Giảm giá',
     SURCHARGE: 'Phí gửi xe',
+    DEPOSIT: 'Tiền cọc',
+    DEPOSIT_APPLIED: 'Khấu trừ cọc',
   }
   return (Object.keys(labels) as ItemType[])
     .map((type) => ({ label: labels[type], value: items[type], color: itemColors[type] }))
@@ -722,8 +714,9 @@ function formatReportDate(value: string): string {
 
 function rangeLabel(range: Range, from: string, to: string): string {
   if (range === 'today') return 'Hôm nay'
-  if (range === '7d') return '7 ngày gần nhất'
-  if (range === '30d') return '30 ngày gần nhất'
+  if (range === 'week') return 'Tuần này'
+  if (range === 'month') return 'Tháng này'
+  if (range === 'year') return 'Năm này'
   // Tuỳ chỉnh: hiển thị khoảng ngày
   return `${formatReportDate(from)} – ${formatReportDate(to)}`
 }

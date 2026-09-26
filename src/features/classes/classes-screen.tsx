@@ -8,7 +8,7 @@ import { Input, Label, Textarea } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonRows } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
@@ -193,17 +193,12 @@ export function ClassesScreen() {
   ], [submitting])
 
   if (isLoading) {
-    return (
-      <SkeletonPage maxWidth="max-w-4xl">
-        <Skeleton className="h-10 w-48" />
-        <SkeletonRows count={3} />
-      </SkeletonPage>
-    )
+    return <AppSkeleton />
   }
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-4xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
             <School size={24} className="text-amber-500" />
@@ -216,9 +211,9 @@ export function ClassesScreen() {
           <Button variant="primary" size="md" icon={Plus} fullWidth onClick={openCreate}>Thêm lớp</Button>
         </div>
 
-        {error && <NoticeCard tone="danger" title="Không tải được danh sách lớp" description={error} />}
+        {error && <NoticeCard tone="danger" title="Không tải được danh sách lớp" description={error} action={<Button variant="secondary" size="sm" onClick={() => void mutate()}>Thử lại</Button>} />}
 
-        <div className="md:hidden">
+        {!error && <div className="md:hidden">
           <SortableCardList
             columns={cardColumns}
             data={classes}
@@ -234,9 +229,9 @@ export function ClassesScreen() {
             emptyMessage="Chưa có lớp học"
             emptyDescription="Tạo lớp để quản lý lịch học và sổ học viên riêng cho từng lớp."
           />
-        </div>
+        </div>}
 
-        <div className="hidden md:block">
+        {!error && <div className="hidden md:block">
           <SortableTable
             columns={columns}
             data={classes}
@@ -248,7 +243,7 @@ export function ClassesScreen() {
             emptyMessage="Chưa có lớp học"
             emptyDescription="Tạo lớp để quản lý lịch học và sổ học viên riêng cho từng lớp."
           />
-        </div>
+        </div>}
       </div>
 
       {formOpen && <ClassFormModal
@@ -273,7 +268,7 @@ export function ClassesScreen() {
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         title="Xoá lớp học?"
-        description={deleteTarget ? `Xoá vĩnh viễn lớp "${deleteTarget.name}", ${deleteTarget.slots.length} lịch lặp và TOÀN BỘ buổi học (kể cả buổi đã điểm danh), cùng sự kiện trên Google Calendar. Chỉ dùng khi thêm nhầm — muốn giữ lịch sử thì dùng "Kết thúc lớp".` : undefined}
+        description={deleteTarget ? `Chỉ xoá được lớp "${deleteTarget.name}" khi chưa có điểm danh hoặc ghi chú. Nếu lớp đã hoạt động, hãy kết thúc lớp để giữ lại lịch sử học viên.` : undefined}
         confirmLabel="Xoá lớp"
         submitting={submitting}
         onConfirm={deleteClass}

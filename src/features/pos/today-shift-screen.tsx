@@ -10,10 +10,10 @@ import {
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { NoticeCard } from '@/components/ui/notice-card'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
-import { TodayShiftSkeleton } from './today-shift-skeleton'
 import { useApi } from '@/hooks/use-api'
 import { QuickActions } from './quick-actions'
 import { SellPickDialog } from './sell-pick-dialog'
@@ -25,6 +25,7 @@ import { ToolCountDialog } from './tool-count-dialog'
 import { SellDialog } from './sell-dialog'
 import { RetailDialog } from './retail-dialog'
 import { CheckInDialog } from './check-in-dialog'
+import { BookingCards, type BookingItem } from './booking-list'
 import { CheckoutDrawer } from './checkout-drawer'
 import type {
   Product,
@@ -37,6 +38,7 @@ type CheckInMode = 'WALK_IN' | 'MEMBER'
 const SHIFT_KEY = '/api/shifts?current=true&openOperational=true'
 const SESSIONS_KEY = '/api/sessions?status=ACTIVE&limit=50'
 const AUTH_KEY = '/api/auth/me'
+const BOOKINGS_KEY = '/api/bookings'
 const PRODUCTS_KEY = '/api/products?isActive=true'
 const TOOLS_KEY = '/api/tools'
 
@@ -50,6 +52,7 @@ export function TodayShiftScreen() {
   const { mutate: mutateCache } = useSWRConfig()
 
   const [submitting, setSubmitting] = useState(false)
+  const [busyBookingId, setBusyBookingId] = useState<string | null>(null)
 
   const [openShiftDialog, setOpenShiftDialog] = useState(false)
   const [closeShiftDialog, setCloseShiftDialog] = useState(false)
@@ -66,6 +69,7 @@ export function TodayShiftScreen() {
   const shiftQuery = useApi<{ myShift: Shift | null; openShift: Shift | null }>(SHIFT_KEY)
   const sessionsQuery = useApi<SessionRow[]>(SESSIONS_KEY)
   const authQuery = useApi<{ userId: string; role: string }>(AUTH_KEY)
+  const bookingsQuery = useApi<BookingItem[]>(BOOKINGS_KEY)
   const shouldLoadProducts = !!checkoutSession || !!sellSession || retailOpen
   const shouldLoadTools = closeShiftDialog || countToolsDialog
   const productsQuery = useApi<Product[]>(shouldLoadProducts ? PRODUCTS_KEY : null, { revalidateOnMount: true })
@@ -74,18 +78,23 @@ export function TodayShiftScreen() {
   const shift = shiftQuery.data?.success ? shiftQuery.data.data?.myShift ?? null : null
   const openOperationalShift = shiftQuery.data?.success ? shiftQuery.data.data?.openShift ?? null : null
   const sessions = sessionsQuery.data?.success ? sessionsQuery.data.data ?? [] : []
+  const bookings = bookingsQuery.data?.success
+    ? (bookingsQuery.data.data ?? []).filter((booking) => booking.status === 'BOOKED')
+    : []
   const products = productsQuery.data?.success ? productsQuery.data.data ?? [] : []
   const tools = toolsQuery.data?.success ? toolsQuery.data.data ?? [] : []
   const authUserId = authQuery.data?.success ? authQuery.data.data?.userId ?? null : null
   const authRole = authQuery.data?.success ? authQuery.data.data?.role ?? null : null
-  const loading = shiftQuery.isLoading || sessionsQuery.isLoading || authQuery.isLoading
+  const loading = shiftQuery.isLoading || sessionsQuery.isLoading || authQuery.isLoading || bookingsQuery.isLoading
   const error = refreshError
     || shiftQuery.error?.message
     || sessionsQuery.error?.message
     || authQuery.error?.message
+    || bookingsQuery.error?.message
     || (!shiftQuery.data?.success ? shiftQuery.data?.error : undefined)
     || (!sessionsQuery.data?.success ? sessionsQuery.data?.error : undefined)
     || (!authQuery.data?.success ? authQuery.data?.error : undefined)
+    || (!bookingsQuery.data?.success ? bookingsQuery.data?.error : undefined)
     || ''
   const productsError = productsQuery.error?.message
     ?? (!productsQuery.data?.success ? productsQuery.data?.error : undefined)
@@ -116,7 +125,7 @@ export function TodayShiftScreen() {
 
   const refreshHome = useCallback(async () => {
     setRefreshError('')
-    const refreshed = await refreshResources([SHIFT_KEY, SESSIONS_KEY, AUTH_KEY])
+    const refreshed = await refreshResources([SHIFT_KEY, SESSIONS_KEY, AUTH_KEY, BOOKINGS_KEY])
     if (!refreshed) setRefreshError('Không làm mới được dữ liệu. Hãy thử tải lại.')
   }, [refreshResources])
 
@@ -131,6 +140,31 @@ export function TodayShiftScreen() {
       ? { ...current, data: update(current.data ?? []) }
       : current, { revalidate: false })
   }, [sessionsQuery.mutate])
+
+  const handleBookingCheckIn = async (booking: BookingItem) => {
+    setBusyBookingId(booking.id)
+    setSubmitting(true)
+    try {
+      const response = await apiJson(`/api/bookings/${booking.id}`, {
+        ...jsonRequest({ action: 'check-in' }),
+        method: 'PATCH',
+      })
+      if (!response.success) {
+        notifyError(response.error || 'Không xác nhận được lịch')
+        return
+      }
+      void bookingsQuery.mutate((current) => current?.success
+        ? { ...current, data: (current.data ?? []).filter((item) => item.id !== booking.id) }
+        : current, { revalidate: false })
+      notifySuccess('Đã xác nhận lịch và bắt đầu phiên chơi')
+      await refreshAfterMutation([SESSIONS_KEY, BOOKINGS_KEY], 'Đã xác nhận lịch nhưng danh sách chưa cập nhật. Không xác nhận lại; hãy tải lại màn hình.')
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setBusyBookingId(null)
+      setSubmitting(false)
+    }
+  }
 
   const { registerRefresh } = usePageRefresh()
 
@@ -395,12 +429,12 @@ export function TodayShiftScreen() {
   }
 
   if (loading) {
-    return <TodayShiftSkeleton />
+    return <AppSkeleton />
   }
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      <div className="mx-auto flex max-w-content flex-col gap-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
@@ -483,6 +517,17 @@ export function TodayShiftScreen() {
             onRetail={() => setRetailOpen(true)}
           />
         </div>
+
+        <section className="animate-slide-up rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Lịch đặt trong ngày</h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Các lịch chưa xác nhận</p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => router.push('/bookings')}>Quản lý</Button>
+          </div>
+          <BookingCards bookings={bookings} onCheckIn={(booking) => void handleBookingCheckIn(booking)} busyId={busyBookingId} actionDisabled={!shift} />
+        </section>
 
         <section
           className="animate-slide-up rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"

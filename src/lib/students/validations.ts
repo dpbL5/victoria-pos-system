@@ -64,6 +64,7 @@ export const createSeriesSchema = z.object({
 })
 
 export const markAttendanceSchema = z.object({
+  version: z.number().int().positive(),
   entries: z
     .array(
       z.object({
@@ -73,9 +74,10 @@ export const markAttendanceSchema = z.object({
       })
     )
     .min(1, 'Không có học viên nào để điểm danh'),
-})
+}).refine(value => new Set(value.entries.map(entry => entry.studentId)).size === value.entries.length, 'Không được lặp học viên trong danh sách điểm danh')
 
 export const updateLessonNotesSchema = z.object({
+  version: z.number().int().positive(),
   entries: z
     .array(
       z.object({
@@ -84,7 +86,7 @@ export const updateLessonNotesSchema = z.object({
       })
     )
     .min(1, 'Không có học viên nào để lưu ghi chú'),
-})
+}).refine(value => new Set(value.entries.map(entry => entry.studentId)).size === value.entries.length, 'Không được lặp học viên trong danh sách ghi chú')
 
 export const connectCalendarSchema = z.object({
   code: z.string().trim().min(1, 'Thiếu mã xác thực'),

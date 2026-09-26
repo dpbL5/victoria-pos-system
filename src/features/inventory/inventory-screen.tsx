@@ -12,7 +12,7 @@ import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel, SkeletonStats } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
@@ -223,7 +223,7 @@ export function InventoryScreen() {
   ], [canManageStock])
 
   if (loading) {
-    return <InventorySkeleton />
+    return <AppSkeleton />
   }
 
   const listHeader = (
@@ -252,7 +252,7 @@ export function InventoryScreen() {
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-5xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
@@ -379,17 +379,6 @@ export function InventoryScreen() {
         onDone={handleDelete}
       />
     </div>
-  )
-}
-
-function InventorySkeleton() {
-  return (
-    <SkeletonPage>
-      <Skeleton className="h-10 w-40" />
-      <SkeletonStats />
-      <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
-      <SkeletonPanel><Skeleton className="h-80 w-full" /></SkeletonPanel>
-    </SkeletonPage>
   )
 }
 

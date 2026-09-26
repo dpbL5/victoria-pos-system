@@ -1,6 +1,6 @@
 'use client'
 import { localTime } from './lesson-editor'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CheckCircle2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/input'
@@ -24,7 +24,7 @@ const dayLabel = (iso: string) => {
 
 // ── Dialog điểm danh + note từng học viên ──
 export function AttendanceDialog({
-  lesson,
+  lesson: initialLesson,
   onClose,
   onSaved,
 }: {
@@ -33,7 +33,17 @@ export function AttendanceDialog({
   onSaved: () => void
 }) {
   const { success: notifySuccess, error: notifyError } = useToast()
+  const [lesson, setLesson] = useState(initialLesson)
   const [submitting, setSubmitting] = useState(false)
+  const [conflict, setConflict] = useState(false)
+  const [now, setNow] = useState(Date.now)
+  const endsAt = Date.parse(lesson.startsAt) + lesson.durationMin * 60_000
+  const canAttend = endsAt <= now
+  useEffect(() => {
+    if (endsAt <= now) return
+    const timer = setTimeout(() => setNow(Date.now()), Math.max(0, Math.min(endsAt - Date.now(), 2_147_483_647)))
+    return () => clearTimeout(timer)
+  }, [endsAt, now])
   const { data: history } = useApi<{ notes: PreviousNote[] }>(`/api/lessons/${lesson.id}/previous-notes`)
   const previousByStudent = new Map((history?.data?.notes ?? []).map(note => [note.studentId, note]))
   const [entries, setEntries] = useState<Record<string, { status: 'COMPLETED' | 'ABSENT' | 'SCHEDULED'; note: string }>>(() => {
@@ -45,24 +55,28 @@ export function AttendanceDialog({
   })
 
   const handleSubmit = async () => {
+    const notes = lesson.students.filter(row => entries[row.studentId]?.note !== (row.note ?? '')).map(row => ({ studentId: row.studentId, note: entries[row.studentId]?.note ?? '' }))
+    if (!canAttend && !notes.length) return
     setSubmitting(true)
     try {
-      const data = await apiJson<{ lesson: Lesson; remainingByStudent: Record<string, number> }>(`/api/lessons/${lesson.id}/attendance`, {
-        method: 'POST',
+      const data = await apiJson<{ lesson: Lesson; remainingByStudent: Record<string, number> }>(`/api/lessons/${lesson.id}/${canAttend ? 'attendance' : 'notes'}`, {
+        method: canAttend ? 'POST' : 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          entries: lesson.students.map((ls) => ({
+          version: lesson.version,
+          entries: canAttend ? lesson.students.map((ls) => ({
             studentId: ls.studentId,
             status: entries[ls.studentId]?.status ?? 'SCHEDULED',
-            note: entries[ls.studentId]?.note ?? '',
-          })),
+            ...(entries[ls.studentId]?.note !== (ls.note ?? '') ? { note: entries[ls.studentId]?.note ?? '' } : {}),
+          })) : notes,
         }),
       })
       if (!data.success) {
-        notifyError(data.error || 'Không lưu được điểm danh')
+        setConflict(data.code === 'LESSON_CONFLICT')
+        notifyError(data.error || 'Không lưu được buổi học')
         return
       }
-      notifySuccess('Đã lưu điểm danh')
+      notifySuccess(canAttend ? 'Đã lưu điểm danh' : 'Đã lưu ghi chú chuẩn bị')
       onSaved()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
@@ -79,11 +93,37 @@ export function AttendanceDialog({
       description={localTime(lesson.startsAt).replace('T', ' ')}
       size="md"
       footer={
-        <Button variant="inverse" size="lg" fullWidth disabled={submitting} onClick={handleSubmit}>
-          {submitting ? 'Đang lưu...' : 'Lưu điểm danh'}
+        <Button variant="inverse" size="lg" fullWidth disabled={submitting || conflict || (!canAttend && !lesson.students.some(row => entries[row.studentId]?.note !== (row.note ?? '')))} onClick={handleSubmit}>
+          {submitting ? 'Đang lưu...' : canAttend ? 'Lưu điểm danh' : 'Lưu ghi chú chuẩn bị'}
         </Button>
       }
     >
+      {!canAttend && <p className="mb-3 text-sm text-amber-700 dark:text-amber-300">Có thể ghi chú chuẩn bị trước buổi; điểm danh mở sau giờ kết thúc dự kiến.</p>}
+      {conflict && <Button type="button" variant="secondary" disabled={submitting} onClick={async () => {
+        setSubmitting(true)
+        try {
+          const result = await apiJson<Lesson>(`/api/lessons/${lesson.id}`)
+          if (!result.success || !result.data) { notifyError(result.error || 'Không tải được buổi học'); return }
+          if (result.data.status === 'CANCELLED') { notifyError('Buổi học đã huỷ. Hãy sao chép ghi chú trước khi đóng'); return }
+          const latest = result.data
+          if (lesson.students.some(row => entries[row.studentId]?.note !== (row.note ?? '') && !latest.students.some(s => s.studentId === row.studentId))) {
+            notifyError('Có học viên đã rời buổi. Hãy sao chép ghi chú trước khi đóng')
+            return
+          }
+          setEntries(Object.fromEntries(latest.students.map(row => {
+            const old = lesson.students.find(s => s.studentId === row.studentId)
+            const draft = entries[row.studentId]
+            return [row.studentId, {
+              status: old && draft.status !== old.status ? draft.status : row.status,
+              note: old && draft.note !== (old.note ?? '') ? draft.note : row.note ?? '',
+            }]
+          })))
+          setLesson(latest)
+          setConflict(false)
+          notifySuccess('Đã tải bản mới và giữ thay đổi đang soạn. Kiểm tra trước khi lưu lại')
+        } catch { notifyError('Lỗi kết nối máy chủ') }
+        finally { setSubmitting(false) }
+      }}>Tải bản mới, giữ nội dung đang soạn</Button>}
       <ul className="space-y-3">
         {lesson.students.map((ls) => {
           const entry = entries[ls.studentId]
@@ -95,6 +135,7 @@ export function AttendanceDialog({
                 <div className="flex gap-1">
                   <button
                     type="button"
+                    disabled={submitting || !canAttend}
                     aria-pressed={entry?.status === 'COMPLETED'}
                     onClick={() => setEntries((prev) => ({ ...prev, [ls.studentId]: { ...prev[ls.studentId], status: 'COMPLETED' } }))}
                     className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${entry?.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800'}`}
@@ -103,6 +144,7 @@ export function AttendanceDialog({
                   </button>
                   <button
                     type="button"
+                    disabled={submitting || !canAttend}
                     aria-pressed={entry?.status === 'ABSENT'}
                     onClick={() => setEntries((prev) => ({ ...prev, [ls.studentId]: { ...prev[ls.studentId], status: 'ABSENT' } }))}
                     className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${entry?.status === 'ABSENT' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800'}`}
@@ -119,7 +161,9 @@ export function AttendanceDialog({
               <Textarea
                 className="mt-2"
                 rows={1}
-                placeholder="Note sau buổi học..."
+                maxLength={2000}
+                disabled={submitting}
+                placeholder={canAttend ? 'Ghi chú sau buổi học...' : 'Ghi chú chuẩn bị cho học viên...'}
                 value={entry?.note ?? ''}
                 onChange={(e) => setEntries((prev) => ({ ...prev, [ls.studentId]: { ...prev[ls.studentId], note: e.target.value } }))}
               />

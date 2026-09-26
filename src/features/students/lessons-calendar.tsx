@@ -22,7 +22,6 @@ import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { useSWRConfig } from 'swr'
 import { apiJson } from '@/lib/api'
 import { LessonEditor, localTime, lockedLesson } from './lesson-editor'
-import { CalendarConnection, useCalendarStatus } from './calendar-connection'
 import type { Lesson, Student } from './types'
 import type { LessonClass } from '@/features/classes/types'
 
@@ -58,7 +57,6 @@ export default function LessonsCalendar() {
   const ref = useRef<CalendarRef>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  const { needsAttention: googleNeedsAttention } = useCalendarStatus()
   const toast = useToast()
   const { registerRefresh } = usePageRefresh()
   const { mutate: mutateCache } = useSWRConfig()
@@ -142,13 +140,9 @@ export default function LessonsCalendar() {
       </div>
       <p className="min-w-0 flex-1 truncate text-center text-sm font-semibold md:text-base">{title}</p>
       <div ref={menuRef} className="relative flex shrink-0 items-center gap-1">
-        <CalendarConnection compact />
         <Select aria-label="Chế độ xem lịch" className="!w-auto max-w-20 border-0 bg-transparent !px-1.5 shadow-none lg:max-w-24" value={view} onChange={e => { setView(e.target.value); ref.current?.getApi().changeView(e.target.value) }}>{Object.entries(VIEWS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select>
         <Button variant="ghost" icon={SlidersHorizontal} size="sm" aria-label={activeFilterCount ? `Bộ lọc lịch, đang áp dụng ${activeFilterCount}` : 'Bộ lọc lịch'} aria-expanded={filtersOpen} className="md:hidden" onClick={() => setFiltersOpen(v => !v)}>{activeFilterCount ? <span className="text-[10px]">{activeFilterCount}</span> : null}</Button>
-        <span className="relative inline-flex">
-          <Button variant="ghost" icon={MoreHorizontal} size="sm" aria-label="Lối tắt khác" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)} />
-          {googleNeedsAttention && <span className="pointer-events-none absolute right-0.5 top-0.5 size-2 rounded-full bg-amber-500 ring-2 ring-surface-secondary" aria-hidden />}
-        </span>
+        <Button variant="ghost" icon={MoreHorizontal} size="sm" aria-label="Lối tắt khác" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)} />
         <div className={`${menuOpen ? '' : 'hidden'} absolute right-0 top-full z-30 mt-1 w-56 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-800 dark:bg-zinc-900`}>
           <Link href="/students" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring dark:text-zinc-200 dark:hover:bg-zinc-800" onClick={() => setMenuOpen(false)}>
             <Users size={16} aria-hidden /> Học viên
@@ -156,8 +150,6 @@ export default function LessonsCalendar() {
           <Link href="/classes" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring dark:text-zinc-200 dark:hover:bg-zinc-800" onClick={() => setMenuOpen(false)}>
             <School size={16} aria-hidden /> Lớp học
           </Link>
-          <div className="my-1 h-px bg-zinc-100 dark:bg-zinc-800" aria-hidden />
-          <CalendarConnection menuItem onOpen={() => setMenuOpen(false)} />
         </div>
       </div>
       <Button className="add-lesson-button" size="sm" icon={Plus} onClick={() => openNew(date)}>Thêm buổi</Button>

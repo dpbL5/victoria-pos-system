@@ -1,0 +1,101 @@
+import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
+import { fail, runInTransaction } from '@/lib/infrastructure/db-helpers'
+import type { Repositories } from '@/lib/infrastructure/repositories'
+import { repositories } from '@/lib/infrastructure/repositories'
+import { err, ok } from '@/lib/shared/result'
+import type { DomainError, Result } from '@/lib/shared/result'
+import type { CreateBookingInput, UpdateBookingInput } from '../validations'
+
+export async function createBooking(
+  input: CreateBookingInput & { staffId: string },
+  deps: Repositories = repositories
+): Promise<Result<{ id: string; depositInvoiceId: string | null }>> {
+  const customer = input.customerId ? await deps.customer.findById(input.customerId) : null
+  if (input.customerId && !customer) return err('CUSTOMER_NOT_FOUND')
+  if (new Date(input.scheduledAt) <= new Date()) return err('BOOKING_TIME_INVALID')
+
+  const result = await runInTransaction(async (tx) => {
+    const booking = await tx.booking!.create({
+      customerId: customer?.id ?? null,
+      customerName: customer ? null : (input.customerName?.trim() || null),
+      customerPhone: customer ? null : (input.customerPhone?.trim() || null),
+      scheduledAt: new Date(input.scheduledAt),
+      playerCount: input.playerCount,
+      staffId: input.staffId,
+      notes: input.notes?.trim() || null,
+    })
+
+    await tx.audit.append({
+      userId: input.staffId,
+      action: 'BOOKING_CREATE',
+      entityType: 'Booking',
+      entityId: booking.id,
+      details: {
+        customerId: customer?.id ?? null,
+        scheduledAt: input.scheduledAt,
+        playerCount: input.playerCount,
+      },
+    })
+    return { id: booking.id, depositInvoiceId: null }
+  })
+
+  return result.ok ? ok(result.value) : result
+}
+
+export async function updateBooking(
+  input: UpdateBookingInput & { bookingId: string; staffId: string },
+  deps: Repositories = repositories
+): Promise<Result<{ id: string }>> {
+  const booking = await deps.booking!.findById(input.bookingId)
+  if (!booking) return err('BOOKING_NOT_FOUND')
+  if (booking.status !== 'BOOKED') return err('BOOKING_NOT_EDITABLE')
+  if (input.scheduledAt && new Date(input.scheduledAt) <= new Date()) return err('BOOKING_TIME_INVALID')
+  if (input.customerId) {
+    const customer = await deps.customer.findById(input.customerId)
+    if (!customer) return err('CUSTOMER_NOT_FOUND')
+  }
+  const updated = await runInTransaction(async (tx) => {
+    const result = await tx.booking!.updateBooked(input.bookingId, {
+      ...(input.scheduledAt !== undefined ? { scheduledAt: new Date(input.scheduledAt) } : {}),
+      ...(input.playerCount !== undefined ? { playerCount: input.playerCount } : {}),
+      ...(input.customerId !== undefined ? { customerId: input.customerId } : {}),
+      ...(input.customerName !== undefined ? { customerName: input.customerName?.trim() || null } : {}),
+      ...(input.customerPhone !== undefined ? { customerPhone: input.customerPhone?.trim() || null } : {}),
+      ...(input.notes !== undefined ? { notes: input.notes?.trim() || null } : {}),
+    })
+    if (!result.count) fail('BOOKING_NOT_EDITABLE')
+    await tx.audit.append({ userId: input.staffId, action: 'BOOKING_UPDATE', entityType: 'Booking', entityId: input.bookingId, details: input })
+    return { id: input.bookingId }
+  })
+  return updated.ok ? ok(updated.value) : updated
+}
+
+export async function setBookingStatus(
+  input: { bookingId: string; staffId: string; status: 'CANCELLED' | 'NO_SHOW' },
+  deps: Repositories = repositories
+): Promise<Result<{ id: string; status: 'CANCELLED' | 'NO_SHOW' }>> {
+  const booking = await deps.booking!.findById(input.bookingId)
+  if (!booking) return err('BOOKING_NOT_FOUND')
+  if (Number(booking.depositAmount) > 0) return err('BOOKING_HAS_DEPOSIT')
+  const result = await runInTransaction(async (tx) => {
+    const updated = await tx.booking!.transition(input.bookingId, 'BOOKED', input.status)
+    if (!updated.count) fail('BOOKING_NOT_EDITABLE')
+    await tx.audit.append({ userId: input.staffId, action: `BOOKING_${input.status}`, entityType: 'Booking', entityId: input.bookingId, details: {} })
+    return { id: input.bookingId, status: input.status }
+  })
+  return result.ok ? ok(result.value) : result
+}
+
+export function mapBookingError(error: DomainError): HttpErrorInfo {
+  switch (error.code) {
+    case 'BOOKING_NOT_FOUND': return { code: error.code, message: 'Không tìm thấy lịch đặt', status: 404 }
+    case 'BOOKING_TIME_INVALID': return { code: error.code, message: 'Giờ hẹn phải ở tương lai', status: 400 }
+    case 'BOOKING_NOT_EDITABLE': return { code: error.code, message: 'Lịch này đã được xử lý hoặc không còn chỉnh sửa được', status: 409 }
+    case 'BOOKING_HAS_DEPOSIT': return { code: error.code, message: 'Lịch đã thu cọc, vui lòng xử lý cọc trước khi hủy', status: 409 }
+    case 'CUSTOMER_NOT_FOUND': return { code: error.code, message: 'Không tìm thấy khách hàng', status: 404 }
+    case 'ACTIVE_SESSION_EXISTS': return { code: error.code, message: 'Khách đang có phiên chơi chưa kết thúc', status: 409 }
+    case 'MEMBERSHIP_REQUIRED': return { code: error.code, message: 'Hội viên chưa có gói còn hiệu lực. Vui lòng gia hạn trước khi check-in.', status: 409 }
+    case 'SHIFT_REQUIRED': return { code: error.code, message: 'Mở ca trước khi xác nhận khách bắt đầu phiên', status: 409 }
+    default: return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
+  }
+}

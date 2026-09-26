@@ -28,6 +28,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     const result = await markAttendance({
       staffId: auth.userId,
       lessonId: id,
+      version: parsed.data.version,
       entries: parsed.data.entries,
     })
 

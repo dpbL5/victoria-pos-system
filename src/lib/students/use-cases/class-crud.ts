@@ -78,6 +78,7 @@ export async function createClass(input: CreateClassInput, deps: Repositories = 
       coachName: input.coachName || null,
       note: input.note || null,
     })
+    await tx.lessonClass.replaceStudents(created.id, studentIds)
     let generatedCount = 0
     for (const slot of input.slots ?? []) {
       const result = await createSlotInTx(tx, {
@@ -115,6 +116,9 @@ export async function updateClass(input: UpdateClassInput, deps: Repositories = 
     const lessonClass = await tx.lessonClass.findById(input.classId)
     if (!lessonClass) fail('CLASS_NOT_FOUND')
     const renamed = input.name !== undefined && input.name !== lessonClass!.name
+    if (input.isActive === true && !lessonClass!.isActive) {
+      await assertStudentsInSingleClass(tx, classRosterIds(lessonClass!))
+    }
     const updated = await tx.lessonClass.update(input.classId, {
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.coachName !== undefined ? { coachName: input.coachName || null } : {}),
@@ -210,18 +214,15 @@ async function deleteClassEvents(lessonClass: LessonClassRecord, lessons: Lesson
 }
 
 /**
- * Xoá lớp thêm nhầm: XOÁ CỨNG lớp + mọi khung giờ + mọi buổi của lớp (kể cả buổi đã điểm danh).
+ * Chỉ xoá lớp thêm nhầm khi mọi buổi chưa có hoạt động hoặc ghi chú.
  * Dùng khi tạo lớp sai và muốn gỡ hoàn toàn. Muốn giữ lịch sử thì dùng "Kết thúc lớp".
  */
 export async function deleteClass(input: { staffId: string; classId: string }, deps: Repositories = repositories) {
-  const lessonClass = await deps.lessonClass.findById(input.classId)
-  if (!lessonClass) return err('CLASS_NOT_FOUND')
-  const lessons = await deps.lesson.findByClass(input.classId)
-  const deletedEvents = await deleteClassEvents(lessonClass, lessons, deps)
-  return runInTransaction(async tx => {
+  const result = await runInTransaction(async tx => {
     const current = await tx.lessonClass.findById(input.classId)
     if (!current) fail('CLASS_NOT_FOUND')
     const currentLessons = await tx.lesson.findByClass(input.classId)
+    if (hasClassHistory(currentLessons)) fail('CLASS_HAS_HISTORY')
     await tx.lesson.deleteMany(currentLessons.map(lesson => lesson.id))
     for (const slot of current!.slots) await tx.lessonSeries.delete(slot.id)
     await tx.lessonClass.delete(input.classId)
@@ -230,26 +231,39 @@ export async function deleteClass(input: { staffId: string; classId: string }, d
       action: 'CLASS_DELETE',
       entityType: 'LessonClass',
       entityId: input.classId,
-      details: { name: current!.name, slots: current!.slots.length, lessons: currentLessons.length, hardDelete: true, deletedEvents },
+      details: { name: current!.name, slots: current!.slots.length, lessons: currentLessons.length, hardDelete: true },
     })
-    return { deleted: true as const, deletedSlots: current!.slots.length, deletedLessons: currentLessons.length, deletedEvents }
+    return { deleted: true as const, deletedSlots: current!.slots.length, deletedLessons: currentLessons.length, lessonClass: current!, lessons: currentLessons }
   }, isolation)
+  if (!result.ok) return result
+  const { lessonClass, lessons, ...deleted } = result.value
+  const deletedEvents = await deleteClassEvents(lessonClass, lessons, deps)
+  return ok({ ...deleted, deletedEvents })
 }
+
+const hasClassHistory = (lessons: LessonRecord[]) => lessons.some(lesson =>
+  lesson.status !== 'SCHEDULED' || Boolean(lesson.note?.trim()) || lesson.students.some(student =>
+    student.status !== 'SCHEDULED' || Boolean(student.note?.trim()) || Boolean(student.packageId)
+  )
+)
 
 /** Ghi sổ học viên: áp cho mọi khung giờ + các buổi tương lai chưa điểm danh. */
 async function applyRoster(tx: Repositories, lessonClass: LessonClassRecord, studentIds: string[]) {
   const now = new Date()
   let updatedLessons = 0
   let skippedLocked = 0
+  await tx.lessonClass.replaceStudents(lessonClass.id, studentIds)
   for (const slot of lessonClass.slots) {
     await tx.lessonSeries.replaceStudents(slot.id, studentIds)
+    await tx.lessonSeries.update(slot.id, {}, slot.version)
     const future = (await tx.lesson.findBySeries(slot.id)).filter(l => l.startsAt >= now && l.status === 'SCHEDULED')
     for (const lesson of future) {
-      if (isLessonLocked(lesson)) {
+      if (isLessonLocked(lesson) || lesson.students.some(member => member.note !== null && !studentIds.includes(member.studentId))) {
         skippedLocked++
         continue
       }
       await tx.lesson.replaceStudents(lesson.id, studentIds)
+      await tx.lesson.update(lesson.id, {}, lesson.version)
       updatedLessons++
     }
   }
@@ -262,6 +276,7 @@ export async function setClassRoster(input: { staffId: string; classId: string; 
   return runInTransaction(async tx => {
     const lessonClass = await tx.lessonClass.findById(input.classId)
     if (!lessonClass) fail('CLASS_NOT_FOUND')
+    if (!lessonClass.isActive) fail('CLASS_ENDED')
     if (input.studentIds.length) await studentsActive(tx, input.studentIds)
     // Chỉ chặn học viên MỚI thêm vào lớp; thành viên đang có (kể cả dữ liệu cũ vi phạm) không bị chặn khi lưu sổ.
     const current = new Set(classRosterIds(lessonClass!))
@@ -284,6 +299,7 @@ export async function addClassStudent(input: { staffId: string; classId: string;
   return runInTransaction(async tx => {
     const lessonClass = await tx.lessonClass.findById(input.classId)
     if (!lessonClass) fail('CLASS_NOT_FOUND')
+    if (!lessonClass.isActive) fail('CLASS_ENDED')
     await studentsActive(tx, [input.studentId])
     const current = classRosterIds(lessonClass!)
     if (!current.includes(input.studentId)) await assertStudentsInSingleClass(tx, [input.studentId], { excludeClassId: input.classId })
@@ -306,6 +322,7 @@ export async function removeClassStudent(input: { staffId: string; classId: stri
   return runInTransaction(async tx => {
     const lessonClass = await tx.lessonClass.findById(input.classId)
     if (!lessonClass) fail('CLASS_NOT_FOUND')
+    if (!lessonClass.isActive) fail('CLASS_ENDED')
     const studentIds = classRosterIds(lessonClass!).filter(id => id !== input.studentId)
     const result = await applyRoster(tx, lessonClass!, studentIds)
     await tx.audit.append({
@@ -329,6 +346,7 @@ export async function createClassSlot(input: CreateClassSlotInput, deps: Reposit
   return runInTransaction(async tx => {
     const lessonClass = await tx.lessonClass.findById(input.classId)
     if (!lessonClass) fail('CLASS_NOT_FOUND')
+    if (!lessonClass.isActive) fail('CLASS_ENDED')
     const { series, generatedCount } = await createSlotInTx(tx, {
       classId: lessonClass!.id,
       title: lessonClass!.name,
@@ -359,6 +377,7 @@ export interface UpdateClassSlotInput extends Partial<ClassSlotInput> {
 export async function updateClassSlot(input: UpdateClassSlotInput, deps: Repositories = repositories) {
   const lessonClass = await deps.lessonClass.findById(input.classId)
   if (!lessonClass) return err('CLASS_NOT_FOUND')
+  if (!lessonClass.isActive) return err('CLASS_ENDED')
   const slot = lessonClass.slots.find(s => s.id === input.slotId)
   if (!slot) return err('CLASS_SLOT_NOT_FOUND')
   const anchor = anchorLesson(await deps.lesson.findBySeries(slot.id))
@@ -487,6 +506,8 @@ export function mapClassError(error: DomainError): HttpErrorInfo {
   const errors: Record<string, [number, string]> = {
     CLASS_NOT_FOUND: [404, 'Không tìm thấy lớp học'],
     CLASS_SLOT_NOT_FOUND: [404, 'Không tìm thấy khung giờ của lớp'],
+    CLASS_HAS_HISTORY: [409, 'Lớp đã có hoạt động hoặc ghi chú. Hãy kết thúc lớp để giữ lịch sử'],
+    CLASS_ENDED: [409, 'Lớp đã kết thúc, không thể thay đổi sổ học viên hoặc thêm lịch'],
   }
   const mapped = errors[error.code]
   return mapped ? { code: error.code, status: mapped[0], message: mapped[1] } : mapLessonError(error)

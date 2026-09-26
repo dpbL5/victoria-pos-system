@@ -11,7 +11,7 @@ import { Input, Select } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
@@ -129,19 +129,13 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
   }
 
   if (loading && !student) {
-    return (
-      <SkeletonPage maxWidth="max-w-3xl">
-          <Skeleton className="h-10 w-48" />
-          <SkeletonPanel><Skeleton className="h-40 w-full" /></SkeletonPanel>
-          <SkeletonPanel><Skeleton className="h-40 w-full" /></SkeletonPanel>
-      </SkeletonPage>
-    )
+    return <AppSkeleton />
   }
 
   if (!student) {
     return (
       <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-content">
           <NoticeCard tone="danger" title="Không tìm thấy học viên" description={error || 'Học viên không tồn tại hoặc đã bị xoá.'} />
         </div>
       </div>
@@ -152,7 +146,7 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-3xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <header className="flex items-center gap-2">
           <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.push('/students')} title="Quay lại" />
           <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
@@ -259,7 +253,7 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
                   )}
                   {l.status !== 'CANCELLED' && (
                     <div className="mt-1">
-                      <StudentLessonNote lessonId={l.id} studentId={id} studentName={student.fullName} note={row?.note ?? null} onSaved={() => void mutateLessons()} />
+                      <StudentLessonNote lessonId={l.id} version={l.version} studentId={id} studentName={student.fullName} note={row?.note ?? null} onSaved={() => void mutateLessons()} />
                     </div>
                   )}
                 </div>
@@ -286,7 +280,7 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
                   )}
                   {l.status !== 'CANCELLED' && (
                     <div className="mt-1">
-                      <StudentLessonNote lessonId={l.id} studentId={id} studentName={student.fullName} note={row?.note ?? null} onSaved={() => void mutateLessons()} />
+                      <StudentLessonNote lessonId={l.id} version={l.version} studentId={id} studentName={student.fullName} note={row?.note ?? null} onSaved={() => void mutateLessons()} />
                     </div>
                   )}
                 </div>

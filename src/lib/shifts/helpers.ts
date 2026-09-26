@@ -101,7 +101,7 @@ export async function calculateExpectedCash(
 
 export interface TransactionItem {
   id: string
-  type: 'payment' | 'membership'
+  type: 'payment' | 'membership' | 'deposit'
   amount: number
   paymentMethod: string | null
   paidAt: string
@@ -174,7 +174,7 @@ export async function getShiftTransactions(
 
   const mapTransaction = (p: PaymentRow): TransactionItem => ({
     id: p.id,
-    type: p.kind === 'MEMBERSHIP' ? 'membership' as const : 'payment' as const,
+    type: p.kind === 'MEMBERSHIP' ? 'membership' as const : p.kind === 'DEPOSIT' ? 'deposit' as const : 'payment' as const,
     amount: Number(p.grandTotal),
     paymentMethod: p.paymentMethod as string,
     paidAt: p.paidAt instanceof Date ? p.paidAt.toISOString() : String(p.paidAt),
@@ -207,7 +207,7 @@ export async function getShiftTransactions(
     summary: {
       totalAmount,
       totalCount: activeTransactions.length,
-      paymentCount: activeTransactions.filter((t) => t.type === 'payment').length,
+      paymentCount: activeTransactions.filter((t) => t.type !== 'membership').length,
       membershipCount: activeTransactions.filter((t) => t.type === 'membership').length,
       cashAmount: activeTransactions
         .filter((t) => t.paymentMethod === 'CASH')

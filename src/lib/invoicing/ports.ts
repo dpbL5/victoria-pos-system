@@ -31,6 +31,7 @@ export interface CreatePaidInvoiceInput {
 }
 
 export interface CreatePaymentInput {
+  kind?: 'OPERATIONAL' | 'DEPOSIT'
   invoiceId: string
   /** sessionId nullable cho thanh toán phi vận hành (phí hội viên) */
   sessionId?: string | null
@@ -125,6 +126,8 @@ export interface VoidInvoiceItemRef {
   id: string
   type: string
   productId: string | null
+  metadata?: Prisma.JsonValue | null
+  total?: number
   stockMovements: VoidStockMovementRef[]
 }
 

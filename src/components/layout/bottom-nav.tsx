@@ -52,9 +52,9 @@ export function BottomNav({ userRole }: BottomNavProps) {
       : pathname.startsWith(href)
 
   return (
-    <nav className="safe-area-bottom fixed inset-x-0 bottom-0 z-50 border-t border-zinc-200 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 md:hidden">
+    <nav aria-label="Điều hướng chính" className="safe-area-bottom pointer-events-none fixed inset-x-0 bottom-0 z-50 px-3 md:hidden">
       <div
-        className="grid h-16"
+        className="pointer-events-auto mx-auto grid h-16 max-w-md grid-cols-1 overflow-hidden rounded-[1.75rem] border border-zinc-200/80 bg-white/90 p-1.5 shadow-[0_8px_30px_rgb(15_23_42/0.14)] backdrop-blur-xl dark:border-zinc-700/80 dark:bg-zinc-900/90 dark:shadow-[0_8px_30px_rgb(0_0_0/0.35)]"
         style={{ gridTemplateColumns: `repeat(${visibleItems.length}, minmax(0, 1fr))` }}
       >
         {visibleItems.map((item) => {

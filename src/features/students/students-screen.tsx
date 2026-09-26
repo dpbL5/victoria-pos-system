@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input, Select } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonRows } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
@@ -186,17 +186,12 @@ export function StudentsScreen() {
   ], [submitting, router])
 
   if (loading) {
-    return (
-      <SkeletonPage maxWidth="max-w-3xl">
-          <Skeleton className="h-10 w-48" />
-          <SkeletonRows count={2} />
-      </SkeletonPage>
-    )
+    return <AppSkeleton />
   }
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-3xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
             <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">

@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  Banknote,
   Car,
   Clock,
   Minus,
@@ -96,6 +97,8 @@ const itemTypeIcons: Record<string, LucideIcon> = {
   SERVICE: ScrollText,
   DISCOUNT: Tag,
   SURCHARGE: Car,
+  DEPOSIT: Banknote,
+  DEPOSIT_APPLIED: Banknote,
 }
 
 const statusVariant: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
@@ -561,6 +564,8 @@ export function InlineProductEditor({
   lines,
   products,
   loading,
+  error,
+  onRetry,
   onAdd,
   onDecrease,
   onIncrease,
@@ -569,6 +574,8 @@ export function InlineProductEditor({
   lines: InvoiceEditorLine[]
   products: Product[]
   loading: boolean
+  error?: string
+  onRetry?: () => void
   onAdd: (product: Product) => void
   onDecrease: (productId: string, delta: number) => void
   onIncrease: (productId: string, delta: number) => void
@@ -618,7 +625,12 @@ export function InlineProductEditor({
         </div>
       )}
 
-      {loading ? (
+      {error ? (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+          <p>Không tải được sản phẩm: {error}</p>
+          {onRetry && <button type="button" className="mt-2 font-medium underline" onClick={onRetry}>Thử lại</button>}
+        </div>
+      ) : loading ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">Đang tải danh sách hàng hoá...</p>
       ) : products.length > 0 ? (
         <div className="flex flex-wrap gap-2">

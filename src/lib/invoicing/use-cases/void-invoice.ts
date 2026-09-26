@@ -51,6 +51,11 @@ export async function runVoidInvoice(
   if (!invoice) fail('INVOICE_NOT_FOUND')
   if (invoice.status !== 'PAID') fail('INVOICE_NOT_VOIDABLE')
   if (!invoice.shiftId) fail('SHIFT_CLOSED')
+  if (invoice.items.some((item) => item.type === 'DEPOSIT')) fail('DEPOSIT_INVOICE_VOID_UNSUPPORTED')
+  if (invoice.sessionId && invoice.items.some((item) => item.type === 'DEPOSIT_APPLIED')) {
+    const booking = await tx.booking!.findForSession(invoice.sessionId)
+    if (booking && booking.depositRefundedAmount > 0) fail('BOOKING_DEPOSIT_REFUND_VOID_UNSUPPORTED')
+  }
 
   const correctionShiftId = invoice.shiftId
   const actorName = invoice.staff?.fullName ?? staffId
@@ -61,7 +66,20 @@ export async function runVoidInvoice(
 
   // 1. Hoàn trả tồn kho cho hàng hoá đã bán (đảo ngược StockMovement SALE)
   let reversedStockItems = 0
+  let reversedDeposit = 0
   for (const item of invoice.items) {
+    if (item.type === 'DEPOSIT_APPLIED') {
+      const metadata = item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+        ? item.metadata as Record<string, unknown>
+        : null
+      const bookingId = typeof metadata?.bookingId === 'string' ? metadata.bookingId : null
+      const amount = Math.abs(Number(item.total ?? 0))
+      if (bookingId && amount > 0) {
+        const reversed = await tx.booking!.reverseDeposit(bookingId, amount)
+        if (!reversed.count) fail('BOOKING_DEPOSIT_STALE')
+        reversedDeposit += amount
+      }
+    }
     if (!item.productId) continue
     for (const movement of item.stockMovements) {
       const returnQty = Math.abs(movement.quantity)
@@ -115,6 +133,7 @@ export async function runVoidInvoice(
       statusAfter: 'CANCELLED',
       grandTotal: invoice.grandTotal,
       reversedStockItems,
+      reversedDeposit,
       reason: reason ?? null,
       shiftId: correctionShiftId,
       actorName,
@@ -130,6 +149,12 @@ export function mapVoidInvoiceError(error: DomainError): HttpErrorInfo {
       return { code: 'INVOICE_NOT_FOUND', message: 'Không tìm thấy hoá đơn', status: 404 }
     case 'INVOICE_NOT_VOIDABLE':
       return { code: 'INVOICE_NOT_VOIDABLE', message: 'Chỉ có thể huỷ hoá đơn đã thanh toán (trạng thái PAID)', status: 409 }
+    case 'DEPOSIT_INVOICE_VOID_UNSUPPORTED':
+      return { code: 'DEPOSIT_INVOICE_VOID_UNSUPPORTED', message: 'Không thể huỷ giao dịch cọc ở phiên bản hiện tại', status: 409 }
+    case 'BOOKING_DEPOSIT_STALE':
+      return { code: 'BOOKING_DEPOSIT_STALE', message: 'Số dư cọc đã thay đổi. Tải lại hóa đơn rồi thử lại.', status: 409 }
+    case 'BOOKING_DEPOSIT_REFUND_VOID_UNSUPPORTED':
+      return { code: 'BOOKING_DEPOSIT_REFUND_VOID_UNSUPPORTED', message: 'Không thể huỷ hoá đơn sau khi phần cọc dư đã được hoàn', status: 409 }
     case 'SHIFT_CLOSED':
       return { code: 'SHIFT_CLOSED', message: 'Hoá đơn chưa gán ca thanh toán, không thể ghi nhận hoàn trả.', status: 409 }
     default:

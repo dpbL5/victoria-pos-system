@@ -89,6 +89,8 @@ export interface TrendItemType {
   SERVICE: number
   DISCOUNT: number
   SURCHARGE: number
+  DEPOSIT: number
+  DEPOSIT_APPLIED: number
 }
 
 export interface TrendHourRow {

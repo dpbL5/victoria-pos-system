@@ -1,168 +1,187 @@
-'use client'
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
   Banknote,
-  CalendarClock,
   CreditCard,
   History,
-} from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
-import { FilterButton } from '@/components/ui/filter-button'
-import { Input } from '@/components/ui/input'
-import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
-import { usePageRefresh } from '@/components/layout/page-refresh-context'
-import { formatClock, money } from '@/features/pos/format'
-import { today } from '@/lib/shared/utils'
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FilterButton } from "@/components/ui/filter-button";
+import { Input } from "@/components/ui/input";
+import { NoticeCard } from "@/components/ui/notice-card";
+import { AppSkeleton } from "@/components/ui/skeleton";
+import { usePageRefresh } from "@/components/layout/page-refresh-context";
+import { formatClock, money } from "@/features/pos/format";
+import { today } from "@/lib/shared/utils";
 
-type ShiftStatusFilter = 'ALL' | 'OPEN' | 'CLOSED'
+type ShiftStatusFilter = "ALL" | "OPEN" | "CLOSED";
 
 interface ShiftParticipantRow {
-  id: string
-  leftAt?: string | null
+  id: string;
+  leftAt?: string | null;
   staff: {
-    fullName: string
-  }
+    fullName: string;
+  };
 }
 
 interface ShiftRow {
-  id: string
-  staffId: string
-  staff?: { id: string; fullName: string }
-  openedAt: string
-  closedAt?: string | null
-  openingCash: number | string
-  closingCash?: number | string | null
-  expectedCash?: number | string | null
-  cashDifference?: number | string | null
-  status: 'OPEN' | 'CLOSED'
-  notes?: string | null
-  participants?: ShiftParticipantRow[]
+  id: string;
+  staffId: string;
+  staff?: { id: string; fullName: string };
+  openedAt: string;
+  closedAt?: string | null;
+  openingCash: number | string;
+  closingCash?: number | string | null;
+  expectedCash?: number | string | null;
+  cashDifference?: number | string | null;
+  status: "OPEN" | "CLOSED";
+  notes?: string | null;
+  participants?: ShiftParticipantRow[];
   _count?: {
-    sessions: number
-    payments: number
-  }
+    sessions: number;
+    payments: number;
+  };
   toolCounts?: Array<{
-    id: string
-    toolId: string
-    tool: { id: string; name: string; quantity: number; isRequired: boolean }
-    openCount: number
-    closeCount: number | null
-  }>
+    id: string;
+    toolId: string;
+    tool: { id: string; name: string; quantity: number; isRequired: boolean };
+    openCount: number;
+    closeCount: number | null;
+  }>;
   toolStats?: {
-    total: number
-    matched: number
-    mismatched: number
-  }
+    total: number;
+    matched: number;
+    mismatched: number;
+  };
 }
 
 interface DayGroup {
-  date: string
-  totalRevenue: number
-  cashRevenue: number
-  transferRevenue: number
-  cardRevenue: number
-  paymentCount: number
-  membershipCount: number
-  sessionCount: number
-  weekday?: number
-  shifts: ShiftRow[]
+  date: string;
+  totalRevenue: number;
+  cashRevenue: number;
+  transferRevenue: number;
+  cardRevenue: number;
+  paymentCount: number;
+  membershipCount: number;
+  sessionCount: number;
+  weekday?: number;
+  shifts: ShiftRow[];
 }
 
 interface DayGroupsResponse {
-  success: boolean
-  data?: DayGroup[]
-  pagination?: { page: number; daysPerPage: number; totalDays: number; totalPages: number }
-  error?: string
+  success: boolean;
+  data?: DayGroup[];
+  pagination?: {
+    page: number;
+    daysPerPage: number;
+    totalDays: number;
+    totalPages: number;
+  };
+  error?: string;
 }
 
 export function ShiftsScreen() {
-  const [dayGroups, setDayGroups] = useState<DayGroup[]>([])
-  const [pagination, setPagination] = useState({ page: 1, daysPerPage: 7, totalDays: 0, totalPages: 0 })
-  const [statusFilter, setStatusFilter] = useState<ShiftStatusFilter>('ALL')
-  const [searchInput, setSearchInput] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [dayGroups, setDayGroups] = useState<DayGroup[]>([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    daysPerPage: 7,
+    totalDays: 0,
+    totalPages: 0,
+  });
+  const [statusFilter, setStatusFilter] = useState<ShiftStatusFilter>("ALL");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const todayStr = today()
+  const todayStr = today();
 
-  const loadData = useCallback(async (page: number) => {
-    setLoading(true)
-    setError('')
-    try {
-      const params = new URLSearchParams({
-        groupBy: 'day',
-        daysPerPage: '7',
-        page: String(page),
-      })
-      if (statusFilter !== 'ALL') params.set('status', statusFilter)
+  const loadData = useCallback(
+    async (page: number) => {
+      setLoading(true);
+      setError("");
+      try {
+        const params = new URLSearchParams({
+          groupBy: "day",
+          daysPerPage: "7",
+          page: String(page),
+        });
+        if (statusFilter !== "ALL") params.set("status", statusFilter);
 
-      const shiftData = await fetch(`/api/shifts?${params.toString()}`).then((r) => r.json()) as DayGroupsResponse
+        const shiftData = (await fetch(`/api/shifts?${params.toString()}`).then(
+          (r) => r.json(),
+        )) as DayGroupsResponse;
 
-      if (!shiftData.success) throw new Error(shiftData.error || 'Không tải được ca làm')
+        if (!shiftData.success)
+          throw new Error(shiftData.error || "Không tải được ca làm");
 
-      setDayGroups(shiftData.data ?? [])
-      if (shiftData.pagination) setPagination(shiftData.pagination)
-    } catch (err) {
-      setError((err as Error).message || 'Lỗi kết nối máy chủ')
-    } finally {
-      setLoading(false)
-    }
-  }, [statusFilter])
+        setDayGroups(shiftData.data ?? []);
+        if (shiftData.pagination) setPagination(shiftData.pagination);
+      } catch (err) {
+        setError((err as Error).message || "Lỗi kết nối máy chủ");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [statusFilter],
+  );
 
   useEffect(() => {
-    void loadData(1)
-  }, [loadData])
+    void loadData(1);
+  }, [loadData]);
 
-  const { registerRefresh } = usePageRefresh()
+  const { registerRefresh } = usePageRefresh();
 
   useEffect(() => {
-    return registerRefresh(() => void loadData(pagination.page))
-  }, [registerRefresh, loadData, pagination.page])
+    return registerRefresh(() => void loadData(pagination.page));
+  }, [registerRefresh, loadData, pagination.page]);
 
   const visibleGroups = useMemo(() => {
-    const keyword = searchQuery.trim().toLowerCase()
-    if (!keyword) return dayGroups
+    const keyword = searchQuery.trim().toLowerCase();
+    if (!keyword) return dayGroups;
 
-    return dayGroups.map((group) => ({
-      ...group,
-      shifts: group.shifts.filter((shift) => {
-        const names = [
-          shift.staff?.fullName,
-          ...(shift.participants ?? []).map((p) => p.staff.fullName),
-        ]
-        return names.some((name) => name?.toLowerCase().includes(keyword))
-          || shift.id.toLowerCase().includes(keyword)
-      }),
-    })).filter((group) => group.shifts.length > 0)
-  }, [searchQuery, dayGroups])
+    return dayGroups
+      .map((group) => ({
+        ...group,
+        shifts: group.shifts.filter((shift) => {
+          const names = [
+            shift.staff?.fullName,
+            ...(shift.participants ?? []).map((p) => p.staff.fullName),
+          ];
+          return (
+            names.some((name) => name?.toLowerCase().includes(keyword)) ||
+            shift.id.toLowerCase().includes(keyword)
+          );
+        }),
+      }))
+      .filter((group) => group.shifts.length > 0);
+  }, [searchQuery, dayGroups]);
 
-  const isCurrentGroup = (group: DayGroup) => group.date === todayStr
+  const isCurrentGroup = (group: DayGroup) => group.date === todayStr;
 
-  if (loading) return <ShiftsSkeleton />
+  if (loading) return <AppSkeleton />;
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-6xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <header
           className={`items-end justify-between gap-3 md:flex ${
-            pagination.totalPages > 1 ? 'flex' : 'hidden'
+            pagination.totalPages > 1 ? "flex" : "hidden"
           }`}
         >
           <div className="hidden min-w-0 md:block">
             <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
-              <CalendarClock size={24} className="text-blue-500" />
               Ca làm
             </h1>
             <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-              Lịch sử ca làm {pagination.totalDays > 0 && (
+              Lịch sử ca làm{" "}
+              {pagination.totalDays > 0 && (
                 <>· {pagination.totalDays} ngày gần nhất</>
               )}
             </p>
@@ -195,7 +214,11 @@ export function ShiftsScreen() {
         </header>
 
         {error && (
-          <NoticeCard tone="danger" title="Không tải được dữ liệu" description={error} />
+          <NoticeCard
+            tone="danger"
+            title="Không tải được dữ liệu"
+            description={error}
+          />
         )}
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -203,27 +226,36 @@ export function ShiftsScreen() {
             aria-label="Tìm ca làm"
             value={searchInput}
             onChange={(event) => {
-              const next = event.target.value
-              setSearchInput(next)
-              if (next === '') setSearchQuery('')
+              const next = event.target.value;
+              setSearchInput(next);
+              if (next === "") setSearchQuery("");
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                setSearchQuery(searchInput)
+              if (event.key === "Enter") {
+                event.preventDefault();
+                setSearchQuery(searchInput);
               }
             }}
             placeholder="Tìm theo tên nhân viên hoặc mã ca"
             className="sm:max-w-xs"
           />
           <div className="flex gap-2 overflow-x-auto pb-1">
-            <FilterButton active={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')}>
+            <FilterButton
+              active={statusFilter === "ALL"}
+              onClick={() => setStatusFilter("ALL")}
+            >
               Tất cả
             </FilterButton>
-            <FilterButton active={statusFilter === 'OPEN'} onClick={() => setStatusFilter('OPEN')}>
+            <FilterButton
+              active={statusFilter === "OPEN"}
+              onClick={() => setStatusFilter("OPEN")}
+            >
               Đang mở
             </FilterButton>
-            <FilterButton active={statusFilter === 'CLOSED'} onClick={() => setStatusFilter('CLOSED')}>
+            <FilterButton
+              active={statusFilter === "CLOSED"}
+              onClick={() => setStatusFilter("CLOSED")}
+            >
               Đã đóng
             </FilterButton>
           </div>
@@ -240,33 +272,41 @@ export function ShiftsScreen() {
             </div>
           ) : (
             visibleGroups.map((group) => (
-              <DayGroupSection key={group.date} group={group} isCurrentDay={isCurrentGroup(group)} />
+              <DayGroupSection
+                key={group.date}
+                group={group}
+                isCurrentDay={isCurrentGroup(group)}
+              />
             ))
           )}
         </section>
       </div>
     </div>
-  )
+  );
 }
 
 function DayGroupSection({
   group,
   isCurrentDay,
 }: {
-  group: DayGroup
-  isCurrentDay: boolean
+  group: DayGroup;
+  isCurrentDay: boolean;
 }) {
-  const dayLabel = new Date(group.date).toLocaleDateString('vi-VN', {
-    weekday: 'long',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
+  const dayLabel = new Date(group.date).toLocaleDateString("vi-VN", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 
   return (
     <section className="space-y-2">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-200 pb-2 dark:border-zinc-800">
-        {isCurrentDay && <Badge variant="purple" size="sm">Hôm nay</Badge>}
+        {isCurrentDay && (
+          <Badge variant="purple" size="sm">
+            Hôm nay
+          </Badge>
+        )}
         <h3 className="text-sm font-semibold capitalize text-zinc-950 dark:text-white">
           {dayLabel}
         </h3>
@@ -294,52 +334,81 @@ function DayGroupSection({
         ))}
       </ul>
     </section>
-  )
+  );
 }
 
 function ShiftCard({ shift }: { shift: ShiftRow }) {
-  const activeParticipants = (shift.participants ?? []).filter((p) => !p.leftAt)
-  const pastParticipants = (shift.participants ?? []).filter((p) => p.leftAt)
-  const duration = formatShiftDuration(shift.openedAt, shift.closedAt)
+  const activeParticipants = (shift.participants ?? []).filter(
+    (p) => !p.leftAt,
+  );
+  const pastParticipants = (shift.participants ?? []).filter((p) => p.leftAt);
+  const duration = formatShiftDuration(shift.openedAt, shift.closedAt);
 
-  const transactionsHref = `/transactions?shiftId=${shift.id}`
+  const transactionsHref = `/transactions?shiftId=${shift.id}`;
 
   return (
     <Link
       href={transactionsHref}
       className="group relative grid grid-cols-[4px_1fr] transition-colors hover:bg-zinc-50 focus-visible:bg-zinc-50 dark:hover:bg-zinc-800/40 dark:focus-visible:bg-zinc-800/40"
     >
-      <div className={shift.status === 'OPEN' ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'} />
+      <div
+        className={
+          shift.status === "OPEN"
+            ? "bg-emerald-500"
+            : "bg-zinc-300 dark:bg-zinc-700"
+        }
+      />
       <div className="px-3 py-3">
         <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={shift.status === 'OPEN' ? 'success' : 'default'} size="sm">
-                {shift.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}
+              <Badge
+                variant={shift.status === "OPEN" ? "success" : "default"}
+                size="sm"
+              >
+                {shift.status === "OPEN" ? "Đang mở" : "Đã đóng"}
               </Badge>
               <h4 className="text-sm font-semibold text-zinc-950 dark:text-white">
                 Ca {formatClock(shift.openedAt)}
-                {shift.closedAt ? ` - ${formatClock(shift.closedAt)}` : ''}
+                {shift.closedAt ? ` - ${formatClock(shift.closedAt)}` : ""}
               </h4>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">· {duration}</span>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                · {duration}
+              </span>
             </div>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Mở bởi <span className="font-medium text-zinc-700 dark:text-zinc-300">{shift.staff?.fullName ?? 'Không rõ'}</span>
+              Mở bởi{" "}
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                {shift.staff?.fullName ?? "Không rõ"}
+              </span>
             </p>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              <span className="tabular-nums">{shift._count?.payments ?? 0}</span> giao dịch
+              <span className="tabular-nums">
+                {shift._count?.payments ?? 0}
+              </span>{" "}
+              giao dịch
               {shift._count?.sessions !== undefined && (
-                <> · <span className="tabular-nums">{shift._count.sessions}</span> phiên</>
+                <>
+                  {" "}
+                  ·{" "}
+                  <span className="tabular-nums">
+                    {shift._count.sessions}
+                  </span>{" "}
+                  phiên
+                </>
               )}
             </p>
           </div>
-
         </div>
 
         {shift.toolStats && (
           <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             <span>
-              Dụng cụ: <span className="font-semibold text-zinc-700 dark:text-zinc-300">{shift.toolStats.total}</span> món
+              Dụng cụ:{" "}
+              <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                {shift.toolStats.total}
+              </span>{" "}
+              món
             </span>
             <span className="ml-2 text-emerald-600 dark:text-emerald-400">
               Khớp {shift.toolStats.matched}
@@ -373,34 +442,19 @@ function ShiftCard({ shift }: { shift: ShiftRow }) {
         )}
       </div>
     </Link>
-  )
+  );
 }
 
-function ShiftsSkeleton() {
-  return (
-    <SkeletonPage>
-      <Skeleton className="h-10 w-36" />
-      <SkeletonPanel><Skeleton className="h-28 w-full" /></SkeletonPanel>
-      <SkeletonPanel className="space-y-3">
-        <Skeleton className="h-5 w-32" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-20 w-full" />
-      </SkeletonPanel>
-      <SkeletonPanel className="space-y-3">
-        <Skeleton className="h-5 w-32" />
-        <Skeleton className="h-20 w-full" />
-      </SkeletonPanel>
-    </SkeletonPage>
-  )
-}
-
-function formatShiftDuration(openedAt: string, closedAt?: string | null): string {
-  const start = new Date(openedAt).getTime()
-  const end = closedAt ? new Date(closedAt).getTime() : Date.now()
-  const totalMinutes = Math.max(0, Math.round((end - start) / 60000))
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = totalMinutes % 60
-  if (hours === 0) return `${minutes} phút`
-  if (minutes === 0) return `${hours} giờ`
-  return `${hours} giờ ${minutes} phút`
+function formatShiftDuration(
+  openedAt: string,
+  closedAt?: string | null,
+): string {
+  const start = new Date(openedAt).getTime();
+  const end = closedAt ? new Date(closedAt).getTime() : Date.now();
+  const totalMinutes = Math.max(0, Math.round((end - start) / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes} phút`;
+  if (minutes === 0) return `${hours} giờ`;
+  return `${hours} giờ ${minutes} phút`;
 }

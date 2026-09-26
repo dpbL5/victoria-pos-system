@@ -28,6 +28,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const result = await updateLessonStudentNotes({
       staffId: auth.userId,
       lessonId: id,
+      version: parsed.data.version,
       entries: parsed.data.entries,
     })
 

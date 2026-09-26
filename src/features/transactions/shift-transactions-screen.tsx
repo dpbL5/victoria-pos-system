@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label, Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
 import { shortInvoiceNo } from '@/lib/shared/utils'
 import { formatClock, formatDay, money, paymentMethodLabel } from '@/features/pos/format'
@@ -39,7 +39,7 @@ interface ShiftTransactionsResponse {
   }
 }
 
-type TypeFilter = 'ALL' | 'payment' | 'membership'
+type TypeFilter = 'ALL' | 'payment' | 'membership' | 'deposit'
 
 interface ShiftTransactionsScreenProps {
   initialShiftId?: string
@@ -126,7 +126,7 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
     const byType =
       typeFilter === 'ALL'
         ? transactions
-        : transactions.filter((t) => t.type === typeFilter)
+        : transactions.filter((t) => typeFilter === 'payment' ? t.type === 'payment' : t.type === typeFilter)
     const q = searchQuery.trim().toLowerCase()
     if (!q) return byType
     return byType.filter((t) => {
@@ -142,21 +142,14 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
 
   // ── Đang tải danh sách ca ──
   if (shiftsLoading) {
-    return (
-      <SkeletonPage maxWidth="max-w-5xl">
-          <Skeleton className="h-9 w-24" />
-          <SkeletonPanel><Skeleton className="h-12 w-full" /></SkeletonPanel>
-          <SkeletonPanel><Skeleton className="h-20 w-full" /></SkeletonPanel>
-          <SkeletonPanel><Skeleton className="h-64 w-full" /></SkeletonPanel>
-      </SkeletonPage>
-    )
+    return <AppSkeleton />
   }
 
   // ── Lỗi khi tải danh sách ca ──
   if (shiftsError) {
     return (
       <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-5xl space-y-4">
+        <div className="mx-auto max-w-content space-y-4">
           <PageHeader onBack={() => router.back()} title="Giao dịch trong ca" />
           <NoticeCard
             tone="danger"
@@ -177,7 +170,7 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
   if (shifts.length === 0) {
     return (
       <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-5xl space-y-4">
+        <div className="mx-auto max-w-content space-y-4">
           <PageHeader onBack={() => router.back()} title="Giao dịch trong ca" />
           <EmptyState
             icon={CalendarClock}
@@ -196,7 +189,7 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-5xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <PageHeader
           onBack={() => router.back()}
           title="Giao dịch trong ca"
@@ -437,6 +430,9 @@ function TransactionLedger({
             >
               Hội viên
             </FilterButton>
+            <FilterButton active={filter === 'deposit'} onClick={() => onFilterChange('deposit')}>
+              Tiền cọc
+            </FilterButton>
           </div>
         </div>
         <div className="relative">
@@ -533,9 +529,12 @@ function TransactionRow({
   onOpen: (invoiceId: string) => void
 }) {
   const isMembership = tx.type === 'membership'
+  const isDeposit = tx.type === 'deposit'
   const isCancelled = tx.invoiceStatus === 'CANCELLED'
   const canOpen = !!tx.invoiceId
-  const invoiceType = isMembership || tx.invoiceNo?.startsWith('MEM-')
+  const invoiceType = isDeposit || tx.invoiceNo?.startsWith('DEP-')
+    ? { label: 'Tiền cọc', variant: 'warning' as const }
+    : isMembership || tx.invoiceNo?.startsWith('MEM-')
     ? { label: 'Đăng ký hội viên', variant: 'purple' as const }
     : tx.invoiceNo?.startsWith('SEL-')
       ? { label: 'Bán lẻ', variant: 'warning' as const }

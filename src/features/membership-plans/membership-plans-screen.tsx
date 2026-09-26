@@ -2,22 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  CalendarClock,
   Edit3,
   Plus,
   Ticket,
   Trash2,
-  type LucideIcon,
 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label, Select } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
+import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
+import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
@@ -100,10 +98,86 @@ export function MembershipPlansScreen() {
     setDialogMode('create')
   }
 
-  const openEdit = (plan: MembershipPlan) => {
+  const openEdit = useCallback((plan: MembershipPlan) => {
     setEditingPlan(plan)
     setDialogMode('edit')
-  }
+  }, [])
+
+  const renderActions = useCallback((plan: MembershipPlan) => (
+    <div className="flex gap-1.5">
+      <Button
+        variant="secondary"
+        size="sm"
+        icon={Edit3}
+        disabled={submitting}
+        onClick={() => openEdit(plan)}
+        title="Sửa gói"
+      />
+      <Button
+        variant="outline-danger"
+        size="sm"
+        icon={Trash2}
+        disabled={submitting}
+        onClick={() => setDeletePlan(plan)}
+        title="Xoá gói"
+      />
+    </div>
+  ), [openEdit, submitting])
+
+  const planColumns: Column<MembershipPlan>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Tên gói',
+      cellClassName: 'px-4 py-3 font-medium',
+      render: (plan) => <span className={planNameColor(plan.isActive)}>{plan.name}</span>,
+    },
+    {
+      key: 'durationMonths',
+      label: 'Thời hạn',
+      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
+      render: (plan) => `${plan.durationMonths} tháng`,
+    },
+    {
+      label: 'Giá gói',
+      cellClassName: 'px-4 py-3 font-semibold tabular-nums text-zinc-950 dark:text-white',
+      render: (plan) => formatVND(Number(plan.price)),
+    },
+    {
+      label: 'Thao tác',
+      cellClassName: 'px-4 py-3',
+      render: renderActions,
+    },
+  ], [renderActions])
+
+  const planCardColumns: CardColumn<MembershipPlan>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Tên gói',
+      render: (plan) => (
+        <span className={`text-base font-semibold ${planNameColor(plan.isActive)}`}>
+          {plan.name}
+        </span>
+      ),
+    },
+    {
+      key: 'durationMonths',
+      label: 'Thời hạn',
+      render: (plan) => `${plan.durationMonths} tháng`,
+    },
+    {
+      key: 'price',
+      label: 'Giá',
+      render: (plan) => (
+        <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">
+          {formatVND(Number(plan.price))}
+        </span>
+      ),
+    },
+    {
+      label: '',
+      render: renderActions,
+    },
+  ], [renderActions])
 
   const handleSaved = async (message: string) => {
     notifySuccess(message)
@@ -138,12 +212,28 @@ export function MembershipPlansScreen() {
   }
 
   if (loading) {
-    return <MembershipPlansSkeleton />
+    return <AppSkeleton />
   }
+
+  const listHeader = (
+    <div>
+      <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
+        Danh sách gói
+      </h2>
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        {filteredPlans.length} gói · {stats.active} đang bán · {stats.inactive} ngừng dùng
+      </p>
+      <div role="group" aria-label="Lọc gói hội viên" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+        <FilterButton active={filter === 'ALL'} onClick={() => setFilter('ALL')}>Tất cả</FilterButton>
+        <FilterButton active={filter === 'ACTIVE'} onClick={() => setFilter('ACTIVE')}>Đang bán</FilterButton>
+        <FilterButton active={filter === 'INACTIVE'} onClick={() => setFilter('INACTIVE')}>Ngừng dùng</FilterButton>
+      </div>
+    </div>
+  )
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-5xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
@@ -164,16 +254,6 @@ export function MembershipPlansScreen() {
           <AccessDenied />
         ) : (
           <>
-            <NoticeCard
-              tone={stats.active > 0 ? 'success' : 'warning'}
-              title={stats.active > 0 ? 'Có gói đang bán' : 'Chưa có gói đang bán'}
-              description={
-                stats.active > 0
-                  ? `${stats.active} gói có thể dùng để đăng ký hoặc gia hạn hội viên.`
-                  : 'Nhân viên không thể thu phí hội viên nếu không có gói đang dùng.'
-              }
-            />
-
             <Button
               variant="inverse"
               size="lg"
@@ -184,50 +264,45 @@ export function MembershipPlansScreen() {
               Thêm gói hội viên
             </Button>
 
-            <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-                <div>
-                  <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
-                    Danh sách gói
-                  </h2>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {filteredPlans.length} gói · {stats.active} đang bán · {stats.inactive} ngừng dùng
-                  </p>
-                  <div role="group" aria-label="Lọc gói hội viên" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
-                    <FilterButton active={filter === 'ALL'} onClick={() => setFilter('ALL')}>Tất cả</FilterButton>
-                    <FilterButton active={filter === 'ACTIVE'} onClick={() => setFilter('ACTIVE')}>Đang bán</FilterButton>
-                    <FilterButton active={filter === 'INACTIVE'} onClick={() => setFilter('INACTIVE')}>Ngừng dùng</FilterButton>
-                  </div>
-                </div>
-                <Badge variant={stats.active > 0 ? 'success' : 'warning'}>
-                  {stats.active > 0 ? 'Sẵn sàng' : 'Thiếu gói'}
-                </Badge>
-              </div>
+            {/* Mobile: card list */}
+            <div className="md:hidden">
+              <SortableCardList
+                header={listHeader}
+                columns={planCardColumns}
+                data={filteredPlans}
+                keyExtractor={(plan) => plan.id}
+                search={{
+                  placeholder: 'Tìm tên gói',
+                  getText: (plan) => plan.name,
+                }}
+                sortableKeys={['name', 'durationMonths']}
+                defaultSortKey="durationMonths"
+                defaultSortDir="asc"
+                emptyIcon={Ticket}
+                emptyMessage="Chưa có gói hội viên"
+                emptyDescription="Thêm gói để nhân viên đăng ký và gia hạn hội viên."
+              />
+            </div>
 
-              {filteredPlans.length === 0 ? (
-                <EmptyState
-                  icon={Ticket}
-                  message="Chưa có gói phù hợp"
-                  description="Thử đổi bộ lọc hoặc thêm gói hội viên mới."
-                  action={
-                    <Button variant="secondary" size="sm" icon={Plus} onClick={openCreate}>
-                      Thêm gói
-                    </Button>
-                  }
-                />
-              ) : (
-                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {filteredPlans.map((plan) => (
-                    <MembershipPlanCard
-                      key={plan.id}
-                      plan={plan}
-                      onEdit={() => openEdit(plan)}
-                      onDelete={() => setDeletePlan(plan)}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
+            {/* Desktop: table */}
+            <div className="hidden md:block">
+              <SortableTable
+                header={listHeader}
+                columns={planColumns}
+                data={filteredPlans}
+                keyExtractor={(plan) => plan.id}
+                search={{
+                  placeholder: 'Tìm tên gói',
+                  getText: (plan) => plan.name,
+                }}
+                sortableKeys={['name', 'durationMonths']}
+                defaultSortKey="durationMonths"
+                defaultSortDir="asc"
+                emptyIcon={Ticket}
+                emptyMessage="Chưa có gói hội viên"
+                emptyDescription="Thêm gói để nhân viên đăng ký và gia hạn hội viên."
+              />
+            </div>
           </>
         )}
       </div>
@@ -262,81 +337,8 @@ export function MembershipPlansScreen() {
   )
 }
 
-function MembershipPlansSkeleton() {
-  return (
-    <SkeletonPage>
-      <Skeleton className="h-10 w-40" />
-      <SkeletonPanel><Skeleton className="h-16 w-full" /></SkeletonPanel>
-      <SkeletonPanel><Skeleton className="h-80 w-full" /></SkeletonPanel>
-    </SkeletonPage>
-  )
-}
-
-function MembershipPlanCard({
-  plan,
-  onEdit,
-  onDelete,
-}: {
-  plan: MembershipPlan
-  onEdit: () => void
-  onDelete: () => void
-}) {
-  return (
-    <div className="px-4 py-3">
-      <div className="grid grid-cols-[1fr_auto] gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
-              {plan.name}
-            </p>
-            <Badge variant={plan.isActive ? 'success' : 'default'} size="sm">
-              {plan.isActive ? 'Đang bán' : 'Ngừng dùng'}
-            </Badge>
-          </div>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Dùng cho đăng ký mới và gia hạn hội viên
-          </p>
-        </div>
-        <p className="self-start text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
-          {formatVND(Number(plan.price))}
-        </p>
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <MiniInfo Icon={CalendarClock} label="Thời hạn" value={`${plan.durationMonths} tháng`} />
-        <MiniInfo Icon={Ticket} label="Trạng thái" value={plan.isActive ? 'Cho phép bán' : 'Không cho bán'} />
-      </div>
-
-      <div className="mt-3 flex gap-2">
-        <Button variant="secondary" size="sm" icon={Edit3} onClick={onEdit}>
-          Sửa
-        </Button>
-        <Button variant="outline-danger" size="sm" icon={Trash2} onClick={onDelete}>
-          Xóa
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-function MiniInfo({
-  Icon,
-  label,
-  value,
-}: {
-  Icon: LucideIcon
-  label: string
-  value: string
-}) {
-  return (
-    <div className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950">
-      <p className="flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-        <Icon size={12} />
-        {label}
-      </p>
-      <p className="mt-1 text-xs font-semibold text-zinc-950 dark:text-white">{value}</p>
-    </div>
-  )
+function planNameColor(isActive: boolean) {
+  return isActive ? 'text-zinc-950 dark:text-white' : 'text-zinc-500 dark:text-zinc-400'
 }
 
 function MembershipPlanDialog({

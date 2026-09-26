@@ -6,6 +6,7 @@ export type SessionWithDetails = Prisma.SessionGetPayload<{
   include: {
     customer: true
     membership: true
+    booking: true
     pricingGroups: { orderBy: { createdAt: 'asc' } }
   }
 }>
@@ -15,6 +16,7 @@ export type SessionWithPlayers = Prisma.SessionGetPayload<{
   include: {
     customer: true
     membership: true
+    booking: true
     pricingGroups: {
       orderBy: { createdAt: 'asc' }
       include: { players: true }

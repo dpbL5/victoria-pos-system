@@ -18,9 +18,10 @@ import type { LessonClass } from '@/features/classes/types'
 export const localTime = (iso: string) => new Date(Date.parse(iso) + 7 * 3600000).toISOString().slice(0, 16)
 export const lockedLesson = (lesson: Lesson) => lesson.status !== 'SCHEDULED' || lesson.students.some(s => s.status !== 'SCHEDULED' || s.packageId)
 
-export function LessonEditor({ lesson, start, end, studentId, onClose, onSaved, onNotesSaved }: {
+export function LessonEditor({ lesson: initialLesson, start, end, studentId, onClose, onSaved, onNotesSaved }: {
   lesson?: Lesson; start: string; end: string; studentId?: string; onClose: () => void; onSaved: () => void; onNotesSaved?: () => void
 }) {
+  const [lesson, setLesson] = useState(initialLesson)
   const toast = useToast()
   const [title, setTitle] = useState(lesson?.title ?? '')
   const [coachName, setCoachName] = useState(lesson?.coachName ?? '')
@@ -146,7 +147,7 @@ export function LessonEditor({ lesson, start, end, studentId, onClose, onSaved, 
             </Select>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Dùng cho chuyển lịch hoặc học bù: chọn lớp để tự điền sổ học viên và tiêu đề; buổi vẫn nằm trong lịch của lớp.</p>
           </div>}
-          <StudentPicker key={pickedClassId || 'free'} value={studentIds} onChange={ids => { setStudentIds(ids); setDirty(true) }} initial={lesson?.students.map(s => s.student) ?? (pickedClassId ? pickedRoster : [])} />
+          <StudentPicker key={pickedClassId || 'free'} value={studentIds} disabled={Boolean(recurring && (pickedClassId || lesson?.series?.class?.id))} onChange={ids => { setStudentIds(ids); setDirty(true) }} initial={lesson?.students.map(s => s.student) ?? (pickedClassId ? pickedRoster : [])} />
         </fieldset>
         {!recurring && <><div><Label htmlFor="lesson-note">Ghi chú buổi học</Label><Textarea disabled={saving || lesson?.status === 'CANCELLED'} id="lesson-note" value={note} onChange={e => setNote(e.target.value)} maxLength={2000} rows={4} placeholder="Nội dung buổi học, tiến độ và điều cần lưu ý" /></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={saving || lesson?.status === 'CANCELLED'} checked={shareNote} onChange={e => setShareNote(e.target.checked)} />Đồng bộ ghi chú lên Google Calendar</label><p className="text-xs text-zinc-500">Ghi chú riêng từng học viên chỉ lưu trong ứng dụng.</p></>}
         {recurring && <p className="text-sm text-zinc-500">Ghi chú được lưu riêng từng buổi. Mở “Buổi này” để chỉnh ghi chú.</p>}
@@ -154,8 +155,14 @@ export function LessonEditor({ lesson, start, end, studentId, onClose, onSaved, 
       {lesson && !recurring && lesson.status !== 'CANCELLED' && lesson.students.length > 0 && (
         <LessonStudentNotes
           lessonId={lesson.id}
+          version={lesson.version}
           students={lesson.students.map(ls => ({ studentId: ls.studentId, fullName: ls.student.fullName, note: ls.note }))}
-          onSaved={onNotesSaved}
+          onSaved={updated => {
+            // Chỉ nâng phiên bản biểu mẫu khi chính lần lưu này tạo ra bản kế tiếp.
+            // Nếu đã tải lại sau xung đột, biểu mẫu cũ vẫn phải bị chặn khi lưu.
+            if (updated.version === lesson.version + 1) setLesson(updated)
+            onNotesSaved?.()
+          }}
         />
       )}
     </Modal>

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('@/lib/infrastructure/prisma', () => ({ prisma: {} }))
 
+import { runInTransaction } from '@/lib/infrastructure/db-helpers'
 import { updateLessonStudentNotes } from '@/lib/students/use-cases/attendance'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import type { LessonRecord } from '@/lib/students'
@@ -67,11 +68,13 @@ function makeLesson(overrides: Partial<LessonRecord> = {}): LessonRecord {
 }
 
 function setupLesson(overrides: Partial<Repositories['lesson']> = {}) {
-  const setStudentNote = vi.fn(async () => {})
+  const lesson = makeLesson()
+  const setStudentNote = vi.fn(async ({ note }: { note: string | null }) => { lesson.students[0].note = note })
   const auditCalls: { action: string; entityId: string; details?: unknown }[] = []
   setup({
     lesson: {
-      findById: vi.fn(async () => makeLesson()),
+      findById: vi.fn(async () => lesson),
+      update: vi.fn(async () => { lesson.version++; return lesson }),
       setStudentNote,
       ...overrides,
     } as never,
@@ -89,7 +92,7 @@ describe('updateLessonStudentNotes', () => {
     setup({ lesson: { findById: vi.fn(async () => null) } as never })
 
     const result = await updateLessonStudentNotes(
-      { staffId: 'staff-1', lessonId: 'lesson-x', entries: [{ studentId: 'stu-1', note: 'ok' }] },
+      { staffId: 'staff-1', lessonId: 'lesson-x', version: 1, entries: [{ studentId: 'stu-1', note: 'ok' }] },
       state.reposForTest!
     )
 
@@ -101,7 +104,7 @@ describe('updateLessonStudentNotes', () => {
     setup({ lesson: { findById: vi.fn(async () => makeLesson()) } as never })
 
     const result = await updateLessonStudentNotes(
-      { staffId: 'staff-1', lessonId: 'lesson-1', entries: [{ studentId: 'other', note: 'ok' }] },
+      { staffId: 'staff-1', lessonId: 'lesson-1', version: 1, entries: [{ studentId: 'other', note: 'ok' }] },
       state.reposForTest!
     )
 
@@ -115,7 +118,7 @@ describe('updateLessonStudentNotes', () => {
     })
 
     const result = await updateLessonStudentNotes(
-      { staffId: 'staff-1', lessonId: 'lesson-1', entries: [{ studentId: 'stu-1', note: 'ok' }] },
+      { staffId: 'staff-1', lessonId: 'lesson-1', version: 1, entries: [{ studentId: 'stu-1', note: 'ok' }] },
       state.reposForTest!
     )
 
@@ -127,12 +130,13 @@ describe('updateLessonStudentNotes', () => {
     const { setStudentNote, auditCalls } = setupLesson()
 
     const result = await updateLessonStudentNotes(
-      { staffId: 'staff-1', lessonId: 'lesson-1', entries: [{ studentId: 'stu-1', note: '  Tiến bộ tốt  ' }] },
+      { staffId: 'staff-1', lessonId: 'lesson-1', version: 1, entries: [{ studentId: 'stu-1', note: '  Tiến bộ tốt  ' }] },
       state.reposForTest!
     )
 
     expect(result.ok).toBe(true)
     expect(setStudentNote).toHaveBeenCalledWith({ lessonId: 'lesson-1', studentId: 'stu-1', note: 'Tiến bộ tốt' })
+    expect(result).toMatchObject({ ok: true, value: { lesson: { version: 2 } } })
 
     expect(auditCalls).toHaveLength(1)
     expect(auditCalls[0].action).toBe('LESSON_STUDENT_NOTE')
@@ -143,7 +147,7 @@ describe('updateLessonStudentNotes', () => {
     const { setStudentNote } = setupLesson()
 
     const result = await updateLessonStudentNotes(
-      { staffId: 'staff-1', lessonId: 'lesson-1', entries: [{ studentId: 'stu-1', note: '   ' }] },
+      { staffId: 'staff-1', lessonId: 'lesson-1', version: 1, entries: [{ studentId: 'stu-1', note: '   ' }] },
       state.reposForTest!
     )
 
@@ -157,11 +161,26 @@ describe('updateLessonStudentNotes', () => {
     })
 
     const result = await updateLessonStudentNotes(
-      { staffId: 'staff-1', lessonId: 'lesson-1', entries: [{ studentId: 'stu-1', note: 'Dặn mang cung' }] },
+      { staffId: 'staff-1', lessonId: 'lesson-1', version: 1, entries: [{ studentId: 'stu-1', note: 'Dặn mang cung' }] },
       state.reposForTest!
     )
 
     expect(result.ok).toBe(true)
     expect(setStudentNote).toHaveBeenCalledTimes(1)
   })
+})
+
+it('chặn ghi chú bản cũ trước khi gọi thao tác ghi', async () => {
+  const { setStudentNote } = setupLesson()
+  const result = await updateLessonStudentNotes({ staffId: 'staff-1', lessonId: 'lesson-1', version: 2, entries: [{ studentId: 'stu-1', note: 'Bản cũ' }] }, state.reposForTest!)
+  expect(result).toMatchObject({ ok: false, error: { code: 'LESSON_CONFLICT' } })
+  expect(setStudentNote).not.toHaveBeenCalled()
+})
+
+
+it('lỗi giao dịch đồng thời trả xung đột để UI giữ bản nháp', async () => {
+  setupLesson()
+  vi.mocked(runInTransaction).mockRejectedValueOnce({ code: 'P2034' })
+  const result = await updateLessonStudentNotes({ staffId: 'staff-1', lessonId: 'lesson-1', version: 1, entries: [{ studentId: 'stu-1', note: 'Bản nháp' }] }, state.reposForTest!)
+  expect(result).toMatchObject({ ok: false, error: { code: 'LESSON_CONFLICT' } })
 })

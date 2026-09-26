@@ -24,6 +24,7 @@ type StudentStore = Pick<
   | 'calendarSyncJob'
   | 'calendarEventMapping'
   | 'lessonSeriesStudent'
+  | 'lessonClassStudent'
 >
 
 const lessonInclude = {
@@ -34,12 +35,13 @@ const lessonInclude = {
 
 const classInclude = {
   slots: { include: { students: { include: { student: true } } }, orderBy: { startsOn: 'asc' } },
+  students: { include: { student: true }, orderBy: { student: { fullName: 'asc' } } },
   _count: { select: { lessons: true } },
 } as const
 
 const studentInclude = {
   packages: true,
-  series: { include: { series: { include: { class: true } } } },
+  classMemberships: { where: { lessonClass: { isActive: true } }, include: { lessonClass: true } },
 } as const
 
 export function createStudentRepository(store: StudentStore): StudentRepository {
@@ -59,19 +61,10 @@ export function createStudentRepository(store: StudentStore): StudentRepository 
             : {}),
           // Chưa thuộc lớp nào, hoặc đang ở đúng lớp đang xét (HK còn lại của lớp đó).
           ...(availableForClassId
-            ? {
-                AND: [
-                  {
-                    OR: [
-                      { series: { none: { series: { classId: { not: null } } } } },
-                      { series: { some: { series: { classId: availableForClassId } } } },
-                    ],
-                  },
-                ],
-              }
+            ? { classMemberships: { none: { lessonClass: { isActive: true, id: { not: availableForClassId } } } } }
             : {}),
           // Chưa thuộc lớp nào — dùng khi tạo lớp mới để không chọn nhầm học viên của lớp khác.
-          ...(unassigned ? { series: { none: { series: { classId: { not: null } } } } } : {}),
+          ...(unassigned ? { classMemberships: { none: { lessonClass: { isActive: true } } } } : {}),
         },
         include: studentInclude,
         orderBy: { fullName: 'asc' },
@@ -144,6 +137,8 @@ export function createLessonRepository(store: StudentStore): LessonRepository {
       return (await store.lesson.findUniqueOrThrow({ where: { id }, include: lessonInclude }))
     },
     replaceStudents: async (id, studentIds) => {
+      const protectedRow = await store.lessonStudent.findFirst({ where: { lessonId: id, studentId: { notIn: studentIds }, OR: [{ note: { not: null } }, { packageId: { not: null } }, { status: { not: 'SCHEDULED' } }] } })
+      if (protectedRow) fail('LESSON_STUDENT_HAS_HISTORY')
       await store.lessonStudent.deleteMany({ where: { lessonId: id, studentId: { notIn: studentIds } } })
       await store.lessonStudent.createMany({ data: studentIds.map(studentId => ({ lessonId: id, studentId })), skipDuplicates: true })
     },
@@ -240,6 +235,10 @@ export function createLessonClassRepository(store: StudentStore): LessonClassRep
       }),
     findById: (id) => store.lessonClass.findUnique({ where: { id }, include: classInclude }),
     create: (data) => store.lessonClass.create({ data, include: classInclude }),
+    replaceStudents: async (classId, studentIds) => {
+      await store.lessonClassStudent.deleteMany({ where: { classId } })
+      if (studentIds.length) await store.lessonClassStudent.createMany({ data: studentIds.map(studentId => ({ classId, studentId })) })
+    },
     update: (id, data) => store.lessonClass.update({ where: { id }, data, include: classInclude }),
     delete: async (id) => {
       await store.lessonClass.delete({ where: { id } })
@@ -254,16 +253,16 @@ export function createLessonClassRepository(store: StudentStore): LessonClassRep
         include: lessonInclude,
         orderBy: { startsAt: 'asc' },
       }),
-    classesOfStudents: async studentIds => {
-      const rows = await store.lessonSeriesStudent.findMany({
-        where: { studentId: { in: studentIds }, series: { classId: { not: null } } },
-        select: { studentId: true, student: { select: { fullName: true } }, series: { select: { classId: true, class: { select: { name: true } } } } },
+    classesOfStudents: async (studentIds, activeOnly = true) => {
+      const rows = await store.lessonClassStudent.findMany({
+        where: { studentId: { in: studentIds }, ...(activeOnly ? { lessonClass: { isActive: true } } : {}) },
+        select: { studentId: true, student: { select: { fullName: true } }, classId: true, lessonClass: { select: { name: true } } },
       })
       return rows.map(row => ({
         studentId: row.studentId,
         studentName: row.student.fullName,
-        classId: row.series.classId!,
-        className: row.series.class?.name ?? '',
+        classId: row.classId,
+        className: row.lessonClass.name,
       }))
     },
   }
@@ -278,12 +277,17 @@ export function createLessonPackageRepository(store: StudentStore): LessonPackag
     update: (id, data) => store.lessonPackage.update({ where: { id }, data }),
     incrementUsed: async (id) => {
       const pkg = await store.lessonPackage.findUnique({ where: { id } })
-      if (!pkg) throw new Error('LESSON_PACKAGE_NOT_FOUND')
-      if (pkg.used >= pkg.total) return pkg
-      return store.lessonPackage.update({
-        where: { id },
-        data: { used: { increment: 1 } },
-      })
+      if (!pkg) fail('LESSON_PACKAGE_UNAVAILABLE')
+      const changed = await store.lessonPackage.updateMany({ where: { id, isActive: true, used: { equals: pkg.used, lt: pkg.total } }, data: { used: { increment: 1 } } })
+      if (!changed.count) fail('LESSON_PACKAGE_UNAVAILABLE')
+      return store.lessonPackage.findUniqueOrThrow({ where: { id } })
+    },
+    decrementUsed: async (id) => {
+      const pkg = await store.lessonPackage.findUnique({ where: { id } })
+      if (!pkg) fail('LESSON_PACKAGE_UNAVAILABLE')
+      const changed = await store.lessonPackage.updateMany({ where: { id, used: { equals: pkg!.used, gt: 0 } }, data: { used: { decrement: 1 } } })
+      if (!changed.count) fail('LESSON_PACKAGE_UNAVAILABLE')
+      return store.lessonPackage.findUniqueOrThrow({ where: { id } })
     },
   }
 }

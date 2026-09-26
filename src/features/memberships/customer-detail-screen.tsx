@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
@@ -22,7 +23,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label, Textarea } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { isManagerOrAdmin } from '@/lib/shared/roles'
 import { apiJson, jsonRequest } from '@/lib/api'
@@ -277,13 +278,13 @@ export function CustomerDetailScreen({ id }: Props) {
   }
 
   if (loading) {
-    return <CustomerDetailSkeleton />
+    return <AppSkeleton />
   }
 
   if (!customer) {
     return (
       <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-5xl space-y-4">
+        <div className="mx-auto max-w-content space-y-4">
           <BackButton />
           <EmptyState
             icon={User}
@@ -300,7 +301,7 @@ export function CustomerDetailScreen({ id }: Props) {
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-5xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <BackButton />
 
         {error && (
@@ -311,8 +312,8 @@ export function CustomerDetailScreen({ id }: Props) {
           />
         )}
 
-        <div className="grid gap-4 md:grid-cols-5">
-          {/* ── Rail: hồ sơ + thống kê + ghi chú ── */}
+        <div className="grid gap-4 lg:grid-cols-5">
+          {/* ── Rail: hồ sơ + thống kê + trạng thái hội viên ── */}
           <ProfileRail
             customer={customer}
             monogram={monogram}
@@ -330,20 +331,22 @@ export function CustomerDetailScreen({ id }: Props) {
             onCancelEdit={cancelEdit}
             onSave={handleSave}
             onDelete={() => setDeleteOpen(true)}
+            membership={isMember && membershipInfo ? (
+              <div className="space-y-3">
+                <MembershipStatusBlock
+                  status={membershipInfo.status}
+                  current={membershipInfo.current}
+                  daysToExpiry={daysToExpiry}
+                  shiftReady={!!shift}
+                  onRenew={() => setRenewOpen(true)}
+                />
+                <MembershipHistorySection memberships={memberships} />
+              </div>
+            ) : null}
           />
 
-          {/* ── Main: trạng thái hội viên (member) hoặc khoảng trống (walk-in) + lịch sử ── */}
-          <div className="space-y-4 md:col-span-3">
-            {isMember && membershipInfo && (
-              <MembershipStatusBlock
-                status={membershipInfo.status}
-                current={membershipInfo.current}
-                daysToExpiry={daysToExpiry}
-                shiftReady={!!shift}
-                onRenew={() => setRenewOpen(true)}
-              />
-            )}
-
+          {/* ── Main: lịch sử thanh toán ── */}
+          <div className="lg:col-span-3">
             <HistorySection history={history} />
           </div>
         </div>
@@ -413,6 +416,7 @@ function ProfileRail({
   onCancelEdit,
   onSave,
   onDelete,
+  membership,
 }: {
   customer: CustomerDetail
   monogram: string
@@ -430,9 +434,10 @@ function ProfileRail({
   onCancelEdit: () => void
   onSave: () => void
   onDelete: () => void
+  membership?: ReactNode
 }) {
   return (
-    <aside className="md:col-span-2">
+    <aside className="lg:col-span-2">
       <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 md:p-5">
         <div className="flex items-start gap-3">
           <div
@@ -548,17 +553,19 @@ function ProfileRail({
         <RailStat label="Tổng chi" value={money(stats.spent)} />
         <RailStat label="Giờ chơi" value={`${stats.hours}h`} />
       </div>
+
+      {membership ? <div className="mt-3">{membership}</div> : null}
     </aside>
   )
 }
 
 function RailStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-3 py-3 text-center">
+    <div className="px-2 py-3 text-center">
       <p className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         {label}
       </p>
-      <p className="mt-0.5 truncate text-base font-bold tabular-nums text-zinc-950 dark:text-white">
+      <p className="mt-0.5 truncate text-sm font-bold tabular-nums text-zinc-950 dark:text-white xl:text-base">
         {value}
       </p>
     </div>
@@ -592,7 +599,6 @@ function MembershipStatusBlock({
       : 'before:bg-zinc-400'
 
   const statusLabel = isActive ? 'Còn hạn' : isExpired ? 'Hết hạn' : 'Chưa có kỳ'
-  const statusVariant = isActive ? 'success' : isExpired ? 'warning' : 'default'
 
   const ctaLabel = isActive ? 'Đóng tiếp kỳ mới' : isExpired ? 'Gia hạn để chơi' : 'Đăng ký kỳ đầu'
   const ctaDisabled = isNone || !shiftReady
@@ -613,18 +619,11 @@ function MembershipStatusBlock({
         </p>
       </div>
 
-      <div className="mt-3 flex items-baseline gap-2">
-        <span className="text-3xl font-extrabold tracking-tight text-zinc-950 dark:text-white">
-          {isActive && daysToExpiry !== null
-            ? `Còn ${daysToExpiry} ngày`
-            : statusLabel}
-        </span>
-        {isActive ? null : (
-          <Badge variant={statusVariant} size="sm">
-            {statusLabel}
-          </Badge>
-        )}
-      </div>
+      <p className="mt-3 text-3xl font-extrabold tracking-tight text-zinc-950 dark:text-white">
+        {isActive && daysToExpiry !== null
+          ? `Còn ${daysToExpiry} ngày`
+          : statusLabel}
+      </p>
 
       {current ? (
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -657,6 +656,46 @@ function MembershipStatusBlock({
           </p>
         ) : null}
       </div>
+    </section>
+  )
+}
+
+function MembershipHistorySection({ memberships }: { memberships: Membership[] }) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <header className="flex items-center gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        <History size={15} className="text-zinc-400" />
+        <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
+          Lịch sử đóng phí
+        </h2>
+        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+          · {memberships.length} kỳ
+        </span>
+      </header>
+
+      {memberships.length === 0 ? (
+        <p className="p-4 text-sm text-zinc-500 dark:text-zinc-400">
+          Chưa có lịch sử hội viên.
+        </p>
+      ) : (
+        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+          {memberships.map((membership) => (
+            <li key={membership.id} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-zinc-950 dark:text-white">
+                  {membership.plan?.name ?? 'Gói hội viên'}
+                </p>
+                <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">
+                  {formatDay(membership.startsAt)}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {formatDay(membership.startsAt)} - {formatDay(membership.expiresAt)}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   )
 }
@@ -798,23 +837,5 @@ function InvoiceHistoryRow({ invoice }: { invoice: CustomerHistoryInvoice }) {
         </div>
       </details>
     </li>
-  )
-}
-
-function CustomerDetailSkeleton() {
-  return (
-    <SkeletonPage maxWidth="max-w-5xl">
-        <Skeleton className="h-6 w-24" />
-        <div className="grid gap-4 md:grid-cols-5">
-          <div className="md:col-span-2 space-y-3">
-            <SkeletonPanel><Skeleton className="h-32 w-full" /></SkeletonPanel>
-            <SkeletonPanel><Skeleton className="h-16 w-full" /></SkeletonPanel>
-          </div>
-          <div className="md:col-span-3 space-y-4">
-            <SkeletonPanel><Skeleton className="h-40 w-full" /></SkeletonPanel>
-            <SkeletonPanel><Skeleton className="h-64 w-full" /></SkeletonPanel>
-          </div>
-        </div>
-    </SkeletonPage>
   )
 }

@@ -59,6 +59,11 @@
   --color-accent-purple: var(--color-accent-purple);
   --color-accent-purple-bg: var(--color-accent-purple-bg);
   --color-accent-purple-border: var(--color-accent-purple-border);
+
+  /* Layout — bề rộng nội dung dùng chung cho MỌI trang dashboard.
+     Đổi 1 dòng này là đổi width toàn bộ app. Dùng class `max-w-content`,
+     không hardcode max-w-3xl/4xl/5xl/6xl trong trang (có test chặn). */
+  --container-content: 64rem;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -140,8 +145,19 @@
   /* Sidebar */
   --sidebar-width: 16rem;
   --sidebar-collapsed-width: 4.5rem;
-  --bottom-nav-height: 3.75rem;
+  --bottom-nav-height: 4rem;
   --header-height: 3.5rem;
+}
+
+/* Chừa khoảng cho island nav và vùng home indicator của iPhone. */
+@media (max-width: 767px) {
+  .safe-area-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+  }
+
+  .mobile-nav-content-safe {
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 0.75rem);
+  }
 }
 
 /* ── Dark theme overrides ───────────────────────────────── */
@@ -259,11 +275,6 @@ body {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
 }
-/* Stagger nhẹ cho grid shortcut. */
-@keyframes stagger-enter {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 /* Toast xuất hiện từ top: scale nhỏ (0.9) → đúng kích thước */
 @keyframes toast-pop {
   from { opacity: 0; transform: translateY(-8px) scale(0.9); }
@@ -284,6 +295,10 @@ body {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
+@keyframes logo-breathe {
+  0%, 100% { opacity: 0.72; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1); }
+}
 .animate-fade-in { animation: fade-in var(--dur-quick) var(--ease-out); }
 .animate-slide-up { animation: slide-up var(--dur-menu) var(--ease-out); }
 .animate-slide-down { animation: slide-down var(--dur-quick) var(--ease-out); }
@@ -293,19 +308,10 @@ body {
 .animate-toast-exit { animation: toast-exit var(--dur-quick) var(--ease-in-out) forwards; }
 .animate-card-enter { animation: card-enter 220ms var(--ease-out) both; }
 
-/* Grid stagger nhẹ cho các shortcut app. */
-.motion-stagger > * {
-  animation: stagger-enter 280ms var(--ease-out) both;
-}
-.motion-stagger > *:nth-child(1)  { animation-delay: 0ms; }
-.motion-stagger > *:nth-child(2)  { animation-delay: 35ms; }
-.motion-stagger > *:nth-child(3)  { animation-delay: 70ms; }
-.motion-stagger > *:nth-child(4)  { animation-delay: 105ms; }
-.motion-stagger > *:nth-child(5)  { animation-delay: 140ms; }
-.motion-stagger > *:nth-child(6)  { animation-delay: 175ms; }
-.motion-stagger > *:nth-child(7)  { animation-delay: 210ms; }
-.motion-stagger > *:nth-child(8)  { animation-delay: 245ms; }
-.motion-stagger > *:nth-child(9)  { animation-delay: 280ms; }
+/* Stagger cho danh sách: dùng `.animate-card-enter` kèm inline animationDelay
+   theo index (index * 35ms) — chạy đúng với số item bất kỳ. Bản cũ dùng
+   nth-child chỉ phủ 9 item đầu nên item thứ 10 trở đi nhảy vào cùng lúc với
+   item đầu tiên. */
 
 /* Hover lift — dùng cho Card, list row, summary tile. Tách transform
    khỏi transition-colors để cả hai chạy độc lập. */
@@ -365,6 +371,10 @@ body {
   );
 }
 
+.app-skeleton-logo {
+  animation: logo-breathe 1.8s var(--ease-in-out) infinite;
+}
+
 /* Active nav indicator — dot dưới icon, dùng absolute + scale-in. */
 .nav-dot {
   position: absolute;
@@ -402,7 +412,6 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  .motion-stagger > * { animation: none !important; }
   .motion-hover-lift:hover { transform: none !important; }
   .motion-press:active { transform: none !important; }
   .skeleton::after { animation: none !important; opacity: 0.4; }

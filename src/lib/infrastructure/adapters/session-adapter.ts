@@ -11,6 +11,7 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
         include: {
           customer: true,
           membership: true,
+          booking: true,
           pricingGroups: { orderBy: { createdAt: 'asc' } },
         },
       })
@@ -312,6 +313,7 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
         include: {
           customer: true,
           membership: true,
+          booking: true,
           pricingGroups: {
             orderBy: { createdAt: 'asc' },
             include: {

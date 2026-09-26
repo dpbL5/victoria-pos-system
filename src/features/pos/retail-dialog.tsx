@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { Minus, Plus, Search, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Minus, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { money, toNumber } from './format'
+import { CustomerSearch } from './customer-search'
 import { PaymentMethodPicker } from './payment-method-picker'
 import type { Customer, PaymentMethod, Product } from './types'
 
@@ -39,9 +40,6 @@ export function RetailDialog({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH')
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [customerQuery, setCustomerQuery] = useState('')
-  const [customerResults, setCustomerResults] = useState<Customer[]>([])
-  const [customerOpen, setCustomerOpen] = useState(false)
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -50,32 +48,9 @@ export function RetailDialog({
       setPaymentMethod('CASH')
       setCustomer(null)
       setCustomerQuery('')
-      setCustomerResults([])
-      setCustomerOpen(false)
       /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [open])
-
-  // Tìm khách theo tên/SĐT — debounce
-  useEffect(() => {
-    if (!open || !customerOpen || customerQuery.trim().length === 0) {
-      return
-    }
-    if (searchTimer.current) clearTimeout(searchTimer.current)
-    searchTimer.current = setTimeout(async () => {
-      try {
-        const data = await apiJson<Customer[]>(
-          `/api/customers?search=${encodeURIComponent(customerQuery.trim())}&limit=6`,
-        )
-        setCustomerResults(data.success ? (data.data ?? []) : [])
-      } catch {
-        setCustomerResults([])
-      }
-    }, 300)
-    return () => {
-      if (searchTimer.current) clearTimeout(searchTimer.current)
-    }
-  }, [customerQuery, customerOpen, open])
 
   const cartLines = products
     .map((product) => ({
@@ -181,48 +156,12 @@ export function RetailDialog({
               </button>
             </div>
           ) : (
-            <div className="relative mt-1">
-              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-              <input
-                type="text"
-                value={customerQuery}
-                onChange={(e) => {
-                  setCustomerQuery(e.target.value)
-                  setCustomerOpen(true)
-                }}
-                onFocus={() => setCustomerOpen(true)}
-                placeholder="Tìm tên hoặc SĐT..."
-                className="h-9 w-full rounded-lg border border-zinc-200 bg-transparent pl-8 pr-3 text-sm outline-none focus:border-zinc-400 dark:border-zinc-800 dark:focus:border-zinc-600"
-              />
-              {customerOpen && customerQuery.trim().length > 0 && (
-                <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
-                  {customerResults.length === 0 ? (
-                    <p className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
-                      Không tìm thấy khách
-                    </p>
-                  ) : (
-                    customerResults.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setCustomer(c)
-                          setCustomerOpen(false)
-                        }}
-                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                      >
-                        <span className="truncate font-medium text-zinc-950 dark:text-white">
-                          {c.fullName}
-                        </span>
-                        <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">
-                          {c.type === 'MEMBER' ? 'Hội viên' : 'Vãng lai'}
-                        </span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
+            <CustomerSearch
+              className="mt-1"
+              value={customerQuery}
+              onValueChange={setCustomerQuery}
+              onSelect={setCustomer}
+            />
           )}
         </div>
 

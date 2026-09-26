@@ -145,6 +145,14 @@ export interface CheckoutContext {
    * Đồng bộ với preview (dùng endTime làm mốc).
    */
   pauseRef: Date
+  bookingDeposit?: {
+    bookingId: string
+    expectedApplied: number
+    expectedRefunded: number
+    remaining: number
+    depositInvoiceId: string | null
+    paymentMethod: 'CASH' | 'TRANSFER' | 'CARD' | null
+  }
 }
 
 export async function checkOut(
@@ -515,6 +523,16 @@ export async function checkOut(
     playersToBillByGroup,
     pauseRef,
     earlyCollectionGroupIds,
+    bookingDeposit: session.booking
+      ? {
+          bookingId: session.booking.id,
+          expectedApplied: Number(session.booking.depositAppliedAmount),
+          expectedRefunded: Number(session.booking.depositRefundedAmount),
+          remaining: Math.max(0, Number(session.booking.depositAmount) - Number(session.booking.depositAppliedAmount) - Number(session.booking.depositRefundedAmount)),
+          depositInvoiceId: session.booking.depositInvoiceId,
+          paymentMethod: session.booking.depositPaymentMethod === 'MEMBER' ? null : session.booking.depositPaymentMethod,
+        }
+      : undefined,
   }
 
   const result = await runInTransaction((tx) =>
@@ -748,6 +766,7 @@ export async function runCheckOutTx(
     playersToBillByGroup,
     pauseRef,
     earlyCollectionGroupIds,
+    bookingDeposit,
   } = ctx
   const { paidAt, promotionRuleId } = state
   let {
@@ -1090,6 +1109,36 @@ export async function runCheckOutTx(
     }
   }
 
+  // ── Áp dụng cọc đã thu cho lịch này, tối đa bằng số tiền checkout ──
+  const depositApplied = bookingDeposit
+    ? Math.min(bookingDeposit.remaining, Math.max(0, invoiceGrandTotal))
+    : 0
+  if (bookingDeposit && depositApplied > 0) {
+    const applied = await tx.booking!.applyDeposit(
+      bookingDeposit.bookingId,
+      bookingDeposit.expectedApplied,
+      depositApplied
+    )
+    if (!applied.count) fail('BOOKING_DEPOSIT_STALE')
+    invoiceSubtotal -= depositApplied
+    invoiceGrandTotal = Math.max(0, invoiceGrandTotal - depositApplied)
+    await tx.billing.createInvoiceItem({
+      invoiceId: invoice.id,
+      type: 'DEPOSIT_APPLIED',
+      description: 'Khấu trừ tiền cọc đã thanh toán',
+      quantity: 1,
+      unitPrice: -depositApplied,
+      subtotal: -depositApplied,
+      discountAmount: 0,
+      total: -depositApplied,
+      metadata: {
+        bookingId: bookingDeposit.bookingId,
+        depositInvoiceId: bookingDeposit.depositInvoiceId,
+      },
+    })
+    await tx.billing.updateInvoiceTotals(invoice.id, invoiceSubtotal, invoiceGrandTotal)
+  }
+
   const payment = await tx.billing.createPayment({
     sessionId,
     invoiceId: invoice.id,
@@ -1147,6 +1196,63 @@ export async function runCheckOutTx(
 
   const isFullCheckout = totalRemaining <= 0
 
+  let depositRefund = 0
+  if (isFullCheckout && bookingDeposit) {
+    depositRefund = Math.max(0, bookingDeposit.remaining - depositApplied)
+    if (depositRefund > 0) {
+      const marked = await tx.booking!.applyRefund(
+        bookingDeposit.bookingId,
+        bookingDeposit.expectedRefunded,
+        depositRefund
+      )
+      if (!marked.count) fail('BOOKING_DEPOSIT_STALE')
+      const refundInvoice = await tx.billing.createPaidInvoice({
+        invoiceNo: generateInvoiceNo('DEP'),
+        sessionId,
+        customerId,
+        shiftId,
+        staffId,
+        paidAt,
+        notes: `Hoàn phần cọc chưa sử dụng của lịch ${bookingDeposit.bookingId}`,
+        subtotal: -depositRefund,
+        discountTotal: 0,
+        grandTotal: -depositRefund,
+        lines: [{
+          type: 'DEPOSIT',
+          description: 'Hoàn phần tiền cọc chưa sử dụng',
+          quantity: 1,
+          unitPrice: -depositRefund,
+          subtotal: -depositRefund,
+          discountAmount: 0,
+          total: -depositRefund,
+          metadata: { bookingId: bookingDeposit.bookingId, refund: true },
+        }],
+      })
+      await tx.billing.createPayment({
+        kind: 'DEPOSIT',
+        invoiceId: refundInvoice.id,
+        sessionId,
+        shiftId,
+        staffId,
+        totalHours: 0,
+        subtotal: -depositRefund,
+        discountTotal: 0,
+        grandTotal: -depositRefund,
+        paymentMethod: bookingDeposit.paymentMethod ?? 'CASH',
+        paidAt,
+        notes: `Hoàn cọc lịch ${bookingDeposit.bookingId}`,
+      })
+      await tx.booking!.setDepositRefundInvoice(bookingDeposit.bookingId, refundInvoice.id)
+      await tx.audit.append({
+        userId: staffId,
+        action: 'BOOKING_DEPOSIT_REFUND',
+        entityType: 'Booking',
+        entityId: bookingDeposit.bookingId,
+        details: { invoiceId: refundInvoice.id, amount: depositRefund, paymentMethod: bookingDeposit.paymentMethod ?? 'CASH' },
+      })
+    }
+  }
+
   if (isFullCheckout) {
     await tx.session.update(sessionId, {
       shiftId,
@@ -1175,7 +1281,7 @@ export async function runCheckOutTx(
   if (customerId) {
     await tx.customer.recordPlay(customerId, {
       hours: +(finalPricing.totalHours * checkoutCount).toFixed(2),
-      spent: invoiceGrandTotal,
+      spent: invoiceGrandTotal + depositApplied,
     })
   }
 
@@ -1205,6 +1311,8 @@ export async function runCheckOutTx(
       pricingGroupId: targetGroupId ?? null,
       mergedSellItemCount: mergedSellItemIds.length > 0 ? mergedSellItemIds.length : undefined,
       parkingFeeTotal: parkingFeeTotal || undefined,
+      depositApplied: depositApplied || undefined,
+      depositRefund: depositRefund || undefined,
       pricingAssignedAtCheckout: (pendingAssignments?.length ?? 0) > 0,
       assignedPricingRuleIds: pendingAssignments?.map(a => a.pricingRuleId),
       earlyCollection: earlyCollectionSequence !== undefined
@@ -1281,6 +1389,8 @@ export function mapCheckoutError(error: DomainError): HttpErrorInfo {
       return { code: 'NO_PLAYERS_TO_CHECKOUT', message: 'Không còn người chơi nào để checkout', status: 400 }
     case 'SHIFT_REQUIRED':
       return { code: 'SHIFT_REQUIRED', message: 'Cần mở hoặc tham gia ca trước khi checkout', status: 409 }
+    case 'BOOKING_DEPOSIT_STALE':
+      return { code: 'BOOKING_DEPOSIT_STALE', message: 'Số dư cọc đã thay đổi. Vui lòng tải lại phiên rồi thử lại.', status: 409 }
     case 'MEMBERSHIP_EXPIRED_DURING_CHECKOUT':
       return { code: 'MEMBERSHIP_EXPIRED_DURING_CHECKOUT', message: 'Gói hội viên đã hết hạn trong lúc checkout. Vui lòng thử lại.', status: 409 }
     case 'PROMOTION_UNAVAILABLE':

@@ -27,6 +27,30 @@
 | `SortableCardList` | `@/components/ui/sortable-card-list` | Danh sách card kéo thả (dụng cụ) |
 | `SortableTable` | `@/components/ui/sortable-table` | Bảng kéo thả (dụng cụ) |
 
+## Bề rộng nội dung trang (bắt buộc — mọi trang giống nhau)
+
+Mọi trang dashboard dùng **cùng một bề rộng nội dung**: class `max-w-content`, sinh ra từ token `--container-content` trong `src/app/globals.css` (`@theme inline`).
+
+```tsx
+// Screen chuẩn — copy khối này cho trang mới
+return (
+  <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
+    <div className="mx-auto max-w-content space-y-4">
+      <header className="hidden items-center justify-between gap-3 md:flex">…</header>
+      …
+    </div>
+  </div>
+)
+```
+
+Quy tắc:
+
+- **Không hardcode `max-w-3xl/4xl/5xl/6xl/7xl`** trong `src/features/**/*-screen.tsx` và `src/app/(dashboard)/**/page.tsx` — có test chặn: `src/lib/__tests__/page-content-width.test.ts`.
+- Mọi `*-screen.tsx` phải chứa `max-w-content` (hoặc nằm trong danh sách full-bleed có chủ đích: `lessons-screen.tsx` — lịch FullCalendar).
+- Skeleton của trang dùng `SkeletonPage` — component này đã tự áp `max-w-content`, không truyền `maxWidth`.
+- Đổi bề rộng toàn app = sửa đúng **1 dòng** `--container-content` trong `globals.css` (không sửa từng trang).
+- Bề rộng riêng cho thành phần con (ví dụ tờ hoá đơn `max-w-3xl` trong chi tiết giao dịch) vẫn hợp lệ — test chỉ áp cho file trang/screen.
+
 ## Icon mapping chuẩn (dùng nhất quán toàn dự án)
 
 - **Dùng `lucide-react` cho tất cả icons** — không dùng emoji trong UI

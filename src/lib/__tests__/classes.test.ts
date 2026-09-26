@@ -53,6 +53,7 @@ function classRecord(item: LessonClassRecord): LessonClassRecord {
   const lessonCount = state.lessons.filter(lesson => lesson.classId === item.id || slots.some(series => series.id === lesson.seriesId)).length
   return {
     ...item,
+    students: item.students ?? [],
     slots: slots.map(series => ({
       ...series,
       students: series.students.map(row => ({ studentId: row.studentId, student: { id: row.studentId, fullName: row.studentId, phone: null } })),
@@ -81,18 +82,19 @@ beforeEach(() => {
         Object.assign(item, data)
         return classRecord(item)
       }),
+      replaceStudents: vi.fn(async (id: string, ids: string[]) => {
+        state.classes.find(row => row.id === id)!.students = ids.map(studentId => ({ classId: id, studentId, student: { id: studentId, fullName: studentId, phone: null } })) as LessonClassRecord['students']
+      }),
       delete: vi.fn(async (id: string) => { state.classes = state.classes.filter(row => row.id !== id) }),
       findUpcomingLessons: vi.fn(async (ids: string[]) => state.lessons.filter(lesson => lesson.startsAt >= new Date() && (ids.includes(lesson.classId ?? '') || ids.includes(state.series.find(series => series.id === lesson.seriesId)?.classId ?? '')))),
       classesOfStudents: vi.fn(async (studentIds: string[]) => {
         const rows: { studentId: string; studentName: string; classId: string; className: string }[] = []
-        for (const item of state.classes) {
-          for (const series of state.series.filter(row => row.classId === item.id)) {
-            for (const member of series.students) {
+        for (const item of state.classes.filter(row => row.isActive)) {
+            for (const member of item.students ?? []) {
               if (!studentIds.includes(member.studentId)) continue
               if (rows.some(row => row.studentId === member.studentId && row.classId === item.id)) continue
               rows.push({ studentId: member.studentId, studentName: member.studentId, classId: item.id, className: item.name })
             }
-          }
         }
         return rows
       }),
@@ -231,17 +233,16 @@ describe('đổi thông tin lớp', () => {
     expect(state.lessons).toHaveLength(0)
   })
 
-  it('xoá cứng cả buổi đã điểm danh', async () => {
+  it('chặn xoá lớp đã có điểm danh', async () => {
     const created = await createClass({ staffId: 'admin', name: 'Lớp nhầm', studentIds: ['a'], slots: [slot(2, '18:00')] })
     const classId = created.ok ? created.value.lessonClass.id : ''
     state.lessons[0].students[0].status = 'COMPLETED'
 
     const result = await deleteClass({ staffId: 'admin', classId }, state.repos)
-    expect(result.ok).toBe(true)
-    expect(result.ok ? result.value.deletedLessons : 0).toBeGreaterThan(0)
-    expect(state.classes).toHaveLength(0)
-    expect(state.series).toHaveLength(0)
-    expect(state.lessons).toHaveLength(0)
+    expect(result).toMatchObject({ ok: false, error: { code: 'CLASS_HAS_HISTORY' } })
+    expect(state.classes).toHaveLength(1)
+    expect(state.lessons.length).toBeGreaterThan(0)
+    expect(state.repos.googleCalendar.deleteEvent).not.toHaveBeenCalled()
   })
 
   it('xoá event Google của khung giờ trước khi xoá dữ liệu', async () => {
@@ -304,7 +305,7 @@ describe('ràng buộc một học viên chỉ thuộc một lớp', () => {
     const seriesA = state.series.find(row => row.classId === classA)!
     const anchor = state.lessons.filter(lesson => lesson.seriesId === seriesA.id).sort((x, y) => +x.startsAt - +y.startsAt)[0]
     const blocked = await updateSeries({ staffId: 'admin', seriesId: seriesA.id, version: seriesA.version, scope: 'FOLLOWING', lessonId: anchor.id, studentIds: ['a', 'b'] }, state.repos)
-    expect(blocked).toMatchObject({ ok: false, error: { code: 'CLASS_STUDENT_TAKEN' } })
+    expect(blocked).toMatchObject({ ok: false, error: { code: 'CLASS_ROSTER_REQUIRED' } })
 
     const plain = await createSeries({ staffId: 'admin', title: 'Chuỗi tự do', daysOfWeek: [6], startTime: '09:00', durationMin: 60, startsOn: futureOn(6), studentIds: ['c'] }, state.repos)
     const plainSeries = plain.ok ? plain.value.series : null
@@ -330,4 +331,50 @@ describe('sửa khung giờ', () => {
     const anchor = state.lessons.filter(lesson => lesson.seriesId === next.id).sort((a, b) => +a.startsAt - +b.startsAt)[0]
     expect(oldSeries.endsOn!.getTime()).toBeLessThan(anchor.startsAt.getTime())
   })
+})
+
+it('giữ sổ lớp chưa có lịch và dùng đúng sổ khi thêm khung sau đó', async () => {
+  const created = await createClass({ staffId: 'admin', name: 'Chưa có lịch', studentIds: ['a'] })
+  expect(created.ok).toBe(true)
+  const classId = created.ok ? created.value.lessonClass.id : ''
+  expect((await state.repos.lessonClass.findById(classId))?.students.map(row => row.studentId)).toEqual(['a'])
+  const added = await createClassSlot({ staffId: 'admin', classId, ...slot(3, '18:00') })
+  expect(added.ok).toBe(true)
+  expect(state.lessons.every(lesson => lesson.students[0].studentId === 'a')).toBe(true)
+})
+
+it('thay sổ giữ ghi chú chuẩn bị và tăng phiên bản những buổi thực sự thay đổi', async () => {
+  const created = await createClass({ staffId: 'admin', name: 'Lớp', studentIds: ['a'], slots: [slot(3, '18:00')] })
+  const classId = created.ok ? created.value.lessonClass.id : ''
+  const annotated = state.lessons[0]
+  annotated.students[0].note = 'Chuẩn bị bài riêng'
+  const other = state.lessons[1]
+  const version = other.version
+  const seriesVersion = state.series[0].version
+  const result = await setClassRoster({ staffId: 'admin', classId, studentIds: ['b'] })
+  expect(result).toMatchObject({ ok: true, value: { skippedLocked: 1 } })
+  expect(annotated.students[0]).toMatchObject({ studentId: 'a', note: 'Chuẩn bị bài riêng' })
+  expect(other.students[0].studentId).toBe('b')
+  expect(other.version).toBe(version + 1)
+  expect(state.series[0].version).toBe(seriesVersion + 1)
+})
+
+it('lớp kết thúc không chặn vào lớp mới và không cho thay sổ lớp cũ', async () => {
+  const created = await createClass({ staffId: 'admin', name: 'Lớp cũ', studentIds: ['a'] })
+  const classId = created.ok ? created.value.lessonClass.id : ''
+  await updateClass({ staffId: 'admin', classId, isActive: false })
+  expect((await createClass({ staffId: 'admin', name: 'Lớp mới', studentIds: ['a'] })).ok).toBe(true)
+  expect(await setClassRoster({ staffId: 'admin', classId, studentIds: ['b'] })).toMatchObject({ ok: false, error: { code: 'CLASS_ENDED' } })
+  expect(await updateClass({ staffId: 'admin', classId, isActive: true })).toMatchObject({ ok: false, error: { code: 'CLASS_STUDENT_TAKEN' } })
+})
+
+it('không xoá Google khi transaction xoá lớp thất bại và rollback', async () => {
+  const created = await createClass({ staffId: 'admin', name: 'Lớp', studentIds: ['a'], slots: [slot(3, '18:00')] })
+  const classId = created.ok ? created.value.lessonClass.id : ''
+  state.repos.audit.append = vi.fn(async () => fail('CLASS_HAS_HISTORY'))
+  expect(await deleteClass({ staffId: 'admin', classId }, state.repos)).toMatchObject({ ok: false, error: { code: 'CLASS_HAS_HISTORY' } })
+  expect(state.repos.calendarConnection.listReady).not.toHaveBeenCalled()
+  expect(state.repos.googleCalendar.deleteEvent).not.toHaveBeenCalled()
+  expect(state.classes).toHaveLength(1)
+  expect(state.lessons.length).toBeGreaterThan(0)
 })

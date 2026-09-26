@@ -96,6 +96,7 @@ describe('markAttendance', () => {
       {
         staffId: 'staff-1',
         lessonId: 'lesson-x',
+        version: 1,
         entries: [{ studentId: 'stu-1', status: 'COMPLETED' }],
       },
       state.reposForTest!
@@ -115,6 +116,7 @@ describe('markAttendance', () => {
       {
         staffId: 'staff-1',
         lessonId: 'lesson-1',
+        version: 1,
         entries: [{ studentId: 'other-student', status: 'COMPLETED' }],
       },
       state.reposForTest!
@@ -150,6 +152,7 @@ describe('markAttendance', () => {
       {
         staffId: 'staff-1',
         lessonId: 'lesson-1',
+        version: 1,
         entries: [{ studentId: 'stu-1', status: 'COMPLETED' }],
       },
       state.reposForTest!
@@ -184,6 +187,7 @@ describe('markAttendance', () => {
       {
         staffId: 'staff-1',
         lessonId: 'lesson-1',
+        version: 1,
         entries: [{ studentId: 'stu-1', status: 'ABSENT' }],
       },
       state.reposForTest!
@@ -192,4 +196,71 @@ describe('markAttendance', () => {
     expect(result.ok).toBe(true)
     expect(incrementUsed).not.toHaveBeenCalled()
   })
+})
+
+function setupTransitions(overrides: Partial<LessonRecord> = {}) {
+  const lesson = makeLesson({ startsAt: new Date(Date.now() - 7_200_000), ...overrides })
+  const pkg = makePackage()
+  setup({
+    lesson: {
+      findById: vi.fn(async () => lesson),
+      update: vi.fn(async (_id, data, version) => {
+        if (lesson.version !== version) throw new Error('Phiên bản sai trong test')
+        Object.assign(lesson, data, { version: lesson.version + 1 })
+        return lesson
+      }),
+      setPackage: vi.fn(async ({ packageId }) => { lesson.students[0].packageId = packageId }),
+      upsertAttendance: vi.fn(async ({ status, note }) => {
+        lesson.students[0].status = status
+        if (note !== undefined) lesson.students[0].note = note
+      }),
+    } as Partial<Repositories['lesson']> as Repositories['lesson'],
+    lessonPackage: {
+      findActiveByStudent: vi.fn(async () => [pkg]),
+      findById: vi.fn(async () => pkg),
+      incrementUsed: vi.fn(async () => { pkg.used++; return pkg }),
+      decrementUsed: vi.fn(async () => { pkg.used--; return pkg }),
+    } as Partial<Repositories['lessonPackage']> as Repositories['lessonPackage'],
+    audit: { append: vi.fn() } as never,
+  })
+  const mark = (status: 'COMPLETED' | 'ABSENT' | 'SCHEDULED', version = lesson.version) => markAttendance({
+    staffId: 'admin', lessonId: lesson.id, version, entries: [{ studentId: 'stu-1', status }],
+  }, state.reposForTest!)
+  return { lesson, pkg, mark }
+}
+
+it('hoàn đúng gói khi sửa điểm danh và không trừ lần hai khi lưu lại', async () => {
+  const { lesson, pkg, mark } = setupTransitions()
+  expect((await mark('COMPLETED')).ok).toBe(true)
+  expect(pkg.used).toBe(1)
+  expect(lesson.students[0].packageId).toBe(pkg.id)
+  expect((await mark('COMPLETED')).ok).toBe(true)
+  expect(pkg.used).toBe(1)
+  expect((await mark('ABSENT')).ok).toBe(true)
+  expect(pkg.used).toBe(0)
+  expect(lesson.students[0].packageId).toBeNull()
+  expect((await mark('COMPLETED')).ok).toBe(true)
+  expect(pkg.used).toBe(1)
+  expect((await mark('SCHEDULED')).ok).toBe(true)
+  expect(pkg.used).toBe(0)
+  expect(lesson.status).toBe('SCHEDULED')
+})
+
+it('không trừ thêm với dữ liệu cũ ABSENT nhưng còn liên kết gói đã trừ', async () => {
+  const { lesson, pkg, mark } = setupTransitions()
+  lesson.students[0].status = 'ABSENT'
+  lesson.students[0].packageId = pkg.id
+  pkg.used = 1
+  expect((await mark('COMPLETED')).ok).toBe(true)
+  expect(pkg.used).toBe(1)
+  expect(state.reposForTest!.lessonPackage.incrementUsed).not.toHaveBeenCalled()
+})
+
+it('chặn phiên bản cũ và buổi chưa kết thúc trước khi thay đổi gói', async () => {
+  const { lesson, pkg, mark } = setupTransitions()
+  expect(await mark('COMPLETED', 0)).toMatchObject({ ok: false, error: { code: 'LESSON_CONFLICT' } })
+  lesson.startsAt = new Date()
+  expect(await mark('COMPLETED')).toMatchObject({ ok: false, error: { code: 'LESSON_NOT_FINISHED' } })
+  expect(pkg.used).toBe(0)
+  expect(state.reposForTest!.lesson.upsertAttendance).not.toHaveBeenCalled()
 })

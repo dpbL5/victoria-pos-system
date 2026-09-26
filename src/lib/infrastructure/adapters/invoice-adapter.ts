@@ -26,6 +26,8 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
               id: true,
               type: true,
               productId: true,
+              metadata: true,
+              total: true,
               stockMovements: {
                 where: { type: 'SALE' },
                 select: {
@@ -45,6 +47,8 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
         grandTotal: Number(invoice.grandTotal),
         items: invoice.items.map((item) => ({
           ...item,
+          total: Number(item.total),
+          metadata: item.metadata,
           stockMovements: item.stockMovements,
         })),
       } satisfies VoidInvoiceTarget
@@ -63,6 +67,7 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
               id: true,
               type: true,
               productId: true,
+              metadata: true,
               stockMovements: {
                 where: { type: 'SALE' },
                 select: { id: true, productId: true, quantity: true },
@@ -75,6 +80,7 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
         .flatMap((d) => d.items)
         .map((item) => ({
           ...item,
+          metadata: item.metadata,
           stockMovements: item.stockMovements,
         }))
     },
@@ -138,7 +144,7 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
     async createPayment(input) {
       const payment = await store.payment.create({
         data: {
-          kind: 'OPERATIONAL',
+          kind: input.kind ?? 'OPERATIONAL',
           invoiceId: input.invoiceId,
           sessionId: input.sessionId ?? null,
           shiftId: input.shiftId,

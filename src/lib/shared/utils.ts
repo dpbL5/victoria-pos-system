@@ -48,6 +48,19 @@ export function toInputDate(date: Date): string {
   return `${y}-${m}-${day}`
 }
 
+/** Khoảng ngày lịch hiện tại theo giờ Việt Nam, kết thúc ở hôm nay. */
+export function getVnCalendarRange(period: 'day' | 'week' | 'month' | 'year', now = new Date()): { from: string; to: string } {
+  const to = toInputDate(now)
+  const [year, month, day] = to.split('-').map(Number)
+  const start = new Date(Date.UTC(year, month - 1, day))
+
+  if (period === 'week') start.setUTCDate(day - ((start.getUTCDay() + 6) % 7))
+  if (period === 'month') start.setUTCDate(1)
+  if (period === 'year') start.setUTCMonth(0, 1)
+
+  return { from: start.toISOString().slice(0, 10), to }
+}
+
 /** Trả về thời điểm 00:00:00.000 giờ Việt Nam của ngày `value` (UTC+7). */
 export function parseStartOfDay(value: string): Date {
   const [y, m, d] = value.split('-').map(Number)

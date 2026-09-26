@@ -64,7 +64,7 @@ beforeEach(() => {
       }),
     },
     audit: { append: vi.fn() },
-    lessonClass: { classesOfStudents: vi.fn(async () => []) },
+    lessonClass: { findById: vi.fn(async () => ({ id: 'class-1', isActive: true, students: [{ studentId: 'a' }] })), classesOfStudents: vi.fn(async () => []) },
     calendarSync: {
       summary: vi.fn(async (connectionId: string) => ({
         pending: state.jobs.filter(j => j.connectionId === connectionId && j.status === 'PENDING').length,

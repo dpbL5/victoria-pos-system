@@ -18,6 +18,7 @@ export interface AttendanceEntry {
 export interface MarkAttendanceInput {
   staffId: string
   lessonId: string
+  version: number
   entries: AttendanceEntry[]
 }
 
@@ -43,6 +44,8 @@ export async function markAttendance(
   const result = await runInTransaction(async (tx) => {
     const current = await tx.lesson.findById(input.lessonId)
     if (!current || current.status === 'CANCELLED') fail('LESSON_CANCELLED')
+    if (current.version !== input.version) fail('LESSON_CONFLICT')
+    if (current.startsAt.getTime() + current.durationMin * 60_000 > Date.now()) fail('LESSON_NOT_FINISHED')
     if (input.entries.some(e => !current!.students.some(s => s.studentId === e.studentId))) fail('LESSON_STUDENT_MISMATCH')
     const remainingByStudent: Record<string, number> = {}
 
@@ -50,16 +53,11 @@ export async function markAttendance(
       const ls = current!.students.find((s) => s.studentId === e.studentId)
       if (!ls) continue
 
-      // Cập nhật status + note cho LessonStudent này
-      await tx.lesson.upsertAttendance({
-        lessonId: input.lessonId,
-        studentId: e.studentId,
-        status: e.status,
-        note: e.note === undefined ? undefined : e.note.trim(),
-      })
-
-      // Khi chuyển sang COMPLETED và chưa có gói bị trừ → trừ 1 buổi từ gói
-      if (e.status === 'COMPLETED' && !ls.packageId) {
+      if (e.status !== 'COMPLETED' && ls.packageId) {
+        const refunded = await tx.lessonPackage.decrementUsed(ls.packageId)
+        await tx.lesson.setPackage({ lessonId: input.lessonId, studentId: e.studentId, packageId: null })
+        remainingByStudent[e.studentId] = Math.max(0, refunded.total - refunded.used)
+      } else if (ls.status !== 'COMPLETED' && e.status === 'COMPLETED' && !ls.packageId) {
         const packages = await tx.lessonPackage.findActiveByStudent(e.studentId)
         const pkg = pickChargeablePackage(packages)
         if (pkg) {
@@ -70,13 +68,20 @@ export async function markAttendance(
             packageId: pkg.id,
           })
           remainingByStudent[e.studentId] = Math.max(0, updated.total - updated.used)
-        }
+        } else remainingByStudent[e.studentId] = await currentRemaining(tx, e.studentId)
       } else if (e.status === 'COMPLETED' && ls.packageId) {
         const pkg = await tx.lessonPackage.findById(ls.packageId)
         remainingByStudent[e.studentId] = pkg ? Math.max(0, pkg.total - pkg.used) : 0
       } else {
         remainingByStudent[e.studentId] = await currentRemaining(tx, e.studentId)
       }
+
+      await tx.lesson.upsertAttendance({
+        lessonId: input.lessonId,
+        studentId: e.studentId,
+        status: e.status,
+        note: e.note === undefined ? undefined : e.note.trim(),
+      })
     }
 
     // Cập nhật note cấp buổi (không — note cấp buổi ở lesson, note HV ở LessonStudent)
@@ -91,10 +96,13 @@ export async function markAttendance(
     })
 
     const statuses = current!.students.map(s => input.entries.find(e => e.studentId === s.studentId)?.status ?? s.status)
-    await tx.lesson.update(input.lessonId, { status: statuses.every(status => status !== 'SCHEDULED') ? 'COMPLETED' : 'SCHEDULED' })
+    await tx.lesson.update(input.lessonId, { status: statuses.every(status => status !== 'SCHEDULED') ? 'COMPLETED' : 'SCHEDULED' }, input.version)
     const updated = await tx.lesson.findById(input.lessonId)
     return { lesson: updated!, remainingByStudent }
-  }, { isolationLevel: 'Serializable' })
+  }, { isolationLevel: 'Serializable' }).catch(error => {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2034') return err('LESSON_CONFLICT')
+    throw error
+  })
 
   return result
 }
@@ -126,6 +134,7 @@ export async function previousAttendanceNotes(
 export interface UpdateLessonNotesInput {
   staffId: string
   lessonId: string
+  version: number
   entries: { studentId: string; note: string }[]
 }
 
@@ -149,6 +158,7 @@ export async function updateLessonStudentNotes(
   const result = await runInTransaction(async (tx) => {
     const current = await tx.lesson.findById(input.lessonId)
     if (!current || current.status === 'CANCELLED') fail('LESSON_CANCELLED')
+    if (current.version !== input.version) fail('LESSON_CONFLICT')
     if (input.entries.some(e => !current!.students.some(s => s.studentId === e.studentId))) fail('LESSON_STUDENT_MISMATCH')
 
     for (const e of input.entries) {
@@ -160,6 +170,8 @@ export async function updateLessonStudentNotes(
       })
     }
 
+    await tx.lesson.update(current.id, { status: current.status }, input.version)
+
     await tx.audit.append({
       userId: input.staffId,
       action: 'LESSON_STUDENT_NOTE',
@@ -170,7 +182,10 @@ export async function updateLessonStudentNotes(
 
     const updated = await tx.lesson.findById(input.lessonId)
     return { lesson: updated! }
-  }, { isolationLevel: 'Serializable' })
+  }, { isolationLevel: 'Serializable' }).catch(error => {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2034') return err('LESSON_CONFLICT')
+    throw error
+  })
 
   return result
 }
@@ -183,6 +198,8 @@ export function mapLessonNotesError(error: DomainError): HttpErrorInfo {
       return { code: 'LESSON_NOT_FOUND', message: 'Không tìm thấy buổi học', status: 404 }
     case 'LESSON_STUDENT_MISMATCH':
       return { code: 'LESSON_STUDENT_MISMATCH', message: 'Có học viên không thuộc buổi học này', status: 400 }
+    case 'LESSON_CONFLICT':
+      return { code: error.code, message: 'Buổi học đã được cập nhật ở nơi khác. Hãy tải lại và lưu lại ghi chú', status: 409 }
     default:
       return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
   }
@@ -196,6 +213,12 @@ export function mapMarkAttendanceError(error: DomainError): HttpErrorInfo {
       return { code: 'LESSON_NOT_FOUND', message: 'Không tìm thấy buổi học', status: 404 }
     case 'LESSON_STUDENT_MISMATCH':
       return { code: 'LESSON_STUDENT_MISMATCH', message: 'Có học viên không thuộc buổi học này', status: 400 }
+    case 'LESSON_CONFLICT':
+      return { code: error.code, message: 'Buổi học đã được cập nhật ở nơi khác. Hãy tải lại trước khi điểm danh', status: 409 }
+    case 'LESSON_NOT_FINISHED':
+      return { code: error.code, message: 'Chỉ có thể điểm danh sau khi buổi học kết thúc', status: 409 }
+    case 'LESSON_PACKAGE_UNAVAILABLE':
+      return { code: error.code, message: 'Không thể cập nhật gói buổi học. Hãy kiểm tra số buổi còn lại', status: 409 }
     default:
       return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
   }
