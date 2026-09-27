@@ -69,9 +69,9 @@ function createPrismaClient(): PrismaClient<'query'> {
   );
 
   const diagnosticsEnabled = process.env.API_PERF_SQL_DIAGNOSTICS === '1'
-  const client = new PrismaClient<'query'>({
+  const client = new PrismaClient({
     adapter,
-    ...(diagnosticsEnabled ? { log: [{ level: 'query', emit: 'event' }] } : {}),
+    log: diagnosticsEnabled ? [{ level: 'query', emit: 'event' }] : [],
   })
   if (diagnosticsEnabled) {
     client.$on('query', (event) => recordApiSqlQuery(event.duration))
