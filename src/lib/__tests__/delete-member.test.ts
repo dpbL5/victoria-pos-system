@@ -58,6 +58,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     },
     shift: {
       findOpenForStaff: vi.fn(async () => ({ id: 'shift-1' }) as never),
+      findOpenIdForStaff: vi.fn(async () => ({ id: 'shift-1' })),
       findOpenOperational: vi.fn(),
       findByIdForClose: vi.fn(),
       calculateExpectedCash: vi.fn(),
@@ -77,6 +78,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     pricing: {
       findApplicableRule: vi.fn(),
       findByIdWithTiers: vi.fn(),
+      findManyByIdsWithTiers: vi.fn(async () => []),
       getApplicableRules: vi.fn(),
       countApplicable: vi.fn(),
       countAll: vi.fn(),
@@ -144,10 +146,12 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     user: { findByUsername: vi.fn(), findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), findActiveOpenShiftParticipants: vi.fn() },
     tool: { findMany: vi.fn(), findById: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     student: { findMany: vi.fn(), findById: vi.fn(), findByIdIncludingDeleted: vi.fn(), create: vi.fn(), update: vi.fn(), softDelete: vi.fn() },
-    lesson: { findManyBetween: vi.fn(), findById: vi.fn(), findBySeries: vi.fn(), findUpcomingByStudent: vi.fn(), findPastByStudent: vi.fn(), create: vi.fn(), update: vi.fn(), cancel: vi.fn(), setGoogleEventId: vi.fn(), deleteFutureBySeries: vi.fn(), countLessonsByStudent: vi.fn(), upsertAttendance: vi.fn(), setPackage: vi.fn() },
-    lessonSeries: { findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-    lessonPackage: { findById: vi.fn(), findActiveByStudent: vi.fn(), create: vi.fn(), update: vi.fn(), incrementUsed: vi.fn() },
-    calendarConnection: { find: vi.fn(async () => null), upsert: vi.fn(), updateToken: vi.fn(), delete: vi.fn() },
+    lesson: { replaceStudents: vi.fn(), findManyBetween: vi.fn(), findById: vi.fn(), findBySeries: vi.fn(), findUpcomingByStudent: vi.fn(), findPastByStudent: vi.fn(), create: vi.fn(), update: vi.fn(), cancel: vi.fn(), setGoogleEventId: vi.fn(), deleteFutureBySeries: vi.fn(), countLessonsByStudent: vi.fn(), findByClass: vi.fn(async () => []), deleteMany: vi.fn(async () => 0), upsertAttendance: vi.fn(), setStudentNote: vi.fn(), lastNotesByStudent: vi.fn(async () => []) },
+    lessonSeries: { replaceStudents: vi.fn(), findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    lessonClass: { findMany: vi.fn(), findById: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), findUpcomingLessons: vi.fn(), classesOfStudents: vi.fn(async () => []), replaceStudents: vi.fn() },
+    calendarSync: { summary: vi.fn(), getMapping: vi.fn(), setMapping: vi.fn(), remapPrimary: vi.fn(), enqueue: vi.fn(), pending: vi.fn(), list: vi.fn(), finish: vi.fn(), retry: vi.fn(), acquire: vi.fn(), release: vi.fn(), reconnectRequired: vi.fn() },
+    googleCalendar: { exchangeCode: vi.fn(), refresh: vi.fn(), encrypt: vi.fn(), decrypt: vi.fn(), listCalendars: vi.fn(), putEvent: vi.fn(), deleteEvent: vi.fn(), instance: vi.fn() },
+    calendarConnection: { findByUser: vi.fn(async () => null), findById: vi.fn(async () => null), listReady: vi.fn(async () => []), upsertForUser: vi.fn(), updateToken: vi.fn(), delete: vi.fn() },
     reporting: {
       getDashboardData: vi.fn(),
       getRevenueData: vi.fn(),

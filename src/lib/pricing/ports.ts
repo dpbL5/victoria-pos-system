@@ -21,6 +21,8 @@ export interface PricingRepository {
   findApplicableRule(currentHour: number, dayType: DayType, at: Date): Promise<PricingRuleWithTiers | null>
   /** Rule + tiers theo ID — dùng để snapshot khi check-in */
   findByIdWithTiers(ruleId: string): Promise<PricingRuleWithTiers | null>
+  /** Batch rule + tiers theo ID — dùng khi checkout có nhiều nhóm giá */
+  findManyByIdsWithTiers(ruleIds: string[]): Promise<PricingRuleWithTiers[]>
   /** Danh sách rule đang hiệu lực (cho UI dropdown chọn bảng giá) */
   getApplicableRules(at: Date): Promise<PricingRuleWithTiers[]>
   countApplicable(at: Date): Promise<number>

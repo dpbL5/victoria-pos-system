@@ -76,7 +76,7 @@ function LedgerRow({
           disabled={busy}
           onChange={onUncheck}
           tabIndex={-1}
-          className="mt-1 h-4 w-4 shrink-0 accent-emerald-600"
+          className="relative mt-1 h-5 w-5 shrink-0 appearance-none rounded-full border border-zinc-400 bg-white checked:border-emerald-600 checked:bg-emerald-600 after:absolute after:inset-0 after:m-auto after:h-[8px] after:w-[4px] after:rotate-45 after:border-b-2 after:border-r-2 after:border-white after:opacity-0 after:content-[''] checked:after:opacity-100 focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-zinc-500 dark:bg-zinc-800 dark:checked:border-emerald-500 dark:checked:bg-emerald-500"
         />
       ) : null}
       <span className="min-w-0 flex-1">
@@ -176,6 +176,10 @@ export function CheckoutDrawer({
   session,
   frozenAt,
   products,
+  productsLoading,
+  productsError,
+  onRetryProducts,
+  onSellItemsChanged,
   shiftReady,
   submitting,
   setSubmitting,
@@ -185,11 +189,15 @@ export function CheckoutDrawer({
   session: SessionRow | null;
   frozenAt: string | null;
   products: Product[];
+  productsLoading: boolean;
+  productsError: string;
+  onRetryProducts: () => void;
+  onSellItemsChanged: () => Promise<boolean>;
   shiftReady: boolean;
   submitting: boolean;
   setSubmitting: (value: boolean) => void;
   onClose: () => void;
-  onDone: () => Promise<void>;
+  onDone: () => Promise<boolean | void>;
 }) {
   const { success: notifySuccess, error: notifyError } = useToast();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
@@ -209,6 +217,7 @@ export function CheckoutDrawer({
   // Luồng chọn người + bảng giá thống nhất
   const [pickerGroups, setPickerGroups] = useState<PickerGroup[]>([]);
   const nextGroupKey = useRef(0);
+  const lastPreviewSessionId = useRef<string | null>(null);
   // Legacy: session cũ không có player rows — giữ stepper số người như trước
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [checkoutPlayerCount, setCheckoutPlayerCount] = useState(1);
@@ -413,14 +422,18 @@ export function CheckoutDrawer({
     if (!session) {
       setPlayQuote(null);
       setQuoteError("");
+      lastPreviewSessionId.current = null;
       return;
     }
 
     let cancelled = false;
+    const controller = new AbortController();
+    const delay = lastPreviewSessionId.current === session.id ? 250 : 0;
+    lastPreviewSessionId.current = session.id;
     setPlayQuote(null);
+    setQuoteLoading(true);
+    setQuoteError("");
     const loadQuote = async () => {
-      setQuoteLoading(true);
-      setQuoteError("");
       try {
         const params = new URLSearchParams();
         if (promotionRuleId) params.set("promotionRuleId", promotionRuleId);
@@ -445,25 +458,28 @@ export function CheckoutDrawer({
         const qs = params.toString();
         const data = await apiJson<PlayTimeQuote>(
           `/api/sessions/${session.id}/checkout-preview${qs ? `?${qs}` : ""}`,
+          { signal: controller.signal },
         );
         if (!data.success || !data.data) {
           throw new Error(data.error || "Không tính được tiền giờ chơi");
         }
         if (!cancelled) setPlayQuote(data.data);
       } catch (quoteLoadError) {
-        if (!cancelled)
+        if (!cancelled && !controller.signal.aborted)
           setQuoteError(
             (quoteLoadError as Error).message ||
               "Không tính được tiền giờ chơi",
           );
       } finally {
-        if (!cancelled) setQuoteLoading(false);
+        if (!cancelled && !controller.signal.aborted) setQuoteLoading(false);
       }
     };
 
-    void loadQuote();
+    const timer = window.setTimeout(() => void loadQuote(), delay);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
+      controller.abort();
     };
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [
@@ -642,6 +658,9 @@ export function CheckoutDrawer({
   const productSubtotal = cartLines.reduce((sum, line) => sum + line.total, 0);
   const sellableTotal = pendingSellTotal + productSubtotal;
   const grandTotal = Math.max(0, playTotal + sellableTotal - parkingFeeTotal);
+  const depositRemaining = Math.max(0, Number(session?.booking?.depositAmount ?? 0) - Number(session?.booking?.depositAppliedAmount ?? 0) - Number(session?.booking?.depositRefundedAmount ?? 0));
+  const depositApplied = Math.min(depositRemaining, grandTotal);
+  const payableTotal = grandTotal - depositApplied;
 
   const pricingBlocked = needsPricing && applicablePricingRules.length === 0;
   // Chọn ít nhất 1 người khi dùng picker
@@ -685,6 +704,10 @@ export function CheckoutDrawer({
       if (!data.success) {
         notifyError(data.error || "Không bỏ được dòng bán kèm");
         return;
+      }
+      const refreshed = await onSellItemsChanged();
+      if (!refreshed) {
+        notifyError("Đã bỏ dòng bán kèm nhưng danh sách chưa cập nhật. Không thao tác lại; hãy tải lại màn hình.");
       }
       setQuoteReloadKey((k) => k + 1);
     } catch {
@@ -754,8 +777,10 @@ export function CheckoutDrawer({
         return;
       }
 
-      notifySuccess(`Đã thu ${money(data.data?.grandTotal ?? grandTotal)}`);
-      await onDone();
+      const refreshed = await onDone();
+      notifySuccess(refreshed === false
+        ? "Đã ghi nhận thanh toán; dữ liệu chưa cập nhật. Không thu lại, hãy tải lại màn hình."
+        : `Đã thu ${money(data.data?.grandTotal ?? payableTotal)}`);
     } catch {
       notifyError("Lỗi kết nối máy chủ");
     } finally {
@@ -800,21 +825,34 @@ export function CheckoutDrawer({
         }
         description={
           session ? (
-            <>
-              {isMember ? "Hội viên" : "Vãng lai"}
+            <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                  isMember
+                    ? "bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-200"
+                    : "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-200"
+                }`}
+              >
+                {isMember ? "Hội viên" : "Vãng lai"}
+              </span>
+              <span>
+                Vào chơi {new Date(session.startTime).toLocaleTimeString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
               {session.customerPhone && (
-                <>
-                  {" · "}
+                <span>
                   <a
                     href={`tel:${session.customerPhone}`}
                     className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
                   >
                     {session.customerPhone}
                   </a>
-                </>
+                </span>
               )}
-              {isGroupSession ? ` · ${sessionPlayerCount} người` : ""}
-            </>
+              {isGroupSession && <span>{sessionPlayerCount} người chơi</span>}
+            </span>
           ) : undefined
         }
         size="lg"
@@ -847,13 +885,13 @@ export function CheckoutDrawer({
                 Chọn ít nhất 1 người chơi trước khi thu tiền.
               </p>
             ) : null}
-            <div className="overflow-hidden rounded-xl border-2 border-zinc-950 dark:border-white">
-              <div className="flex items-end justify-between gap-3 bg-zinc-100 px-4 py-3 dark:bg-zinc-800">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
-                  Tổng cộng
+            <div className="overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="flex items-end justify-between gap-3 px-4 py-3">
+                <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                  Tổng cần thu
                 </span>
-                <span className="text-[26px] font-extrabold leading-none tabular-nums text-zinc-950 dark:text-white">
-                  {quoteError ? "—" : money(grandTotal)}
+                <span className="text-2xl font-bold leading-none tabular-nums text-zinc-950 dark:text-white">
+                  {quoteError ? "—" : money(payableTotal)}
                 </span>
               </div>
               <Button
@@ -865,6 +903,7 @@ export function CheckoutDrawer({
                   !shiftReady ||
                   quoteLoading ||
                   !!quoteError ||
+                  (!!productsError && Object.values(cart).some((quantity) => quantity > 0)) ||
                   !playQuote ||
                   pricingBlocked ||
                   freshMultiGroupPartial ||
@@ -1047,7 +1086,7 @@ export function CheckoutDrawer({
               )}
 
             {/* ══ CHI TIẾT — hàng hoá / dịch vụ ══ */}
-            <LedgerGroup title="Chi tiết dịch vụ">
+            <LedgerGroup title="Hàng hoá & dịch vụ">
               {pendingSellItems.length > 0 ? (
                 <ul className="divide-y divide-zinc-100 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
                   {pendingSellItems.map((item) => (
@@ -1077,7 +1116,9 @@ export function CheckoutDrawer({
                 products={products.filter(
                   (product) => product.type === "SERVICE" || product.stockQuantity > 0,
                 )}
-                loading={false}
+                loading={productsLoading}
+                error={productsError}
+                onRetry={onRetryProducts}
                 onAdd={(product) => changeCart(product, 1)}
                 onDecrease={(productId) => {
                   const product = products.find((item) => item.id === productId);
@@ -1111,6 +1152,13 @@ export function CheckoutDrawer({
                   amount={money(sellableTotal)}
                   tone={sellableTotal > 0 ? "plain" : "muted"}
                 />
+                {depositApplied > 0 && (
+                  <SumRow
+                    label="Khấu trừ tiền cọc"
+                    amount={`-${money(depositApplied)}`}
+                    tone="minus"
+                  />
+                )}
                 {!isMember && (
                   <SumRow
                     label="Khuyến mại giờ chơi"
@@ -1200,7 +1248,7 @@ export function CheckoutDrawer({
               <PaymentMethodPicker
                 key={session?.id ?? "retail"}
                 id="payment-method"
-                amount={grandTotal}
+                amount={payableTotal}
                 method={paymentMethod}
                 onMethodChange={setPaymentMethod}
               />

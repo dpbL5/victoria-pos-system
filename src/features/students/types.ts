@@ -10,19 +10,12 @@ export interface Student {
   deletedAt: string | null
   createdAt: string
   updatedAt: string
-  packages: LessonPackage[]
+  classMemberships?: { lessonClass: { id: string; name: string; isActive: boolean } }[]
 }
 
-export interface LessonPackage {
-  id: string
-  studentId: string
-  name: string
-  total: number
-  used: number
-  isActive: boolean
-  createdAt: string
-  updatedAt: string
-}
+/** Lớp hiện tại của học viên — ràng buộc: mỗi học viên chỉ thuộc một lớp. */
+export const studentClassOf = (student: Pick<Student, 'classMemberships'>): { id: string; name: string } | null =>
+  student.classMemberships?.find(row => row.lessonClass.isActive)?.lessonClass ?? null
 
 export interface LessonStudent {
   id: string
@@ -30,12 +23,29 @@ export interface LessonStudent {
   studentId: string
   status: 'SCHEDULED' | 'COMPLETED' | 'ABSENT'
   note: string | null
-  packageId: string | null
   student: { id: string; fullName: string }
-  package: LessonPackage | null
 }
 
+export interface LessonSeries {
+  id: string
+  version: number
+  title: string
+  daysOfWeek: number[]
+  startTime: string
+  durationMin: number
+  intervalWeeks: number
+  occurrenceCount: number | null
+  startsOn: string
+  endsOn: string | null
+  class?: { id: string; name: string } | null
+}
 export interface Lesson {
+  version: number
+  originalStartAt: string | null
+  shareNote: boolean
+  isException: boolean
+  series: LessonSeries | null
+  class?: { id: string; name: string } | null
   id: string
   seriesId: string | null
   title: string
@@ -49,7 +59,11 @@ export interface Lesson {
 }
 
 export interface CalendarStatus {
+  lastSyncedAt?: string | null
   connected: boolean
+  needsReconnect?: boolean
+  pending?: number
+  failed?: number
   email?: string
   calendarId?: string | null
   connectedAt?: string

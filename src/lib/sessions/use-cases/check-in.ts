@@ -121,7 +121,7 @@ export async function runCheckInTx(
     sessionCustomerName = `Khách #${String(todaySessionCount + 1).padStart(3, '0')}`
   }
 
-  const openShift = await tx.shift.findOpenForStaff(staffId)
+  const openShift = await tx.shift.findOpenIdForStaff(staffId)
   if (!openShift) fail('SHIFT_REQUIRED')
 
   // ── Bảng giá không còn chọn lúc check-in: để trống, nhân viên chọn khi thu tiền ──

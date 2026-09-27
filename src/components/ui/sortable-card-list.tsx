@@ -5,7 +5,7 @@ import { Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { KeyboardEvent } from 'react'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { ListHeader, type ListSearchConfig } from '@/components/ui/list-header'
@@ -16,6 +16,7 @@ export interface Column<T> {
   label: string
   headerClassName?: string
   cellClassName?: string
+  cardClassName?: string
   render: (item: T) => React.ReactNode
 }
 
@@ -30,10 +31,10 @@ interface SortableCardListProps<T> {
   data: T[]
   keyExtractor: (item: T) => string
   sortableKeys?: string[]
+  sortLabels?: Record<string, string>
   defaultSortKey?: string
   defaultSortDir?: 'asc' | 'desc'
   loading?: boolean
-  loadingCount?: number
   emptyIcon?: LucideIcon
   emptyMessage?: string
   emptyDescription?: string
@@ -51,10 +52,10 @@ export function SortableCardList<T>({
   data,
   keyExtractor,
   sortableKeys = [],
+  sortLabels,
   defaultSortKey,
   defaultSortDir = 'desc',
   loading = false,
-  loadingCount = 4,
   emptyIcon = Users,
   emptyMessage = 'Không có dữ liệu',
   emptyDescription,
@@ -155,7 +156,8 @@ export function SortableCardList<T>({
           <span className="mr-1 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400">Sắp xếp:</span>
           {sortableKeys.map((key) => {
             const col = columns.find((c) => c.key === key)
-            const label = col?.label ?? key
+            const label = sortLabels?.[key] || col?.label
+            if (!label) return null
             const active = sortKey === key
             return (
               <button
@@ -179,21 +181,7 @@ export function SortableCardList<T>({
 
       {/* Loading */}
       {loading && (
-        <div aria-busy="true" aria-label="Đang tải danh sách" className="space-y-3 p-3">
-          <span className="sr-only">Đang tải dữ liệu...</span>
-          {Array.from({ length: loadingCount }).map((_, i) => (
-            <div key={i} aria-hidden="true" className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-              <Skeleton className="mb-3 h-5 w-2/3" />
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-1/2" />
-                  <Skeleton className="h-4 w-1/3" />
-                </div>
-                <Skeleton className="h-10 w-20 rounded-lg" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <AppSkeleton />
       )}
 
       {/* Empty */}
@@ -215,7 +203,9 @@ export function SortableCardList<T>({
       {/* Card list */}
       {!loading && sorted.length > 0 && (
         <ul role="list" className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-          {sorted.map((item) => (
+          {sorted.map((item) => {
+            const actionFooter = renderActionFooter?.(item)
+            return (
             <li key={keyExtractor(item)}>
               <div
                 {...(interactive
@@ -239,10 +229,10 @@ export function SortableCardList<T>({
                     {detailCols.length > 0 && (
                       <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                         {detailCols.map((col) => (
-                          <span key={col.key} className="inline-flex min-w-0 items-baseline gap-1">
-                            <span className="shrink-0 text-zinc-500 dark:text-zinc-400">
+                          <span key={col.key} className={`inline-flex min-w-0 items-baseline gap-1 ${col.cardClassName ?? ''}`}>
+                            {col.label && <span className="shrink-0 text-zinc-500 dark:text-zinc-400">
                               {col.label}
-                            </span>
+                            </span>}
                             <span className={`min-w-0 truncate ${col.cellClassName ?? 'text-zinc-700 dark:text-zinc-300'}`}>
                               {col.render(item)}
                             </span>
@@ -252,7 +242,7 @@ export function SortableCardList<T>({
                     )}
                   </div>
 
-                  {(actionCols.length > 0 || renderActionFooter) && (
+                  {actionCols.length > 0 && (
                     <div
                       className="flex flex-col items-end gap-2 max-md:[&_button]:gap-0 max-md:[&_button]:p-1.5 max-md:[&_.button-label]:hidden"
                       onClick={(e) => e.stopPropagation()}
@@ -262,13 +252,22 @@ export function SortableCardList<T>({
                       {actionCols.map((col, i) => (
                         <div key={i}>{col.render(item)}</div>
                       ))}
-                      {renderActionFooter?.(item)}
                     </div>
                   )}
                 </div>
+                {actionFooter && (
+                  <div
+                    className="mt-3 border-t border-zinc-100 pt-2 dark:border-zinc-800"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    {actionFooter}
+                  </div>
+                )}
               </div>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
     </div>

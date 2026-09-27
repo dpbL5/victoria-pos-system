@@ -68,7 +68,7 @@ export async function retailSale(
 
   const result = await runInTransaction(async (tx) => {
     // ── Kiểm tra ca làm trong transaction để tránh TOCTOU race ──
-    const openShift = await tx.shift.findOpenForStaff(staffId)
+    const openShift = await tx.shift.findOpenIdForStaff(staffId)
     if (!openShift) fail('SHIFT_REQUIRED')
 
     const shiftId = openShift.id
@@ -87,9 +87,11 @@ export async function retailSale(
       lines: [],
     })
 
+    const latestProducts = await tx.product.findManyByIds(productIds)
+    const latestProductsById = new Map(latestProducts.map((product) => [product.id, product]))
     for (const line of lines) {
-      const latestProduct = await tx.product.findByIdForSale(line.productId)
-      if (!latestProduct || !latestProduct.isActive) {
+      const latestProduct = latestProductsById.get(line.productId)
+      if (!latestProduct) {
         fail('PRODUCT_UNAVAILABLE')
       }
 

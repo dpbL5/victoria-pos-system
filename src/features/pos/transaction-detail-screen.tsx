@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, Pencil, ReceiptText, Trash2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Skeleton, SkeletonPanel } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label, Textarea } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
@@ -103,28 +103,12 @@ export function TransactionDetailScreen({ id }: Props) {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-full bg-[var(--color-surface-secondary)] px-4 py-6 dark:bg-black md:px-8 md:py-10">
-        <div className="mx-auto max-w-6xl space-y-6">
-          <Skeleton className="h-9 w-24" />
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-            <SkeletonPanel><Skeleton className="h-[600px] w-full" /></SkeletonPanel>
-            <div className="space-y-6">
-              <SkeletonPanel><Skeleton className="h-32 w-full" /></SkeletonPanel>
-              <SkeletonPanel><Skeleton className="h-32 w-full" /></SkeletonPanel>
-              <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return <AppSkeleton />
 
   if (error || !invoice) {
     return (
       <div className="min-h-full bg-[var(--color-surface-secondary)] px-4 py-6 dark:bg-black md:px-8 md:py-10">
-        <div className="mx-auto max-w-6xl space-y-6">
+        <div className="mx-auto max-w-content space-y-6">
           <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.back()}>
             Quay lại
           </Button>
@@ -142,7 +126,7 @@ export function TransactionDetailScreen({ id }: Props) {
 
   return (
     <div className="min-h-full bg-[var(--color-surface-secondary)] px-4 py-6 dark:bg-black md:px-8 md:py-10">
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="mx-auto max-w-content space-y-6">
         {/* ── Folio chrome ── */}
         <div className="flex items-center justify-between gap-3">
           <Button

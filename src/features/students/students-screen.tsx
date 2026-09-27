@@ -1,38 +1,33 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { CalendarClock, Edit3, GraduationCap, Plus, RefreshCw, Trash2, Users } from 'lucide-react'
+import { CalendarClock, Edit3, GraduationCap, Plus, Trash2, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Input, Label } from '@/components/ui/input'
+import { Input, Select } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonRows } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
-import type { Student, CalendarStatus } from './types'
+import { emptyStudentForm, studentFormBody, StudentFormModal, studentToForm, type StudentForm } from './student-form-modal'
+import { studentClassOf, type Student } from './types'
 
-interface StudentForm {
-  fullName: string
-  phone: string
-  birthYear: string
-  notes: string
-}
-
-const emptyForm: StudentForm = { fullName: '', phone: '', birthYear: '', notes: '' }
+const emptyForm = emptyStudentForm()
 
 export function StudentsScreen() {
   const { success: notifySuccess, error: notifyError } = useToast()
   const router = useRouter()
-  const { data: studentsData, isLoading, mutate } = useApi<Student[]>('/api/students', { dedupingInterval: 60_000 })
-  const { data: calData, mutate: mutateCal } = useApi<CalendarStatus>('/api/google/status', { dedupingInterval: 60_000 })
+  const [query, setQuery] = useState('')
+  const [offset, setOffset] = useState(0)
+  const [filter, setFilter] = useState('')
+  const { data: studentsData, isLoading, mutate } = useApi<Student[]>(`/api/students?limit=20&offset=${offset}&search=${encodeURIComponent(query)}&status=${filter}`,  { dedupingInterval: 60_000 })
 
   const { registerRefresh } = usePageRefresh()
   useEffect(() => {
@@ -42,7 +37,6 @@ export function StudentsScreen() {
   const students = studentsData?.data ?? []
   const error = !studentsData?.success ? (studentsData?.error ?? '') : ''
   const loading = isLoading
-  const calStatus = calData?.data
 
   const [submitting, setSubmitting] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
@@ -58,12 +52,7 @@ export function StudentsScreen() {
 
   const openEdit = (s: Student) => {
     setEditStudent(s)
-    setForm({
-      fullName: s.fullName,
-      phone: s.phone ?? '',
-      birthYear: s.birthYear ? String(s.birthYear) : '',
-      notes: s.notes ?? '',
-    })
+    setForm(studentToForm(s))
     setFormOpen(true)
   }
 
@@ -80,12 +69,7 @@ export function StudentsScreen() {
     }
     setSubmitting(true)
     try {
-      const body = {
-        fullName: form.fullName.trim(),
-        phone: form.phone.trim() || undefined,
-        birthYear: form.birthYear ? Number(form.birthYear) : undefined,
-        notes: form.notes.trim() || undefined,
-      }
+      const body = studentFormBody(form)
       const data = editStudent
         ? await apiJson<Student>(`/api/students/${editStudent.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         : await apiJson<Student>('/api/students', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -122,33 +106,14 @@ export function StudentsScreen() {
     }
   }
 
-  const handleConnect = () => {
-    window.location.href = '/api/google/connect'
-  }
-
-  const handleDisconnect = async () => {
-    setSubmitting(true)
-    try {
-      const data = await apiJson('/api/google/disconnect', { method: 'POST' })
-      if (!data.success) {
-        notifyError(data.error || 'Không ngắt kết nối được')
-        return
-      }
-      notifySuccess('Đã ngắt kết nối Google Calendar')
-      await mutateCal()
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   const statusBadge = (s: Student) =>
     s.status === 'ACTIVE' ? <Badge variant="success">Đang học</Badge> : <Badge variant="default">Dừng học</Badge>
 
-  const remainingText = (s: Student) => {
-    const total = s.packages.filter((p) => p.isActive).reduce((sum, p) => sum + (p.total - p.used), 0)
-    return total > 0 ? `${total} buổi` : 'Chưa có gói'
+  const classCell = (s: Student) => {
+    const item = studentClassOf(s)
+    return item
+      ? <Link href={`/classes/${item.id}`} className="text-sm text-blue-700 hover:underline dark:text-blue-300">{item.name}</Link>
+      : <span className="text-sm text-zinc-400 dark:text-zinc-500">Chưa vào lớp</span>
   }
 
   const columns: Column<Student>[] = useMemo(() => [
@@ -170,10 +135,10 @@ export function StudentsScreen() {
       render: (item) => item.phone || '—',
     },
     {
-      key: 'remaining',
-      label: 'Còn lại',
-      cellClassName: 'px-4 py-3 text-sm tabular-nums text-zinc-950 dark:text-white',
-      render: (item) => remainingText(item),
+      key: 'class',
+      label: 'Lớp',
+      cellClassName: 'px-4 py-3',
+      render: (item) => classCell(item),
     },
     {
       label: 'Thao tác',
@@ -200,7 +165,7 @@ export function StudentsScreen() {
       ),
     },
     { key: 'phone', label: 'SĐT', render: (item) => item.phone || '—' },
-    { key: 'remaining', label: 'Còn lại', render: (item) => <span className="font-semibold tabular-nums">{remainingText(item)}</span> },
+    { key: 'class', label: 'Lớp', render: (item) => classCell(item) },
     {
       label: '',
       render: (item) => (
@@ -214,17 +179,12 @@ export function StudentsScreen() {
   ], [submitting, router])
 
   if (loading) {
-    return (
-      <SkeletonPage maxWidth="max-w-3xl">
-          <Skeleton className="h-10 w-48" />
-          <SkeletonRows count={2} />
-      </SkeletonPage>
-    )
+    return <AppSkeleton />
   }
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-3xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
             <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
@@ -252,49 +212,14 @@ export function StudentsScreen() {
           </Button>
         </div>
 
-        {/* Google Calendar connect */}
-        <Card padding="md" className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <RefreshCw size={20} className={`shrink-0 ${calStatus?.connected ? 'text-emerald-500' : 'text-zinc-400'}`} />
-            <div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-white">
-                Google Calendar {calStatus?.connected ? `(${calStatus.email ?? ''})` : ''}
-              </p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {calStatus?.connected
-                  ? 'Đã kết nối — buổi học sẽ đồng bộ sang calendar CLB.'
-                  : calStatus?.isConfigured
-                    ? 'Kết nối để đồng bộ buổi học sang Google Calendar.'
-                    : 'Chưa cấu hình Google Calendar (cần GOOGLE_CLIENT_ID/SECRET).'}
-              </p>
-            </div>
-          </div>
-          {calStatus?.connected ? (
-            <Button variant="outline-danger" size="sm" disabled={submitting} onClick={handleDisconnect}>
-              Ngắt kết nối
-            </Button>
-          ) : (
-            <Button variant="secondary" size="sm" disabled={!calStatus?.isConfigured} onClick={handleConnect}>
-              Kết nối Google
-            </Button>
-          )}
-        </Card>
-
         {error && <NoticeCard tone="danger" title="Không tải được dữ liệu" description={error} />}
 
+        <div className="flex flex-wrap gap-2"><Input aria-label="Tìm học viên" placeholder="Tìm tên hoặc số điện thoại" value={query} onChange={e => { setQuery(e.target.value); setOffset(0) }} /><Select aria-label="Trạng thái học viên" value={filter} onChange={e => { setFilter(e.target.value); setOffset(0) }}><option value="">Tất cả trạng thái</option><option value="ACTIVE">Đang học</option><option value="INACTIVE">Đã nghỉ</option></Select></div>
         <div className="md:hidden">
           <SortableCardList
             columns={cardColumns}
             data={students}
             keyExtractor={(s) => s.id}
-            search={{
-              placeholder: 'Tìm tên hoặc số điện thoại',
-              getText: (s) => `${s.fullName} ${s.phone ?? ''}`,
-            }}
-            filters={[
-              { key: 'ACTIVE', label: 'Đang học', matches: (s) => s.status === 'ACTIVE' },
-              { key: 'INACTIVE', label: 'Đã nghỉ', matches: (s) => s.status === 'INACTIVE' },
-            ]}
             sortableKeys={['fullName']}
             defaultSortKey="fullName"
             defaultSortDir="asc"
@@ -309,10 +234,6 @@ export function StudentsScreen() {
             columns={columns}
             data={students}
             keyExtractor={(s) => s.id}
-            search={{
-              placeholder: 'Tìm tên hoặc số điện thoại',
-              getText: (s) => `${s.fullName} ${s.phone ?? ''}`,
-            }}
             sortableKeys={['fullName', 'phone']}
             defaultSortKey="fullName"
             defaultSortDir="asc"
@@ -322,6 +243,7 @@ export function StudentsScreen() {
           />
         </div>
 
+        <div className="flex items-center justify-between"><Button variant="secondary" disabled={offset === 0} onClick={() => setOffset(n => Math.max(0, n - 20))}>Trước</Button><span className="text-sm">Trang {offset / 20 + 1}</span><Button variant="secondary" disabled={students.length < 20} onClick={() => setOffset(n => n + 20)}>Tiếp</Button></div>
         <StudentFormModal
           open={formOpen}
           student={editStudent}
@@ -343,57 +265,5 @@ export function StudentsScreen() {
         />
       </div>
     </div>
-  )
-}
-
-// ── Form thêm/sửa học viên ──
-function StudentFormModal({
-  open,
-  student,
-  form,
-  submitting,
-  onChange,
-  onClose,
-  onSubmit,
-}: {
-  open: boolean
-  student: Student | null
-  form: StudentForm
-  submitting: boolean
-  onChange: (f: StudentForm) => void
-  onClose: () => void
-  onSubmit: () => void
-}) {
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={student ? 'Sửa học viên' : 'Thêm học viên'}
-      size="md"
-      footer={
-        <Button variant="inverse" size="lg" fullWidth disabled={submitting || !form.fullName.trim()} onClick={onSubmit}>
-          {submitting ? 'Đang lưu...' : student ? 'Cập nhật' : 'Thêm học viên'}
-        </Button>
-      }
-    >
-      <div className="space-y-3">
-        <div>
-          <Label htmlFor="student-name" required>Tên học viên</Label>
-          <Input id="student-name" value={form.fullName} onChange={(e) => onChange({ ...form, fullName: e.target.value })} placeholder="Họ và tên" />
-        </div>
-        <div>
-          <Label htmlFor="student-phone">Số điện thoại</Label>
-          <Input id="student-phone" value={form.phone} onChange={(e) => onChange({ ...form, phone: e.target.value })} placeholder="0xxxxxxxxx" />
-        </div>
-        <div>
-          <Label htmlFor="student-birth">Năm sinh</Label>
-          <Input id="student-birth" type="number" min={1900} max={2100} value={form.birthYear} onChange={(e) => onChange({ ...form, birthYear: e.target.value })} placeholder="VD: 2005" />
-        </div>
-        <div>
-          <Label htmlFor="student-notes">Ghi chú</Label>
-          <Input id="student-notes" value={form.notes} onChange={(e) => onChange({ ...form, notes: e.target.value })} placeholder="Ghi chú (tuỳ chọn)" />
-        </div>
-      </div>
-    </Modal>
   )
 }

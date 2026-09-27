@@ -40,7 +40,7 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
 - Use `formatVND()` from `@/lib/utils` for all VND display. Do not redefine money formatters locally.
 - Use shared types from `@/types` when available. Do not duplicate core entity interfaces in pages unless the type is an include/projection shape specific to that file.
 - Use `lucide-react` icons. Do not use emoji in UI.
-- Use `Input`, `Select`, `Label`, `Modal`, `Badge`, `EmptyState`, `Skeleton`, and toast primitives from `src/components/ui/` when applicable.
+- Use `Input`, `Select`, `Label`, `Modal`, `Badge`, `EmptyState`, `AppSkeleton`, and toast primitives from `src/components/ui/` when applicable. `AppSkeleton` is the only skeleton/loading placeholder; do not create other skeleton components, markup, or styles.
 - All mutations touching multiple tables must go through `runInTransaction()` from `@/lib/infrastructure/db-helpers` (which wraps `prisma.$transaction` internally), never raw `prisma.$transaction()` inside use-cases.
 
 ## Business Invariants

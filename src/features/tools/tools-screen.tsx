@@ -13,7 +13,7 @@ import { Input, Label } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonRows } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
@@ -161,16 +161,16 @@ export function ToolsScreen() {
       ),
     },
     {
-      key: 'description',
-      label: 'Mô tả',
-      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
-      render: (item) => item.description || '—',
-    },
-    {
       key: 'quantity',
       label: 'SL chuẩn',
       cellClassName: 'px-4 py-3 text-sm tabular-nums text-zinc-950 dark:text-white',
       render: (item) => item.quantity,
+    },
+    {
+      key: 'description',
+      label: 'Mô tả',
+      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
+      render: (item) => item.description || '—',
     },
     {
       label: 'Thao tác',
@@ -197,14 +197,14 @@ export function ToolsScreen() {
       ),
     },
     {
-      key: 'description',
-      label: 'Mô tả',
-      render: (item) => item.description || '—',
-    },
-    {
       key: 'quantity',
       label: 'SL chuẩn',
       render: (item) => <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">{item.quantity}</span>,
+    },
+    {
+      key: 'description',
+      label: 'Mô tả',
+      render: (item) => item.description || '—',
     },
     {
       label: '',
@@ -218,17 +218,12 @@ export function ToolsScreen() {
   ], [submitting, openEdit])
 
   if (loading) {
-    return (
-      <SkeletonPage maxWidth="max-w-3xl">
-          <Skeleton className="h-10 w-48" />
-          <SkeletonRows count={3} />
-      </SkeletonPage>
-    )
+    return <AppSkeleton />
   }
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-3xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
             <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">

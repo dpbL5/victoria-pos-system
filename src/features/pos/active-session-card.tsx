@@ -61,37 +61,41 @@ export function ActiveSessionCard({
 
   return (
     <div
-      className="animate-card-enter px-3 py-2.5 transition-colors hover:bg-zinc-50/70 sm:px-4 sm:py-3 dark:hover:bg-zinc-900/40"
+      className="animate-card-enter px-4 py-3 transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-900/40"
       style={{ animationDelay: `${Math.min(index, 8) * 30}ms` }}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         {/* Trái — tên + meta (hàng 1) + dòng Nghỉ (hàng 2, dưới tên) */}
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p
-              className={
-                isPaused
-                  ? 'truncate text-base font-semibold text-amber-600 transition-colors duration-200 dark:text-amber-400'
-                  : isMember
-                    ? 'truncate text-base font-semibold text-purple-600 transition-colors duration-200 dark:text-purple-400'
-                    : 'truncate text-base font-semibold text-zinc-950 transition-colors duration-200 dark:text-white'
-              }
-            >
-              {session.customerName ?? session.customer?.fullName ?? 'Khách lẻ'}
-            </p>
-            <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-              <LogIn size={11} className="shrink-0" />
+        <div className="flex min-w-0 flex-col gap-2">
+          <p
+            className={
+              isPaused
+                ? 'truncate text-sm font-semibold text-amber-600 transition-colors duration-200 dark:text-amber-400'
+                : isMember
+                  ? 'truncate text-sm font-semibold text-purple-600 transition-colors duration-200 dark:text-purple-400'
+                  : 'truncate text-sm font-semibold text-zinc-950 transition-colors duration-200 dark:text-white'
+            }
+          >
+            {session.customerName ?? session.customer?.fullName ?? 'Khách lẻ'}
+          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="inline-flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+              <LogIn size={12} className="shrink-0" />
               {formatClock(session.startTime)}
             </span>
             {session.customerPhone && (
-              <>
-                <Phone size={11} className="shrink-0 text-zinc-500 dark:text-zinc-400" />
-                <span className='inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400'>{session.customerPhone}</span>
-              </>
+              <a
+                href={`tel:${session.customerPhone}`}
+                className="inline-flex items-center gap-1 text-xs text-zinc-500 underline-offset-2 transition-colors hover:text-zinc-900 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-zinc-400 dark:hover:text-zinc-200 dark:focus:ring-blue-400"
+                aria-label={`Gọi ${session.customerPhone}`}
+              >
+                <Phone size={12} className="shrink-0 text-zinc-500 dark:text-zinc-400" />
+                {session.customerPhone}
+              </a>
             )}
             {pendingSell > 0 && (
-              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                · Tạm tính{' '}
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                Tạm tính{' '}
                 <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">
                   {money(pendingSell)}
                 </span>

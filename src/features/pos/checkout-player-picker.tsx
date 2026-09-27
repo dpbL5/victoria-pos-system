@@ -197,7 +197,7 @@ export function CheckoutPlayerPicker({
                 Không còn người chơi để chọn.
               </p>
             ) : (
-              <ul className="mt-2 divide-y divide-zinc-100 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+              <ul className="mt-2 space-y-2">
                 {group.members.map((m) => {
                   const checked = group.selectedIds.includes(m.id)
                   const inOther = !group.locked && assignedInOtherGroup(i, m.id)
@@ -207,8 +207,11 @@ export function CheckoutPlayerPicker({
                       <button
                         type="button"
                         onClick={() => toggleMember(i, m.id)}
-                        className={`flex w-full items-start gap-3 py-2 text-left transition-colors ${
-                          checked ? '' : 'opacity-55'
+                        aria-pressed={checked}
+                        className={`flex min-h-14 w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                          checked
+                            ? 'bg-blue-50 dark:bg-blue-500/10'
+                            : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/70'
                         } ${inOther ? 'opacity-40' : ''}`}
                       >
                         <input
@@ -216,7 +219,7 @@ export function CheckoutPlayerPicker({
                           readOnly
                           checked={checked}
                           tabIndex={-1}
-                          className="mt-1 h-4 w-4 shrink-0 accent-emerald-600"
+                          className="relative mt-1 h-5 w-5 shrink-0 appearance-none rounded-full border border-zinc-400 bg-white checked:border-blue-600 checked:bg-blue-600 after:absolute after:inset-0 after:m-auto after:h-[8px] after:w-[4px] after:rotate-45 after:border-b-2 after:border-r-2 after:border-white after:opacity-0 after:content-[''] checked:after:opacity-100 focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-zinc-500 dark:bg-zinc-800 dark:checked:border-blue-500 dark:checked:bg-blue-500"
                         />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[15px] leading-tight text-zinc-950 dark:text-white">

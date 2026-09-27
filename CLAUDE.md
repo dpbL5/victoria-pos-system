@@ -107,7 +107,7 @@ interface Customer { id: string; fullName: string; ... }
 - Dùng `<Suspense>` cho streaming các phần chưa sẵn sàng
 - **Không import Server Component vào Client Component** — truyền qua `children` prop
 
-**Shared components bắt buộc (đã extract — dùng lại, không viết lại), import từ `@/components/ui/*`:** `Badge`, `StatCard`, `EmptyState`, `LoadingDots`, `Skeleton`/`TableSkeleton`/`StatCardsSkeleton`/`CardSkeleton`, `Modal`, `ToastProvider` + `useToast`, `Input`/`Select`/`Label`/`Textarea`, `Button`, `FilterButton`, `NoticeCard`.
+**Shared components bắt buộc (đã extract — dùng lại, không viết lại), import từ `@/components/ui/*`:** `Badge`, `StatCard`, `EmptyState`, `AppSkeleton`, `Modal`, `ToastProvider` + `useToast`, `Input`/`Select`/`Label`/`Textarea`, `Button`, `FilterButton`, `NoticeCard`.
 
 Catalog đầy đủ (kèm "Dùng khi" + ví dụ code): **`docs/ui-patterns.md`**. Template Client Component: **`docs/code-conventions.md`**.
 
@@ -119,7 +119,7 @@ Catalog đầy đủ (kèm "Dùng khi" + ví dụ code): **`docs/ui-patterns.md`
 
 ### 5. Data Fetching (Client Component)
 
-- Luôn có `loading` state — render skeleton khi đang fetch
+- Luôn có `loading` state — dùng `AppSkeleton` cho loading placeholder; không tự tạo skeleton khác hoặc custom skeleton.
 - Luôn có `error` state — bắt cả `d.success === false` và `catch` network error
 - Dùng `useCallback` wrap function fetch, `useEffect` gọi nó — tránh React 19 `set-state-in-effect` lint error (suppress bằng `// eslint-disable-next-line react-hooks/set-state-in-effect`)
 - KHÔNG dùng `.then().catch()` chains — dùng `async/await` + `try/catch`
@@ -317,7 +317,7 @@ export type CreateThingInput = z.infer<typeof createThingSchema>;
 - Validate: `hourTo > hourFrom`, `ratePerHour > 0`, `effectiveTo >= effectiveFrom` nếu có ngày hết hiệu lực.
 - `GET /api/pricing/status` trả `activeCount`; POS và tab `Thêm` dùng để cảnh báo khả năng check-in vãng lai. Check-in vãng lai cần rule đang hiệu lực đúng `daysOfWeek`/`dayType`, khung giờ, thời điểm; không fallback giá mặc định.
 
-Ví dụ code UI (Toast, Modal, Skeleton, Badge, StatCard, EmptyState, Loading, ticker): **`docs/ui-patterns.md`**.
+Ví dụ code UI (Toast, Modal, AppSkeleton, Badge, StatCard, EmptyState, ticker): **`docs/ui-patterns.md`**.
 
 ## Cách chạy
 

@@ -52,7 +52,7 @@ export function DashboardClientLayout({ user, children }: { user: User; children
         <div className="flex min-h-screen bg-white dark:bg-zinc-950">
           <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} userRole={user.role} />
 
-          <div className={`flex min-w-0 flex-1 flex-col pb-16 transition-all duration-200 md:pb-0 ${sidebarOffset}`}>
+          <div className={`mobile-nav-content-safe flex min-w-0 flex-1 flex-col transition-all duration-200 md:pb-0 ${sidebarOffset}`}>
             <PageRefreshProvider>
               <Header
                 userFullName={user.fullName}

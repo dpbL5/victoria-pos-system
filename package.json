@@ -16,9 +16,11 @@
     "seed:expired": "tsx prisma/seed-expired-customer.ts",
     "migrate:walkin-customer-name": "tsx prisma/migrate-walkin-customer-name.ts",
     "migrate:session-players": "tsx prisma/migrate-session-players.ts",
+    "migrate:lesson-classes": "tsx prisma/migrate-lesson-classes.ts",
     "check:db": "tsx scripts/check-db.ts"
   },
   "dependencies": {
+    "@fullcalendar/react": "^7.1.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "bcryptjs": "^3.0.3",
@@ -31,6 +33,7 @@
     "react-dom": "19.2.4",
     "recharts": "^3.10.1",
     "swr": "^2.3.6",
+    "temporal-polyfill": "^1.0.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {

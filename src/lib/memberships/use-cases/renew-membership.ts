@@ -37,7 +37,7 @@ export async function renewMembership(
     deps.customer.findById(customerId),
     deps.membershipPlan.findById(planId),
     deps.membership.findLatest(customerId),
-    deps.shift.findOpenForStaff(staffId),
+    deps.shift.findOpenIdForStaff(staffId),
   ])
 
   if (!customer) return err('CUSTOMER_NOT_FOUND')

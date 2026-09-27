@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/shared/auth'
 import { repositories } from '@/lib/infrastructure/repositories'
+import { withApiDiagnostics } from '@/lib/infrastructure/api-diagnostics'
 import { parseStartOfDay, toInputDate } from '@/lib/shared/utils'
 import type { DashboardStats } from '@/types'
 import type { ItemTypeRow, PaymentMethodRow } from '@/lib/reports'
@@ -11,7 +12,7 @@ type ItemTypeKey = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DIS
 const paymentMethods: PaymentMethodKey[] = ['CASH', 'TRANSFER', 'CARD', 'MEMBER']
 const itemTypes: ItemTypeKey[] = ['PLAY_TIME', 'MEMBERSHIP_FEE', 'PRODUCT', 'SERVICE', 'DISCOUNT', 'SURCHARGE']
 
-export async function GET() {
+async function getDashboard() {
   try {
     const auth = await requireAuth()
     const { start, end } = getTodayRange()
@@ -131,6 +132,8 @@ export async function GET() {
     return NextResponse.json({ success: false, error: 'Lỗi máy chủ' }, { status: 500 })
   }
 }
+
+export const GET = withApiDiagnostics('GET /api/reports/dashboard', getDashboard)
 
 function getTodayRange() {
   const todayStr = toInputDate(new Date())

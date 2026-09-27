@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { requireMutationAuth } from '@/lib/shared/auth'
+import { withApiDiagnostics } from '@/lib/infrastructure/api-diagnostics'
 import { sellItems, mapSellItemsError } from '@/lib/sessions'
 import {
   apiError,
@@ -21,7 +22,7 @@ const sellSchema = z.object({
   notes: z.string().max(500).optional(),
 })
 
-export async function POST(
+async function postSellItems(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -52,3 +53,5 @@ export async function POST(
     return apiError({ code: 'SERVER_ERROR', message: 'Lỗi máy chủ', status: 500 })
   }
 }
+
+export const POST = withApiDiagnostics('POST /api/sessions/[id]/sell', postSellItems)

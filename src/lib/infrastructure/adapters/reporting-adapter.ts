@@ -497,6 +497,8 @@ async function getTrends(store: ReportingStore, input: RevenueInput): Promise<Tr
     SERVICE: 0,
     DISCOUNT: 0,
     SURCHARGE: 0,
+    DEPOSIT: 0,
+    DEPOSIT_APPLIED: 0,
   }
   for (const row of itemTypeRows) {
     const key = row.type as keyof TrendItemType

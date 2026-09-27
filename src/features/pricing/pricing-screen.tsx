@@ -3,23 +3,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Banknote,
-  CalendarDays,
-  Clock3,
   Edit3,
   Plus,
-  Repeat2,
   Trash2,
-  type LucideIcon,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
+import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
+import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
@@ -140,10 +137,100 @@ export function PricingScreen() {
     setDialogMode('create')
   }
 
-  const openEdit = (rule: PricingRule) => {
+  const openEdit = useCallback((rule: PricingRule) => {
     setEditingRule(rule)
     setDialogMode('edit')
-  }
+  }, [])
+
+  const renderActions = useCallback((rule: PricingRule) => (
+    <div className="flex gap-1.5">
+      <Button
+        variant="secondary"
+        size="sm"
+        icon={Edit3}
+        disabled={submitting}
+        onClick={() => openEdit(rule)}
+        title="Sửa quy tắc"
+      />
+      <Button
+        variant="outline-danger"
+        size="sm"
+        icon={Trash2}
+        disabled={submitting}
+        onClick={() => setDeleteRule(rule)}
+        title="Xoá quy tắc"
+      />
+    </div>
+  ), [openEdit, submitting])
+
+  const ruleColumns: Column<PricingRule>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Tên bảng giá',
+      cellClassName: 'px-4 py-3 font-medium',
+      render: (rule) => (
+        <span className="flex items-center gap-2">
+          <span className="text-zinc-950 dark:text-white">{rule.name}</span>
+          <StatusBadge status={getRuleStatus(rule)} />
+        </span>
+      ),
+    },
+    {
+      key: 'ratePerHour',
+      label: 'Đơn giá',
+      cellClassName: 'px-4 py-3',
+      render: (rule) => <TierPricing rule={rule} />,
+    },
+    {
+      key: 'hourFrom',
+      label: 'Thời gian',
+      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
+      render: (rule) => `${formatWeeklyDays(getRuleDays(rule))} · ${formatHourRange(rule.hourFrom, rule.hourTo)}`,
+    },
+    {
+      key: 'effectiveFrom',
+      label: 'Hiệu lực',
+      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
+      render: (rule) => formatEffectiveRange(rule),
+    },
+    {
+      label: 'Thao tác',
+      cellClassName: 'px-4 py-3',
+      render: renderActions,
+    },
+  ], [renderActions])
+
+  const ruleCardColumns: CardColumn<PricingRule>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Tên bảng giá',
+      render: (rule) => (
+        <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
+          {rule.name}
+          <StatusBadge status={getRuleStatus(rule)} />
+        </span>
+      ),
+    },
+    {
+      key: 'ratePerHour',
+      label: 'Đơn giá',
+      render: (rule) => <TierPricing rule={rule} />,
+    },
+    {
+      key: 'hourFrom',
+      label: 'Thời gian',
+      render: (rule) => `${formatWeeklyDays(getRuleDays(rule))} · ${formatHourRange(rule.hourFrom, rule.hourTo)}`,
+    },
+    {
+      key: 'effectiveFrom',
+      label: 'Hiệu lực',
+      render: (rule) => formatEffectiveRange(rule),
+    },
+    {
+      label: '',
+      render: renderActions,
+    },
+  ], [renderActions])
 
   const handleSaved = async (message: string) => {
     notifySuccess(message)
@@ -173,14 +260,43 @@ export function PricingScreen() {
   }
 
   if (loading) {
-    return <PricingSkeleton />
+    return <AppSkeleton />
   }
 
   const isAdmin = isAdminOnly(user?.role)
 
+  const listHeader = (
+    <div>
+      <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
+        Quy tắc giá giờ chơi
+      </h2>
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        {filteredRules.length} quy tắc · phủ {stats.coveredDays}/7 ngày trong tuần
+      </p>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+        <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
+        <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hiệu lực: {stats.active}</button>
+        <button type="button" aria-pressed={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')} className={statusFilter === 'FUTURE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Sắp tới: {stats.future}</button>
+        <button type="button" aria-pressed={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')} className={statusFilter === 'EXPIRED' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200'}>Hết hạn: {stats.expired}</button>
+      </div>
+      <div role="group" aria-label="Lọc ngày áp dụng" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+        <FilterButton active={dayFilter === 'ALL'} onClick={() => setDayFilter('ALL')}>Tất cả ngày</FilterButton>
+        {weekDays.map((day) => (
+          <FilterButton
+            key={day.value}
+            active={dayFilter === String(day.value)}
+            onClick={() => setDayFilter(String(day.value))}
+          >
+            {day.short}
+          </FilterButton>
+        ))}
+      </div>
+    </div>
+  )
+
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-5xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
@@ -211,58 +327,45 @@ export function PricingScreen() {
               Thêm quy tắc bảng giá
             </Button>
 
-            <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-                <div>
-                  <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
-                    Quy tắc giá giờ chơi
-                  </h2>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {filteredRules.length} quy tắc · phủ {stats.coveredDays}/7 ngày trong tuần
-                  </p>
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                    <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
-                    <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hiệu lực: {stats.active}</button>
-                    <button type="button" aria-pressed={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')} className={statusFilter === 'FUTURE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Sắp tới: {stats.future}</button>
-                    <button type="button" aria-pressed={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')} className={statusFilter === 'EXPIRED' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200'}>Hết hạn: {stats.expired}</button>
-                  </div>
-                  <div role="group" aria-label="Lọc ngày áp dụng" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
-                    <FilterButton active={dayFilter === 'ALL'} onClick={() => setDayFilter('ALL')}>Tất cả ngày</FilterButton>
-                    {weekDays.map((day) => (
-                      <FilterButton
-                        key={day.value}
-                        active={dayFilter === String(day.value)}
-                        onClick={() => setDayFilter(String(day.value))}
-                      >
-                        {day.short}
-                      </FilterButton>
-                    ))}
-                  </div>
-                </div>
-                <Badge variant={stats.active > 0 ? 'success' : 'warning'}>
-                  {stats.active > 0 ? 'Sẵn sàng' : 'Thiếu giá'}
-                </Badge>
-              </div>
+            {/* Mobile: card list */}
+            <div className="md:hidden">
+              <SortableCardList
+                header={listHeader}
+                columns={ruleCardColumns}
+                data={filteredRules}
+                keyExtractor={(rule) => rule.id}
+                search={{
+                  placeholder: 'Tìm tên bảng giá',
+                  getText: (rule) => rule.name,
+                }}
+                sortableKeys={['name', 'hourFrom', 'effectiveFrom']}
+                defaultSortKey="name"
+                defaultSortDir="asc"
+                emptyIcon={Banknote}
+                emptyMessage="Chưa có bảng giá"
+                emptyDescription="Thêm quy tắc giá giờ chơi để nhân viên tính tiền khi thu."
+              />
+            </div>
 
-              {filteredRules.length === 0 ? (
-                <EmptyState
-                  icon={Banknote}
-                  message="Chưa có quy tắc phù hợp"
-                  description="Thử đổi bộ lọc hoặc thêm quy tắc bảng giá mới."
-                />
-              ) : (
-                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {filteredRules.map((rule) => (
-                    <PricingRuleCard
-                      key={rule.id}
-                      rule={rule}
-                      onEdit={() => openEdit(rule)}
-                      onDelete={() => setDeleteRule(rule)}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
+            {/* Desktop: table */}
+            <div className="hidden md:block">
+              <SortableTable
+                header={listHeader}
+                columns={ruleColumns}
+                data={filteredRules}
+                keyExtractor={(rule) => rule.id}
+                search={{
+                  placeholder: 'Tìm tên bảng giá',
+                  getText: (rule) => rule.name,
+                }}
+                sortableKeys={['name', 'hourFrom', 'effectiveFrom']}
+                defaultSortKey="name"
+                defaultSortDir="asc"
+                emptyIcon={Banknote}
+                emptyMessage="Chưa có bảng giá"
+                emptyDescription="Thêm quy tắc giá giờ chơi để nhân viên tính tiền khi thu."
+              />
+            </div>
           </>
         )}
       </div>
@@ -297,103 +400,33 @@ export function PricingScreen() {
   )
 }
 
-function PricingSkeleton() {
+// Giá theo bậc luỹ tiến: bậc đầu lấy giá cơ bản, các bậc sau lấy giá riêng của tier
+function TierPricing({ rule }: { rule: PricingRule }) {
+  const tiers = rule.tiers ?? []
+
+  if (tiers.length === 0) {
+    return (
+      <span className="whitespace-nowrap font-semibold tabular-nums text-zinc-950 dark:text-white">
+        {money(rule.ratePerHour)}/giờ
+      </span>
+    )
+  }
+
+  const lines = [
+    `<${tiers[0]!.minHours}h: ${money(rule.ratePerHour)}/giờ`,
+    ...tiers.map((tier, index) => {
+      const nextMin = tiers[index + 1]?.minHours
+      const range = nextMin ? `${tier.minHours}-${nextMin}h` : `≥${tier.minHours}h`
+      return `${range}: ${money(tier.ratePerHour)}/giờ`
+    }),
+  ]
+
   return (
-      <SkeletonPage>
-      <Skeleton className="h-10 w-36" />
-      <SkeletonPanel><Skeleton className="h-80 w-full" /></SkeletonPanel>
-    </SkeletonPage>
-  )
-}
-
-function PricingRuleCard({
-  rule,
-  onEdit,
-  onDelete,
-}: {
-  rule: PricingRule
-  onEdit: () => void
-  onDelete: () => void
-}) {
-  const status = getRuleStatus(rule)
-  const days = getRuleDays(rule)
-
-  return (
-    <div className="px-4 py-3">
-      <div className="grid grid-cols-[1fr_auto] gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
-              {rule.name}
-            </p>
-            <StatusBadge status={status} />
-          </div>
-          <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {formatWeeklyDays(days)} · {formatHourRange(rule.hourFrom, rule.hourTo)}
-          </div>
-        </div>
-        <p className="self-start text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
-          {money(rule.ratePerHour)}
-        </p>
-      </div>
-
-      <div className="mt-3">
-        <WeeklyStrip days={days} />
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
-        <MiniInfo Icon={Clock3} label="Khung giờ" value={formatHourRange(rule.hourFrom, rule.hourTo)} />
-        <MiniInfo Icon={Repeat2} label="Lặp lại" value={formatWeeklyDays(days)} />
-        <MiniInfo Icon={CalendarDays} label="Hiệu lực" value={formatEffectiveRange(rule)} />
-      </div>
-
-      {rule.tiers && rule.tiers.length > 0 && (
-        <div className="mt-3 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950">
-          <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Giá luỹ tiến theo giờ chơi</p>
-          <div className="mt-1 space-y-1">
-            <p className="text-xs text-zinc-700 dark:text-zinc-300">&lt;{rule.tiers[0]!.minHours}h: <span className="font-semibold tabular-nums">{money(rule.ratePerHour)}</span>/giờ</p>
-            {rule.tiers.map((tier, idx) => {
-              const nextMin = rule.tiers![idx + 1]?.minHours
-              const range = nextMin ? `${tier.minHours}-${nextMin}h` : `≥${tier.minHours}h`
-              return (
-                <p key={tier.id} className="text-xs text-zinc-700 dark:text-zinc-300">
-                  {range}: <span className="font-semibold tabular-nums">{money(tier.ratePerHour)}</span>/giờ
-                </p>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      <div className="mt-3 flex gap-2">
-        <Button variant="secondary" size="sm" icon={Edit3} onClick={onEdit}>
-          Sửa
-        </Button>
-        <Button variant="outline-danger" size="sm" icon={Trash2} onClick={onDelete}>
-          Xóa
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-function MiniInfo({
-  Icon,
-  label,
-  value,
-}: {
-  Icon: LucideIcon
-  label: string
-  value: string
-}) {
-  return (
-    <div className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950">
-      <p className="flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-        <Icon size={12} />
-        {label}
-      </p>
-      <p className="mt-1 text-xs font-semibold text-zinc-950 dark:text-white">{value}</p>
-    </div>
+    <span className="flex flex-col gap-0.5 text-[11px] tabular-nums text-zinc-700 dark:text-zinc-300">
+      {lines.map((line) => (
+        <span key={line} className="whitespace-nowrap">{line}</span>
+      ))}
+    </span>
   )
 }
 
@@ -714,30 +747,6 @@ function WeeklyDaySelector({
           Cả tuần
         </Button>
       </div>
-    </div>
-  )
-}
-
-function WeeklyStrip({ days }: { days: number[] }) {
-  const selectedDays = normalizeDays(days)
-
-  return (
-    <div className="grid grid-cols-7 gap-1">
-      {weekDays.map((day) => {
-        const active = selectedDays.includes(day.value)
-        return (
-          <span
-            key={day.value}
-            className={`flex h-6 items-center justify-center rounded-md border text-[10px] font-semibold ${
-              active
-                ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300'
-                : 'border-zinc-100 bg-zinc-50 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-600'
-            }`}
-          >
-            {day.short}
-          </span>
-        )
-      })}
     </div>
   )
 }

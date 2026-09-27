@@ -2,9 +2,13 @@ import { describe, it, expect } from 'vitest'
 import {
   formatVND,
   formatHours,
+  getVnCalendarRange,
   toInputDate,
   parseStartOfDay,
   parseEndOfDay,
+  formatVnDate,
+  formatVnDateTime,
+  formatVnTimeRange,
 } from '@/lib/shared/utils'
 
 // ── formatVND ───────────────────────────────────────────
@@ -28,6 +32,18 @@ describe('formatVND', () => {
 
   it('định dạng số âm (nếu có)', () => {
     expect(formatVND(-50000)).toBe('-50.000đ')
+  })
+})
+
+// ── getVnCalendarRange ──────────────────────────────────
+
+describe('getVnCalendarRange', () => {
+  const now = new Date('2026-09-22T10:00:00+07:00')
+
+  it('tính từ thứ Hai, đầu tháng và đầu năm đến hôm nay theo giờ Việt Nam', () => {
+    expect(getVnCalendarRange('week', now)).toEqual({ from: '2026-09-21', to: '2026-09-22' })
+    expect(getVnCalendarRange('month', now)).toEqual({ from: '2026-09-01', to: '2026-09-22' })
+    expect(getVnCalendarRange('year', now)).toEqual({ from: '2026-01-01', to: '2026-09-22' })
   })
 })
 
@@ -105,5 +121,27 @@ describe('parseEndOfDay', () => {
   it('ngày đầu năm', () => {
     const result = parseEndOfDay('2026-01-01')
     expect(result.toISOString()).toBe('2026-01-01T16:59:59.999Z')
+  })
+})
+
+// ── Định dạng ngày giờ Việt Nam (dùng chung cho HV/Lớp/Lịch) ──
+
+describe('formatVnDate / formatVnDateTime / formatVnTimeRange', () => {
+  it('hiển thị theo giờ Việt Nam bất kể múi giờ máy chạy', () => {
+    // 18:00 giờ VN = 11:00 UTC
+    expect(formatVnDateTime('2026-09-10T11:00:00Z')).toBe('10/09/2026 18:00')
+    expect(formatVnDate('2026-09-10T11:00:00Z')).toBe('10/09/2026')
+  })
+
+  it('ngày rìa: 17:00 UTC đã sang ngày mới ở VN', () => {
+    expect(formatVnDate('2026-09-10T17:00:00Z')).toBe('11/09/2026')
+  })
+
+  it('khoảng giờ của buổi học tính từ giờ bắt đầu + thời lượng', () => {
+    expect(formatVnTimeRange('2026-09-10T11:00:00Z', 90)).toBe('18:00–19:30')
+  })
+
+  it('nhận cả Date', () => {
+    expect(formatVnDate(new Date('2026-01-01T00:00:00+07:00'))).toBe('01/01/2026')
   })
 })

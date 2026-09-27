@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { requireAdmin } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { repositories } from '@/lib/infrastructure/repositories'
-import { createLessonSchema } from '@/lib/students'
+import { calendarRangeSchema, ensureLessonsUntil, mapLessonError, createLessonSchema } from '@/lib/students'
 import { createLesson, mapCreateLessonError } from '@/lib/students'
 import { parseStartOfDay, parseEndOfDay } from '@/lib/shared/utils'
 import {
@@ -15,16 +15,28 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin()
+    const auth = await requireAdmin()
 
-    const fromParam = request.nextUrl.searchParams.get('from')
-    const toParam = request.nextUrl.searchParams.get('to')
-    const from = fromParam ? parseStartOfDay(fromParam) : new Date()
-    const to = toParam ? parseEndOfDay(toParam) : parseEndOfDay(new Date().toISOString().slice(0, 10))
-
-    const lessons = await repositories.lesson.findManyBetween(from, to)
-
-    return apiSuccess(lessons)
+    const fromParam = request.nextUrl.searchParams.get('from') ?? ''
+    const toParam = request.nextUrl.searchParams.get('to') ?? ''
+    const range = calendarRangeSchema.safeParse({
+      from: /^\d{4}-\d{2}-\d{2}$/.test(fromParam) ? parseStartOfDay(fromParam).toISOString() : fromParam,
+      to: /^\d{4}-\d{2}-\d{2}$/.test(toParam) ? new Date(parseEndOfDay(toParam).getTime() + 1).toISOString() : toParam,
+    })
+    if (!range.success) return apiError({ code: 'VALIDATION', message: 'Khoảng ngày không hợp lệ (tối đa một năm)', status: 400 })
+    const from = new Date(range.data.from)
+    const to = new Date(range.data.to)
+    const expanded = await ensureLessonsUntil(to)
+    const warning = expanded.ok ? undefined : `Chưa sinh tiếp được lịch: ${mapLessonError(expanded.error).message}. Các buổi đã lưu vẫn hiển thị bên dưới.`
+    const statusParam = request.nextUrl.searchParams.get('status')
+    const status = statusParam === 'SCHEDULED' || statusParam === 'COMPLETED' || statusParam === 'CANCELLED' ? statusParam : undefined
+    const rows = await repositories.lesson.findManyBetween(from, to, {
+      studentId: request.nextUrl.searchParams.get('studentId') || undefined,
+      coachName: request.nextUrl.searchParams.get('coachName') || undefined,
+      classId: request.nextUrl.searchParams.get('classId') || undefined,
+      status,
+    })
+    return apiSuccess({ lessons: rows, warning })
   } catch (error) {
     const message = (error as Error).message
     if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)
@@ -47,18 +59,20 @@ export async function POST(request: NextRequest) {
 
     const result = await createLesson({
       staffId: auth.userId,
+      classId: parsed.data.classId,
       title: parsed.data.title,
       coachName: parsed.data.coachName,
       startsAt: new Date(parsed.data.startsAt),
       durationMin: parsed.data.durationMin,
       studentIds: parsed.data.studentIds,
       note: parsed.data.note,
+      shareNote: parsed.data.shareNote,
     })
 
     if (!result.ok) return apiError(mapCreateLessonError(result.error))
 
-    const { lesson, googleSynced, warning } = result.value
-    return apiSuccess({ lesson, googleSynced, warning }, 201)
+    const { lesson, googleSynced } = result.value
+    return apiSuccess({ lesson, googleSynced }, 201)
   } catch (error) {
     const message = (error as Error).message
     if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)

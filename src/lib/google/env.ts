@@ -8,6 +8,6 @@ export function getGoogleConfig() {
     clientId: clientId || '',
     clientSecret: clientSecret || '',
     redirectUri: `${appUrl || 'http://localhost:3000'}/api/google/callback`,
-    isConfigured: Boolean(clientId && clientSecret && appUrl),
+    isConfigured: Boolean(clientId && clientSecret && appUrl && /^[a-fA-F0-9]{64}$/.test(process.env.GOOGLE_TOKEN_ENCRYPTION_KEY ?? '')),
   }
 }

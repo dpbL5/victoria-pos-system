@@ -101,7 +101,6 @@
 | InvoiceRow | `invoice-row.tsx` | ✅ Đã tách |
 | formatPromotionOption | `promotion-option.ts` | ✅ Đã tách |
 | ToolCountFields | `tool-count-fields.tsx` | ✅ Đã tách |
-| TodayShiftSkeleton | `today-shift-skeleton.tsx` | ✅ Đã tách |
 | QuickActions | `quick-actions.tsx` | ✅ Đã tách |
 | SellPickDialog | `sell-pick-dialog.tsx` | ✅ Đã tách |
 | ShiftRail | `shift-rail.tsx` | ✅ Đã tách |

@@ -50,8 +50,7 @@ src/
 │   │   ├── badge.tsx           # Badge (7 variants, 2 sizes)
 │   │   ├── stat-card.tsx       # Card thống kê (icon, trend indicator)
 │   │   ├── empty-state.tsx     # Empty list/table placeholder
-│   │   ├── loading-dots.tsx    # Full-page spinner + dots animation
-│   │   ├── skeleton.tsx        # Skeleton, TableSkeleton, StatCardsSkeleton, CardSkeleton
+│   │   ├── skeleton.tsx        # AppSkeleton (loading placeholder dùng chung)
 │   │   ├── toast.tsx           # ToastProvider + useToast hook
 │   │   ├── modal.tsx           # Modal (responsive: bottom sheet mobile, overlay desktop)
 │   │   ├── confirm-dialog.tsx  # ConfirmDialog — dialog xác nhận hành động nguy hiểm

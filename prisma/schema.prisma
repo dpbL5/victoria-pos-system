@@ -29,6 +29,12 @@ enum SessionStatus {
   CANCELLED
 }
 
+enum BookingStatus {
+  BOOKED
+  CHECKED_IN
+  CANCELLED
+}
+
 enum DayType {
   WEEKDAY
   WEEKEND
@@ -51,6 +57,7 @@ enum PaymentMethod {
 enum PaymentKind {
   OPERATIONAL
   MEMBERSHIP
+  DEPOSIT
 }
 
 enum MembershipStatus {
@@ -71,6 +78,8 @@ enum InvoiceItemType {
   SERVICE
   DISCOUNT
   SURCHARGE
+  DEPOSIT
+  DEPOSIT_APPLIED
 }
 
 enum ProductType {
@@ -130,6 +139,7 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   sessions           Session[]
+  bookings           Booking[]
   payments           Payment[]
   shifts             Shift[]
   shiftParticipants  ShiftParticipant[]
@@ -137,6 +147,7 @@ model User {
   stockMovements     StockMovement[]
   activityLogs       ActivityLog[]
   cashflowEntries    CashflowEntry[]
+  calendarConnection CalendarConnection?
 
   @@map("users")
 }
@@ -153,10 +164,11 @@ model Customer {
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
 
-  sessions           Session[]
-  memberships        Membership[]
-  invoices           Invoice[]
-  payments           Payment[]
+  sessions    Session[]
+  memberships Membership[]
+  invoices    Invoice[]
+  payments    Payment[]
+  bookings    Booking[]
 
   @@index([type])
   @@map("customers")
@@ -206,6 +218,7 @@ model Session {
   pricingGroups SessionPricingGroup[]
   players       SessionPlayer[]
   sellItems     SessionSellItem[]
+  booking       Booking?
 
   @@index([customerId, status])
   @@index([shiftId])
@@ -217,7 +230,39 @@ model Session {
   @@map("sessions")
 }
 
-/** Dòng bán kèm tạm trên phiên — chưa phải hóa đơn; khi checkout mới tạo invoice INV duy nhất */
+model Booking {
+  id                     String         @id @default(uuid())
+  customerId             String?        @map("customer_id")
+  customer               Customer?      @relation(fields: [customerId], references: [id])
+  customerName           String?        @map("customer_name") @db.VarChar(100)
+  customerPhone          String?        @map("customer_phone") @db.VarChar(20)
+  scheduledAt            DateTime       @map("scheduled_at")
+  playerCount            Int            @default(1) @map("player_count")
+  depositAmount          Decimal        @default(0) @map("deposit_amount") @db.Decimal(12, 0)
+  depositAppliedAmount   Decimal        @default(0) @map("deposit_applied_amount") @db.Decimal(12, 0)
+  depositRefundedAmount  Decimal        @default(0) @map("deposit_refunded_amount") @db.Decimal(12, 0)
+  depositPaymentMethod   PaymentMethod? @map("deposit_payment_method")
+  depositInvoiceId       String?        @unique @map("deposit_invoice_id")
+  depositInvoice         Invoice?       @relation("BookingDepositInvoice", fields: [depositInvoiceId], references: [id])
+  depositRefundInvoiceId String?        @unique @map("deposit_refund_invoice_id")
+  depositRefundInvoice   Invoice?       @relation("BookingDepositRefundInvoice", fields: [depositRefundInvoiceId], references: [id])
+  sessionId              String?        @unique @map("session_id")
+  session                Session?       @relation(fields: [sessionId], references: [id])
+  staffId                String         @map("staff_id")
+  staff                  User           @relation(fields: [staffId], references: [id])
+  status                 BookingStatus  @default(BOOKED)
+  notes                  String?        @db.Text
+  createdAt              DateTime       @default(now()) @map("created_at")
+  updatedAt              DateTime       @updatedAt @map("updated_at")
+
+  @@index([scheduledAt, status])
+  @@index([customerId, status])
+  @@map("bookings")
+}
+
+/**
+ * Dòng bán kèm tạm trên phiên — chưa phải hóa đơn; khi checkout mới tạo invoice INV duy nhất
+ */
 model SessionSellItem {
   id        String   @id @default(uuid())
   sessionId String   @map("session_id")
@@ -226,7 +271,7 @@ model SessionSellItem {
   product   Product  @relation(fields: [productId], references: [id])
   quantity  Int      @default(1)
   unitPrice Decimal  @default(0) @map("unit_price") @db.Decimal(12, 0)
-  notes     String? @db.Text
+  notes     String?  @db.Text
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -335,8 +380,8 @@ model MembershipPlan {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  memberships        Membership[]
-  payments           Payment[]
+  memberships Membership[]
+  payments    Payment[]
 
   @@map("membership_plans")
 }
@@ -353,8 +398,8 @@ model Membership {
   createdAt  DateTime         @default(now()) @map("created_at")
   updatedAt  DateTime         @updatedAt @map("updated_at")
 
-  sessions           Session[]
-  payments           Payment[]
+  sessions Session[]
+  payments Payment[]
 
   @@index([customerId, startsAt, expiresAt])
   @@index([status])
@@ -377,12 +422,12 @@ model Shift {
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
-  sessions           Session[]
-  participants       ShiftParticipant[]
-  toolCounts         ShiftTool[]
-  invoices           Invoice[]
-  payments           Payment[]
-  stockMovements     StockMovement[]
+  sessions       Session[]
+  participants   ShiftParticipant[]
+  toolCounts     ShiftTool[]
+  invoices       Invoice[]
+  payments       Payment[]
+  stockMovements StockMovement[]
 
   @@index([staffId, status])
   @@index([openedAt])
@@ -427,8 +472,10 @@ model Invoice {
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
-  items              InvoiceItem[]
-  payments           Payment[]
+  items                InvoiceItem[]
+  payments             Payment[]
+  bookingDeposit       Booking?      @relation("BookingDepositInvoice")
+  bookingDepositRefund Booking?      @relation("BookingDepositRefundInvoice")
 
   @@index([customerId])
   @@index([sessionId])
@@ -461,30 +508,30 @@ model InvoiceItem {
 }
 
 model Payment {
-  id            String        @id @default(uuid())
-  kind          PaymentKind   @default(OPERATIONAL)
-  sessionId     String?       @map("session_id")
-  session       Session?      @relation(fields: [sessionId], references: [id])
-  invoiceId     String?       @map("invoice_id")
-  invoice       Invoice?      @relation(fields: [invoiceId], references: [id])
-  shiftId       String?       @map("shift_id")
-  shift         Shift?        @relation(fields: [shiftId], references: [id])
-  staffId       String        @map("staff_id")
-  staff         User          @relation(fields: [staffId], references: [id])
-  customerId    String?       @map("customer_id")
-  customer      Customer?     @relation(fields: [customerId], references: [id])
-  membershipId  String?       @map("membership_id")
-  membership    Membership?   @relation(fields: [membershipId], references: [id])
-  planId        String?       @map("plan_id")
+  id            String          @id @default(uuid())
+  kind          PaymentKind     @default(OPERATIONAL)
+  sessionId     String?         @map("session_id")
+  session       Session?        @relation(fields: [sessionId], references: [id])
+  invoiceId     String?         @map("invoice_id")
+  invoice       Invoice?        @relation(fields: [invoiceId], references: [id])
+  shiftId       String?         @map("shift_id")
+  shift         Shift?          @relation(fields: [shiftId], references: [id])
+  staffId       String          @map("staff_id")
+  staff         User            @relation(fields: [staffId], references: [id])
+  customerId    String?         @map("customer_id")
+  customer      Customer?       @relation(fields: [customerId], references: [id])
+  membershipId  String?         @map("membership_id")
+  membership    Membership?     @relation(fields: [membershipId], references: [id])
+  planId        String?         @map("plan_id")
   plan          MembershipPlan? @relation(fields: [planId], references: [id])
-  totalHours    Decimal       @map("total_hours") @db.Decimal(5, 2)
-  subtotal      Decimal       @db.Decimal(12, 0)
-  discountTotal Decimal       @default(0) @map("discount_total") @db.Decimal(12, 0)
-  grandTotal    Decimal       @map("grand_total") @db.Decimal(12, 0)
-  paymentMethod PaymentMethod @map("payment_method")
-  paidAt        DateTime      @default(now()) @map("paid_at")
-  notes         String?       @db.Text
-  createdAt     DateTime      @default(now()) @map("created_at")
+  totalHours    Decimal         @map("total_hours") @db.Decimal(5, 2)
+  subtotal      Decimal         @db.Decimal(12, 0)
+  discountTotal Decimal         @default(0) @map("discount_total") @db.Decimal(12, 0)
+  grandTotal    Decimal         @map("grand_total") @db.Decimal(12, 0)
+  paymentMethod PaymentMethod   @map("payment_method")
+  paidAt        DateTime        @default(now()) @map("paid_at")
+  notes         String?         @db.Text
+  createdAt     DateTime        @default(now()) @map("created_at")
 
   @@index([invoiceId])
   @@index([shiftId])
@@ -619,69 +666,91 @@ model Student {
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
 
-  packages LessonPackage[]
-  lessons  LessonStudent[]
+  lessons          LessonStudent[]
+  series           LessonSeriesStudent[]
+  classMemberships LessonClassStudent[]
 
   @@index([status])
   @@map("students")
 }
 
-model LessonPackage {
+// ── Lớp học — danh tính + sổ học viên; lịch là các LessonSeries (khung giờ) ──
+
+model LessonClass {
   id        String   @id @default(uuid())
-  studentId String   @map("student_id")
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  name      String   @db.VarChar(100)
-  total     Int      @default(1) // số buổi đã mua
-  used      Int      @default(0) // số buổi đã dùng
+  name      String   @db.VarChar(150)
+  coachName String?  @map("coach_name") @db.VarChar(100)
+  note      String?  @db.Text
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  lessonStudents LessonStudent[]
+  slots    LessonSeries[]
+  lessons  Lesson[]
+  students LessonClassStudent[]
 
-  @@index([studentId, isActive])
-  @@map("lesson_packages")
+  @@index([isActive])
+  @@map("lesson_classes")
 }
 
 model LessonSeries {
-  id            String    @id @default(uuid())
-  title         String    @db.VarChar(150)
-  coachName     String?   @map("coach_name") @db.VarChar(100)
-  daysOfWeek    Int[]     @map("days_of_week") // [1,4] = T2, T5 (0=CN)
-  startTime     String    @map("start_time") @db.VarChar(5) // "18:00"
-  durationMin   Int       @default(60) @map("duration_min")
-  rrule         String    @db.VarChar(200) // FREQ=WEEKLY;BYDAY=MO,TH
-  startsOn      DateTime  @map("starts_on")
-  endsOn        DateTime? @map("ends_on")
-  isActive      Boolean   @default(true) @map("is_active")
-  googleEventId String?   @map("google_event_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  id            String       @id @default(uuid())
+  classId       String?      @map("class_id")
+  class         LessonClass? @relation(fields: [classId], references: [id], onDelete: SetNull)
+  title         String       @db.VarChar(150)
+  coachName     String?      @map("coach_name") @db.VarChar(100)
+  daysOfWeek    Int[]        @map("days_of_week") // [1,4] = T2, T5 (0=CN)
+  startTime     String       @map("start_time") @db.VarChar(5) // "18:00"
+  durationMin   Int          @default(60) @map("duration_min")
+  rrule         String       @db.VarChar(200) // FREQ=WEEKLY;BYDAY=MO,TH
+  startsOn      DateTime     @map("starts_on")
+  endsOn        DateTime?    @map("ends_on")
+  isActive      Boolean      @default(true) @map("is_active")
+  googleEventId String?      @map("google_event_id")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
 
-  lessons Lesson[]
+  version           Int                   @default(1)
+  intervalWeeks     Int                   @default(1) @map("interval_weeks")
+  occurrenceCount   Int?                  @map("occurrence_count")
+  timeZone          String                @default("Asia/Ho_Chi_Minh") @map("time_zone")
+  materializedUntil DateTime?             @map("materialized_until")
+  googleCalendarId  String?               @map("google_calendar_id")
+  lessons           Lesson[]
+  students          LessonSeriesStudent[]
 
   @@index([startsOn])
+  @@index([classId])
   @@map("lesson_series")
 }
 
 model Lesson {
-  id            String         @id @default(uuid())
-  seriesId      String?        @map("series_id")
-  series        LessonSeries?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
-  title         String         @db.VarChar(150)
-  coachName     String?        @map("coach_name") @db.VarChar(100)
-  startsAt      DateTime       @map("starts_at")
-  durationMin   Int            @default(60) @map("duration_min")
-  status        LessonStatus   @default(SCHEDULED)
-  note          String?        @db.Text // note cấp buổi
-  googleEventId String?        @map("google_event_id")
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
+  id            String        @id @default(uuid())
+  seriesId      String?       @map("series_id")
+  series        LessonSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  classId       String?       @map("class_id")
+  class         LessonClass?  @relation(fields: [classId], references: [id], onDelete: SetNull)
+  title         String        @db.VarChar(150)
+  coachName     String?       @map("coach_name") @db.VarChar(100)
+  startsAt      DateTime      @map("starts_at")
+  durationMin   Int           @default(60) @map("duration_min")
+  status        LessonStatus  @default(SCHEDULED)
+  note          String?       @db.Text // note cấp buổi
+  googleEventId String?       @map("google_event_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
 
-  students LessonStudent[]
+  version          Int             @default(1)
+  originalStartAt  DateTime?       @map("original_start_at")
+  isException      Boolean         @default(false) @map("is_exception")
+  shareNote        Boolean         @default(false) @map("share_note")
+  googleCalendarId String?         @map("google_calendar_id")
+  students         LessonStudent[]
 
+  @@unique([seriesId, originalStartAt])
   @@index([startsAt])
   @@index([seriesId])
+  @@index([classId])
   @@map("lessons")
 }
 
@@ -693,8 +762,6 @@ model LessonStudent {
   student   Student          @relation(fields: [studentId], references: [id])
   status    LessonAttendance @default(SCHEDULED)
   note      String?          @db.Text // note riêng từng HV
-  packageId String?          @map("package_id") // gói bị trừ khi hoàn thành buổi này
-  package   LessonPackage?   @relation(fields: [packageId], references: [id], onDelete: SetNull)
 
   @@unique([lessonId, studentId])
   @@index([studentId])
@@ -702,13 +769,72 @@ model LessonStudent {
 }
 
 model CalendarConnection {
-  id             String   @id @default(uuid())
-  email          String   @db.VarChar(200)
-  accessToken    String   @map("access_token") @db.Text
-  refreshToken   String   @map("refresh_token") @db.Text
-  tokenExpiresAt DateTime @map("token_expires_at")
-  calendarId     String?  @map("calendar_id") @db.VarChar(200) // null = calendar "primary"
-  connectedAt    DateTime @default(now()) @map("connected_at")
+  id             String    @id @default(uuid())
+  userId         String    @unique @map("user_id") // mỗi ADMIN một kết nối Google của riêng mình
+  email          String    @db.VarChar(200)
+  accessToken    String    @map("access_token") @db.Text
+  refreshToken   String    @map("refresh_token") @db.Text
+  tokenExpiresAt DateTime  @map("token_expires_at")
+  calendarId     String?   @map("calendar_id") @db.VarChar(200) // null = calendar "primary"
+  connectedAt    DateTime  @default(now()) @map("connected_at")
+  generation     String    @default(uuid())
+  needsReconnect Boolean   @default(false) @map("needs_reconnect")
+  leaseUntil     DateTime? @map("lease_until")
+  leaseOwner     String?   @map("lease_owner")
+
+  user User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs CalendarSyncJob[]
 
   @@map("calendar_connections")
+}
+
+model LessonSeriesStudent {
+  seriesId  String       @map("series_id")
+  studentId String       @map("student_id")
+  series    LessonSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  student   Student      @relation(fields: [studentId], references: [id])
+
+  @@id([seriesId, studentId])
+  @@index([studentId])
+  @@map("lesson_series_students")
+}
+
+model LessonClassStudent {
+  classId     String      @map("class_id")
+  studentId   String      @map("student_id")
+  lessonClass LessonClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([classId, studentId])
+  @@index([studentId])
+  @@map("lesson_class_students")
+}
+
+model CalendarSyncJob {
+  id            String             @id @default(uuid())
+  connectionId  String             @map("connection_id")
+  entityKey     String             @map("entity_key")
+  entityId      String             @map("entity_id")
+  kind          String
+  version       Int                @default(1)
+  status        String             @default("PENDING")
+  attempts      Int                @default(0)
+  nextAttemptAt DateTime           @default(now()) @map("next_attempt_at")
+  lastError     String?            @map("last_error")
+  syncedAt      DateTime?          @map("synced_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+  connection    CalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, entityKey])
+  @@index([connectionId, status, nextAttemptAt])
+  @@map("calendar_sync_jobs")
+}
+
+model CalendarEventMapping {
+  entityKey  String @map("entity_key")
+  calendarId String @map("calendar_id")
+  eventId    String @map("event_id")
+
+  @@id([entityKey, calendarId])
+  @@map("calendar_event_mappings")
 }

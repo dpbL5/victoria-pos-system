@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const createStudentSchema = z.object({
-  fullName: z.string().min(1, 'Tên học viên không được để trống').max(100),
+  fullName: z.string().trim().min(1, 'Tên học viên không được để trống').max(100),
   phone: z.string().max(20).optional().or(z.literal('')),
   birthYear: z.number().int().min(1900).max(2100).optional().nullable(),
   notes: z.string().max(2000).optional().or(z.literal('')),
@@ -11,51 +11,48 @@ export const updateStudentSchema = createStudentSchema
   .partial()
   .extend({ status: z.enum(['ACTIVE', 'INACTIVE']).optional() })
 
-export const createPackageSchema = z.object({
-  studentId: z.string().uuid('Mã học viên không hợp lệ'),
-  name: z.string().min(1, 'Tên gói không được để trống').max(100),
-  total: z.number().int().positive('Số buổi phải lớn hơn 0'),
-})
-
-export const updatePackageSchema = z.object({
-  name: z.string().min(1, 'Tên gói không được để trống').max(100).optional(),
-  total: z.number().int().positive('Số buổi phải lớn hơn 0').optional(),
-  isActive: z.boolean().optional(),
-})
-
 const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/
 
 export const createLessonSchema = z.object({
-  title: z.string().min(1, 'Tiêu đề buổi học không được để trống').max(150),
+  shareNote: z.boolean().default(false),
+  classId: z.string().uuid('Mã lớp không hợp lệ').optional(),
+  title: z.string().trim().min(1, 'Tiêu đề buổi học không được để trống').max(150),
   coachName: z.string().max(100).optional().or(z.literal('')),
-  startsAt: z.string().min(1, 'Thiếu thời gian bắt đầu').refine((v) => !Number.isNaN(Date.parse(v)), 'Thời gian bắt đầu không hợp lệ'),
+  startsAt: z.iso.datetime({ offset: true, message: 'Thời gian phải có múi giờ hợp lệ' }),
   durationMin: z.number().int().positive('Thời lượng phải > 0').max(1440).default(60),
-  studentIds: z.array(z.string().uuid('Mã học viên không hợp lệ')).min(1, 'Chọn ít nhất 1 học viên'),
+  studentIds: z.array(z.string().uuid('Mã học viên không hợp lệ')).min(1, 'Chọn ít nhất 1 học viên').max(100, 'Tối đa 100 học viên mỗi buổi'),
   note: z.string().max(2000).optional().or(z.literal('')),
 })
 
 export const updateLessonSchema = z.object({
-  title: z.string().min(1, 'Tiêu đề buổi học không được để trống').max(150).optional(),
+  version: z.number({ error: 'Thiếu phiên bản bản ghi hợp lệ' }).int().positive(),
+  studentIds: z.array(z.string().uuid('Mã học viên không hợp lệ')).min(1, 'Chọn học viên').max(100, 'Tối đa 100 học viên').optional(),
+  shareNote: z.boolean().optional(),
+  title: z.string().trim().min(1, 'Tiêu đề buổi học không được để trống').max(150).optional(),
   coachName: z.string().max(100).optional().or(z.literal('')),
-  startsAt: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Thời gian bắt đầu không hợp lệ').optional(),
+  startsAt: z.iso.datetime({ offset: true, message: 'Thời gian phải có múi giờ hợp lệ' }).optional(),
   durationMin: z.number().int().positive('Thời lượng phải > 0').max(1440).optional(),
   note: z.string().max(2000).optional().or(z.literal('')),
 })
 
 export const createSeriesSchema = z.object({
-  title: z.string().min(1, 'Tiêu đề lịch học không được để trống').max(150),
+  classId: z.string().uuid('Mã lớp không hợp lệ').optional(),
+  intervalWeeks: z.number().int().min(1).max(12).default(1),
+  occurrenceCount: z.number().int().min(1).max(500).optional().nullable(),
+  title: z.string().trim().min(1, 'Tiêu đề lịch học không được để trống').max(150),
   coachName: z.string().max(100).optional().or(z.literal('')),
   daysOfWeek: z
     .array(z.number().int().min(0).max(6))
     .min(1, 'Chọn ít nhất 1 ngày trong tuần'),
   startTime: z.string().regex(timePattern, 'Giờ bắt đầu không hợp lệ (vd: 18:00)'),
   durationMin: z.number().int().positive('Thời lượng phải > 0').max(1440).default(60),
-  startsOn: z.string().min(1, 'Thiếu ngày bắt đầu').refine((v) => !Number.isNaN(Date.parse(v)), 'Ngày bắt đầu không hợp lệ'),
-  endsOn: z.string().optional().nullable().refine((v) => v == null || v === '' || !Number.isNaN(Date.parse(v)), 'Ngày kết thúc không hợp lệ'),
-  studentIds: z.array(z.string().uuid('Mã học viên không hợp lệ')).min(1, 'Chọn ít nhất 1 học viên'),
+  startsOn: z.iso.date({ message: 'Ngày bắt đầu không hợp lệ' }).refine(v => Math.abs(Date.parse(v) - Date.now()) < 10 * 366 * 86400000, 'Ngày phải trong khoảng 10 năm'),
+  endsOn: z.iso.date({ message: 'Ngày kết thúc không hợp lệ' }).optional().nullable(),
+  studentIds: z.array(z.string().uuid('Mã học viên không hợp lệ')).min(1, 'Chọn ít nhất 1 học viên').max(100, 'Tối đa 100 học viên mỗi buổi'),
 })
 
 export const markAttendanceSchema = z.object({
+  version: z.number().int().positive(),
   entries: z
     .array(
       z.object({
@@ -65,19 +62,80 @@ export const markAttendanceSchema = z.object({
       })
     )
     .min(1, 'Không có học viên nào để điểm danh'),
-})
+}).refine(value => new Set(value.entries.map(entry => entry.studentId)).size === value.entries.length, 'Không được lặp học viên trong danh sách điểm danh')
+
+export const updateLessonNotesSchema = z.object({
+  version: z.number().int().positive(),
+  entries: z
+    .array(
+      z.object({
+        studentId: z.string().uuid('Mã học viên không hợp lệ'),
+        note: z.string().max(2000),
+      })
+    )
+    .min(1, 'Không có học viên nào để lưu ghi chú'),
+}).refine(value => new Set(value.entries.map(entry => entry.studentId)).size === value.entries.length, 'Không được lặp học viên trong danh sách ghi chú')
 
 export const connectCalendarSchema = z.object({
-  code: z.string().min(1, 'Thiếu mã xác thực'),
-  state: z.string().min(1, 'Thiếu state'),
+  code: z.string().trim().min(1, 'Thiếu mã xác thực'),
+  state: z.string().trim().min(1, 'Thiếu state'),
 })
 
 export type StudentCreateInput = z.infer<typeof createStudentSchema>
 export type StudentUpdateInput = z.infer<typeof updateStudentSchema>
-export type PackageCreateInput = z.infer<typeof createPackageSchema>
-export type PackageUpdateInput = z.infer<typeof updatePackageSchema>
 export type LessonCreateInput = z.infer<typeof createLessonSchema>
 export type LessonUpdateInput = z.infer<typeof updateLessonSchema>
 export type SeriesCreateInput = z.infer<typeof createSeriesSchema>
 export type AttendanceMarkInput = z.infer<typeof markAttendanceSchema>
+export type LessonNotesUpdateInput = z.infer<typeof updateLessonNotesSchema>
 export type CalendarConnectInput = z.infer<typeof connectCalendarSchema>
+
+export const seriesMutationSchema = createSeriesSchema.partial().extend({
+  version: z.number({ error: 'Thiếu phiên bản bản ghi hợp lệ' }).int().positive(),
+  scope: z.enum(['FOLLOWING', 'ALL']),
+  lessonId: z.string().uuid('Mã buổi học không hợp lệ'),
+})
+
+// ── Lớp học ─────────────────────────────────────────────
+export const classSlotSchema = z.object({
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1, 'Chọn ít nhất 1 ngày trong tuần'),
+  startTime: z.string().regex(timePattern, 'Giờ bắt đầu không hợp lệ (vd: 18:00)'),
+  durationMin: z.number().int().positive('Thời lượng phải > 0').max(1440).default(60),
+  startsOn: z.iso.date({ message: 'Ngày bắt đầu không hợp lệ' }).refine(v => Math.abs(Date.parse(v) - Date.now()) < 10 * 366 * 86400000, 'Ngày phải trong khoảng 10 năm'),
+  endsOn: z.iso.date({ message: 'Ngày kết thúc không hợp lệ' }).optional().nullable(),
+  intervalWeeks: z.number().int().min(1).max(12).default(1),
+  occurrenceCount: z.number().int().min(1).max(500).optional().nullable(),
+})
+
+export const createClassSchema = z.object({
+  name: z.string().trim().min(1, 'Tên lớp không được để trống').max(150),
+  coachName: z.string().max(100).optional().or(z.literal('')),
+  note: z.string().max(2000).optional().or(z.literal('')),
+  studentIds: z.array(z.string().uuid('Mã học viên không hợp lệ')).max(100, 'Tối đa 100 học viên mỗi lớp').optional(),
+  slots: z.array(classSlotSchema).max(10, 'Tối đa 10 khung giờ mỗi lớp').optional(),
+})
+
+export const updateClassSchema = z.object({
+  name: z.string().trim().min(1, 'Tên lớp không được để trống').max(150).optional(),
+  coachName: z.string().max(100).optional().or(z.literal('')),
+  note: z.string().max(2000).optional().or(z.literal('')),
+  isActive: z.boolean().optional(),
+})
+
+export const setClassRosterSchema = z.object({
+  studentIds: z.array(z.string().uuid('Mã học viên không hợp lệ')).max(100, 'Tối đa 100 học viên mỗi lớp'),
+})
+
+export const updateClassSlotSchema = classSlotSchema.partial().extend({
+  version: z.number({ error: 'Thiếu phiên bản bản ghi hợp lệ' }).int().positive(),
+  scope: z.enum(['FOLLOWING', 'ALL']).default('FOLLOWING'),
+})
+
+export const endClassSlotSchema = z.object({
+  version: z.number({ error: 'Thiếu phiên bản bản ghi hợp lệ' }).int().positive(),
+  scope: z.enum(['FOLLOWING', 'ALL']).default('FOLLOWING'),
+})
+export const calendarRangeSchema = z.object({
+  from: z.iso.datetime({ offset: true }),
+  to: z.iso.datetime({ offset: true }),
+}).refine(v => Date.parse(v.to) > Date.parse(v.from) && Date.parse(v.to) - Date.parse(v.from) <= 366 * 86400000 && Math.abs(Date.parse(v.to) - Date.now()) <= 10 * 366 * 86400000, 'Khoảng lịch không hợp lệ hoặc dài quá một năm')

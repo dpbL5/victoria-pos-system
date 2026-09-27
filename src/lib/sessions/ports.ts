@@ -6,6 +6,7 @@ export type SessionWithDetails = Prisma.SessionGetPayload<{
   include: {
     customer: true
     membership: true
+    booking: true
     pricingGroups: { orderBy: { createdAt: 'asc' } }
   }
 }>
@@ -15,6 +16,7 @@ export type SessionWithPlayers = Prisma.SessionGetPayload<{
   include: {
     customer: true
     membership: true
+    booking: true
     pricingGroups: {
       orderBy: { createdAt: 'asc' }
       include: { players: true }
@@ -75,6 +77,13 @@ export type SessionListRow = Prisma.SessionGetPayload<{
     promotionName: true
     promotionDiscountType: true
     promotionDiscountValue: true
+    booking: {
+      select: {
+        depositAmount: true
+        depositAppliedAmount: true
+        depositRefundedAmount: true
+      }
+    }
     customer: { select: { id: true; fullName: true; phone: true; type: true } }
     customerPhone: true
     staff: { select: { id: true; fullName: true } }

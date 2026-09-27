@@ -7,6 +7,7 @@ import { rateLimit } from "@/lib/shared/rate-limit";
 import { withRetry } from "@/lib/infrastructure/db-retry";
 import type { SessionPayload } from "@/types";
 import { isAdminOnly, isManagerOrAdmin } from './roles';
+import { measureApiAuth, recordApiRetry } from '@/lib/infrastructure/api-diagnostics'
 
 // Re-export for API route usage
 export { isAdminOnly, isManagerOrAdmin };
@@ -104,41 +105,43 @@ function getCachedUser(userId: string): AuthUserLookup | null | undefined {
 
 // ── Require auth (throws nếu chưa login) ──────────────
 export async function requireAuth(): Promise<SessionPayload> {
-  const session = await verifySession();
-  if (!session) {
-    throw new Error("UNAUTHORIZED");
-  }
+  return measureApiAuth(async () => {
+    const session = await verifySession();
+    if (!session) {
+      throw new Error("UNAUTHORIZED");
+    }
 
-  const cached = getCachedUser(session.userId);
-  let user: AuthUserLookup | null;
-  if (cached === undefined) {
-    user = await withRetry(() =>
-      prisma.user.findUnique({
-        where: { id: session.userId },
-        select: {
-          id: true,
-          username: true,
-          fullName: true,
-          role: true,
-          isActive: true,
-        },
-      })
-    );
-    userCache.set(session.userId, { user, expiresAt: Date.now() + USER_CACHE_TTL_MS });
-  } else {
-    user = cached;
-  }
+    const cached = getCachedUser(session.userId);
+    let user: AuthUserLookup | null;
+    if (cached === undefined) {
+      user = await withRetry(() =>
+        prisma.user.findUnique({
+          where: { id: session.userId },
+          select: {
+            id: true,
+            username: true,
+            fullName: true,
+            role: true,
+            isActive: true,
+          },
+        }), { onRetry: recordApiRetry }
+      );
+      userCache.set(session.userId, { user, expiresAt: Date.now() + USER_CACHE_TTL_MS });
+    } else {
+      user = cached;
+    }
 
-  if (!user || !user.isActive) {
-    throw new Error("UNAUTHORIZED");
-  }
+    if (!user || !user.isActive) {
+      throw new Error("UNAUTHORIZED");
+    }
 
-  return {
-    userId: user.id,
-    username: user.username,
-    fullName: user.fullName,
-    role: user.role,
-  };
+    return {
+      userId: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role,
+    };
+  })
 }
 
 // ── Require admin role (ADMIN only — quản trị hệ thống) ──

@@ -44,6 +44,9 @@ export async function runEditInvoice(
   if (invoice.status !== 'PAID') fail('INVOICE_NOT_EDITABLE')
   if (!invoice.shiftId) fail('SHIFT_CLOSED')
   if (invoice.payments.some((p) => p.kind === 'MEMBERSHIP')) fail('INVOICE_HAS_MEMBERSHIP')
+  if (invoice.payments.some((p) => p.kind === 'DEPOSIT') || invoice.items.some((item) => item.type === 'DEPOSIT_APPLIED')) {
+    fail('INVOICE_HAS_DEPOSIT')
+  }
 
   const actorName = invoice.staff?.fullName ?? staffId
   const timestamp = new Date().toISOString()
@@ -321,6 +324,8 @@ export function mapEditInvoiceError(error: DomainError): HttpErrorInfo {
         message: 'Hoá đơn có phí hội viên — vui lòng dùng chức năng huỷ hoá đơn',
         status: 409,
       }
+    case 'INVOICE_HAS_DEPOSIT':
+      return { code: 'INVOICE_HAS_DEPOSIT', message: 'Không thể sửa trực tiếp giao dịch có tiền cọc', status: 409 }
     case 'INSUFFICIENT_STOCK':
       return {
         code: 'INSUFFICIENT_STOCK',

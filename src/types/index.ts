@@ -135,6 +135,7 @@ export interface SessionPayload {
 // ── API response wrappers ──────────────────────────────
 export interface ApiResponse<T = unknown> {
   success: boolean
+  code?: string
   data?: T
   current?: unknown
   error?: string
@@ -172,7 +173,7 @@ export interface RevenueReport {
 
 export interface TransactionItem {
   id: string
-  type: 'payment' | 'membership'
+  type: 'payment' | 'membership' | 'deposit'
   amount: number
   paymentMethod: string | null
   paidAt: string

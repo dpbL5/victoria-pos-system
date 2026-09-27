@@ -3,17 +3,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
+  Check,
   Settings,
   Ticket,
   UserPlus,
   Users,
+  X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { useApi } from '@/hooks/use-api'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
@@ -36,19 +38,9 @@ interface MemberCustomer extends Customer {
   membershipStatus: MemberStatus
 }
 
-interface MembershipListResponse {
-  success: boolean
-  data?: Membership[]
-  current?: Membership | null
-  error?: string
-}
-
 export function MemberScreen() {
-  const { success: notifySuccess, error: notifyError } = useToast()
+  const { success: notifySuccess } = useToast()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
-  const [selectedMember, setSelectedMember] = useState<MemberCustomer | null>(null)
-  const [history, setHistory] = useState<Membership[]>([])
-  const [historyLoading, setHistoryLoading] = useState(false)
   const [registerOpen, setRegisterOpen] = useState(false)
   const [renewMember, setRenewMember] = useState<RenewMemberInput | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -90,24 +82,6 @@ export function MemberScreen() {
   const isAdmin = isManagerOrAdmin(user?.role)
   const canManagePlans = isAdminOnly(user?.role)
 
-  const openMember = useCallback(async (member: MemberCustomer) => {
-    setSelectedMember(member)
-    setHistory([])
-    setHistoryLoading(true)
-    try {
-      const data = await apiJson<Membership[]>(`/api/memberships?customerId=${member.id}`) as MembershipListResponse
-      if (!data.success) {
-        notifyError(data.error || 'Không tải được lịch sử hội viên')
-        return
-      }
-      setHistory(data.data ?? [])
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setHistoryLoading(false)
-    }
-  }, [notifyError])
-
   const renderActions = useCallback((item: MemberCustomer) => (
     <div className="flex items-center gap-2">
       {isAdmin && (
@@ -136,14 +110,14 @@ export function MemberScreen() {
     {
       key: 'fullName',
       label: 'Tên hội viên',
-      cellClassName: 'px-4 py-3 font-medium text-zinc-950 dark:text-white',
+      cellClassName: 'px-4 py-3 font-medium',
       render: (item) => (
-        <button type="button" onClick={() => void openMember(item)} className="text-left hover:text-blue-600">
+        <Link href={`/customers/${item.id}`} className="text-left hover:text-blue-600">
           <div className="flex items-center gap-2">
-            {item.fullName}
+            <span className={memberNameColor(item.membershipStatus)}>{item.fullName}</span>
             <StatusBadge status={item.membershipStatus} />
           </div>
-        </button>
+        </Link>
       ),
     },
     {
@@ -163,17 +137,17 @@ export function MemberScreen() {
       cellClassName: 'px-4 py-3',
       render: (item) => renderActions(item),
     },
-  ], [openMember, renderActions, renderMembershipStatus])
+  ], [renderActions, renderMembershipStatus])
 
   const memberCardColumns: CardColumn<MemberCustomer>[] = useMemo(() => [
     {
       key: 'fullName',
       label: 'Tên hội viên',
       render: (item) => (
-        <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
+        <Link href={`/customers/${item.id}`} className={`flex items-center gap-2 text-base font-semibold ${memberNameColor(item.membershipStatus)}`}>
           {item.fullName}
           <StatusBadge status={item.membershipStatus} />
-        </span>
+        </Link>
       ),
     },
     {
@@ -201,12 +175,11 @@ export function MemberScreen() {
   const handleRenewed = async () => {
     notifySuccess('Đã gia hạn hội viên')
     setRenewMember(null)
-    setSelectedMember(null)
     await mutate()
   }
 
   if (loading) {
-    return <MemberScreenSkeleton />
+    return <AppSkeleton />
   }
 
   const listHeader = (
@@ -225,15 +198,12 @@ export function MemberScreen() {
           <button type="button" aria-pressed={statusFilter === 'NONE'} onClick={() => setStatusFilter('NONE')} className={statusFilter === 'NONE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Chưa đóng: {stats.none}</button>
         </div>
       </div>
-      <Badge variant={shift ? 'success' : 'warning'}>
-        {shift ? 'Có ca' : 'Chưa mở ca'}
-      </Badge>
     </div>
   )
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-5xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
@@ -337,29 +307,29 @@ export function MemberScreen() {
         onDone={handleRenewed}
       />
 
-      <MemberDetailDrawer
-        member={selectedMember}
-        history={history}
-        loading={historyLoading}
-        onClose={() => setSelectedMember(null)}
-      />
     </div>
   )
 }
 
-function MemberScreenSkeleton() {
-  return (
-      <SkeletonPage>
-      <Skeleton className="h-9 w-32" />
-      <SkeletonPanel><Skeleton className="h-12 w-full" /></SkeletonPanel>
-      <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
-    </SkeletonPage>
-  )
+function memberNameColor(status: MemberStatus) {
+  return status === 'EXPIRED' ? 'text-amber-700/70 dark:text-amber-300/70' : 'text-zinc-950 dark:text-white'
 }
 
 function StatusBadge({ status }: { status: MemberStatus }) {
-  if (status === 'ACTIVE') return <Badge variant="success" size="sm">Còn hạn</Badge>
-  if (status === 'EXPIRED') return <Badge variant="warning" size="sm">Hết hạn</Badge>
+  if (status === 'ACTIVE') {
+    return (
+      <span role="img" aria-label="Còn hạn" title="Còn hạn">
+        <Check size={16} strokeWidth={2.5} className="text-emerald-600 dark:text-emerald-400" />
+      </span>
+    )
+  }
+  if (status === 'EXPIRED') {
+    return (
+      <span role="img" aria-label="Hết hạn" title="Hết hạn">
+        <X size={16} strokeWidth={2.5} className="text-amber-500 dark:text-amber-400" />
+      </span>
+    )
+  }
   return <Badge variant="danger" size="sm">Chưa đóng</Badge>
 }
 
@@ -564,85 +534,5 @@ function MemberPaymentForm({
         </div>
       </div>
     </div>
-  )
-}
-
-function MemberDetailDrawer({
-  member,
-  history,
-  loading,
-  onClose,
-}: {
-  member: MemberCustomer | null
-  history: Membership[]
-  loading: boolean
-  onClose: () => void
-}) {
-  return (
-    <Modal
-      open={!!member}
-      onClose={onClose}
-      title={member?.fullName ?? 'Chi tiết hội viên'}
-      description={member?.phone || 'Chưa có số điện thoại'}
-    >
-      {member && (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-zinc-950 dark:text-white">
-                  Trạng thái hội viên
-                </p>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  {member.membershipStatus === 'ACTIVE' && member.currentMembership
-                    ? `Còn hạn đến ${formatDay(member.currentMembership.expiresAt)}`
-                    : member.membershipStatus === 'EXPIRED' && member.latestMembership
-                      ? `Hết hạn từ ${formatDay(member.latestMembership.expiresAt)}`
-                      : 'Chưa có kỳ hội viên'}
-                </p>
-              </div>
-              <StatusBadge status={member.membershipStatus} />
-            </div>
-          </div>
-
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-zinc-950 dark:text-white">
-              Lịch sử đóng phí
-            </h3>
-            {loading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-14 w-full" />
-                <Skeleton className="h-14 w-full" />
-              </div>
-            ) : history.length === 0 ? (
-              <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
-                Chưa có lịch sử hội viên.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {history.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-zinc-950 dark:text-white">
-                        {item.plan?.name ?? 'Gói hội viên'}
-                      </p>
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {formatDay(item.startsAt)}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                      {formatDay(item.startsAt)} - {formatDay(item.expiresAt)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </Modal>
   )
 }

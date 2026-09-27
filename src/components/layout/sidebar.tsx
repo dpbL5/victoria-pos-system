@@ -1,8 +1,8 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import Image from 'next/image'
-import { usePathname } from 'next/navigation'
+import Link from "next/link";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
 import {
   ArrowRightLeft,
   Banknote,
@@ -12,81 +12,136 @@ import {
   ChevronRight,
   GraduationCap,
   Package,
+  School,
   Settings,
   ShieldCheck,
   Tag,
   Timer,
   UserCog,
-  Wrench,
+  Users,
+  BowArrow,
   type LucideIcon,
-} from 'lucide-react'
-import { useCallback } from 'react'
-import { Button } from '@/components/ui/button'
-import { isAdminOnly } from '@/lib/shared/roles'
+} from "lucide-react";
+import { useCallback } from "react";
+import { isAdminOnly } from "@/lib/shared/roles";
 
 interface MenuItem {
-  href: string
-  label: string
-  Icon: LucideIcon
-  adminOnly?: boolean
-  staffHidden?: boolean
+  href: string;
+  label: string;
+  Icon: LucideIcon;
+  adminOnly?: boolean;
+  staffHidden?: boolean;
 }
 
-export const staffMenuItems: MenuItem[] = [
-  { href: '/sessions', label: 'Ca hôm nay', Icon: Timer },
-  { href: '/shifts', label: 'Ca làm', Icon: CalendarClock, staffHidden: true },
-  { href: '/customers', label: 'Hội viên', Icon: ShieldCheck },
-  { href: '/inventory', label: 'Kho', Icon: Package, staffHidden: true },
-  { href: '/reports', label: 'Báo cáo', Icon: BarChart3, adminOnly: true },
-  { href: '/pricing', label: 'Bảng giá', Icon: Banknote, adminOnly: true },
-  { href: '/promotions', label: 'Khuyến mại', Icon: Tag, adminOnly: true },
-  { href: '/tools', label: 'Dụng cụ', Icon: Wrench, adminOnly: true },
-  { href: '/students', label: 'Học viên', Icon: GraduationCap, adminOnly: true },
-  { href: '/staff', label: 'Nhân viên', Icon: UserCog, adminOnly: true },
-  { href: '/cashflow', label: 'Thu chi', Icon: ArrowRightLeft, adminOnly: true },
-  { href: '/settings', label: 'Cài đặt', Icon: Settings },
-]
+interface MenuGroup {
+  label: string;
+  items: MenuItem[];
+}
 
-export function getVisibleStaffMenuItems(userRole?: string): MenuItem[] {
-  return staffMenuItems.filter((item) => {
-    if (item.adminOnly && !isAdminOnly(userRole)) return false
-    if (item.staffHidden && userRole === 'STAFF') return false
-    return true
-  })
+export const menuGroups: MenuGroup[] = [
+  {
+    label: "Vận hành",
+    items: [
+      { href: "/sessions", label: "Ca hôm nay", Icon: Timer },
+      { href: "/bookings", label: "Đặt Lịch", Icon: CalendarClock },
+      {
+        href: "/shifts",
+        label: "Ca làm",
+        Icon: CalendarClock,
+        staffHidden: true,
+      },
+      {
+        href: "/cashflow",
+        label: "Thu chi",
+        Icon: ArrowRightLeft,
+        adminOnly: true,
+      },
+    ],
+  },
+  {
+    label: "Khách hàng",
+    items: [{ href: "/customers", label: "Hội viên", Icon: ShieldCheck }],
+  },
+  {
+    label: "Kho",
+    items: [
+      { href: "/inventory", label: "Kho", Icon: Package, staffHidden: true },
+      { href: "/tools", label: "Dụng cụ", Icon: BowArrow, adminOnly: true },
+    ],
+  },
+  {
+    label: "Đào tạo",
+    items: [
+      {
+        href: "/lessons",
+        label: "Lịch học",
+        Icon: GraduationCap,
+        adminOnly: true,
+      },
+      { href: "/classes", label: "Lớp học", Icon: School, adminOnly: true },
+      { href: "/students", label: "Học viên", Icon: Users, adminOnly: true },
+    ],
+  },
+  {
+    label: "Quản trị",
+    items: [
+      { href: "/reports", label: "Báo cáo", Icon: BarChart3, adminOnly: true },
+      { href: "/pricing", label: "Bảng giá", Icon: Banknote, adminOnly: true },
+      { href: "/promotions", label: "Khuyến mại", Icon: Tag, adminOnly: true },
+      { href: "/staff", label: "Nhân viên", Icon: UserCog, adminOnly: true },
+    ],
+  },
+  {
+    label: "Hệ thống",
+    items: [{ href: "/settings", label: "Cài đặt", Icon: Settings }],
+  },
+];
+
+export function getVisibleMenuGroups(userRole?: string): MenuGroup[] {
+  return menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (item.adminOnly && !isAdminOnly(userRole)) return false;
+        if (item.staffHidden && userRole === "STAFF") return false;
+        return true;
+      }),
+    }))
+    .filter((group) => group.items.length > 0);
 }
 
 interface SidebarProps {
-  collapsed: boolean
-  onToggle: () => void
-  userRole?: string
+  collapsed: boolean;
+  onToggle: () => void;
+  userRole?: string;
 }
 
 export function Sidebar({ collapsed, onToggle, userRole }: SidebarProps) {
-  const pathname = usePathname()
-  const menuItems = getVisibleStaffMenuItems(userRole)
+  const pathname = usePathname();
+  const groups = getVisibleMenuGroups(userRole);
 
   const isActive = useCallback(
     (href: string) =>
-      href === '/sessions'
-        ? pathname === '/sessions' || pathname === '/'
+      href === "/sessions"
+        ? pathname === "/sessions" || pathname === "/"
         : pathname.startsWith(href),
-    [pathname]
-  )
+    [pathname],
+  );
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-zinc-200 bg-white transition-all duration-200 dark:border-zinc-800 dark:bg-zinc-950 md:flex ${
-        collapsed ? 'w-[4.5rem]' : 'w-60'
+      className={`group fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-zinc-200 bg-white transition-all duration-200 dark:border-zinc-800 dark:bg-zinc-950 md:flex ${
+        collapsed ? "w-[4.5rem]" : "w-60"
       }`}
     >
       <div
         className={`flex items-center border-b border-zinc-200 px-4 py-4 dark:border-zinc-800 ${
-          collapsed ? 'justify-center' : 'gap-3'
+          collapsed ? "justify-center" : "gap-3"
         }`}
       >
         <div
           className={`relative shrink-0 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-800 ${
-            collapsed ? 'h-9 w-9' : 'h-10 w-10'
+            collapsed ? "h-9 w-9" : "h-10 w-10"
           }`}
         >
           <Image
@@ -109,34 +164,58 @@ export function Sidebar({ collapsed, onToggle, userRole }: SidebarProps) {
         )}
       </div>
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
-        {menuItems.map((item) => {
-          const active = isActive(item.href)
-          const { Icon } = item
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? 'page' : undefined}
-              className={`motion-press flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${
-                collapsed ? 'justify-center px-2' : ''
-              } ${
-                active
-                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400'
-                  : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-200'
-              }`}
-              title={collapsed ? item.label : undefined}
-            >
-              <Icon size={20} className="shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
-            </Link>
-          )
-        })}
+      <nav className="flex-1 overflow-y-auto px-3 py-3">
+        {groups.map((group, index) => (
+          <div key={group.label}>
+            {index > 0 &&
+              (collapsed ? (
+                <div className="mx-auto my-2 h-px w-6 bg-zinc-200 dark:bg-zinc-800" />
+              ) : (
+                <div className="h-4" />
+              ))}
+            {!collapsed && (
+              <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-400 dark:text-zinc-600">
+                {group.label}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const active = isActive(item.href);
+                const { Icon } = item;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    className={`motion-press flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${
+                      collapsed ? "justify-center px-2" : ""
+                    } ${
+                      active
+                        ? "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400"
+                        : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-200"
+                    }`}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <Icon size={20} className="shrink-0" />
+                    {!collapsed && <span>{item.label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      <div className="border-t border-zinc-200 px-3 py-3 dark:border-zinc-800">
-        <Button variant="ghost" size="sm" icon={collapsed ? ChevronRight : ChevronLeft} onClick={onToggle} title={collapsed ? 'Mở rộng' : 'Thu gọn'} />
-      </div>
+      <button
+        type="button"
+        onClick={onToggle}
+        title={collapsed ? "Mở rộng" : "Thu gọn"}
+        aria-label={collapsed ? "Mở rộng thanh bên" : "Thu gọn thanh bên"}
+        aria-expanded={!collapsed}
+        className="absolute -right-3.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 opacity-0 shadow-sm transition-opacity duration-150 hover:text-zinc-900 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+      >
+        {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+      </button>
     </aside>
-  )
+  );
 }

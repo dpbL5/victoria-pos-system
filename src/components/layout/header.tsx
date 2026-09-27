@@ -12,6 +12,7 @@ interface HeaderProps {
 
 const TITLES: Record<string, string> = {
   '/sessions': 'Ca hôm nay',
+  '/bookings': 'Đặt lịch',
   '/shifts': 'Ca làm',
   '/customers': 'Hội viên',
   '/inventory': 'Kho quầy',
@@ -23,6 +24,8 @@ const TITLES: Record<string, string> = {
   '/settings': 'Thêm',
   '/cashflow': 'Thu chi',
   '/membership-plans': 'Gói hội viên',
+  '/lessons': 'Đào tạo',
+  '/students': 'Đào tạo',
 }
 
 function getTitle(pathname: string): string {

@@ -1,6 +1,7 @@
 // ── Shifts module — Shift + ShiftParticipant + ShiftTool ─────
 export {
   findOpenShiftForStaff,
+  findOpenShiftIdForStaff,
   findOpenOperationalShift,
   shiftWithParticipantsInclude,
   shiftWithAllParticipantsInclude,

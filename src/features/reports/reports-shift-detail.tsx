@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
-import { Skeleton, SkeletonPanel } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { formatClock, money } from '@/features/pos/format'
@@ -119,12 +119,7 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
   if (loading) {
     return (
       <Modal open onClose={onClose} title="Chi tiết ca" size="lg">
-        <div className="space-y-4">
-          <Skeleton className="h-6 w-48" />
-          <SkeletonPanel><Skeleton className="h-32 w-full" /></SkeletonPanel>
-          <SkeletonPanel><Skeleton className="h-24 w-full" /></SkeletonPanel>
-          <SkeletonPanel><Skeleton className="h-64 w-full" /></SkeletonPanel>
-        </div>
+        <AppSkeleton />
       </Modal>
     )
   }
@@ -295,6 +290,8 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
                   { key: 'SERVICE', label: 'Dịch vụ', color: 'bg-amber-500' },
                   { key: 'DISCOUNT', label: 'Giảm giá', color: 'bg-red-500' },
                   { key: 'SURCHARGE', label: 'Phí gửi xe', color: 'bg-rose-500' },
+                  { key: 'DEPOSIT', label: 'Tiền cọc', color: 'bg-sky-500' },
+                  { key: 'DEPOSIT_APPLIED', label: 'Khấu trừ cọc', color: 'bg-teal-500' },
                 ].map(({ key, label, color }) => {
                   const value = detail.byItemType[key as keyof typeof detail.byItemType] ?? 0
                   const max = Math.max(...Object.values(detail.byItemType), 1)

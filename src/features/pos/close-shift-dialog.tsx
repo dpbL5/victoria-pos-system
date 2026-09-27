@@ -13,6 +13,9 @@ export function CloseShiftDialog({
   open,
   shift,
   tools,
+  toolsLoading,
+  toolsError,
+  onRetryTools,
   submitting,
   onClose,
   onSubmit,
@@ -20,6 +23,9 @@ export function CloseShiftDialog({
   open: boolean
   shift: Shift | null
   tools: { id: string; name: string; quantity: number; isRequired: boolean }[]
+  toolsLoading: boolean
+  toolsError: string
+  onRetryTools: () => void
   submitting: boolean
   onClose: () => void
   onSubmit: (closingCash: number, notes?: string, toolCounts?: { toolId: string; openCount: number }[]) => void
@@ -80,6 +86,13 @@ export function CloseShiftDialog({
       }
     >
       <div className="space-y-3">
+        {toolsLoading && <p className="text-sm text-zinc-500 dark:text-zinc-400">Đang tải dụng cụ...</p>}
+        {toolsError && (
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+            <p>Không tải được danh sách dụng cụ: {toolsError}</p>
+            <button type="button" className="mt-2 font-medium underline" onClick={onRetryTools}>Thử lại</button>
+          </div>
+        )}
         <div className="rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-950">
           <div className="flex justify-between">
             <span className="text-zinc-500 dark:text-zinc-400">Tiền đầu ca</span>

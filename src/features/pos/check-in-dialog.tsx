@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Minus, Plus, Search, ShieldCheck, Users } from 'lucide-react'
+import { Minus, Plus, ShieldCheck, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { formatDay } from './format'
+import { CustomerSearch } from './customer-search'
 import type { Customer, Membership, SessionRow } from './types'
 
 type CheckInMode = 'WALK_IN' | 'MEMBER'
@@ -49,11 +50,9 @@ export function CheckInDialog({
   const [walkInPhone, setWalkInPhone] = useState('')
   const [playerCountInput, setPlayerCountInput] = useState('1')
   const [memberSearch, setMemberSearch] = useState('')
-  const [memberResults, setMemberResults] = useState<MemberSearchResult[]>([])
   const [selectedMember, setSelectedMember] = useState<Customer | null>(null)
   const [currentMembership, setCurrentMembership] = useState<Membership | null>(null)
   const [membershipActive, setMembershipActive] = useState(false)
-  const [memberLoading, setMemberLoading] = useState(false)
   const [checkInStartTime, setCheckInStartTime] = useState('')
   const [defaultStartTime, setDefaultStartTime] = useState('')
 
@@ -65,7 +64,6 @@ export function CheckInDialog({
     setWalkInPhone('')
     setPlayerCountInput('1')
     setMemberSearch('')
-    setMemberResults([])
     setSelectedMember(null)
     setCurrentMembership(null)
     setMembershipActive(false)
@@ -77,41 +75,15 @@ export function CheckInDialog({
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [open, initialMode])
 
-  const searchMembers = async () => {
-    const q = memberSearch.trim()
-    if (!q) return
-
-    setMemberLoading(true)
-    setSelectedMember(null)
-    setCurrentMembership(null)
-    setMembershipActive(false)
-    try {
-      const data = await apiJson<MemberSearchResult[]>(
-        `/api/customers?type=MEMBER&search=${encodeURIComponent(q)}&limit=8&includeMembershipStatus=true`
-      )
-      if (!data.success) {
-        notifyError(data.error || 'Không tìm được hội viên')
-        return
-      }
-      setMemberResults(data.data ?? [])
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setMemberLoading(false)
-    }
-  }
-
   const loadMembership = async (customer: MemberSearchResult) => {
     setSelectedMember(customer)
     setMemberSearch(customer.fullName)
-    setMemberResults([])
     // Kết quả tìm kiếm đã kèm membershipStatus/currentMembership (includeMembershipStatus)
     if (customer.membershipStatus !== undefined) {
       setCurrentMembership(customer.currentMembership ?? null)
       setMembershipActive(customer.membershipStatus === 'ACTIVE')
       return
     }
-    setMemberLoading(true)
     try {
       const data = await apiJson<Membership[]>(`/api/memberships?customerId=${customer.id}`)
       if (!data.success) {
@@ -122,8 +94,6 @@ export function CheckInDialog({
       setMembershipActive(!!data.current)
     } catch {
       notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setMemberLoading(false)
     }
   }
 
@@ -359,61 +329,37 @@ export function CheckInDialog({
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search
-                  size={15}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-                />
-                <Input
-                  value={memberSearch}
-                  onChange={(event) => setMemberSearch(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      void searchMembers()
-                    }
-                  }}
-                  className="pl-9"
-                  placeholder="Tên hoặc SĐT hội viên"
-                />
-              </div>
-              <Button variant="primary" size="md" disabled={memberLoading} onClick={() => void searchMembers()}>
-                Tìm
-              </Button>
-            </div>
-
-            {memberResults.length > 0 && (
-              <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
-                {memberResults.map((customer) => (
-                  <button
-                    key={customer.id}
-                    type="button"
-                    onClick={() => void loadMembership(customer)}
-                    className="flex w-full items-center justify-between gap-3 border-b border-zinc-100 px-3 py-2.5 text-left last:border-b-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800"
+            <CustomerSearch<MemberSearchResult>
+              value={memberSearch}
+              onValueChange={setMemberSearch}
+              onSelect={(customer) => void loadMembership(customer)}
+              query="type=MEMBER&includeMembershipStatus=true"
+              limit={8}
+              placeholder="Tên hoặc SĐT hội viên"
+              emptyText="Không tìm thấy hội viên"
+              renderItem={(customer) => (
+                <>
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-zinc-950 dark:text-white">
+                      {customer.fullName}
+                    </span>
+                    <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+                      {customer.phone || 'Chưa có SĐT'}
+                    </span>
+                  </span>
+                  <Badge
+                    variant={customer.membershipStatus === 'ACTIVE' ? 'success' : 'warning'}
+                    size="sm"
                   >
-                    <div>
-                      <p className="text-sm font-medium text-zinc-950 dark:text-white">
-                        {customer.fullName}
-                      </p>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {customer.phone || 'Chưa có SĐT'}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={customer.membershipStatus === 'ACTIVE' ? 'success' : 'warning'}
-                      size="sm"
-                    >
-                      {customer.membershipStatus === 'ACTIVE'
-                        ? 'Còn hạn'
-                        : customer.membershipStatus === 'EXPIRED'
-                          ? 'Hết hạn'
-                          : 'Chưa đóng'}
-                    </Badge>
-                  </button>
-                ))}
-              </div>
-            )}
+                    {customer.membershipStatus === 'ACTIVE'
+                      ? 'Còn hạn'
+                      : customer.membershipStatus === 'EXPIRED'
+                        ? 'Hết hạn'
+                        : 'Chưa đóng'}
+                  </Badge>
+                </>
+              )}
+            />
 
             {selectedMember && (
               <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">

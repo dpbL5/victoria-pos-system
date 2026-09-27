@@ -3,6 +3,16 @@ import { Prisma } from '@/generated/prisma/client'
 
 type ShiftLookupStore = Pick<Prisma.TransactionClient, 'shift'>
 
+function openShiftWhereForStaff(staffId: string) {
+  return {
+    status: 'OPEN' as const,
+    OR: [
+      { staffId },
+      { participants: { some: { staffId, leftAt: null } } },
+    ],
+  }
+}
+
 export const shiftWithParticipantsInclude = {
   staff: { select: { id: true, fullName: true } },
   participants: {
@@ -35,21 +45,19 @@ export async function findOpenShiftForStaff(
   staffId: string
 ) {
   return db.shift.findFirst({
-    where: {
-      status: 'OPEN',
-      OR: [
-        { staffId },
-        {
-          participants: {
-            some: {
-              staffId,
-              leftAt: null,
-            },
-          },
-        },
-      ],
-    },
+    where: openShiftWhereForStaff(staffId),
     include: shiftWithParticipantsInclude,
+    orderBy: { openedAt: 'desc' },
+  })
+}
+
+export async function findOpenShiftIdForStaff(
+  db: ShiftLookupStore,
+  staffId: string
+) {
+  return db.shift.findFirst({
+    where: openShiftWhereForStaff(staffId),
+    select: { id: true },
     orderBy: { openedAt: 'desc' },
   })
 }
@@ -93,7 +101,7 @@ export async function calculateExpectedCash(
 
 export interface TransactionItem {
   id: string
-  type: 'payment' | 'membership'
+  type: 'payment' | 'membership' | 'deposit'
   amount: number
   paymentMethod: string | null
   paidAt: string
@@ -166,7 +174,7 @@ export async function getShiftTransactions(
 
   const mapTransaction = (p: PaymentRow): TransactionItem => ({
     id: p.id,
-    type: p.kind === 'MEMBERSHIP' ? 'membership' as const : 'payment' as const,
+    type: p.kind === 'MEMBERSHIP' ? 'membership' as const : p.kind === 'DEPOSIT' ? 'deposit' as const : 'payment' as const,
     amount: Number(p.grandTotal),
     paymentMethod: p.paymentMethod as string,
     paidAt: p.paidAt instanceof Date ? p.paidAt.toISOString() : String(p.paidAt),
@@ -199,7 +207,7 @@ export async function getShiftTransactions(
     summary: {
       totalAmount,
       totalCount: activeTransactions.length,
-      paymentCount: activeTransactions.filter((t) => t.type === 'payment').length,
+      paymentCount: activeTransactions.filter((t) => t.type !== 'membership').length,
       membershipCount: activeTransactions.filter((t) => t.type === 'membership').length,
       cashAmount: activeTransactions
         .filter((t) => t.paymentMethod === 'CASH')

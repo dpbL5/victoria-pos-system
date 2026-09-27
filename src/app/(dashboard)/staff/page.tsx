@@ -28,7 +28,7 @@ import { Input, Label, Select } from '@/components/ui/input'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
@@ -125,14 +125,14 @@ export default function StaffPage() {
   }, [])
 
   if (loading) {
-    return <StaffSkeleton />
+    return <AppSkeleton />
   }
 
   const isAdmin = isAdminOnly(user?.role)
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-6xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
             <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
@@ -403,11 +403,11 @@ function AccountsTab({
     {
       key: 'isActive',
       label: 'Trạng thái',
-      cellClassName: 'px-4 py-3',
+      cellClassName: 'px-4 py-3 font-medium',
       render: (item) => (
-        <Badge variant={item.isActive ? 'success' : 'danger'} size="sm">
-          {item.isActive ? 'Đang hoạt động' : 'Đã khoá'}
-        </Badge>
+        <span className={item.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
+          {item.isActive ? 'Đang mở' : 'Đã khoá'}
+        </span>
       ),
     },
     {
@@ -474,9 +474,9 @@ function AccountsTab({
       key: 'isActive',
       label: 'Trạng thái',
       render: (item) => (
-        <Badge variant={item.isActive ? 'success' : 'danger'} size="sm">
-          {item.isActive ? 'Đang hoạt động' : 'Đã khoá'}
-        </Badge>
+        <span className={`font-medium ${item.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+          {item.isActive ? 'Đang mở' : 'Đã khoá'}
+        </span>
       ),
     },
     {
@@ -519,14 +519,14 @@ function AccountsTab({
   ], [submitting, handleToggleActive])
 
   if (loading) {
-    return <StaffSkeleton compact />
+    return <AppSkeleton />
   }
 
   const listHeader = (
     <div>
       <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Tài khoản nội bộ</h2>
       <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-        Tổng: {stats.total} · Đang hoạt động: {stats.active} · Quản trị: {stats.admins} · Nhân viên: {stats.staff}
+        Tổng: {stats.total} · Đang mở: {stats.active} · Quản trị: {stats.admins} · Nhân viên: {stats.staff}
       </p>
     </div>
   )
@@ -865,11 +865,7 @@ function ActivityLogsTab({ users }: { users: UserRow[] }) {
         </div>
 
         {loading ? (
-          <div className="space-y-3 p-4">
-            <Skeleton className="h-16" />
-            <Skeleton className="h-16" />
-            <Skeleton className="h-16" />
-          </div>
+          <AppSkeleton />
         ) : logs.length === 0 ? (
           <EmptyState
             icon={History}
@@ -942,16 +938,6 @@ function getLogIcon(action: string) {
   return <History size={16} />
 }
 
-function StaffSkeleton({ compact = false }: { compact?: boolean }) {
-  return (
-    <SkeletonPage>
-      {!compact && <Skeleton className="h-10 w-44" />}
-      <SkeletonPanel><Skeleton className="h-12 w-full" /></SkeletonPanel>
-      <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
-    </SkeletonPage>
-  )
-}
-
 function TableHead({ children }: { children: React.ReactNode }) {
   return (
     <th className="px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -1014,4 +1000,3 @@ function groupLogsByDate(logs: ActivityLogRow[]) {
     items,
   }))
 }
-

@@ -48,12 +48,12 @@ const existingRule = {
 function resetMocks() {
   vi.clearAllMocks()
   // createWithTiers trả rule mới
-  fakeStore.pricingRule.create.mockResolvedValue({ id: 'rule-1', ...existingRule })
+  fakeStore.pricingRule.create.mockResolvedValue(existingRule)
   // findOverlapping (create/update) không có rule trùng
   fakeStore.pricingRule.findMany.mockResolvedValue([])
   // findById (update/delete) trả rule tồn tại
   fakeStore.pricingRule.findUnique.mockResolvedValue(existingRule)
-  fakeStore.pricingRule.update.mockResolvedValue({ id: 'rule-1', ...existingRule })
+  fakeStore.pricingRule.update.mockResolvedValue(existingRule)
   fakeStore.pricingRule.delete.mockResolvedValue(existingRule)
   fakeStore.pricingTier.createMany.mockResolvedValue({ count: 0 })
   fakeStore.pricingTier.deleteMany.mockResolvedValue({ count: 0 })

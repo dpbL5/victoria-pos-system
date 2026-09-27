@@ -1,5 +1,6 @@
 // ── Sessions module — Session + PricingRule + PromotionRule (write-side) ─────
 export { checkIn, mapCheckInError } from './use-cases/check-in'
+export { checkInBooking } from './use-cases/check-in-booking'
 export { checkOut, mapCheckoutError } from './use-cases/check-out'
 export { sellItems, mapSellItemsError } from './use-cases/sell-items'
 export { removeSellItems, mapRemoveSellItemsError } from './use-cases/sell-items'

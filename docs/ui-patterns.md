@@ -9,11 +9,7 @@
 | `Badge` | `@/components/ui/badge` | Trạng thái / loại (ACTIVE, COMPLETED, MEMBER...) |
 | `StatCard` | `@/components/ui/stat-card` | Card thống kê (doanh thu, số phiên, KH mới...) |
 | `EmptyState` | `@/components/ui/empty-state` | Table/list không có dữ liệu |
-| `LoadingDots` | `@/components/ui/loading-dots` | Full-page loading spinner |
-| `Skeleton` | `@/components/ui/skeleton` | Skeleton loading riêng lẻ |
-| `TableSkeleton` | `@/components/ui/skeleton` | Skeleton table (rows × cols) |
-| `StatCardsSkeleton` | `@/components/ui/skeleton` | Skeleton stat card grid |
-| `CardSkeleton` | `@/components/ui/skeleton` | Skeleton card đơn |
+| `AppSkeleton` | `@/components/ui/skeleton` | Loading placeholder dùng chung |
 | `Modal` | `@/components/ui/modal` | Dialog/modal (responsive: bottom sheet mobile, overlay desktop) |
 | `ToastProvider` | `@/components/ui/toast` | Wrap dashboard layout — cung cấp toast notifications |
 | `useToast` | `@/components/ui/toast` | Hook: `const { success, error } = useToast()` |
@@ -26,6 +22,30 @@
 | `NoticeCard` | `@/components/ui/notice-card` | Card thông báo (4 tones: info/success/warning/danger, title + description + action) |
 | `SortableCardList` | `@/components/ui/sortable-card-list` | Danh sách card kéo thả (dụng cụ) |
 | `SortableTable` | `@/components/ui/sortable-table` | Bảng kéo thả (dụng cụ) |
+
+## Bề rộng nội dung trang (bắt buộc — mọi trang giống nhau)
+
+Mọi trang dashboard dùng **cùng một bề rộng nội dung**: class `max-w-content`, sinh ra từ token `--container-content` trong `src/app/globals.css` (`@theme inline`).
+
+```tsx
+// Screen chuẩn — copy khối này cho trang mới
+return (
+  <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
+    <div className="mx-auto max-w-content space-y-4">
+      <header className="hidden items-center justify-between gap-3 md:flex">…</header>
+      …
+    </div>
+  </div>
+)
+```
+
+Quy tắc:
+
+- **Không hardcode `max-w-3xl/4xl/5xl/6xl/7xl`** trong `src/features/**/*-screen.tsx` và `src/app/(dashboard)/**/page.tsx` — có test chặn: `src/lib/__tests__/page-content-width.test.ts`.
+- Mọi `*-screen.tsx` phải chứa `max-w-content` (hoặc nằm trong danh sách full-bleed có chủ đích: `lessons-screen.tsx` — lịch FullCalendar).
+- Loading toàn màn hình dùng `AppSkeleton`; khi có nội dung, screen vẫn theo quy tắc `max-w-content`.
+- Đổi bề rộng toàn app = sửa đúng **1 dòng** `--container-content` trong `globals.css` (không sửa từng trang).
+- Bề rộng riêng cho thành phần con (ví dụ tờ hoá đơn `max-w-3xl` trong chi tiết giao dịch) vẫn hợp lệ — test chỉ áp cho file trang/screen.
 
 ## Icon mapping chuẩn (dùng nhất quán toàn dự án)
 
@@ -141,20 +161,15 @@ import { Modal } from "@/components/ui/modal";
 
 → Tự động: lock body scroll, close on Escape, click-outside-to-close, animate vào/ra, responsive (bottom sheet mobile, centered overlay desktop), **focus trap** (Tab giữ trong modal, restore focus về phần tử trước khi mở), padding responsive (`px-4 py-3` mobile / `sm:px-5 sm:py-4` desktop).
 
-### Skeleton loading (preferred cho table/card pages)
+### Loading UI
 
 ```tsx
-import { Skeleton, TableSkeleton, StatCardsSkeleton } from "@/components/ui/skeleton";
+import { AppSkeleton } from '@/components/ui/skeleton'
 
-// Table skeleton
-if (loading) return <div className="p-4 md:p-6"><TableSkeleton rows={6} cols={5} /></div>;
-
-// Stat cards skeleton
-if (loading) return <StatCardsSkeleton count={4} />;
-
-// Skeleton riêng lẻ
-<Skeleton className="h-4 w-32" />
+if (loading) return <AppSkeleton />
 ```
+
+Chỉ dùng `AppSkeleton` cho loading placeholder. Không tạo skeleton component, markup, animation, hoặc style riêng; với tải lại cục bộ, giữ nội dung hiện tại hoặc dùng trạng thái loading của control.
 
 ### Badge
 
@@ -202,6 +217,5 @@ import { Inbox } from "lucide-react";
 ### Loading (full page)
 
 ```tsx
-if (loading) return <LoadingDots />;
-if (loading) return <LoadingDots variant="dots" message="Đang tải..." />;
+if (loading) return <AppSkeleton />
 ```

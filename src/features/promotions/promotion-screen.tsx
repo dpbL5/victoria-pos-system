@@ -3,27 +3,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Banknote,
-  CalendarDays,
-  Clock3,
   Edit3,
   Pause,
   Percent,
   Play,
   Plus,
-  Tag,
   Ticket,
   Trash2,
   type LucideIcon,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPage, SkeletonPanel } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
+import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
+import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
@@ -119,6 +117,109 @@ export function PromotionScreen() {
     return matchesStatus && matchesType
   }), [rules, statusFilter, typeFilter])
 
+  const renderActions = useCallback((rule: PromotionRule) => (
+    <div className="flex gap-1.5">
+      <Button
+        variant="secondary"
+        size="sm"
+        icon={Edit3}
+        disabled={submitting}
+        onClick={() => {
+          setEditingRule(rule)
+          setDialogMode('edit')
+        }}
+        title="Sửa khuyến mại"
+      />
+      {rule.isActive && (
+        <Button
+          variant="outline-danger"
+          size="sm"
+          icon={Pause}
+          disabled={submitting}
+          onClick={() => setDeactivateRule(rule)}
+          title="Tạm dừng"
+        />
+      )}
+      <Button
+        variant="outline-danger"
+        size="sm"
+        icon={Trash2}
+        disabled={submitting}
+        onClick={() => setRemoveRule(rule)}
+        title="Xoá khuyến mại"
+      />
+    </div>
+  ), [submitting])
+
+  const ruleColumns: Column<PromotionRule>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Tên khuyến mại',
+      cellClassName: 'px-4 py-3 font-medium',
+      render: (rule) => (
+        <span className="flex items-center gap-2">
+          <span className="text-zinc-950 dark:text-white">{rule.name}</span>
+          <StatusBadge status={getRuleStatus(rule)} />
+        </span>
+      ),
+    },
+    {
+      key: 'discountValue',
+      label: 'Mức giảm',
+      cellClassName: '',
+      render: (rule) => <PromotionValueChip rule={rule} />,
+    },
+    {
+      key: 'hourFrom',
+      label: 'Thời gian',
+      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
+      render: (rule) => `${formatWeeklyDays(rule.daysOfWeek)} · ${formatHourRange(rule.hourFrom, rule.hourTo)}`,
+    },
+    {
+      key: 'effectiveFrom',
+      label: 'Hiệu lực',
+      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
+      render: (rule) => formatEffectiveRange(rule),
+    },
+    {
+      label: 'Thao tác',
+      cellClassName: 'px-4 py-3',
+      render: renderActions,
+    },
+  ], [renderActions])
+
+  const ruleCardColumns: CardColumn<PromotionRule>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Tên khuyến mại',
+      render: (rule) => (
+        <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
+          {rule.name}
+          <StatusBadge status={getRuleStatus(rule)} />
+        </span>
+      ),
+    },
+    {
+      key: 'discountValue',
+      label: 'Mức giảm',
+      render: (rule) => <PromotionValueChip rule={rule} />,
+    },
+    {
+      key: 'hourFrom',
+      label: 'Thời gian',
+      render: (rule) => `${formatWeeklyDays(rule.daysOfWeek)} · ${formatHourRange(rule.hourFrom, rule.hourTo)}`,
+    },
+    {
+      key: 'effectiveFrom',
+      label: 'Hiệu lực',
+      render: (rule) => formatEffectiveRange(rule),
+    },
+    {
+      label: '',
+      render: renderActions,
+    },
+  ], [renderActions])
+
   const handleSaved = async (message: string) => {
     notifySuccess(message)
     setDialogMode(null)
@@ -170,13 +271,33 @@ export function PromotionScreen() {
     }
   }
 
-  if (loading) return <PromotionSkeleton />
+  if (loading) return <AppSkeleton />
 
   const isAdmin = isAdminOnly(user?.role)
 
+  const listHeader = (
+    <div>
+      <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Quy tắc khuyến mại</h2>
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        Mỗi thời điểm chỉ áp dụng một quy tắc, không cộng dồn.
+      </p>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+        <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
+        <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hiệu lực: {stats.active}</button>
+        <button type="button" aria-pressed={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')} className={statusFilter === 'FUTURE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Sắp tới: {stats.future}</button>
+        <button type="button" aria-pressed={statusFilter === 'INACTIVE'} onClick={() => setStatusFilter('INACTIVE')} className={statusFilter === 'INACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200'}>Tạm dừng / hết: {stats.inactive}</button>
+      </div>
+      <div role="group" aria-label="Lọc loại khuyến mại" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+        <FilterButton active={typeFilter === 'ALL'} onClick={() => setTypeFilter('ALL')}>Tất cả loại giảm</FilterButton>
+        <FilterButton active={typeFilter === 'FIXED_AMOUNT'} onClick={() => setTypeFilter('FIXED_AMOUNT')}>Giảm tiền cố định</FilterButton>
+        <FilterButton active={typeFilter === 'PERCENT'} onClick={() => setTypeFilter('PERCENT')}>Giảm phần trăm</FilterButton>
+      </div>
+    </div>
+  )
+
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-5xl space-y-4">
+      <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
@@ -208,51 +329,45 @@ export function PromotionScreen() {
               Thêm khuyến mại
             </Button>
 
-            <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-                <div>
-                  <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Quy tắc khuyến mại</h2>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Mỗi thời điểm chỉ áp dụng một quy tắc, không cộng dồn.
-                  </p>
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                    <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
-                    <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hiệu lực: {stats.active}</button>
-                    <button type="button" aria-pressed={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')} className={statusFilter === 'FUTURE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Sắp tới: {stats.future}</button>
-                    <button type="button" aria-pressed={statusFilter === 'INACTIVE'} onClick={() => setStatusFilter('INACTIVE')} className={statusFilter === 'INACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200'}>Tạm dừng / hết: {stats.inactive}</button>
-                  </div>
-                  <div role="group" aria-label="Lọc loại khuyến mại" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
-                    <FilterButton active={typeFilter === 'ALL'} onClick={() => setTypeFilter('ALL')}>Tất cả loại giảm</FilterButton>
-                    <FilterButton active={typeFilter === 'FIXED_AMOUNT'} onClick={() => setTypeFilter('FIXED_AMOUNT')}>Giảm tiền cố định</FilterButton>
-                    <FilterButton active={typeFilter === 'PERCENT'} onClick={() => setTypeFilter('PERCENT')}>Giảm phần trăm</FilterButton>
-                  </div>
-                </div>
-                <Badge variant={stats.active > 0 ? 'success' : 'default'}>{filteredRules.length}</Badge>
-              </div>
+            {/* Mobile: card list */}
+            <div className="md:hidden">
+              <SortableCardList
+                header={listHeader}
+                columns={ruleCardColumns}
+                data={filteredRules}
+                keyExtractor={(rule) => rule.id}
+                search={{
+                  placeholder: 'Tìm tên khuyến mại',
+                  getText: (rule) => rule.name,
+                }}
+                sortableKeys={['name', 'hourFrom', 'effectiveFrom']}
+                defaultSortKey="name"
+                defaultSortDir="asc"
+                emptyIcon={Ticket}
+                emptyMessage="Chưa có khuyến mại"
+                emptyDescription="Tạo chương trình giảm giá giờ chơi để áp dụng khi thu tiền."
+              />
+            </div>
 
-              {filteredRules.length === 0 ? (
-                <EmptyState
-                  icon={Ticket}
-                  message="Chưa có khuyến mại phù hợp"
-                  description="Thử đổi bộ lọc hoặc tạo một chương trình giảm giá giờ chơi mới."
-                />
-              ) : (
-                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {filteredRules.map((rule) => (
-                    <PromotionCard
-                      key={rule.id}
-                      rule={rule}
-                      onEdit={() => {
-                        setEditingRule(rule)
-                        setDialogMode('edit')
-                      }}
-                      onDeactivate={() => setDeactivateRule(rule)}
-                      onRemove={() => setRemoveRule(rule)}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
+            {/* Desktop: table */}
+            <div className="hidden md:block">
+              <SortableTable
+                header={listHeader}
+                columns={ruleColumns}
+                data={filteredRules}
+                keyExtractor={(rule) => rule.id}
+                search={{
+                  placeholder: 'Tìm tên khuyến mại',
+                  getText: (rule) => rule.name,
+                }}
+                sortableKeys={['name', 'hourFrom', 'effectiveFrom']}
+                defaultSortKey="name"
+                defaultSortDir="asc"
+                emptyIcon={Ticket}
+                emptyMessage="Chưa có khuyến mại"
+                emptyDescription="Tạo chương trình giảm giá giờ chơi để áp dụng khi thu tiền."
+              />
+            </div>
           </>
         )}
       </div>
@@ -302,87 +417,21 @@ export function PromotionScreen() {
   )
 }
 
-function PromotionSkeleton() {
-  return (
-      <SkeletonPage>
-      <Skeleton className="h-10 w-52" />
-      <SkeletonPanel><Skeleton className="h-12 w-full" /></SkeletonPanel>
-      <SkeletonPanel><Skeleton className="h-72 w-full" /></SkeletonPanel>
-    </SkeletonPage>
-  )
-}
-
-function PromotionCard({
-  rule,
-  onEdit,
-  onDeactivate,
-  onRemove,
-}: {
-  rule: PromotionRule
-  onEdit: () => void
-  onDeactivate: () => void
-  onRemove: () => void
-}) {
-  const status = getRuleStatus(rule)
+function PromotionValueChip({ rule }: { rule: PromotionRule }) {
   const isPercent = rule.discountType === 'PERCENT' || rule.discountType === 'PERCENT_PLAY_TIME'
   const isFixedAmount = rule.discountType === 'FIXED_AMOUNT'
 
   return (
-    <div className="grid grid-cols-[5px_1fr]">
-      <div className={isPercent ? 'bg-violet-500' : isFixedAmount ? 'bg-emerald-500' : 'bg-amber-500'} />
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">{rule.name}</p>
-              <StatusBadge status={status} />
-            </div>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {formatWeeklyDays(rule.daysOfWeek)} · {formatHourRange(rule.hourFrom, rule.hourTo)}
-            </p>
-          </div>
-          <div className={`flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-bold tabular-nums ${
-            isPercent
-              ? 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300'
-              : isFixedAmount
-                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
-                : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
-          }`}>
-            {isPercent ? <Percent size={14} /> : isFixedAmount ? <Banknote size={14} /> : <Ticket size={14} />}
-            {formatPromotionValue(rule)}
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
-          <MiniInfo Icon={Clock3} label="Khung giờ" value={formatHourRange(rule.hourFrom, rule.hourTo)} />
-          <MiniInfo Icon={CalendarDays} label="Lặp lại" value={formatWeeklyDays(rule.daysOfWeek)} />
-          <MiniInfo Icon={Tag} label="Hiệu lực" value={formatEffectiveRange(rule)} />
-        </div>
-
-        <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-          {rule.discountType === 'FIXED_AMOUNT'
-            ? 'Giảm một khoản tiền trên tổng giờ chơi của khách vãng lai.'
-            : rule.discountType === 'FIXED_PER_HOUR'
-              ? 'Giảm trên mỗi giờ chơi của khách vãng lai.'
-              : 'Giảm trên tổng tiền giờ chơi của khách vãng lai.'}
-        </p>
-
-        <div className="mt-3 flex gap-2">
-          <Button variant="secondary" size="sm" icon={Edit3} onClick={onEdit}>Sửa</Button>
-          {rule.isActive && <Button variant="outline-danger" size="sm" icon={Pause} onClick={onDeactivate}>Tạm dừng</Button>}
-          <Button variant="outline-danger" size="sm" icon={Trash2} onClick={onRemove}>Xoá</Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function MiniInfo({ Icon, label, value }: { Icon: LucideIcon; label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950">
-      <p className="flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400"><Icon size={12} />{label}</p>
-      <p className="mt-1 truncate text-xs font-semibold text-zinc-950 dark:text-white">{value}</p>
-    </div>
+    <span className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-bold tabular-nums ${
+      isPercent
+        ? 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300'
+        : isFixedAmount
+          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+          : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
+    }`}>
+      {isPercent ? <Percent size={14} /> : isFixedAmount ? <Banknote size={14} /> : <Ticket size={14} />}
+      {formatPromotionValue(rule)}
+    </span>
   )
 }
 

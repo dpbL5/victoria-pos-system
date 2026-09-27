@@ -57,6 +57,11 @@ export interface SessionRow {
   shift?: { id: string; openedAt: string; status: 'OPEN' | 'CLOSED' } | null
   payment?: { paymentMethod: PaymentMethod } | null
   pendingSellTotal?: number
+  booking?: {
+    depositAmount: number | string
+    depositAppliedAmount: number | string
+    depositRefundedAmount: number | string
+  } | null
   pricingGroups?: SessionPricingGroupDTO[]
 }
 

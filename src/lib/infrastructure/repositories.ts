@@ -1,3 +1,4 @@
+import { googleCalendar } from './adapters/google-calendar-adapter'
 // ── Composition root — bundle các repository adapters ─────
 import { prisma } from './prisma'
 import { createBillingRepository } from './adapters/invoice-adapter'
@@ -13,12 +14,14 @@ import { createCashflowRepository } from './adapters/cashflow-adapter'
 import { createUserRepository } from './adapters/user-adapter'
 import { createToolRepository } from './adapters/tool-adapter'
 import { createReportingRepository } from './adapters/reporting-adapter'
+import { createBookingRepository } from './adapters/booking-adapter'
 import {
   createStudentRepository,
   createLessonRepository,
   createLessonSeriesRepository,
-  createLessonPackageRepository,
+  createLessonClassRepository,
   createCalendarConnectionRepository,
+  createCalendarSyncRepository,
 } from './adapters/student-adapter'
 import { createCachedSettingsRepository } from '@/lib/settings'
 import type { Prisma } from '@/generated/prisma/client'
@@ -34,12 +37,15 @@ import type { CashflowRepository } from '@/lib/cashflow/ports'
 import type { UserRepository } from '@/lib/users/ports'
 import type { ToolRepository } from '@/lib/tools/ports'
 import type { ReportingRepository } from '@/lib/reports/ports'
+import type { BookingRepository } from '@/lib/bookings/ports'
 import type {
   StudentRepository,
   LessonRepository,
   LessonSeriesRepository,
-  LessonPackageRepository,
+  LessonClassRepository,
   CalendarConnectionRepository,
+  CalendarSyncRepository,
+  GoogleCalendarPort,
 } from '@/lib/students/ports'
 
 /**
@@ -62,11 +68,15 @@ export interface Repositories {
   user: UserRepository
   tool: ToolRepository
   reporting: ReportingRepository
+  /** Optional only for legacy test doubles; createRepositories always supplies it. */
+  booking?: BookingRepository
   student: StudentRepository
   lesson: LessonRepository
   lessonSeries: LessonSeriesRepository
-  lessonPackage: LessonPackageRepository
+  lessonClass: LessonClassRepository
   calendarConnection: CalendarConnectionRepository
+  calendarSync: CalendarSyncRepository
+  googleCalendar: GoogleCalendarPort
 }
 
 export function createRepositories(store: Prisma.TransactionClient): Repositories {
@@ -87,11 +97,14 @@ export function createRepositories(store: Prisma.TransactionClient): Repositorie
     user: createUserRepository(store),
     tool: createToolRepository(store),
     reporting: createReportingRepository(store),
+    booking: createBookingRepository(store),
     student: createStudentRepository(store),
     lesson: createLessonRepository(store),
     lessonSeries: createLessonSeriesRepository(store),
-    lessonPackage: createLessonPackageRepository(store),
+    lessonClass: createLessonClassRepository(store),
     calendarConnection: createCalendarConnectionRepository(store),
+    calendarSync: createCalendarSyncRepository(store),
+    googleCalendar,
   }
 }
 
