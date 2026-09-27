@@ -666,30 +666,12 @@ model Student {
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
 
-  packages         LessonPackage[]
   lessons          LessonStudent[]
   series           LessonSeriesStudent[]
   classMemberships LessonClassStudent[]
 
   @@index([status])
   @@map("students")
-}
-
-model LessonPackage {
-  id        String   @id @default(uuid())
-  studentId String   @map("student_id")
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  name      String   @db.VarChar(100)
-  total     Int      @default(1) // số buổi đã mua
-  used      Int      @default(0) // số buổi đã dùng
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  lessonStudents LessonStudent[]
-
-  @@index([studentId, isActive])
-  @@map("lesson_packages")
 }
 
 // ── Lớp học — danh tính + sổ học viên; lịch là các LessonSeries (khung giờ) ──
@@ -780,8 +762,6 @@ model LessonStudent {
   student   Student          @relation(fields: [studentId], references: [id])
   status    LessonAttendance @default(SCHEDULED)
   note      String?          @db.Text // note riêng từng HV
-  packageId String?          @map("package_id") // gói bị trừ khi hoàn thành buổi này
-  package   LessonPackage?   @relation(fields: [packageId], references: [id], onDelete: SetNull)
 
   @@unique([lessonId, studentId])
   @@index([studentId])

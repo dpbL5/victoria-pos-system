@@ -5,12 +5,11 @@ import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { formatVnDateTime } from '@/lib/shared/utils'
 import { Button } from '@/components/ui/button'
-import { Input, Label, Select } from '@/components/ui/input'
+import { Label, Select } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useToast } from '@/components/ui/toast'
 import type { CalendarStatus } from './types'
-import { localTime } from './lesson-editor'
 
 /** Trạng thái đồng bộ Google — dùng chung cho chấm cảnh báo trên nút ⋯ và modal kết nối (SWR gộp theo key). */
 export function useCalendarStatus() {
@@ -29,8 +28,6 @@ export function CalendarConnection({ menuItem = false, onOpen, compact = false }
   const [busy, setBusy] = useState(false)
   const [confirmChange, setConfirmChange] = useState(false)
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
-  const [from, setFrom] = useState(() => localTime(new Date().toISOString()).slice(0, 10))
-  const [to, setTo] = useState(() => localTime(new Date(Date.now() + 84 * 86400000).toISOString()).slice(0, 10))
   const { data: calendars } = useApi<{ id: string; summary: string }[]>(open && status?.connected ? '/api/google/calendars' : null)
   const { data: jobs } = useApi<{ entityKey: string; title: string; lastError: string | null }[]>(open && status?.connected ? '/api/google/jobs' : null)
   const toast = useToast()
@@ -52,7 +49,6 @@ export function CalendarConnection({ menuItem = false, onOpen, compact = false }
       const result = await apiJson<{ queued: boolean; processed: number; remaining?: number; syncError?: string }>('/api/google/retry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: `${from}T00:00:00+07:00`, to: `${to}T23:59:59+07:00` }),
       })
       if (!result.success) { toast.error(result.error || 'Không đồng bộ được Google Calendar'); return }
       const processed = result.data?.processed ?? 0
@@ -97,7 +93,7 @@ export function CalendarConnection({ menuItem = false, onOpen, compact = false }
           <div><Label htmlFor="google-calendar">Lịch CLB</Label><Select id="google-calendar" value={chosen || status.calendarId || ''} onChange={e => setChosen(e.target.value)}><option value="">Chọn lịch có quyền chỉnh sửa</option>{calendars?.data?.map(c => <option key={c.id} value={c.id}>{c.summary}</option>)}</Select></div>
           {calendars?.success === false && <p className="text-sm text-red-600">{calendars.error}</p>}
           <Button disabled={busy || !chosen} onClick={() => status.calendarId && status.calendarId !== chosen ? setConfirmChange(true) : void action('/api/google/calendars', 'PUT', { calendarId: chosen })}>Lưu lịch đích</Button>
-          <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700"><p className="mb-3 text-sm font-medium">Đồng bộ với Google Calendar</p><div className="grid grid-cols-2 gap-3"><div><Label htmlFor="sync-from">Từ ngày</Label><Input id="sync-from" type="date" value={from} onChange={e => setFrom(e.target.value)} /></div><div><Label htmlFor="sync-to">Đến ngày</Label><Input id="sync-to" type="date" value={to} onChange={e => setTo(e.target.value)} /></div></div><Button className="mt-3" variant="secondary" icon={RefreshCw} disabled={busy || !status.calendarId || !from || !to} onClick={() => void syncNow()}>{busy ? 'Đang đồng bộ...' : 'Đồng bộ với Google Calendar'}</Button><p className="mt-2 text-xs text-zinc-500">Đồng bộ chạy ngay khi bấm. Đang chờ: {status.pending ?? 0} · Lỗi: {status.failed ?? 0}</p></div>
+          <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700"><Button variant="secondary" icon={RefreshCw} disabled={busy || !status.calendarId} onClick={() => void syncNow()}>{busy ? 'Đang đồng bộ...' : 'Đồng bộ toàn bộ lịch'}</Button><p className="mt-2 text-xs text-zinc-500">Đang chờ: {status.pending ?? 0} · Lỗi: {status.failed ?? 0}</p></div>
           {status.lastSyncedAt && <p className="text-xs text-zinc-500">Đồng bộ gần nhất: {formatVnDateTime(status.lastSyncedAt)}</p>}
           {jobs?.data?.filter(j => j.lastError).map(j => <p key={j.entityKey} className="text-sm text-red-600 dark:text-red-300">{j.title}: {j.lastError}</p>)}
           <Button variant="outline-danger" disabled={busy} onClick={() => setConfirmDisconnect(true)}>Ngắt kết nối</Button>

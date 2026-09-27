@@ -28,7 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { NoticeCard } from "@/components/ui/notice-card";
-import { AppSkeleton, Skeleton } from "@/components/ui/skeleton";
+import { AppSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { useApi } from "@/hooks/use-api";
 import { apiJson } from "@/lib/api";
@@ -339,13 +339,7 @@ export function MoreScreen() {
 
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <SectionTitle title="Giao diện" />
-          {!mounted ? (
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <Skeleton className="h-11" />
-              <Skeleton className="h-11" />
-              <Skeleton className="h-11" />
-            </div>
-          ) : (
+          {mounted && (
             <div className="mt-3 grid grid-cols-3 gap-2">
               {themeOptions.map((option) => {
                 const active = theme === option.value;

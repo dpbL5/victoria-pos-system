@@ -290,11 +290,6 @@ body {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-/* Shimmer overlay chạy ngang trên skeleton loader */
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
 @keyframes logo-breathe {
   0%, 100% { opacity: 0.72; transform: scale(0.94); }
   50% { opacity: 1; transform: scale(1); }
@@ -342,35 +337,6 @@ body {
   transform: scale(0.97);
 }
 
-/* Skeleton shimmer — overlay chạy ngang, dùng cho loading placeholder. */
-.skeleton {
-  position: relative;
-  overflow: hidden;
-  background: var(--color-surface-tertiary);
-  border-radius: var(--radius-md);
-}
-.skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.45) 50%,
-    transparent 100%
-  );
-  animation: shimmer 1.4s var(--ease-in-out) infinite;
-  transform: translateX(-100%);
-}
-.dark .skeleton::after {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.06) 50%,
-    transparent 100%
-  );
-}
-
 .app-skeleton-logo {
   animation: logo-breathe 1.8s var(--ease-in-out) infinite;
 }
@@ -414,5 +380,4 @@ body {
   }
   .motion-hover-lift:hover { transform: none !important; }
   .motion-press:active { transform: none !important; }
-  .skeleton::after { animation: none !important; opacity: 0.4; }
 }

@@ -103,7 +103,7 @@ async function processConnectionJobs(connection: CalendarConnectionRecord, owner
               }
               if (lesson.status === 'CANCELLED') await deps.googleCalendar.deleteEvent(accessToken, calendarId, id)
               else {
-                const description = [lesson.coachName ? `HLV: ${lesson.coachName}` : '', lesson.shareNote ? lesson.note : ''].filter(Boolean).join('\n')
+                const description = [lesson.coachName ? `HLV: ${lesson.coachName}` : '', lesson.note].filter(Boolean).join('\n')
                 await deps.googleCalendar.putEvent(accessToken, calendarId, id, body(lesson.title, lesson.startsAt, lesson.durationMin, description, lesson.id))
               }
               await runInTransaction(async tx => {
@@ -159,20 +159,22 @@ export async function selectCalendar(input: { staffId: string; calendarId: strin
   })
 }
 
-export async function retryCalendar(input: { staffId: string; from: Date; to: Date }, deps: Repositories = repositories) {
-  const expanded = await ensureLessonsUntil(input.to, deps)
+export async function retryCalendar(input: { staffId: string; from?: Date; to?: Date }, deps: Repositories = repositories) {
+  const from = input.from ?? new Date(0)
+  const to = input.to ?? new Date(Date.now() + SERIES_HORIZON_DAYS * DAY_MS)
+  const expanded = await ensureLessonsUntil(to, deps)
   if (!expanded.ok) return expanded
   const queued = await runInTransaction(async tx => {
     const conn = await tx.calendarConnection.findByUser(input.staffId)
     if (!conn) fail('CALENDAR_NOT_CONNECTED')
     for (const series of await tx.lessonSeries.findMany()) await tx.calendarSync.enqueue('SERIES', series.id)
-    const lessons = await tx.lesson.findManyBetween(input.from, input.to)
-    const cancelled = await tx.lesson.findManyBetween(input.from, input.to, { status: 'CANCELLED' })
+    const lessons = await tx.lesson.findManyBetween(from, to)
+    const cancelled = await tx.lesson.findManyBetween(from, to, { status: 'CANCELLED' })
     for (const lesson of [...lessons, ...cancelled]) {
       if (!lesson.seriesId || lesson.isException || lesson.note) await tx.calendarSync.enqueue('LESSON', lesson.id)
     }
     await tx.calendarSync.retry(conn.id)
-    await tx.audit.append({ userId: input.staffId, action: 'GOOGLE_CALENDAR_RETRY', entityType: 'CalendarConnection', entityId: conn.generation, details: { from: input.from.toISOString(), to: input.to.toISOString() } })
+    await tx.audit.append({ userId: input.staffId, action: 'GOOGLE_CALENDAR_RETRY', entityType: 'CalendarConnection', entityId: conn.generation, details: { from: from.toISOString(), to: to.toISOString() } })
     return { queued: true }
   })
   if (!queued.ok) return queued
@@ -202,19 +204,4 @@ export function mapCalendarError(error: DomainError): HttpErrorInfo {
     CALENDAR_BUSY: 'Đang đồng bộ lịch. Hãy thử lại sau một phút', CALENDAR_SYNC_FAILED: 'Chưa đồng bộ được Google Calendar. Kiểm tra kết nối và thử lại',
   }
   return { code: error.code, message: messages[error.code] ?? 'Không cập nhật được Google Calendar', status: error.code === 'CALENDAR_SYNC_FAILED' ? 502 : 409 }
-}
-
-export async function retryLessonSync(input: { staffId: string; lessonId: string }, deps: Repositories = repositories) {
-  const queued = await runInTransaction(async tx => {
-    const connection = await tx.calendarConnection.findByUser(input.staffId)
-    if (!connection?.calendarId) fail('CALENDAR_NOT_CONNECTED')
-    const lesson = await tx.lesson.findById(input.lessonId)
-    if (!lesson) fail('LESSON_NOT_FOUND')
-    if (lesson!.seriesId) await tx.calendarSync.enqueue('SERIES', lesson!.seriesId)
-    await tx.calendarSync.enqueue('LESSON', lesson!.id)
-    await tx.audit.append({ userId: input.staffId, action: 'GOOGLE_CALENDAR_RETRY', entityType: 'Lesson', entityId: lesson!.id })
-    return { queued: true }
-  })
-  if (!queued.ok) return queued
-  return ok({ ...queued.value, ...await syncQueuedJobs(input.staffId, deps) })
 }

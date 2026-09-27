@@ -7,7 +7,6 @@ import type {
   LessonRepository,
   LessonSeriesRepository,
   LessonClassRepository,
-  LessonPackageRepository,
   CalendarConnectionRepository,
   CalendarSyncRepository,
 } from '@/lib/students'
@@ -18,7 +17,6 @@ type StudentStore = Pick<
   | 'lesson'
   | 'lessonSeries'
   | 'lessonClass'
-  | 'lessonPackage'
   | 'lessonStudent'
   | 'calendarConnection'
   | 'calendarSyncJob'
@@ -28,7 +26,7 @@ type StudentStore = Pick<
 >
 
 const lessonInclude = {
-  students: { include: { student: true, package: true } },
+  students: { include: { student: true } },
   series: { include: { class: true } },
   class: true,
 } as const
@@ -40,7 +38,6 @@ const classInclude = {
 } as const
 
 const studentInclude = {
-  packages: true,
   classMemberships: { where: { lessonClass: { isActive: true } }, include: { lessonClass: true } },
 } as const
 
@@ -137,7 +134,7 @@ export function createLessonRepository(store: StudentStore): LessonRepository {
       return (await store.lesson.findUniqueOrThrow({ where: { id }, include: lessonInclude }))
     },
     replaceStudents: async (id, studentIds) => {
-      const protectedRow = await store.lessonStudent.findFirst({ where: { lessonId: id, studentId: { notIn: studentIds }, OR: [{ note: { not: null } }, { packageId: { not: null } }, { status: { not: 'SCHEDULED' } }] } })
+      const protectedRow = await store.lessonStudent.findFirst({ where: { lessonId: id, studentId: { notIn: studentIds }, OR: [{ note: { not: null } }, { status: { not: 'SCHEDULED' } }] } })
       if (protectedRow) fail('LESSON_STUDENT_HAS_HISTORY')
       await store.lessonStudent.deleteMany({ where: { lessonId: id, studentId: { notIn: studentIds } } })
       await store.lessonStudent.createMany({ data: studentIds.map(studentId => ({ lessonId: id, studentId })), skipDuplicates: true })
@@ -171,12 +168,6 @@ export function createLessonRepository(store: StudentStore): LessonRepository {
         where: { lessonId_studentId: { lessonId, studentId } },
         create: { lessonId, studentId, status, note },
         update: { status, ...(note !== undefined ? { note } : {}) },
-      })
-    },
-    setPackage: async ({ lessonId, studentId, packageId }) => {
-      await store.lessonStudent.update({
-        where: { lessonId_studentId: { lessonId, studentId } },
-        data: { packageId },
       })
     },
     setStudentNote: async ({ lessonId, studentId, note }) => {
@@ -264,30 +255,6 @@ export function createLessonClassRepository(store: StudentStore): LessonClassRep
         classId: row.classId,
         className: row.lessonClass.name,
       }))
-    },
-  }
-}
-
-export function createLessonPackageRepository(store: StudentStore): LessonPackageRepository {
-  return {
-    findById: (id) => store.lessonPackage.findUnique({ where: { id } }),
-    findActiveByStudent: (studentId) =>
-      store.lessonPackage.findMany({ where: { studentId, isActive: true }, orderBy: { createdAt: 'asc' } }),
-    create: (data) => store.lessonPackage.create({ data }),
-    update: (id, data) => store.lessonPackage.update({ where: { id }, data }),
-    incrementUsed: async (id) => {
-      const pkg = await store.lessonPackage.findUnique({ where: { id } })
-      if (!pkg) fail('LESSON_PACKAGE_UNAVAILABLE')
-      const changed = await store.lessonPackage.updateMany({ where: { id, isActive: true, used: { equals: pkg.used, lt: pkg.total } }, data: { used: { increment: 1 } } })
-      if (!changed.count) fail('LESSON_PACKAGE_UNAVAILABLE')
-      return store.lessonPackage.findUniqueOrThrow({ where: { id } })
-    },
-    decrementUsed: async (id) => {
-      const pkg = await store.lessonPackage.findUnique({ where: { id } })
-      if (!pkg) fail('LESSON_PACKAGE_UNAVAILABLE')
-      const changed = await store.lessonPackage.updateMany({ where: { id, used: { equals: pkg!.used, gt: 0 } }, data: { used: { decrement: 1 } } })
-      if (!changed.count) fail('LESSON_PACKAGE_UNAVAILABLE')
-      return store.lessonPackage.findUniqueOrThrow({ where: { id } })
     },
   }
 }

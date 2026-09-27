@@ -28,7 +28,7 @@ import { Input, Label, Select } from '@/components/ui/input'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { AppSkeleton, Skeleton } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
@@ -865,11 +865,7 @@ function ActivityLogsTab({ users }: { users: UserRow[] }) {
         </div>
 
         {loading ? (
-          <div className="space-y-3 p-4">
-            <Skeleton className="h-16" />
-            <Skeleton className="h-16" />
-            <Skeleton className="h-16" />
-          </div>
+          <AppSkeleton />
         ) : logs.length === 0 ? (
           <EmptyState
             icon={History}

@@ -1,6 +1,6 @@
 import React, { type ReactNode, type ReactElement } from 'react'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { LessonStudentNotes, StudentLessonNote } from './lesson-notes'
+import { StudentLessonNote } from './lesson-notes'
 import { LessonEditor } from './lesson-editor'
 import { AttendanceDialog } from './attendance-dialog'
 import { apiJson } from '@/lib/api'
@@ -26,7 +26,7 @@ vi.mock('@/hooks/use-api', () => ({ useApi: () => ({}) }))
 type Props = {
   children?: ReactNode; footer?: ReactNode; value?: string; disabled?: boolean
   onClick?: () => unknown; onChange?: (event: { target: { value: string } }) => void
-  onSaved?: (lesson: Lesson) => void
+  onSaved?: (lesson: Lesson) => void; onLessonChange?: (lesson: Lesson) => void
 }
 function elements(node: ReactNode): ReactElement<Props>[] {
   if (Array.isArray(node)) return node.flatMap(elements)
@@ -43,22 +43,19 @@ const lesson = (version = 1, note: string | null = null): Lesson => ({
   id: 'l1', version, title: 'Lớp cung', startsAt: new Date(Date.now() - 7_200_000).toISOString(), durationMin: 60,
   status: 'SCHEDULED', note: null, shareNote: false, isException: false, originalStartAt: null, googleEventId: null,
   coachName: null, series: null, seriesId: null,
-  students: [{ id: 'ls1', studentId: 's1', lessonId: 'l1', status: 'SCHEDULED', note, packageId: null, package: null, student: { id: 's1', fullName: 'A' } }],
+  students: [{ id: 'ls1', studentId: 's1', lessonId: 'l1', status: 'SCHEDULED', note, student: { id: 's1', fullName: 'A' } }],
 })
 beforeEach(() => { hooks.values = []; hooks.cursor = 0; vi.clearAllMocks() })
 
-it('lưu note hai lần dùng phiên bản và baseline mới; trả bản đã lưu cho modal', async () => {
+it('lưu điểm danh hai lần dùng phiên bản mới; trả bản đã lưu cho modal', async () => {
   const onSaved = vi.fn()
-  const component = () => LessonStudentNotes({ lessonId: 'l1', version: 1, students: [{ studentId: 's1', fullName: 'A', note: null }], onSaved })
-  field(render(component)).onChange!({ target: { value: 'Lần một' } })
+  const component = () => AttendanceDialog({ lesson: lesson(), onSaved, onClose: vi.fn() })
   vi.mocked(apiJson).mockResolvedValueOnce({ success: true, data: { lesson: lesson(2, 'Lần một') } })
-  await button(render(component), 'Lưu ghi chú').onClick!()
-  expect(button(render(component), 'Lưu ghi chú').disabled).toBe(true)
+  await button(render(component), 'Lưu điểm danh').onClick!()
   expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ version: 2 }))
-  field(render(component)).onChange!({ target: { value: 'Lần hai' } })
   vi.mocked(apiJson).mockResolvedValueOnce({ success: true, data: { lesson: lesson(3, 'Lần hai') } })
-  await button(render(component), 'Lưu ghi chú').onClick!()
-  expect(JSON.parse(vi.mocked(apiJson).mock.calls[1][1]!.body as string)).toEqual({ version: 2, entries: [{ studentId: 's1', note: 'Lần hai' }] })
+  await button(render(component), 'Lưu điểm danh').onClick!()
+  expect(JSON.parse(vi.mocked(apiJson).mock.calls[1][1]!.body as string).version).toBe(2)
 })
 
 it('inline giữ phiên bản lúc bắt đầu soạn khi props được tải lại', async () => {
@@ -82,7 +79,8 @@ it('inline giữ phiên bản lúc bắt đầu soạn khi props được tải 
 it('modal dùng phiên bản sau khi lưu note để lưu thông tin buổi', async () => {
   const current = lesson()
   const component = () => LessonEditor({ lesson: current, start: current.startsAt, end: new Date(Date.parse(current.startsAt) + 3_600_000).toISOString(), onSaved: vi.fn(), onClose: vi.fn() })
-  render(component).find(node => node.type === LessonStudentNotes)!.props.onSaved!(lesson(2, 'Đã lưu'))
+  render(component).find(node => node.type === AttendanceDialog)!.props.onLessonChange!(lesson(2, 'Đã lưu'))
+  button(render(component), 'Sửa thông tin').onClick!()
   vi.mocked(apiJson).mockResolvedValueOnce({ success: true })
   await button(render(component), 'Lưu').onClick!()
   expect(JSON.parse(vi.mocked(apiJson).mock.calls[0][1]!.body as string).version).toBe(2)
@@ -106,11 +104,12 @@ it('điểm danh không gửi lại note chưa thay đổi', async () => {
   expect(JSON.parse(vi.mocked(apiJson).mock.calls[0][1]!.body as string).entries).toEqual([{ studentId: 's1', status: 'SCHEDULED' }])
 })
 
-it('modal không nâng phiên bản biểu mẫu cũ sau khi note đã hoà giải xung đột', async () => {
+it('modal theo phiên bản mới sau khi hoà giải xung đột ở phần điểm danh', async () => {
   const current = lesson()
   const component = () => LessonEditor({ lesson: current, start: current.startsAt, end: new Date(Date.parse(current.startsAt) + 3_600_000).toISOString(), onSaved: vi.fn(), onClose: vi.fn() })
-  render(component).find(node => node.type === LessonStudentNotes)!.props.onSaved!(lesson(3, 'Sau xung đột'))
-  vi.mocked(apiJson).mockResolvedValueOnce({ success: false, code: 'LESSON_CONFLICT' })
+  render(component).find(node => node.type === AttendanceDialog)!.props.onLessonChange!(lesson(3, 'Sau xung đột'))
+  button(render(component), 'Sửa thông tin').onClick!()
+  vi.mocked(apiJson).mockResolvedValueOnce({ success: true })
   await button(render(component), 'Lưu').onClick!()
-  expect(JSON.parse(vi.mocked(apiJson).mock.calls[0][1]!.body as string).version).toBe(1)
+  expect(JSON.parse(vi.mocked(apiJson).mock.calls[0][1]!.body as string).version).toBe(3)
 })

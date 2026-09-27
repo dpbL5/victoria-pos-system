@@ -4,7 +4,6 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } fro
 import { useRouter } from 'next/navigation'
 import {
   BarChart3,
-  ChevronRight,
   Download,
   ReceiptText,
   TrendingDown,
@@ -13,19 +12,19 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Input, Label, Select } from '@/components/ui/input'
+import { Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { AppSkeleton, Skeleton } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
 import { formatClock, money, paymentMethodLabel } from '@/features/pos/format'
 import type { PaymentMethod, UserSession } from '@/features/pos/types'
 import { getVnCalendarRange, shortInvoiceNo, toInputDate } from '@/lib/shared/utils'
 import { AreaChart, DonutChart, HourlyBarChart, DailyVolumeChart } from './reports-charts'
+import { ReportsPeriodFilter, type ReportsPeriod } from './reports-period-filter'
 import { isAdminOnly } from '@/lib/shared/roles'
 
 type ItemType = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT' | 'SURCHARGE' | 'DEPOSIT' | 'DEPOSIT_APPLIED'
 type Scope = 'STAFF' | 'ALL'
-type Range = 'today' | 'week' | 'month' | 'year'
 
 interface PaymentBreakdown {
   CASH: { total: number; count: number }
@@ -125,17 +124,10 @@ export interface ReportsOverviewHandle {
   refresh: () => void
 }
 
-const RANGES: Array<{ key: Range; label: string; period: 'day' | 'week' | 'month' | 'year' }> = [
-  { key: 'today', label: 'Hôm nay', period: 'day' },
-  { key: 'week', label: 'Tuần này', period: 'week' },
-  { key: 'month', label: 'Tháng này', period: 'month' },
-  { key: 'year', label: 'Năm này', period: 'year' },
-]
-
 export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverviewProps>(
   function ReportsOverview({ user }, ref) {
   const [dashboard, setDashboard] = useState<ReportDashboard | null>(null)
-  const [range, setRange] = useState<Range>('today')
+  const [range, setRange] = useState<ReportsPeriod | null>('today')
   const [revenue, setRevenue] = useState<RevenueData[]>([])
   const [revenueSummary, setRevenueSummary] = useState<RevenueSummary | null>(null)
   const [recentPayments, setRecentPayments] = useState<RevenuePayment[]>([])
@@ -226,9 +218,9 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
   // Khoảng 1 ngày lịch → hero chart chuyển sang granularity giờ (HourlyBarChart).
   const singleDay = isSingleDay(from, to)
 
-  const applyRange = (nextRange: Range) => {
+  const applyRange = (nextRange: ReportsPeriod) => {
     setRange(nextRange)
-    const { from, to } = getVnCalendarRange(RANGES.find((r) => r.key === nextRange)!.period)
+    const { from, to } = getVnCalendarRange(nextRange === 'today' ? 'day' : nextRange)
     setFrom(from)
     setTo(to)
   }
@@ -247,51 +239,22 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
         />
       )}
 
-      {/* Cụm chọn khoảng thời gian — gom 3 cách chọn cùng kỳ vào 1 card, full width */}
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Khoảng thời gian
-            </p>
-            <p className="mt-0.5 text-sm font-semibold text-zinc-950 dark:text-white">
-              {rangeLabel(range, from, to)}
-            </p>
-          </div>
-          <RangeTabs range={range} onChange={applyRange} />
-        </div>
-        <details className="mt-3 group">
-          <summary className="flex cursor-pointer items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 [&::-webkit-details-marker]:hidden">
-            <span>Tuỳ chỉnh ngày</span>
-            <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
-          </summary>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="report-from">Từ ngày</Label>
-              <Input
-                id="report-from"
-                type="date"
-                value={from}
-                onChange={(event) => setFrom(event.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="report-to">Đến ngày</Label>
-              <Input
-                id="report-to"
-                type="date"
-                value={to}
-                onChange={(event) => setTo(event.target.value)}
-              />
-            </div>
-          </div>
-          <div className="mt-3 flex justify-end">
-            <Button variant="inverse" size="xs" disabled={revenueLoading} onClick={() => void loadRevenue(from, to)}>
-              {revenueLoading ? 'Đang tải' : 'Xem'}
-            </Button>
-          </div>
-        </details>
-      </section>
+      <ReportsPeriodFilter
+        from={from}
+        to={to}
+        period={range}
+        loading={revenueLoading}
+        onPeriodChange={applyRange}
+        onFromChange={(value) => {
+          setRange(null)
+          setFrom(value)
+        }}
+        onToChange={(value) => {
+          setRange(null)
+          setTo(value)
+        }}
+        onApply={() => void loadRevenue(from, to)}
+      />
 
       {/* Layout 2/3 + 1/3 — main: monitor focal (scoreboard + chart + lưu lượng);
           side: phân tích cơ cấu + recent + xuất báo cáo. Mobile: stack dọc. */}
@@ -326,10 +289,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
 
             <div className="px-4 pb-5">
               {revenueLoading ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-14 w-full" />
-                  <Skeleton className="h-14 w-full" />
-                </div>
+                <AppSkeleton />
               ) : singleDay ? (
                 // 1 ngày: lấy từ trends.byHour (granularity giờ). Fallback rỗng khi chưa có trends.
                 trends && trends.byHour.length > 0 ? (
@@ -398,7 +358,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
                       <DonutChart
                         data={buildPaymentSlices(trends.byPaymentMethod)}
                         size={160}
-                        centerValue={money(trends.totals.revenue, false)}
+                        totalValue={money(trends.totals.revenue, false)}
                       />
                     </div>
                   </div>
@@ -410,7 +370,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
                       <DonutChart
                         data={buildItemSlices(trends.byItemType)}
                         size={160}
-                        centerValue={money(trends.totals.revenue, false)}
+                        totalValue={money(trends.totals.revenue, false)}
                       />
                     </div>
                   </div>
@@ -493,28 +453,6 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
   )
   }
 )
-
-// ── Tabs chọn khoảng thời gian ──
-function RangeTabs({ range, onChange }: { range: Range; onChange: (range: Range) => void }) {
-  return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {RANGES.map((r) => (
-        <button
-          key={r.key}
-          type="button"
-          onClick={() => onChange(r.key)}
-          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-            range === r.key
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:bg-zinc-800'
-          }`}
-        >
-          {r.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 // ── HeroScoreboard: 1 doanh thu focal (số to + growth badge) + 2 chỉ số phụ ──
 function HeroScoreboard({
@@ -710,15 +648,6 @@ function buildItemSlices(items: ItemBreakdown): Array<{ label: string; value: nu
 function formatReportDate(value: string): string {
   const [, month, day] = value.split('-')
   return `${day}/${month}`
-}
-
-function rangeLabel(range: Range, from: string, to: string): string {
-  if (range === 'today') return 'Hôm nay'
-  if (range === 'week') return 'Tuần này'
-  if (range === 'month') return 'Tháng này'
-  if (range === 'year') return 'Năm này'
-  // Tuỳ chỉnh: hiển thị khoảng ngày
-  return `${formatReportDate(from)} – ${formatReportDate(to)}`
 }
 
 /** Khoảng chỉ chứa 1 ngày lịch — dùng để đổi granularity của hero chart sang giờ. */

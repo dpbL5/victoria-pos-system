@@ -1,11 +1,10 @@
-// ── Use-case: điểm danh buổi học + trừ gói buổi ─────
+// ── Use-case: điểm danh buổi học ─────
 import { err, ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
 import { fail, runInTransaction } from '@/lib/infrastructure/db-helpers'
 import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import { repositories } from '@/lib/infrastructure/repositories'
-import { pickChargeablePackage } from '../helpers/package-math'
 import type { PreviousAttendanceNote } from '../helpers/attendance-notes'
 import type { LessonRecord } from '../ports'
 
@@ -24,8 +23,6 @@ export interface MarkAttendanceInput {
 
 export interface MarkAttendanceResult {
   lesson: LessonRecord
-  /** studentId → số buổi còn lại sau khi trừ */
-  remainingByStudent: Record<string, number>
 }
 
 export async function markAttendance(
@@ -47,35 +44,9 @@ export async function markAttendance(
     if (current.version !== input.version) fail('LESSON_CONFLICT')
     if (current.startsAt.getTime() + current.durationMin * 60_000 > Date.now()) fail('LESSON_NOT_FINISHED')
     if (input.entries.some(e => !current!.students.some(s => s.studentId === e.studentId))) fail('LESSON_STUDENT_MISMATCH')
-    const remainingByStudent: Record<string, number> = {}
-
     for (const e of input.entries) {
       const ls = current!.students.find((s) => s.studentId === e.studentId)
       if (!ls) continue
-
-      if (e.status !== 'COMPLETED' && ls.packageId) {
-        const refunded = await tx.lessonPackage.decrementUsed(ls.packageId)
-        await tx.lesson.setPackage({ lessonId: input.lessonId, studentId: e.studentId, packageId: null })
-        remainingByStudent[e.studentId] = Math.max(0, refunded.total - refunded.used)
-      } else if (ls.status !== 'COMPLETED' && e.status === 'COMPLETED' && !ls.packageId) {
-        const packages = await tx.lessonPackage.findActiveByStudent(e.studentId)
-        const pkg = pickChargeablePackage(packages)
-        if (pkg) {
-          const updated = await tx.lessonPackage.incrementUsed(pkg.id)
-          await tx.lesson.setPackage({
-            lessonId: input.lessonId,
-            studentId: e.studentId,
-            packageId: pkg.id,
-          })
-          remainingByStudent[e.studentId] = Math.max(0, updated.total - updated.used)
-        } else remainingByStudent[e.studentId] = await currentRemaining(tx, e.studentId)
-      } else if (e.status === 'COMPLETED' && ls.packageId) {
-        const pkg = await tx.lessonPackage.findById(ls.packageId)
-        remainingByStudent[e.studentId] = pkg ? Math.max(0, pkg.total - pkg.used) : 0
-      } else {
-        remainingByStudent[e.studentId] = await currentRemaining(tx, e.studentId)
-      }
-
       await tx.lesson.upsertAttendance({
         lessonId: input.lessonId,
         studentId: e.studentId,
@@ -98,22 +69,13 @@ export async function markAttendance(
     const statuses = current!.students.map(s => input.entries.find(e => e.studentId === s.studentId)?.status ?? s.status)
     await tx.lesson.update(input.lessonId, { status: statuses.every(status => status !== 'SCHEDULED') ? 'COMPLETED' : 'SCHEDULED' }, input.version)
     const updated = await tx.lesson.findById(input.lessonId)
-    return { lesson: updated!, remainingByStudent }
+    return { lesson: updated! }
   }, { isolationLevel: 'Serializable' }).catch(error => {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2034') return err('LESSON_CONFLICT')
     throw error
   })
 
   return result
-}
-
-async function currentRemaining(
-  tx: Repositories,
-  studentId: string
-): Promise<number> {
-  const packages = await tx.lessonPackage.findActiveByStudent(studentId)
-  const totalRemaining = packages.reduce((sum, p) => sum + Math.max(0, p.total - p.used), 0)
-  return totalRemaining
 }
 
 export interface PreviousNotesResult {
@@ -142,7 +104,7 @@ export interface UpdateLessonNotesResult {
   lesson: LessonRecord
 }
 
-/** Ghi note riêng từng học viên cho buổi học — không điểm danh, không trừ gói, không đổi status buổi. */
+/** Ghi note riêng từng học viên cho buổi học — không điểm danh hoặc đổi status buổi. */
 export async function updateLessonStudentNotes(
   input: UpdateLessonNotesInput,
   deps: Repositories = repositories
@@ -217,8 +179,6 @@ export function mapMarkAttendanceError(error: DomainError): HttpErrorInfo {
       return { code: error.code, message: 'Buổi học đã được cập nhật ở nơi khác. Hãy tải lại trước khi điểm danh', status: 409 }
     case 'LESSON_NOT_FINISHED':
       return { code: error.code, message: 'Chỉ có thể điểm danh sau khi buổi học kết thúc', status: 409 }
-    case 'LESSON_PACKAGE_UNAVAILABLE':
-      return { code: error.code, message: 'Không thể cập nhật gói buổi học. Hãy kiểm tra số buổi còn lại', status: 409 }
     default:
       return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
   }

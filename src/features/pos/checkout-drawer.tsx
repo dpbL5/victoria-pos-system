@@ -76,7 +76,7 @@ function LedgerRow({
           disabled={busy}
           onChange={onUncheck}
           tabIndex={-1}
-          className="mt-1 h-4 w-4 shrink-0 accent-emerald-600"
+          className="relative mt-1 h-5 w-5 shrink-0 appearance-none rounded-full border border-zinc-400 bg-white checked:border-emerald-600 checked:bg-emerald-600 after:absolute after:inset-0 after:m-auto after:h-[8px] after:w-[4px] after:rotate-45 after:border-b-2 after:border-r-2 after:border-white after:opacity-0 after:content-[''] checked:after:opacity-100 focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-zinc-500 dark:bg-zinc-800 dark:checked:border-emerald-500 dark:checked:bg-emerald-500"
         />
       ) : null}
       <span className="min-w-0 flex-1">
@@ -825,21 +825,34 @@ export function CheckoutDrawer({
         }
         description={
           session ? (
-            <>
-              {isMember ? "Hội viên" : "Vãng lai"}
+            <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                  isMember
+                    ? "bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-200"
+                    : "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-200"
+                }`}
+              >
+                {isMember ? "Hội viên" : "Vãng lai"}
+              </span>
+              <span>
+                Vào chơi {new Date(session.startTime).toLocaleTimeString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
               {session.customerPhone && (
-                <>
-                  {" · "}
+                <span>
                   <a
                     href={`tel:${session.customerPhone}`}
                     className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
                   >
                     {session.customerPhone}
                   </a>
-                </>
+                </span>
               )}
-              {isGroupSession ? ` · ${sessionPlayerCount} người` : ""}
-            </>
+              {isGroupSession && <span>{sessionPlayerCount} người chơi</span>}
+            </span>
           ) : undefined
         }
         size="lg"
@@ -872,12 +885,12 @@ export function CheckoutDrawer({
                 Chọn ít nhất 1 người chơi trước khi thu tiền.
               </p>
             ) : null}
-            <div className="overflow-hidden rounded-xl border-2 border-zinc-950 dark:border-white">
-              <div className="flex items-end justify-between gap-3 bg-zinc-100 px-4 py-3 dark:bg-zinc-800">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
-                  Cần thu
+            <div className="overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="flex items-end justify-between gap-3 px-4 py-3">
+                <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                  Tổng cần thu
                 </span>
-                <span className="text-[26px] font-extrabold leading-none tabular-nums text-zinc-950 dark:text-white">
+                <span className="text-2xl font-bold leading-none tabular-nums text-zinc-950 dark:text-white">
                   {quoteError ? "—" : money(payableTotal)}
                 </span>
               </div>
@@ -1073,7 +1086,7 @@ export function CheckoutDrawer({
               )}
 
             {/* ══ CHI TIẾT — hàng hoá / dịch vụ ══ */}
-            <LedgerGroup title="Chi tiết dịch vụ">
+            <LedgerGroup title="Hàng hoá & dịch vụ">
               {pendingSellItems.length > 0 ? (
                 <ul className="divide-y divide-zinc-100 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
                   {pendingSellItems.map((item) => (

@@ -20,7 +20,6 @@ import {
   createLessonRepository,
   createLessonSeriesRepository,
   createLessonClassRepository,
-  createLessonPackageRepository,
   createCalendarConnectionRepository,
   createCalendarSyncRepository,
 } from './adapters/student-adapter'
@@ -44,7 +43,6 @@ import type {
   LessonRepository,
   LessonSeriesRepository,
   LessonClassRepository,
-  LessonPackageRepository,
   CalendarConnectionRepository,
   CalendarSyncRepository,
   GoogleCalendarPort,
@@ -76,7 +74,6 @@ export interface Repositories {
   lesson: LessonRepository
   lessonSeries: LessonSeriesRepository
   lessonClass: LessonClassRepository
-  lessonPackage: LessonPackageRepository
   calendarConnection: CalendarConnectionRepository
   calendarSync: CalendarSyncRepository
   googleCalendar: GoogleCalendarPort
@@ -105,7 +102,6 @@ export function createRepositories(store: Prisma.TransactionClient): Repositorie
     lesson: createLessonRepository(store),
     lessonSeries: createLessonSeriesRepository(store),
     lessonClass: createLessonClassRepository(store),
-    lessonPackage: createLessonPackageRepository(store),
     calendarConnection: createCalendarConnectionRepository(store),
     calendarSync: createCalendarSyncRepository(store),
     googleCalendar,

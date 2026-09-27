@@ -8,7 +8,7 @@ import { DAY_MS, lessonEnd, overlaps, SERIES_HORIZON_DAYS, weeklyOccurrences, we
 import { assertStudentsInSingleClass } from './class-guards'
 
 const isolation = { isolationLevel: 'Serializable', timeout: 60000 } as const
-export const isLessonLocked = (lesson: Pick<LessonRecord, 'students' | 'status'>) => lesson.status === 'COMPLETED' || lesson.students.some(s => s.status !== 'SCHEDULED' || s.packageId)
+export const isLessonLocked = (lesson: Pick<LessonRecord, 'students' | 'status'>) => lesson.status === 'COMPLETED' || lesson.students.some(s => s.status !== 'SCHEDULED')
 
 export async function studentsActive(tx: Repositories, ids: string[]) {
   if (!ids.length || new Set(ids).size !== ids.length) fail('LESSON_NO_STUDENTS')

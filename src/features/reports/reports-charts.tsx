@@ -150,12 +150,12 @@ export function DonutChart({
   data,
   size = 200,
   thickness = 28,
-  centerValue,
+  totalValue,
 }: {
   data: DonutSlice[]
   size?: number
   thickness?: number
-  centerValue?: string
+  totalValue?: string
 }) {
   const total = data.reduce((sum, d) => sum + d.value, 0)
   const visible = data.filter((d) => d.value > 0)
@@ -205,14 +205,13 @@ export function DonutChart({
             }}
           />
         </RechartsPieChart>
-        {total > 0 && centerValue ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <span className="text-sm font-bold tabular-nums text-zinc-950 dark:text-white sm:text-base">
-              {centerValue}
-            </span>
-          </div>
-        ) : null}
       </div>
+
+      {total > 0 && totalValue ? (
+        <p className="max-w-full text-center text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
+          {totalValue}
+        </p>
+      ) : null}
 
       <div className="min-w-0 flex-1 space-y-2 self-stretch sm:self-center">
         {visible.length === 0 ? (

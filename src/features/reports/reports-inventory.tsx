@@ -3,16 +3,15 @@
 // ── Báo cáo bán hàng từ kho — top sản phẩm bán chạy trong kỳ ──
 // Nguồn: GET /api/reports/top-products (InvoiceItem type=PRODUCT, invoice PAID)
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Package, PackageOpen, RefreshCw, TrendingUp } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Input, Label } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
-import { Skeleton, SkeletonPanel } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { money } from '@/features/pos/format'
 import { getVnCalendarRange, toInputDate } from '@/lib/shared/utils'
+import { ReportsPeriodFilter, type ReportsPeriod } from './reports-period-filter'
 
 interface TopProductRow {
   productId: string
@@ -29,11 +28,12 @@ interface TopProductsResponse {
 }
 
 export function ReportsInventory() {
-  const [from, setFrom] = useState(() => toInputDate(new Date()))
-  const [to, setTo] = useState(() => toInputDate(new Date()))
+  const [initialDate] = useState(() => toInputDate(new Date()))
+  const [from, setFrom] = useState(initialDate)
+  const [to, setTo] = useState(initialDate)
+  const [period, setPeriod] = useState<ReportsPeriod | null>('today')
   const [items, setItems] = useState<TopProductRow[]>([])
-  const [loading, setLoading] = useState(false)
-  const [loaded, setLoaded] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   const load = useCallback(async (nextFrom: string, nextTo: string) => {
@@ -52,12 +52,17 @@ export function ReportsInventory() {
       setError('Lỗi kết nối máy chủ')
     } finally {
       setLoading(false)
-      setLoaded(true)
     }
   }, [])
 
-  const applyQuickRange = (period: 'day' | 'week' | 'month' | 'year') => {
-    const { from: nextFrom, to: nextTo } = getVnCalendarRange(period)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load(initialDate, initialDate)
+  }, [initialDate, load])
+
+  const applyQuickRange = (nextPeriod: ReportsPeriod) => {
+    setPeriod(nextPeriod)
+    const { from: nextFrom, to: nextTo } = getVnCalendarRange(nextPeriod === 'today' ? 'day' : nextPeriod)
     setFrom(nextFrom)
     setTo(nextTo)
     void load(nextFrom, nextTo)
@@ -69,60 +74,35 @@ export function ReportsInventory() {
 
   const totalRevenue = items.reduce((sum, item) => sum + item.revenue, 0)
   const totalQuantity = items.reduce((sum, item) => sum + item.quantitySold, 0)
-  const hasData = loaded && items.length > 0
   const [podium, rest] = items.length > 0
     ? [items.slice(0, 3), items.slice(3)]
     : [[], []]
+  const podiumColumns = podium.length === 1
+    ? 'grid-cols-1'
+    : podium.length === 2
+      ? 'grid-cols-1 sm:grid-cols-2'
+      : 'grid-cols-1 sm:grid-cols-3'
+
+  if (loading) return <AppSkeleton />
 
   return (
     <div className="space-y-4">
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
-              <TrendingUp size={17} className="text-emerald-500" />
-              Bán hàng từ kho
-            </h2>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Top sản phẩm bán chạy theo khoảng ngày
-            </p>
-          </div>
-          {hasData && (
-            <Badge variant="outline">{money(totalRevenue)}</Badge>
-          )}
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="inv-from">Từ ngày</Label>
-            <Input
-              id="inv-from"
-              type="date"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="inv-to">Đến ngày</Label>
-            <Input
-              id="inv-to"
-              type="date"
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-          <Button variant="secondary" size="sm" onClick={() => applyQuickRange('day')}>Hôm nay</Button>
-          <Button variant="secondary" size="sm" onClick={() => applyQuickRange('week')}>Tuần này</Button>
-          <Button variant="secondary" size="sm" onClick={() => applyQuickRange('month')}>Tháng này</Button>
-          <Button variant="secondary" size="sm" onClick={() => applyQuickRange('year')}>Năm này</Button>
-          <Button variant="inverse" size="sm" disabled={loading} onClick={handleView}>
-            {loading ? 'Đang tải' : 'Xem'}
-          </Button>
-        </div>
-      </section>
+      <ReportsPeriodFilter
+        from={from}
+        to={to}
+        period={period}
+        loading={loading}
+        onPeriodChange={applyQuickRange}
+        onFromChange={(value) => {
+          setPeriod(null)
+          setFrom(value)
+        }}
+        onToChange={(value) => {
+          setPeriod(null)
+          setTo(value)
+        }}
+        onApply={handleView}
+      />
 
       {error && (
         <NoticeCard
@@ -142,13 +122,7 @@ export function ReportsInventory() {
         />
       )}
 
-      {loading ? (
-        <SkeletonPanel className="space-y-2">
-          <Skeleton className="h-14 w-full" />
-          <Skeleton className="h-14 w-full" />
-          <Skeleton className="h-14 w-full" />
-        </SkeletonPanel>
-      ) : loaded && items.length === 0 ? (
+      {items.length === 0 ? (
         <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <EmptyState
             icon={PackageOpen}
@@ -159,35 +133,29 @@ export function ReportsInventory() {
       ) : (
         <div className="space-y-4">
           {/* Hero: tổng quan kỳ */}
-          <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex flex-wrap items-end justify-between gap-3 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
-              <div>
-                <h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  Tổng quan kỳ
-                </h3>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-zinc-950 dark:text-white">
+          <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-emerald-500 sm:p-5">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
+                <TrendingUp size={17} className="text-emerald-500" />
+                Bán hàng từ kho
+              </h2>
+              <div className="mt-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  Doanh thu kỳ
+                </p>
+                <p className="mt-1 text-3xl font-extrabold tabular-nums tracking-tight text-zinc-950 dark:text-white md:text-4xl">
                   {money(totalRevenue)}
                 </p>
               </div>
-              <div className="flex items-center gap-3 text-xs">
-                <div>
-                  <span className="text-zinc-500 dark:text-zinc-400">Sản phẩm</span>
-                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
-                    {items.length}
-                  </p>
-                </div>
-                <div className="h-8 w-px bg-zinc-200 dark:bg-zinc-800" />
-                <div>
-                  <span className="text-zinc-500 dark:text-zinc-400">Số lượng bán</span>
-                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
-                    {totalQuantity.toLocaleString('vi-VN')}
-                  </p>
-                </div>
-              </div>
+            </div>
+
+            <div className="grid grid-cols-2 divide-x divide-zinc-200 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+              <InventoryStat label="Sản phẩm" value={items.length} />
+              <InventoryStat label="Số lượng bán" value={totalQuantity.toLocaleString('vi-VN')} />
             </div>
 
             {/* Podium: top 3 */}
-            <ol className="grid grid-cols-1 divide-y divide-zinc-100 border-zinc-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0 dark:divide-zinc-800/50">
+            <ol className={`grid ${podiumColumns} divide-y divide-zinc-100 dark:divide-zinc-800/50 sm:divide-y-0 sm:divide-x`}>
               {podium.map((item, index) => (
                 <PodiumSlot key={item.productId} item={item} rank={index + 1} />
               ))}
@@ -255,6 +223,19 @@ function PodiumSlot({ item, rank }: { item: TopProductRow; rank: number }) {
         {money(item.revenue)}
       </p>
     </li>
+  )
+}
+
+function InventoryStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="px-3 py-3 text-center">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        {label}
+      </p>
+      <p className="mt-0.5 text-lg font-bold tabular-nums text-zinc-950 dark:text-white">
+        {value}
+      </p>
+    </div>
   )
 }
 

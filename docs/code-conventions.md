@@ -34,6 +34,7 @@ import { formatVND } from "@/lib/utils";
 import type { Customer } from "@/types";
 import { Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { AppSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 
 export default function CustomersPage() {
@@ -60,7 +61,7 @@ export default function CustomersPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <div className="p-4 md:p-6"><TableSkeleton rows={6} cols={5} /></div>;
+  if (loading) return <AppSkeleton />;
   if (error) return <p className="text-red-500 text-sm p-4">{error}</p>;
 
   return (/* ... */);

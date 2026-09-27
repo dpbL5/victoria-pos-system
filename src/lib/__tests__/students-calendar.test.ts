@@ -23,7 +23,7 @@ import { weeklyOccurrences, weeklyRrule, overlaps, createLesson, updateLesson, c
 import { fail } from '@/lib/infrastructure/db-helpers'
 
 const future = () => new Date(Date.now() + 30 * 86400000)
-const member = (id: string) => ({ id, studentId: id, lessonId: '', status: 'SCHEDULED', note: null, packageId: null, package: null, student: { id, fullName: id } })
+const member = (id: string) => ({ id, studentId: id, lessonId: '', status: 'SCHEDULED', note: null, student: { id, fullName: id } })
 const base = () => ({ staffId: 'admin', title: 'Lớp cung', studentIds: ['a'], startsAt: future(), durationMin: 60 })
 const connection = (id: string, userId: string, calendarId: string | null): CalendarConnectionRecord => ({
   id, userId, email: `${userId}@gmail.com`, accessToken: 'encrypted', refreshToken: 'encrypted-refresh', tokenExpiresAt: future(),
@@ -234,10 +234,10 @@ describe('đồng bộ bền vững', () => {
     const calls = vi.mocked(state.repos.googleCalendar.putEvent).mock.calls
     expect(calls[0][2]).toBe(calls[1][2])
   })
-  it('ghi chú riêng không ra Google; xoá ghi chú gửi description rỗng', async () => {
+  it('ghi chú buổi học gửi cùng sự kiện khi đồng bộ toàn bộ lịch', async () => {
     await createLesson({ ...base(), note: 'Nội bộ' }, state.repos)
     await press()
-    expect(vi.mocked(state.repos.googleCalendar.putEvent).mock.calls[0][3]).toMatchObject({ description: '' })
+    expect(vi.mocked(state.repos.googleCalendar.putEvent).mock.calls[0][3]).toMatchObject({ description: 'Nội bộ' })
   })
   it('huỷ trước khi sync không tạo sự kiện', async () => {
     await createLesson(base(), state.repos)

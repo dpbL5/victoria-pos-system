@@ -34,8 +34,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     if (!result.ok) return apiError(mapMarkAttendanceError(result.error))
 
-    const { lesson, remainingByStudent } = result.value
-    return apiSuccess({ lesson, remainingByStudent })
+    return apiSuccess({ lesson: result.value.lesson })
   } catch (error) {
     const message = (error as Error).message
     if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)

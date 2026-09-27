@@ -243,7 +243,7 @@ export async function deleteClass(input: { staffId: string; classId: string }, d
 
 const hasClassHistory = (lessons: LessonRecord[]) => lessons.some(lesson =>
   lesson.status !== 'SCHEDULED' || Boolean(lesson.note?.trim()) || lesson.students.some(student =>
-    student.status !== 'SCHEDULED' || Boolean(student.note?.trim()) || Boolean(student.packageId)
+    student.status !== 'SCHEDULED' || Boolean(student.note?.trim())
   )
 )
 

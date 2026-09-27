@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { requireAdmin } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { repositories } from '@/lib/infrastructure/repositories'
-import { calendarAccessToken, selectCalendar, mapCalendarError, retryCalendar } from '@/lib/students'
+import { calendarAccessToken, selectCalendar, mapCalendarError } from '@/lib/students'
 import { apiError, apiSuccess, ERR_UNAUTHORIZED, ERR_FORBIDDEN, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
 function errorResponse(error: unknown) {
   const message = (error as Error).message
@@ -24,8 +24,6 @@ export async function PUT(request: NextRequest) {
     if (!parsed.success) return apiError({ code: 'VALIDATION', message: 'Chọn lịch Google hợp lệ', status: 400 })
     const result = await selectCalendar({ ...parsed.data, staffId: auth.userId })
     if (!result.ok) return apiError(mapCalendarError(result.error))
-    const queued = await retryCalendar({ staffId: auth.userId, from: new Date(), to: new Date(Date.now() + 84 * 86400000) })
-    if (!queued.ok) return apiError(mapCalendarError(queued.error))
     return apiSuccess(result.value)
   } catch (error) { return errorResponse(error) }
 }

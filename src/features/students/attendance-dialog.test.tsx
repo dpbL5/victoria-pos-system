@@ -20,9 +20,7 @@ const member = (studentId: string, fullName: string): LessonStudent => ({
   studentId,
   status: 'SCHEDULED',
   note: null,
-  packageId: null,
   student: { id: studentId, fullName },
-  package: null,
 })
 
 const lesson: Lesson = {
@@ -49,7 +47,7 @@ it('hiển thị bảng học viên và note buổi trước của từng học 
 
   expect(html).toContain('Nguyễn Văn A')
   expect(html).toContain('Trần Thị B')
-  expect(html).toContain('Buổi trước 03/09')
+  expect(html).toContain('Ghi chú buổi 03/09')
   expect(html).toContain('Cần siết tay trái')
-  expect(html.match(/Buổi trước/g)).toHaveLength(1)
+  expect(html.match(/Ghi chú buổi/g)).toHaveLength(1)
 })

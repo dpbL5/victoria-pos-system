@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
-import { Skeleton } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { apiJson, jsonRequest } from '@/lib/api'
@@ -423,15 +423,7 @@ export function BookingsScreen() {
 
           <div className="mt-2" aria-label={`Lịch ngày ${dayLabel}`}>
             {loading ? (
-              <div aria-busy="true" aria-label="Đang tải lịch" className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-                <span className="sr-only">Đang tải lịch...</span>
-                {Array.from({ length: 5 }).map((_, index) => (
-                  <div key={index} aria-hidden className="flex h-16 items-center gap-3 border-t border-zinc-100 px-3 first:border-t-0 dark:border-zinc-800/60">
-                    <Skeleton className="h-3 w-8" />
-                    <Skeleton className="h-10 flex-1 rounded-lg" />
-                  </div>
-                ))}
-              </div>
+              <AppSkeleton />
             ) : dayBookings.length === 0 ? (
               <EmptyState
                 icon={CalendarPlus}

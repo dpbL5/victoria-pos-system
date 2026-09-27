@@ -30,7 +30,7 @@ import { addClassStudent, createClass, createClassSlot, createSeries, deleteClas
 import { fail } from '@/lib/infrastructure/db-helpers'
 
 const DAY_MS = 86_400_000
-const member = (studentId: string) => ({ id: `ls-${studentId}`, lessonId: '', studentId, status: 'SCHEDULED' as const, note: null, packageId: null, package: null, student: { id: studentId, fullName: studentId } })
+const member = (studentId: string) => ({ id: `ls-${studentId}`, lessonId: '', studentId, status: 'SCHEDULED' as const, note: null, student: { id: studentId, fullName: studentId } })
 
 /** Ngày bắt đầu ở tương lai, đúng thứ của `day` (0=CN). */
 function futureOn(day: number, weeksAhead = 6) {

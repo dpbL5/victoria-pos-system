@@ -17,7 +17,7 @@ import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { emptyStudentForm, studentFormBody, StudentFormModal, studentToForm, type StudentForm } from './student-form-modal'
-import { studentClassOf, studentRowOf, remainingLabel, type Student, type StudentRow } from './types'
+import { studentClassOf, type Student } from './types'
 
 const emptyForm = emptyStudentForm()
 
@@ -34,7 +34,7 @@ export function StudentsScreen() {
     return registerRefresh(() => void mutate())
   }, [registerRefresh, mutate])
 
-  const students = useMemo(() => (studentsData?.data ?? []).map(studentRowOf), [studentsData])
+  const students = studentsData?.data ?? []
   const error = !studentsData?.success ? (studentsData?.error ?? '') : ''
   const loading = isLoading
 
@@ -109,14 +109,14 @@ export function StudentsScreen() {
   const statusBadge = (s: Student) =>
     s.status === 'ACTIVE' ? <Badge variant="success">Đang học</Badge> : <Badge variant="default">Dừng học</Badge>
 
-  const classCell = (s: StudentRow) => {
+  const classCell = (s: Student) => {
     const item = studentClassOf(s)
     return item
       ? <Link href={`/classes/${item.id}`} className="text-sm text-blue-700 hover:underline dark:text-blue-300">{item.name}</Link>
       : <span className="text-sm text-zinc-400 dark:text-zinc-500">Chưa vào lớp</span>
   }
 
-  const columns: Column<StudentRow>[] = useMemo(() => [
+  const columns: Column<Student>[] = useMemo(() => [
     {
       key: 'fullName',
       label: 'Học viên',
@@ -141,12 +141,6 @@ export function StudentsScreen() {
       render: (item) => classCell(item),
     },
     {
-      key: 'remainingSessions',
-      label: 'Còn lại',
-      cellClassName: 'px-4 py-3 text-sm tabular-nums text-zinc-950 dark:text-white',
-      render: (item) => remainingLabel(item),
-    },
-    {
       label: 'Thao tác',
       cellClassName: 'px-4 py-3',
       render: (item) => (
@@ -159,7 +153,7 @@ export function StudentsScreen() {
     },
   ], [submitting, router])
 
-  const cardColumns: CardColumn<StudentRow>[] = useMemo(() => [
+  const cardColumns: CardColumn<Student>[] = useMemo(() => [
     {
       key: 'fullName',
       label: 'Học viên',
@@ -172,7 +166,6 @@ export function StudentsScreen() {
     },
     { key: 'phone', label: 'SĐT', render: (item) => item.phone || '—' },
     { key: 'class', label: 'Lớp', render: (item) => classCell(item) },
-    { key: 'remainingSessions', label: 'Còn lại', render: (item) => <span className="font-semibold tabular-nums">{remainingLabel(item)}</span> },
     {
       label: '',
       render: (item) => (
@@ -227,7 +220,7 @@ export function StudentsScreen() {
             columns={cardColumns}
             data={students}
             keyExtractor={(s) => s.id}
-            sortableKeys={['fullName', 'remainingSessions']}
+            sortableKeys={['fullName']}
             defaultSortKey="fullName"
             defaultSortDir="asc"
             emptyIcon={Users}
@@ -241,7 +234,7 @@ export function StudentsScreen() {
             columns={columns}
             data={students}
             keyExtractor={(s) => s.id}
-            sortableKeys={['fullName', 'phone', 'remainingSessions']}
+            sortableKeys={['fullName', 'phone']}
             defaultSortKey="fullName"
             defaultSortDir="asc"
             emptyIcon={Users}

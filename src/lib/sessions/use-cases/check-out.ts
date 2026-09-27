@@ -1051,7 +1051,8 @@ export async function runCheckOutTx(
     }
   }
 
-  const currentProducts = await tx.product.findManyByIds(productIds)
+  const productIds = [...new Set([...sellItemLines, ...checkoutLines].map((line) => line.productId))]
+  const currentProducts = productIds.length > 0 ? await tx.product.findManyByIds(productIds) : []
   const currentProductsById = new Map(currentProducts.map((product) => [product.id, product]))
 
   // ── Tạo InvoiceItem cho các dòng bán kèm đã chờ thu (không trừ kho — đã trừ lúc bán kèm) ──

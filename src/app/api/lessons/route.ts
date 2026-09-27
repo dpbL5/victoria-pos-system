@@ -36,14 +36,7 @@ export async function GET(request: NextRequest) {
       classId: request.nextUrl.searchParams.get('classId') || undefined,
       status,
     })
-    // Trạng thái đồng bộ là của riêng connection người đang xem; chưa kết nối thì không gắn nhãn.
-    const connection = await repositories.calendarConnection.findByUser(auth.userId)
-    const jobs = connection ? await repositories.calendarSync.list(connection.id, rows.flatMap(l => [l.id, ...(l.seriesId ? [l.seriesId] : [])])) : []
-    const lessons = rows.map(l => connection
-      ? { ...l, syncStatus: jobs.find(j => j.entityId === l.id)?.status ?? jobs.find(j => j.entityId === l.seriesId)?.status ?? 'PENDING' }
-      : { ...l, syncStatus: undefined })
-
-    return apiSuccess({ lessons, warning })
+    return apiSuccess({ lessons: rows, warning })
   } catch (error) {
     const message = (error as Error).message
     if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)

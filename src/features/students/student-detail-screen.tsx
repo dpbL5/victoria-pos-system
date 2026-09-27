@@ -3,13 +3,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, CalendarClock, ClipboardCheck, GraduationCap, Plus, School, UserMinus } from 'lucide-react'
+import { ArrowLeft, CalendarClock, ClipboardCheck, GraduationCap, School, UserMinus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input, Select } from '@/components/ui/input'
+import { Select } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
@@ -20,7 +19,7 @@ import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { AttendanceDialog } from './attendance-dialog'
 import { StudentLessonNote } from './lesson-notes'
 import { emptyStudentForm, studentFormBody, StudentFormModal, studentToForm, type StudentForm } from './student-form-modal'
-import { studentClassOf, studentRemaining, type Student, type LessonPackage, type Lesson } from './types'
+import { studentClassOf, type Student, type Lesson } from './types'
 import type { LessonClass } from '@/features/classes/types'
 
 interface StudentDetailProps {
@@ -47,7 +46,6 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
 
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState<StudentForm>(emptyStudentForm())
-  const [pkgOpen, setPkgOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [classPick, setClassPick] = useState('')
   const [leaveClassOpen, setLeaveClassOpen] = useState(false)
@@ -142,8 +140,6 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
     )
   }
 
-  const totalRemaining = studentRemaining(student)
-
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-content space-y-4">
@@ -167,34 +163,6 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
             <div><dt className="text-xs text-zinc-500 dark:text-zinc-400">Năm sinh</dt><dd className="font-medium">{student.birthYear || '—'}</dd></div>
             <div className="sm:col-span-2"><dt className="text-xs text-zinc-500 dark:text-zinc-400">Ghi chú</dt><dd className="font-medium">{student.notes || '—'}</dd></div>
           </dl>
-        </Card>
-
-        {/* Packages */}
-        <Card padding="md" className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
-              Gói buổi học <Badge variant="blue" size="sm">còn {totalRemaining} buổi</Badge>
-            </h2>
-            <Button variant="primary" size="sm" icon={Plus} onClick={() => setPkgOpen(true)}>Thêm gói</Button>
-          </div>
-          {student.packages.length === 0 ? (
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Chưa có gói buổi học.</p>
-          ) : (
-            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-              {student.packages.map((p) => {
-                const remain = Math.max(0, p.total - p.used)
-                return (
-                  <li key={p.id} className="flex items-center justify-between gap-3 py-2.5">
-                    <div>
-                      <p className="text-sm font-medium text-zinc-900 dark:text-white">{p.name}</p>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">{p.total} buổi · đã dùng {p.used} · {p.isActive ? 'đang hoạt động' : 'ngừng'}</p>
-                    </div>
-                    <Badge variant={remain > 0 ? 'success' : 'default'}>còn {remain}</Badge>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
         </Card>
 
         {/* Class — mỗi học viên chỉ thuộc một lớp */}
@@ -301,10 +269,6 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
 
         {attendanceLesson && <AttendanceDialog lesson={attendanceLesson} onClose={() => setAttendanceLesson(null)} onSaved={() => { setAttendanceLesson(null); void mutateLessons() }} />}
 
-        {pkgOpen && (
-          <PackageModal student={student} onClose={() => setPkgOpen(false)} onSaved={() => { setPkgOpen(false); void mutate() }} />
-        )}
-
         <ConfirmDialog
           open={leaveClassOpen}
           onClose={() => setLeaveClassOpen(false)}
@@ -316,86 +280,5 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
         />
       </div>
     </div>
-  )
-}
-
-// ── Quản lý gói buổi của học viên ──
-function PackageModal({
-  student,
-  onClose,
-  onSaved,
-}: {
-  student: Student
-  onClose: () => void
-  onSaved: () => void
-}) {
-  const { success: notifySuccess, error: notifyError } = useToast()
-  const { data: pkgData, mutate } = useApi<LessonPackage[]>(`/api/students/${student.id}/packages`)
-  const [submitting, setSubmitting] = useState(false)
-  const [name, setName] = useState('')
-  const [total, setTotal] = useState('')
-
-  const packages = pkgData?.data ?? []
-
-  const handleAdd = async () => {
-    const n = Number(total)
-    if (!name.trim() || !Number.isInteger(n) || n <= 0) {
-      notifyError('Nhập tên gói và số buổi hợp lệ')
-      return
-    }
-    setSubmitting(true)
-    try {
-      const data = await apiJson<LessonPackage>(`/api/students/${student.id}/packages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), total: n }),
-      })
-      if (!data.success) {
-        notifyError(data.error || 'Không tạo được gói')
-        return
-      }
-      notifySuccess('Đã thêm gói buổi học')
-      setName('')
-      setTotal('')
-      await mutate()
-      onSaved()
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <Modal open onClose={onClose} title={`Gói buổi học — ${student.fullName}`} size="md">
-      <div className="space-y-3">
-        {packages.length === 0 && <p className="text-sm text-zinc-500 dark:text-zinc-400">Chưa có gói buổi học nào.</p>}
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-          {packages.map((p) => {
-            const remain = Math.max(0, p.total - p.used)
-            return (
-              <li key={p.id} className="flex items-center justify-between gap-3 py-2.5">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-white">{p.name}</p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{p.total} buổi, đã dùng {p.used}</p>
-                </div>
-                <Badge variant={remain > 0 ? 'success' : 'default'}>còn {remain}</Badge>
-              </li>
-            )
-          })}
-        </ul>
-
-        <div className="border-t border-zinc-200 pt-3 dark:border-zinc-800">
-          <p className="mb-2 text-xs font-medium text-zinc-600 dark:text-zinc-400">Thêm gói mới</p>
-          <div className="grid grid-cols-2 gap-2">
-            <Input placeholder="Tên gói (VD: Gói 12 buổi)" value={name} onChange={(e) => setName(e.target.value)} />
-            <Input type="number" min={1} placeholder="Số buổi" value={total} onChange={(e) => setTotal(e.target.value)} />
-          </div>
-          <Button variant="primary" size="md" fullWidth className="mt-2" disabled={submitting} onClick={handleAdd}>
-            {submitting ? 'Đang lưu...' : 'Thêm gói'}
-          </Button>
-        </div>
-      </div>
-    </Modal>
   )
 }

@@ -6,7 +6,7 @@ Ngày: 09/09/2026. Trạng thái: đã triển khai mã nguồn. Hướng dẫn 
 
 ## 1. Mục tiêu và phạm vi
 
-Admin quản lý học viên và toàn bộ lịch học trong một giao diện có cách thao tác quen thuộc như Google Calendar: xem ngày/tuần/tháng, bấm hoặc kéo chọn để tạo buổi, bấm sự kiện để sửa, kéo để đổi giờ, kéo cạnh để đổi thời lượng, quản lý lịch lặp và ghi chú riêng từng buổi. Thay đổi được đẩy lên Google Calendar tự động.
+Admin quản lý học viên và toàn bộ lịch học trong một giao diện có cách thao tác quen thuộc như Google Calendar: xem ngày/tuần/tháng, bấm hoặc kéo chọn để tạo buổi, bấm sự kiện để sửa, kéo để đổi giờ, kéo cạnh để đổi thời lượng, quản lý lịch lặp và ghi chú riêng từng buổi. Thay đổi được đẩy lên Google Calendar khi admin bấm nút đồng bộ toàn bộ lịch.
 
 Kế thừa quyền ADMIN hiện có cho toàn bộ module. Học viên tiếp tục là `Student`, độc lập với `Customer`, `Membership` và phiên chơi POS. Một buổi học có thể có nhiều học viên qua `LessonStudent`; đây là nghiệp vụ lớp học đã có trong dự án.
 
@@ -62,9 +62,9 @@ Các điểm hiện tại cần sửa trong phạm vi này:
 | API từ chối thay đổi | Trả sự kiện về vị trí cũ, hiển thị lý do tiếng Việt |
 | DB đã lưu nhưng Google lỗi | Giữ thay đổi trên lịch app; hiển thị Chờ đồng bộ hoặc Đồng bộ lỗi |
 
-Form tạo/sửa thống nhất: tiêu đề, học viên có ô tìm kiếm, tên HLV, ngày, giờ bắt đầu/kết thúc, lặp lại, ghi chú buổi. Lặp tuần hỗ trợ mỗi N tuần, nhiều ngày trong tuần, kết thúc theo ngày/số buổi/không kết thúc.
+Khi tạo buổi từ Calendar, admin bắt buộc chọn lớp; roster học viên được lấy từ lớp và không chỉnh riêng ở form buổi học. Form còn có tiêu đề, HLV, ngày, giờ bắt đầu/kết thúc và ghi chú. Lịch lặp tuần được quản lý trong chi tiết lớp; form Calendar chỉ tạo buổi lẻ và sửa các buổi đã có.
 
-Ghi chú buổi (`Lesson.note`) mặc định lưu nội bộ. Nếu admin muốn đưa lên lịch chung, có lựa chọn rõ ràng “Đồng bộ ghi chú lên Google Calendar”. Ghi chú cá nhân của học viên (`LessonStudent.note`) tiếp tục ở nội bộ. Trước khi bật cơ chế mới, xử lý rõ ghi chú từng được đồng bộ theo hành vi cũ.
+Ghi chú buổi (`Lesson.note`) được gửi cùng sự kiện khi admin đồng bộ toàn bộ lịch. Ghi chú cá nhân của học viên (`LessonStudent.note`) tiếp tục ở nội bộ.
 
 Trên điện thoại, nhấn giữ để chọn/kéo khi thư viện hỗ trợ phù hợp; mọi thao tác kéo đều có cách tương đương qua form cho cảm ứng và bàn phím. Kiểm tra focus, Esc, nhãn nút, trạng thái đang lưu và cảnh báo khi đóng form có thay đổi chưa lưu.
 
@@ -132,12 +132,12 @@ Google hỗ trợ instance và cách tách chuỗi cho thao tác “buổi này 
 
 Luồng bắt buộc: **Admin lưu → transaction ghi dữ liệu + audit + sync job → trả thành công cho UI → tác vụ nền gọi Google → cập nhật mapping/trạng thái**. Không giữ transaction DB trong lúc gọi mạng.
 
-- Tạo/sửa/đổi giờ/đổi thời lượng/huỷ đều sinh yêu cầu đồng bộ. Đồng bộ bản đang có khi kết nối lần đầu hoặc kết nối lại, theo khoảng admin chọn; mặc định hôm nay đến hết phạm vi lịch tương lai đã sinh.
+- Tạo/sửa/đổi giờ/đổi thời lượng/huỷ đều sinh yêu cầu đồng bộ. Nút đồng bộ toàn bộ lịch xếp mọi buổi đã lưu và chuỗi lặp vào hàng đợi, từ lịch sử đến hết phạm vi lịch tương lai đã sinh; không chọn khoảng ngày.
 - Job có khoá/lease tránh hai tiến trình xử lý đồng thời, thứ tự theo event/chuỗi, phiên bản chống job cũ ghi đè bản mới. Tạo ID Google ổn định hợp lệ cho event/master để retry sau timeout không tạo trùng; đặt metadata riêng liên kết ID nội bộ. Google cho phép client cung cấp event ID để tránh tạo trùng sau lỗi: [Create events](https://developers.google.com/workspace/calendar/api/guides/create-events).
 - Job instance phụ thuộc master tồn tại; tác vụ tách chuỗi ghi nhớ bước đã xong để chạy lại an toàn. Huỷ trước khi job tạo chạy phải hội tụ về không có sự kiện hoạt động.
 - Retry có backoff cho rate limit/lỗi tạm thời, timeout; lỗi quyền/token chuyển sang Cần kết nối lại; lỗi dữ liệu dừng để sửa. Xoá một event đã không còn tồn tại được coi là hoàn tất sau kiểm tra đúng mapping.
 - OAuth dùng quyền tối thiểu cho liệt kê lịch và chỉnh event (`calendar.calendarlist.readonly`, `calendar.events` theo lựa chọn lịch có sẵn); admin chọn lịch có quyền ghi. Kiểm tra lại ADMIN ở cả connect/callback, state một lần có hạn và ràng buộc phiên. Mã hoá token phía server bằng khoá môi trường, không trả token ra UI/log; lưu token mới và giữ refresh token cũ khi phản hồi refresh không cấp lại. Nguồn: [Calendar scopes](https://developers.google.com/workspace/calendar/api/auth), [OAuth web server](https://developers.google.com/identity/protocols/oauth2/web-server).
-- Màn kết nối hiển thị lịch đích, trạng thái kết nối, lần đồng bộ thành công, số việc đang chờ/lỗi; mỗi buổi có trạng thái tương ứng và nút thử lại. Mục tiêu khi dịch vụ bình thường: thay đổi xuất hiện trên Google trong tối đa khoảng 2 phút, cần xác nhận bằng nghiệm thu hạ tầng scheduler.
+- Màn kết nối hiển thị lịch đích, trạng thái kết nối, lần đồng bộ thành công và số việc đang chờ/lỗi; admin dùng nút đồng bộ toàn bộ lịch để thử lại các mục lỗi.
 - Ngắt kết nối dừng xử lý job với kết nối cũ, giữ dữ liệu app và các event đã có trên Google. Kết nối lại cùng lịch tiếp tục mapping; đổi lịch phải là thao tác rõ ràng, tạo mapping mới và nêu cách xử lý event lịch cũ trước khi chạy.
 - Vì đồng bộ một chiều, sửa trên Google không nhập lại vào app; UI kết nối giải thích app là nơi chỉnh lịch. Khi job app chạy lại, dữ liệu do app quản lý được ghi lại theo app. Chỉ quản lý event có mapping của ứng dụng.
 

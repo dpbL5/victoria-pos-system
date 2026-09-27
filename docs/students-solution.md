@@ -4,7 +4,7 @@
 
 ## Bối cảnh
 
-Victoria Archery Club cần quản lý **học viên** tách biệt khỏi hệ thống POS: admin thêm/sửa/xoá học viên, xếp lịch học (buổi lẻ + lịch lặp hàng tuần), đồng bộ sang **Google Calendar** (OAuth2, 1 calendar CLB dùng chung), ghi note + điểm danh (hoàn thành/vắng) sau mỗi buổi, đếm **số buổi còn lại** theo gói.
+Victoria Archery Club cần quản lý **học viên** tách biệt khỏi hệ thống POS: admin thêm/sửa/xoá học viên, xếp lịch học (buổi lẻ + lịch lặp hàng tuần), đồng bộ sang **Google Calendar** (OAuth2, 1 calendar CLB dùng chung), ghi note + điểm danh (hoàn thành/vắng) sau mỗi buổi.
 
 Đây là subsystem mới, **không đụng** Customer/Membership/Session/POS. **Chỉ ADMIN** thao tác.
 
@@ -14,7 +14,6 @@ Victoria Archery Club cần quản lý **học viên** tách biệt khỏi hệ 
 - **Google Calendar OAuth2 đầy đủ**, **1 calendar CLB dùng chung** (1 bộ token, admin connect). Dùng server-side fetch tới Google Calendar API v3 — **không cần** thêm dependency `googleapis`.
 - **Nhiều học viên / 1 buổi** — `LessonStudent` (join many-to-many), mỗi HV có trạng thái riêng `SCHEDULED/COMPLETED/ABSENT` + note riêng.
 - **Lịch lặp + buổi lẻ** — `LessonSeries` (RRULE weekly) **materialize** từng `Lesson` tương lai (horizon ~12 tuần) để lưu note/điểm danh/đếm buổi. Series gắn **1 recurring event** Google Calendar (không sync per-occurrence).
-- **Đếm số buổi** — `LessonPackage { total, used }`; hoàn thành 1 buổi giảm remaining (chống đếm trùng theo `[lessonId, studentId]`).
 - **Chỉ ADMIN** thao tác; STAFF không thấy màn này (sidebar `adminOnly`).
 - **Coach = tên hiển thị** — `lesson.coachName` string, không FK User.
 
@@ -22,31 +21,28 @@ Victoria Archery Club cần quản lý **học viên** tách biệt khỏi hệ 
 
 ### Schema (`prisma/schema.prisma`)
 
-Thêm 5 models + 2 enum (chi tiết đầy đủ trong plan):
+Các model của subsystem:
 
 ```
 1. Student           — fullName, phone?, birthYear?, notes?, status ACTIVE/INACTIVE, deletedAt (soft delete)
-2. LessonPackage     — studentId, name, total, used, isActive
-3. LessonSeries      — title, coachName?, daysOfWeek Int[], startTime "HH:mm", durationMin, rrule, startsOn, endsOn?, isActive, googleEventId?
-4. Lesson            — seriesId?, title, coachName?, startsAt, durationMin, status, note?, googleEventId?
-5. LessonStudent     — lessonId + studentId (unique), status, note?, packageId? (gói trừ khi hoàn thành)
-6. CalendarConnection— email, accessToken, refreshToken, tokenExpiresAt, calendarId? (1 row duy nhất cho CLB)
+2. LessonSeries      — title, coachName?, daysOfWeek Int[], startTime "HH:mm", durationMin, rrule, startsOn, endsOn?, isActive, googleEventId?
+3. Lesson            — seriesId?, title, coachName?, startsAt, durationMin, status, note?, googleEventId?
+4. LessonStudent     — lessonId + studentId (unique), status, note?
+5. CalendarConnection— email, accessToken, refreshToken, tokenExpiresAt, calendarId? (1 row duy nhất cho CLB)
 7. enum LessonStatus        — SCHEDULED | COMPLETED | CANCELLED
 8. enum LessonAttendance    — SCHEDULED | COMPLETED | ABSENT
 ```
 
 ### Domain `src/lib/students/` (Port/Adapter + use-cases)
 
-- `ports.ts` — `StudentRepository`, `LessonRepository`, `LessonSeriesRepository`, `LessonPackageRepository`, `CalendarConnectionRepository`.
-- `validations.ts` — zod schema tiếng Việt: `createStudentSchema`, `updateStudentSchema`, `createLessonSchema`, `createSeriesSchema`, `markAttendanceSchema`, `createPackageSchema`, `updatePackageSchema`.
+- `ports.ts` — `StudentRepository`, `LessonRepository`, `LessonSeriesRepository`, `CalendarConnectionRepository`.
+- `validations.ts` — zod schema tiếng Việt cho học viên, lịch và điểm danh.
 - `helpers/` — pure functions (test được):
   - `rrule.ts`: `buildWeeklyRrule(daysOfWeek)`, `generateOccurrences(...)` — sinh các buổi theo tuần giờ Việt Nam.
-  - `package-math.ts`: `remaining(pkg) = total - used`.
 - `use-cases/` — chuẩn pricing use-case (`ok/err/fail`, `runInTransaction`, `tx.audit.append`, `mapXxxError`):
   - `student-crud.ts` — create/update/delete (soft delete).
-  - `package-crud.ts` — create/update (chỉ tăng total).
   - `lesson-crud.ts` — createLesson (lẻ), updateLesson, deleteLesson (CANCELLED + xoá event GCal), createSeries (materialize + recurring GCal event), updateSeries, deleteSeries.
-  - `attendance.ts` — markAttendance: đặt status/note từng HV, COMPLETED → `used+1` (transaction).
+  - `attendance.ts` — markAttendance: lưu trạng thái điểm danh và ghi chú từng HV trong transaction.
   - `calendar-connect.ts` — connect/disconnect/getStatus.
 - `index.ts` — barrel export.
 
@@ -77,8 +73,8 @@ POST            /api/google/disconnect
 
 ### UI (`src/features/students/`)
 
-- `students-screen.tsx` — `StudentsScreen`: danh sách HV, search, số buổi còn lại, CRUD, nút **Kết nối Google Calendar** + trạng thái connect.
-- `student-detail-screen.tsx` — `StudentDetailScreen({ id })`: profile, gói buổi, lịch sử buổi học, note.
+- `students-screen.tsx` — `StudentsScreen`: danh sách HV, search, CRUD, nút **Kết nối Google Calendar** + trạng thái connect.
+- `student-detail-screen.tsx` — `StudentDetailScreen({ id })`: profile, lớp hiện tại, lịch sử buổi học, note.
 - `lessons-screen.tsx` — `LessonsScreen`: xem lịch theo tuần, tạo buổi lẻ + lịch lặp, điểm danh/note.
 - Route pages: `/students`, `/students/[id]`, `/lessons`.
 - Sidebar `staffMenuItems` thêm `{ href: '/lessons', label: 'Học viên', Icon: GraduationCap, adminOnly: true }`; MoreScreen `adminLinks` thêm mục "Học viên".
@@ -86,7 +82,6 @@ POST            /api/google/disconnect
 ### Unit test (`src/lib/__tests__/`)
 
 - `students-rrule.test.ts` — sinh buổi lặp đúng ngày tuần/giờ VN/horizon.
-- `students-package.test.ts` — `remaining`, đếm trùng.
 - `students-attendance.test.ts` — use-case `markAttendance` với fake repo: COMPLETED trừ `used` đúng 1 lần/HV, ABSENT không trừ, note lưu, audit append.
 
 ## Lớp học (LessonClass)
@@ -105,7 +100,7 @@ Lớp là **danh tính + sổ học viên**; lịch của lớp là các **khung
 
 `deleteClass` XOÁ CỨNG lớp + mọi khung giờ + mọi buổi của lớp (kể cả buổi đã điểm danh), dùng khi tạo lớp sai. Ba điểm phải nhớ:
 
-- **Không có ngoại lệ**: bất kể buổi nào đã điểm danh cũng đều bị xoá. Muốn giữ lịch sử thì dùng "Kết thúc lớp". Xoá cứng buổi có `packageId` làm mất luôn dấu vết trừ gói — chỉ hợp lý với lớp thật sự thêm nhầm, chưa vận hành.
+- **Không có ngoại lệ**: bất kể buổi nào đã điểm danh cũng đều bị xoá. Muốn giữ lịch sử thì dùng "Kết thúc lớp".
 - **Dọn Google Calendar trước khi xoá DB**: worker đồng bộ chỉ xoá event khi còn đọc được row (`if (series)` / `if (lesson)`), nên `deleteClassEvents` gọi `googleCalendar.deleteEvent` cho event của khung và của buổi *trước* transaction (best-effort, lỗi từng event bỏ qua; chưa kết nối Google thì bỏ qua bước này). Thứ tự trong transaction: xoá buổi → xoá khung → xoá lớp (FK `classId`/`seriesId` là `SetNull` nên phải xoá tường minh, không dựa vào cascade).
 - UI: nút "Xoá lớp" ở danh sách lớp (mọi dòng) và ở đầu trang chi tiết, kèm ConfirmDialog nói rõ sẽ mất gì; xoá xong quay về `/classes`.
 
@@ -137,4 +132,4 @@ Kết quả 2026-09-17 (sau backfill): 4 lớp, 2 học viên thuộc ≥1 lớp
 - `ponytail:` GCal sync **best-effort** — fail chỉ warning, không chặn nghiệp vụ.
 - `ponytail:` sổ học viên của lớp **không có ngày hiệu lực** vào/ra lớp — thêm `ClassEnrollment` khi cần thống kê theo giai đoạn.
 - `ponytail:` sửa cấu trúc khung giờ (thứ/giờ) đổi lịch cả chuỗi tương lai như `updateSeries`; chưa hỗ trợ nhiều quy tắc lặp trong một khung.
-- `ponytail:` lớp chưa gắn học phí/gói buổi — gói vẫn theo từng học viên (`LessonPackage`).
+- `ponytail:` lớp chưa gắn học phí — bổ sung khi có quy tắc tính phí rõ ràng.

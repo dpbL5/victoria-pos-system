@@ -24,7 +24,7 @@ const lesson: Lesson = {
   note: null,
   googleEventId: null,
   students: [
-    { id: 'ls-1', lessonId: 'l1', studentId: 's1', status: 'SCHEDULED', note: null, packageId: null, student: { id: 's1', fullName: 'Nguyễn Văn A' }, package: null },
+    { id: 'ls-1', lessonId: 'l1', studentId: 's1', status: 'SCHEDULED', note: null, student: { id: 's1', fullName: 'Nguyễn Văn A' } },
   ],
 }
 
@@ -44,11 +44,11 @@ it('buổi đã huỷ không hiện nút điểm danh', () => {
 it('buổi đã lưu hiện mục ghi chú từng học viên', () => {
   const html = render({ ...lesson, students: [{ ...lesson.students[0], note: 'Tiến bộ tốt' }] })
 
-  expect(html).toContain('Ghi chú từng học viên')
+  expect(html).toContain('Ghi chú cho Nguyễn Văn A')
   expect(html).toContain('Nguyễn Văn A')
   expect(html).toContain('Tiến bộ tốt')
 })
 
 it('buổi đã huỷ không hiện mục ghi chú từng học viên', () => {
-  expect(render({ ...lesson, status: 'CANCELLED' })).not.toContain('Ghi chú từng học viên')
+  expect(render({ ...lesson, status: 'CANCELLED' })).not.toContain('Ghi chú cho Nguyễn Văn A')
 })

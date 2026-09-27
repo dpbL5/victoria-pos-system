@@ -55,6 +55,4 @@
   .lessons-calendar-shell { height: 100dvh; }
 }
 
-.lessons-calendar .lesson-mini { font-size: 11px; }
-.lessons-calendar .lesson-mini-day { cursor: pointer; }
 .lessons-calendar .fc { min-height: 0; }

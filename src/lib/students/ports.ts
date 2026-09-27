@@ -3,13 +3,12 @@ import type { Prisma } from '@/generated/prisma/client'
 import type { PreviousAttendanceNote } from './helpers/attendance-notes'
 
 export type StudentRecord = Prisma.StudentGetPayload<{
-  include: { packages: true; classMemberships: { include: { lessonClass: true } } }
+  include: { classMemberships: { include: { lessonClass: true } } }
 }>
 export type LessonRecord = Prisma.LessonGetPayload<{
-  include: { students: { include: { student: true; package: true } }; series: { include: { class: true } }; class: true }
+  include: { students: { include: { student: true } }; series: { include: { class: true } }; class: true }
 }>
 export type LessonSeriesRecord = Prisma.LessonSeriesGetPayload<{ include: { students: true } }>
-export type LessonPackageRecord = Prisma.LessonPackageGetPayload<object>
 export type CalendarConnectionRecord = Prisma.CalendarConnectionGetPayload<object>
 export type LessonClassRecord = Prisma.LessonClassGetPayload<{
   include: { slots: { include: { students: { include: { student: true } } } }; students: { include: { student: true } }; _count: { select: { lessons: true } } }
@@ -68,9 +67,7 @@ export interface LessonRepository {
     status: 'COMPLETED' | 'ABSENT' | 'SCHEDULED'
     note?: string
   }): Promise<void>
-  /** Gắn gói buổi đã bị trừ cho LessonStudent (chống đếm trùng). */
-  setPackage(input: { lessonId: string; studentId: string; packageId: string | null }): Promise<void>
-  /** Ghi note riêng của một học viên cho buổi học (không đụng status/gói). */
+  /** Ghi note riêng của một học viên cho buổi học (không đụng status). */
   setStudentNote(input: { lessonId: string; studentId: string; note: string | null }): Promise<void>
   /** Note khác rỗng của buổi gần nhất trước `before` cho từng học viên. */
   lastNotesByStudent(studentIds: string[], before: Date): Promise<PreviousAttendanceNote[]>
@@ -96,16 +93,6 @@ export interface LessonClassRepository {
   findUpcomingLessons(classIds: string[], from: Date): Promise<LessonRecord[]>
   /** Lớp hiện tại của từng học viên — ràng buộc "một học viên chỉ thuộc một lớp". */
   classesOfStudents(studentIds: string[], activeOnly?: boolean): Promise<{ studentId: string; studentName: string; classId: string; className: string }[]>
-}
-
-export interface LessonPackageRepository {
-  findById(id: string): Promise<LessonPackageRecord | null>
-  findActiveByStudent(studentId: string): Promise<LessonPackageRecord[]>
-  create(data: { studentId: string; name: string; total: number }): Promise<LessonPackageRecord>
-  update(id: string, data: { name?: string; total?: number; isActive?: boolean }): Promise<LessonPackageRecord>
-  /** Tăng used thêm 1 (điều kiện: còn buổi, tức used < total) */
-  incrementUsed(id: string): Promise<LessonPackageRecord>
-  decrementUsed(id: string): Promise<LessonPackageRecord>
 }
 
 export interface CalendarConnectionRepository {

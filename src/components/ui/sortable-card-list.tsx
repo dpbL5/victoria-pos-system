@@ -5,7 +5,7 @@ import { Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { KeyboardEvent } from 'react'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
+import { AppSkeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
 import { ListHeader, type ListSearchConfig } from '@/components/ui/list-header'
@@ -35,7 +35,6 @@ interface SortableCardListProps<T> {
   defaultSortKey?: string
   defaultSortDir?: 'asc' | 'desc'
   loading?: boolean
-  loadingCount?: number
   emptyIcon?: LucideIcon
   emptyMessage?: string
   emptyDescription?: string
@@ -57,7 +56,6 @@ export function SortableCardList<T>({
   defaultSortKey,
   defaultSortDir = 'desc',
   loading = false,
-  loadingCount = 4,
   emptyIcon = Users,
   emptyMessage = 'Không có dữ liệu',
   emptyDescription,
@@ -183,21 +181,7 @@ export function SortableCardList<T>({
 
       {/* Loading */}
       {loading && (
-        <div aria-busy="true" aria-label="Đang tải danh sách" className="space-y-3 p-3">
-          <span className="sr-only">Đang tải dữ liệu...</span>
-          {Array.from({ length: loadingCount }).map((_, i) => (
-            <div key={i} aria-hidden="true" className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-              <Skeleton className="mb-3 h-5 w-2/3" />
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-1/2" />
-                  <Skeleton className="h-4 w-1/3" />
-                </div>
-                <Skeleton className="h-10 w-20 rounded-lg" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <AppSkeleton />
       )}
 
       {/* Empty */}

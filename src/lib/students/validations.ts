@@ -11,18 +11,6 @@ export const updateStudentSchema = createStudentSchema
   .partial()
   .extend({ status: z.enum(['ACTIVE', 'INACTIVE']).optional() })
 
-export const createPackageSchema = z.object({
-  studentId: z.string().uuid('Mã học viên không hợp lệ'),
-  name: z.string().trim().min(1, 'Tên gói không được để trống').max(100),
-  total: z.number().int().positive('Số buổi phải lớn hơn 0'),
-})
-
-export const updatePackageSchema = z.object({
-  name: z.string().trim().min(1, 'Tên gói không được để trống').max(100).optional(),
-  total: z.number().int().positive('Số buổi phải lớn hơn 0').optional(),
-  isActive: z.boolean().optional(),
-})
-
 const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/
 
 export const createLessonSchema = z.object({
@@ -95,8 +83,6 @@ export const connectCalendarSchema = z.object({
 
 export type StudentCreateInput = z.infer<typeof createStudentSchema>
 export type StudentUpdateInput = z.infer<typeof updateStudentSchema>
-export type PackageCreateInput = z.infer<typeof createPackageSchema>
-export type PackageUpdateInput = z.infer<typeof updatePackageSchema>
 export type LessonCreateInput = z.infer<typeof createLessonSchema>
 export type LessonUpdateInput = z.infer<typeof updateLessonSchema>
 export type SeriesCreateInput = z.infer<typeof createSeriesSchema>
