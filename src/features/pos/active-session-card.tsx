@@ -146,15 +146,20 @@ export function ActiveSessionCard({
           )}
         </div>
 
-        {/* Phải — timer chính + Dừng/Chơi + Thu, xếp dọc, căn phải.
-            Phiên nhóm cũng có timer: panel mặc định thu gọn, nên nếu không có
-            đồng hồ ở đây thì câu "đã chơi bao lâu" không có câu trả lời nào. */}
+        {/* Phải — đồng hồ + Dừng/Chơi + Thu, xếp dọc, căn phải.
+            Phiên NHÓM cố tình KHÔNG có đồng hồ ở cấp card: `elapsed` của phiên
+            là thời gian trôi qua kể từ lúc bắt đầu, không phải thời gian tính
+            tiền của bất kỳ người nào (mỗi người pause/resume riêng), nên đặt nó
+            cạnh nút Thu rất dễ bị đọc thành số phải thu. Đồng hồ đúng của phiên
+            nhóm nằm ở từng người chơi trong panel bên dưới. */}
         <div className="flex min-w-0 shrink-0 flex-col items-end gap-1.5">
-          <SessionTimer
-            elapsed={elapsed}
-            isPaused={isPaused}
-            accent={isMember ? 'yellow' : 'emerald'}
-          />
+          {!isGroup && (
+            <SessionTimer
+              elapsed={elapsed}
+              isPaused={isPaused}
+              accent={isMember ? 'yellow' : 'emerald'}
+            />
+          )}
           {pausedPlayers > 0 && (
             <span className="text-xs font-medium text-warning">
               {pausedPlayers} đang nghỉ
