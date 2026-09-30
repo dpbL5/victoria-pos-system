@@ -10,15 +10,13 @@
 @theme inline {
   /* Brand */
   --color-brand: var(--color-brand);
-  --color-brand-light: var(--color-brand-light);
-  --color-brand-dark: var(--color-brand-dark);
 
-  /* Gold — vàng thương hiệu */
-  --color-gold: var(--color-gold);
-  --color-gold-light: var(--color-gold-light);
-  --color-gold-dark: var(--color-gold-dark);
-  --color-gold-bg: var(--color-gold-bg);
-  --color-gold-border: var(--color-gold-border);
+  /* Yellow — vàng thương hiệu, pick từ logo (victoria_logo.svg): #e8b914 light / #d4b572 dark.
+     yellow-dark là bước đậm để làm chữ/icon trên nền sáng; -bg/-border là tint. */
+  --color-yellow: var(--color-yellow);
+  --color-yellow-dark: var(--color-yellow-dark);
+  --color-yellow-bg: var(--color-yellow-bg);
+  --color-yellow-border: var(--color-yellow-border);
 
   /* Surfaces */
   --color-surface-primary: var(--color-surface-primary);
@@ -30,7 +28,6 @@
   /* Borders */
   --color-border-default: var(--color-border-default);
   --color-border-strong: var(--color-border-strong);
-  --color-border-subtle: var(--color-border-subtle);
 
   /* Text */
   --color-text-primary: var(--color-text-primary);
@@ -64,6 +61,19 @@
      Đổi 1 dòng này là đổi width toàn bộ app. Dùng class `max-w-content`,
      không hardcode max-w-3xl/4xl/5xl/6xl trong trang (có test chặn). */
   --container-content: 64rem;
+
+  /* Radii + shadows — khai báo trong @theme để utility `rounded-*`/`shadow-*`
+     dùng đúng thang của dự án (giá trị runtime ở :root/.dark bên dưới). */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -74,52 +84,50 @@
 :root {
   /* Brand */
   --color-brand: #2563eb;
-  --color-brand-light: #3b82f6;
-  --color-brand-dark: #1d4ed8;
 
-  /* Gold — vàng thương hiệu (light: dùng gold-dark cho đủ tương phản trên nền sáng) */
-  --color-gold: #d4b572;
-  --color-gold-light: #e2c685;
-  --color-gold-dark: #b69854;
-  --color-gold-bg: rgba(212, 181, 114, 0.12);
-  --color-gold-border: rgba(212, 181, 114, 0.35);
+  /* Yellow — vàng thương hiệu (gốc logo #e8b914, đẩy sáng hơn); giống nhau ở cả 2 theme. */
+  --color-yellow: #edc92c;
+  --color-yellow-dark: #8a6a00;
+  --color-yellow-bg: rgba(237, 201, 44, 0.16);
+  --color-yellow-border: rgba(237, 201, 44, 0.45);
 
-  /* Surfaces */
+  /* Surfaces — thang neutral lấy đúng thang zinc đang hiển thị:
+     paper (#fff) · canvas (zinc-50) · tint (zinc-100) · card (#fff).
+     Đây là nguồn sự thật duy nhất — code không hardcode zinc nữa. */
   --color-surface-primary: #ffffff;
-  --color-surface-secondary: #f8fafc;
-  --color-surface-tertiary: #f1f5f9;
+  --color-surface-secondary: #fafafa;
+  --color-surface-tertiary: #f4f4f5;
   --color-surface-elevated: #ffffff;
   --color-surface-overlay: rgba(15, 23, 42, 0.6);
 
-  /* Borders */
-  --color-border-default: #e2e8f0;
-  --color-border-strong: #cbd5e1;
-  --color-border-subtle: #f1f5f9;
+  /* Borders — hairline zinc-200 / zinc-300 */
+  --color-border-default: #e4e4e7;
+  --color-border-strong: #d4d4d8;
 
-  /* Text */
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-text-tertiary: #94a3b8;
+  /* Text — zinc-900 / zinc-700 / zinc-500; tertiary đủ tương phản 4.5:1 (WCAG AA chữ nhỏ) */
+  --color-text-primary: #18181b;
+  --color-text-secondary: #3f3f46;
+  --color-text-tertiary: #71717a;
   --color-text-inverse: #ffffff;
 
   /* Focus ring — visible in both light and dark modes */
   --color-focus-ring: #2563eb;
 
-  --color-success: #16a34a;
+  --color-success: #15803d;
   --color-success-bg: #f0fdf4;
   --color-success-border: #bbf7d0;
-  --color-warning: #d97706;
+  --color-warning: #b45309;
   --color-warning-bg: #fffbeb;
   --color-warning-border: #fde68a;
-  --color-danger: #dc2626;
+  --color-danger: #b91c1c;
   --color-danger-bg: #fef2f2;
   --color-danger-border: #fecaca;
-  --color-info: #2563eb;
+  --color-info: #1d4ed8;
   --color-info-bg: #eff6ff;
   --color-info-border: #bfdbfe;
 
-  /* Accent — purple for members */
-  --color-accent-purple: #7c3aed;
+  /* Accent — purple: nhãn không thuộc hội viên (vai trò ADMIN, "Bắt buộc", "Hôm nay") */
+  --color-accent-purple: #6d28d9;
   --color-accent-purple-bg: #f5f3ff;
   --color-accent-purple-border: #ddd6fe;
 
@@ -139,7 +147,8 @@
 
   /* Spacing scale (for reference — use Tailwind classes directly) */
   /* Typography */
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   /* Sidebar */
@@ -156,36 +165,40 @@
   }
 
   .mobile-nav-content-safe {
-    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 0.75rem);
+    padding-bottom: calc(
+      var(--bottom-nav-height) + env(safe-area-inset-bottom) + 0.75rem
+    );
   }
 }
 
 /* ── Dark theme overrides ───────────────────────────────── */
 .dark {
+  color-scheme: dark;
+
   --color-brand: #1a1a1a;
-  --color-brand-light: #2a2a2a;
-  --color-brand-dark: #000000;
 
-  --color-gold: #d4b572;
-  --color-gold-light: #e2c685;
-  --color-gold-dark: #b69854;
-  --color-gold-bg: rgba(212, 181, 114, 0.1);
-  --color-gold-border: rgba(212, 181, 114, 0.25);
+  /* Yellow — dùng chung đúng vàng của light mode; -dark = chính nó vì đã đủ tương phản trên nền tối. */
+  --color-yellow: #edc92c;
+  --color-yellow-dark: #edc92c;
+  --color-yellow-bg: rgba(237, 201, 44, 0.16);
+  --color-yellow-border: rgba(237, 201, 44, 0.38);
 
-  --color-surface-primary: #18181b;
-  --color-surface-secondary: #27272a;
-  --color-surface-tertiary: #3f3f46;
-  --color-surface-elevated: #27272a;
+  /* Surfaces — canvas/sidebar/header là zinc-950, card nhấc lên zinc-900, hover zinc-800. */
+  --color-surface-primary: #09090b;
+  --color-surface-secondary: #09090b;
+  --color-surface-tertiary: #27272a;
+  --color-surface-elevated: #18181b;
   --color-surface-overlay: rgba(0, 0, 0, 0.7);
 
-  --color-border-default: #3f3f46;
+  /* Borders — hairline zinc-800 / zinc-600 */
+  --color-border-default: #27272a;
   --color-border-strong: #52525b;
-  --color-border-subtle: #27272a;
 
-  --color-text-primary: #fafafa;
-  --color-text-secondary: #a1a1aa;
-  --color-text-tertiary: #71717a;
-  --color-text-inverse: #0f172a;
+  /* Text — white / zinc-300 / zinc-400; tertiary đủ tương phản trên nền tối (WCAG AA chữ nhỏ) */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #d4d4d8;
+  --color-text-tertiary: #a1a1aa;
+  --color-text-inverse: #09090b;
 
   --color-success: #22c55e;
   --color-success-bg: rgba(34, 197, 94, 0.1);
@@ -256,52 +269,119 @@ body {
 
 /* ── Animation utilities ────────────────────────────────── */
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes slide-down {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes scale-in {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 @keyframes slide-in-right {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 /* Toast xuất hiện từ top: scale nhỏ (0.9) → đúng kích thước */
 @keyframes toast-pop {
-  from { opacity: 0; transform: translateY(-8px) scale(0.9); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 @keyframes toast-exit {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to   { opacity: 0; transform: translateY(-8px) scale(0.92); }
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.92);
+  }
 }
 /* Card list entry — dùng cho list item xuất hiện theo thứ tự.
    Stagger qua inline style `animationDelay`. */
 @keyframes card-enter {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes logo-breathe {
-  0%, 100% { opacity: 0.72; transform: scale(0.94); }
-  50% { opacity: 1; transform: scale(1); }
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
-.animate-fade-in { animation: fade-in var(--dur-quick) var(--ease-out); }
-.animate-slide-up { animation: slide-up var(--dur-menu) var(--ease-out); }
-.animate-slide-down { animation: slide-down var(--dur-quick) var(--ease-out); }
-.animate-scale-in { animation: scale-in var(--dur-quick) var(--ease-out); }
-.animate-slide-in-right { animation: slide-in-right var(--dur-drawer) var(--ease-out); }
-.animate-toast-pop { animation: toast-pop var(--dur-menu) var(--ease-out); }
-.animate-toast-exit { animation: toast-exit var(--dur-quick) var(--ease-in-out) forwards; }
-.animate-card-enter { animation: card-enter 220ms var(--ease-out) both; }
+.animate-fade-in {
+  animation: fade-in var(--dur-quick) var(--ease-out);
+}
+.animate-slide-up {
+  animation: slide-up var(--dur-menu) var(--ease-out);
+}
+.animate-slide-down {
+  animation: slide-down var(--dur-quick) var(--ease-out);
+}
+.animate-scale-in {
+  animation: scale-in var(--dur-quick) var(--ease-out);
+}
+.animate-slide-in-right {
+  animation: slide-in-right var(--dur-drawer) var(--ease-out);
+}
+.animate-toast-pop {
+  animation: toast-pop var(--dur-menu) var(--ease-out);
+}
+.animate-toast-exit {
+  animation: toast-exit var(--dur-quick) var(--ease-in-out) forwards;
+}
+.animate-card-enter {
+  animation: card-enter 220ms var(--ease-out) both;
+}
 
 /* Stagger cho danh sách: dùng `.animate-card-enter` kèm inline animationDelay
    theo index (index * 35ms) — chạy đúng với số item bất kỳ. Bản cũ dùng
@@ -320,7 +400,9 @@ body {
 }
 .motion-hover-lift:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px -8px rgba(15, 23, 42, 0.12), 0 2px 4px rgba(15, 23, 42, 0.04);
+  box-shadow:
+    0 6px 16px -8px rgba(15, 23, 42, 0.12),
+    0 2px 4px rgba(15, 23, 42, 0.04);
 }
 .motion-hover-lift:active {
   transform: translateY(0) scale(0.99);
@@ -329,9 +411,10 @@ body {
 
 /* Press feedback — dùng cho icon button, list row, clickable tile. */
 .motion-press {
-  transition: transform var(--dur-press) var(--ease-out),
-              background-color var(--dur-quick) var(--ease-out),
-              color var(--dur-quick) var(--ease-out);
+  transition:
+    transform var(--dur-press) var(--ease-out),
+    background-color var(--dur-quick) var(--ease-out),
+    color var(--dur-quick) var(--ease-out);
 }
 .motion-press:active {
   transform: scale(0.97);
@@ -351,8 +434,9 @@ body {
   width: 16px;
   border-radius: 9999px;
   background: currentColor;
-  transition: transform var(--dur-tactile) var(--ease-out),
-              opacity var(--dur-tactile) var(--ease-out);
+  transition:
+    transform var(--dur-tactile) var(--ease-out),
+    opacity var(--dur-tactile) var(--ease-out);
   opacity: 0;
 }
 .nav-active .nav-dot {
@@ -368,16 +452,44 @@ body {
   transition: outline-offset var(--dur-tactile) var(--ease-out);
 }
 
+.dark ::selection {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--color-text-primary);
+}
+
+.dark * {
+  scrollbar-color: var(--color-border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.dark *::-webkit-scrollbar {
+  display: block;
+  width: 0.5rem;
+  height: 0.5rem;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border: 2px solid var(--color-surface-primary);
+  border-radius: 9999px;
+}
+
 /* ── Reduced motion ───────────────────────────────────────
    Global kill switch — duration 0.01ms (không phải `none`) để
    transitionend/animationend vẫn fire cho listeners phụ thuộc. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  .motion-hover-lift:hover { transform: none !important; }
-  .motion-press:active { transform: none !important; }
+  .motion-hover-lift:hover {
+    transform: none !important;
+  }
+  .motion-press:active {
+    transform: none !important;
+  }
 }
