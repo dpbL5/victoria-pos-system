@@ -1,10 +1,32 @@
 'use client'
 
+/**
+ * ── DIRECTION CONTRACT — Ca hôm nay (màn /sessions) ────────────────────────
+ * THESIS: Màn này có HAI hình dạng, không phải một danh sách card xếp chồng.
+ *   Chưa mở ca thì cả màn chỉ còn một việc; mở ca rồi thì phiên chơi chiếm
+ *   phần còn lại. Từ chối: bốn card luôn hiện (hai card rỗng) + một overlay
+ *   modal `fixed inset-0` phủ lên chính màn hình vốn đã trống.
+ * OWN-WORLD: Ink & Gold Ledger — thang neutral zinc, vàng #edc92c chỉ làm HÌNH
+ *   (1.62:1 trên trắng, không bao giờ là chữ trên nền sáng); khi cần vàng làm
+ *   chữ thì dùng bước đậm #8a6a00 (5.07:1). Phẳng mặc định, viền hairline 1px,
+ *   chữ 12/14px, số tabular-nums. Nguồn màu: src/app/globals.css.
+ * STORY: Nhân viên biết ngay mình đang ở chế độ nào, việc kế tiếp là gì, và
+ *   phiên nào đang cần chú ý (tạm dừng / chưa thu hết).
+ * FIRST VIEWPORT (mobile 390px): chưa mở ca → một panel duy nhất, canh giữa,
+ *   status mark + tiêu đề + một nút contrast, không nút disabled, cộng một dòng
+ *   link "Lịch đặt" để giữ lối vào /bookings. Mở ca → dải ca 2 dòng (chấm trạng
+ *   thái + tiền đầu ca), hàng 3 hành động cao 48px, rồi danh sách phiên. Không
+ *   hành động nào nằm sau một lần bấm mở rộng.
+ * FORM: code-led (không sinh comp). Seed key b03671b6, dealt #4 of 7.
+ * FINISH: unreviewed and undocumented is unfinished; this build ends with the
+ *   finish review, the verdict, and DESIGN.md.
+ * ──────────────────────────────────────────────────────────────────────────
+ */
+
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSWRConfig } from 'swr'
 import {
-  ShieldCheck,
   Timer,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -17,7 +39,8 @@ import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { useApi } from '@/hooks/use-api'
 import { QuickActions } from './quick-actions'
 import { SellPickDialog } from './sell-pick-dialog'
-import { ShiftRail } from './shift-rail'
+import { ShiftGate } from './shift-gate'
+import { ShiftStrip } from './shift-strip'
 import { ActiveSessionCard } from './active-session-card'
 import { OpenShiftDialog } from './open-shift-dialog'
 import { CloseShiftDialog } from './close-shift-dialog'
@@ -166,6 +189,29 @@ export function TodayShiftScreen() {
     }
   }
 
+  const handleBookingCancel = async (booking: BookingItem) => {
+    setBusyBookingId(booking.id)
+    try {
+      const response = await apiJson(`/api/bookings/${booking.id}`, {
+        ...jsonRequest({ status: 'CANCELLED' }),
+        method: 'PATCH',
+      })
+      if (!response.success) {
+        notifyError(response.error || 'Không hủy được lịch')
+        return
+      }
+      void bookingsQuery.mutate((current) => current?.success
+        ? { ...current, data: (current.data ?? []).filter((item) => item.id !== booking.id) }
+        : current, { revalidate: false })
+        notifySuccess('Đã hủy lịch quá giờ hẹn')
+        await refreshAfterMutation([BOOKINGS_KEY], 'Đã hủy lịch nhưng danh sách chưa cập nhật. Không hủy lại; hãy tải lại màn hình.')
+    } catch {
+      notifyError('Lỗi kết nối máy chủ')
+    } finally {
+      setBusyBookingId(null)
+    }
+  }
+
   const { registerRefresh } = usePageRefresh()
 
   useEffect(() => {
@@ -178,6 +224,9 @@ export function TodayShiftScreen() {
       : session.playerCount),
     0
   )
+  // Phiên đang tạm dừng là phiên đang không được tính tiền — đếm lên header
+  // để trạng thái cần chú ý không bị chôn trong danh sách.
+  const pausedCount = sessions.filter((session) => session.pausedAt).length
   const isAdmin = authRole === 'ADMIN'
   const shiftReady = isAdmin || !!shift
   const canJoinCurrentShift = isAdmin && !!authUserId && !!shift && shift.status === 'OPEN'
@@ -275,8 +324,8 @@ export function TodayShiftScreen() {
       if (!data.success) {
         updateSessions((current) => current.map((s) => (
           s.id === session.id
-            ? { ...s, pausedAt: previousPausedAt, totalPausedSeconds: previousTotalPaused }
-            : s
+          ? { ...s, pausedAt: previousPausedAt, totalPausedSeconds: previousTotalPaused }
+          : s
         )))
         notifyError(data.error || 'Không tiếp tục được')
         return
@@ -292,8 +341,8 @@ export function TodayShiftScreen() {
     } catch {
       updateSessions((current) => current.map((s) => (
         s.id === session.id
-          ? { ...s, pausedAt: previousPausedAt, totalPausedSeconds: previousTotalPaused }
-          : s
+            ? { ...s, pausedAt: previousPausedAt, totalPausedSeconds: previousTotalPaused }
+            : s
       )))
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -378,8 +427,8 @@ export function TodayShiftScreen() {
           totalPausedSeconds: previousTotalPaused || p.totalPausedSeconds,
         }))
         notifyError(data.error || 'Không tiếp tục được người chơi')
-        return
-      }
+                return
+              }
       const resumedSeconds = data.data?.pausedSeconds ?? 0
       updatePlayerInSession(session.id, playerId, (p) => ({
         ...p,
@@ -415,7 +464,7 @@ export function TodayShiftScreen() {
       const data = await apiJson(`/api/sessions/${session.id}/players/${playerId}`, {
         ...jsonRequest({ name }),
         method: 'PATCH',
-      })
+    })
       if (!data.success) {
         updatePlayerInSession(session.id, playerId, (p) => ({ ...p, name: previousName }))
         notifyError(data.error || 'Không đổi được tên người chơi')
@@ -429,22 +478,73 @@ export function TodayShiftScreen() {
       return false
     } finally {
       setSubmitting(false)
-    }
   }
+}
+
+  // Khối lịch đặt dùng ở CẢ HAI chế độ: một lịch đến giờ là việc thật kể cả khi
+  // chưa mở ca, và ở mobile đây là lối vào /bookings duy nhất (bottom nav không
+  // có mục Lịch đặt). Ở chế độ A nó chỉ hiện khi thật sự có lịch.
+  const bookingsBlock = bookings.length > 0 ? (
+    <section className="rounded-xl border border-border-default bg-surface-elevated shadow-sm">
+      <div className="flex items-center justify-between border-b border-border-default px-4 py-3">
+        <h2 className="text-sm font-semibold text-text-primary">
+          Lịch đặt trong ngày
+          <span className="ml-2 text-xs font-normal tabular-nums text-text-tertiary">
+            {bookings.length}
+          </span>
+        </h2>
+        <Button variant="white" size="sm" onClick={() => router.push('/bookings')}>
+          Quản lý
+        </Button>
+      </div>
+      <BookingCards
+        bookings={bookings}
+        onCheckIn={(booking, startTime) => void handleBookingCheckIn(booking, startTime)}
+        onCancel={(booking) => void handleBookingCancel(booking)}
+        busyId={busyBookingId}
+        actionDisabled={!shift}
+        shiftOpenedAt={shift?.openedAt}
+      />
+    </section>
+  ) : (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-border-default bg-surface-elevated px-4 py-2.5">
+      <p className="min-w-0 truncate text-xs text-text-tertiary">
+        Không có lịch đặt hôm nay
+      </p>
+      <Button variant="ghost" size="sm" onClick={() => router.push('/bookings')}>
+        Lịch đặt
+      </Button>
+    </div>
+  )
+
+  // Chế độ A vẫn phải giữ lối vào /bookings — bottom nav trên mobile không có
+  // mục Lịch đặt, nên bỏ nó đi là chặn đường duy nhất tới màn đó. Nhưng chỉ MỘT
+  // dòng link, không dùng lại bookingsBlock: panel đó mang nút "Xác nhận & Chơi"
+  // và ở chế độ A nút ấy sẽ render disabled, phá đúng lời hứa "không nút disabled".
+  const bookingsLinkRow = (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-border-default bg-surface-elevated px-4 py-2.5">
+      <p className="min-w-0 truncate text-xs text-text-tertiary">
+        {bookings.length > 0
+          ? `${bookings.length} lịch đặt hôm nay`
+          : 'Không có lịch đặt hôm nay'}
+      </p>
+      <Button variant="ghost" size="sm" onClick={() => router.push('/bookings')}>
+        Lịch đặt
+      </Button>
+    </div>
+  )
 
   if (loading) {
     return <AppSkeleton />
   }
 
   return (
-    <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
+    <div className="min-h-full bg-surface-secondary px-4 py-4 md:px-6 md:py-6">
       <div className="mx-auto flex max-w-content flex-col gap-4">
-        <header className="hidden items-center justify-between gap-3 md:flex">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
-              Ca hôm nay
-            </h1>
-          </div>
+        <header className="hidden md:block">
+          <h1 className="text-xl font-bold leading-7 tracking-wide text-text-primary">
+            Ca hôm nay
+          </h1>
         </header>
 
         {error && (
@@ -452,132 +552,98 @@ export function TodayShiftScreen() {
             tone="danger"
             title="Không tải được dữ liệu"
             description={error}
-            action={<Button variant="secondary" size="sm" onClick={() => void refreshHome()}>Thử lại</Button>}
+            action={<Button variant="white" size="sm" onClick={() => void refreshHome()}>Thử lại</Button>}
           />
         )}
 
-        <div className="animate-slide-up">
-          <ShiftRail
-            shift={shift}
-            onOpen={() => setOpenShiftDialog(true)}
-            onClose={() => setCloseShiftDialog(true)}
-            onViewTransactions={() => {
-              if (shift) router.push(`/transactions?shiftId=${shift.id}`)
-            }}
-            onCountTools={() => setCountToolsDialog(true)}
-            hasCounted={hasCountedTools}
-            canJoin={canJoinCurrentShift}
-            onJoin={() => void handleOpenShift()}
-            submitting={submitting}
-          />
-        </div>
-
-        {!shiftReady && (
-          <div className="fixed inset-0 bottom-16 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm md:bottom-0">
-            <div className="mx-4 flex w-full max-w-sm animate-slide-up flex-col items-center rounded-2xl border border-amber-200 bg-white p-6 text-center shadow-xl dark:border-amber-500/20 dark:bg-zinc-900">
-              <div className="flex size-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/20">
-                <ShieldCheck size={24} className="text-amber-600 dark:text-amber-400" />
-              </div>
-              <h3 className="mt-4 text-lg font-bold text-zinc-950 dark:text-white">
-                Chưa mở ca
-              </h3>
-              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                Cần mở hoặc tham gia ca trước khi check-in, checkout và thu tiền.
-              </p>
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => setOpenShiftDialog(true)}
-                className="mt-5 w-full"
-              >
-                Mở / Tham gia ca
-              </Button>
-            </div>
-          </div>
-        )}
-
-        <div className="animate-slide-up" style={{ animationDelay: '40ms' }}>
-          <QuickActions
-            shiftReady={shiftReady}
-            retailDisabled={!shift}
-            onCheckIn={() => {
-              setCheckInInitialMode('WALK_IN')
-              setCheckInDialog(true)
-            }}
-            onSell={() => {
-              if (sessions.length === 0) {
-                notifyError('Chưa có phiên đang chơi để bán kèm')
-                return
-              }
-              if (sessions.length === 1) {
-                setSellSession(sessions[0])
-              } else {
-                setSellPickOpen(true)
-              }
-            }}
-            onRetail={() => setRetailOpen(true)}
-          />
-        </div>
-
-        <section className="animate-slide-up rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Lịch đặt trong ngày</h2>
-            </div>
-            <Button variant="secondary" size="sm" onClick={() => router.push('/bookings')}>Quản lý</Button>
-          </div>
-          <BookingCards bookings={bookings} onCheckIn={(booking, startTime) => void handleBookingCheckIn(booking, startTime)} busyId={busyBookingId} actionDisabled={!shift} shiftOpenedAt={shift?.openedAt} />
-        </section>
-
-        <section
-          className="animate-slide-up rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-          style={{ animationDelay: '80ms' }}
-        >
-          <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
-                Đang chơi
-              </h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {activePlayers} người chơi đang hoạt động
-              </p>
-            </div>
-          </div>
-
-          {sessions.length === 0 ? (
-            <EmptyState
-              icon={Timer}
-              message="Chưa có phiên đang chơi"
-              description={shiftReady ? 'Bắt đầu bằng một lượt check-in.' : 'Mở ca để bắt đầu vận hành.'}
-              action={
-                <Button variant="primary" disabled={!shiftReady} onClick={() => {
-                  setCheckInInitialMode('WALK_IN')
-                  setCheckInDialog(true)
-                }}>
-                  Check-in
-                </Button>
-              }
+        {!shiftReady ? (
+          <>
+            <ShiftGate
+              openShiftAt={openOperationalShift?.openedAt ?? null}
+              submitting={submitting}
+              onOpen={() => setOpenShiftDialog(true)}
             />
-          ) : (
-            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {sessions.map((session, index) => (
-                <ActiveSessionCard
-                  key={session.id}
-                  session={session}
-                  index={index}
-                  checkoutDisabled={!shiftReady}
-                  pauseDisabled={!shiftReady}
-                  onCheckout={() => { setCheckoutFrozenAt(new Date().toISOString()); setCheckoutSession(session) }}
-                  onPause={() => void handlePause(session)}
-                  onResume={() => void handleResume(session)}
-                  onPausePlayer={(playerId) => void handlePausePlayer(session, playerId)}
-                  onResumePlayer={(playerId) => void handleResumePlayer(session, playerId)}
-                  onRenamePlayer={(playerId, name) => handleRenamePlayer(session, playerId, name)}
+            {bookingsLinkRow}
+          </>
+        ) : (
+          <>
+            <ShiftStrip
+              shift={shift}
+              onOpen={() => setOpenShiftDialog(true)}
+              onClose={() => setCloseShiftDialog(true)}
+              onViewTransactions={() => {
+                if (shift) router.push(`/transactions?shiftId=${shift.id}`)
+              }}
+              onCountTools={() => setCountToolsDialog(true)}
+              hasCounted={hasCountedTools}
+              canJoin={canJoinCurrentShift}
+              onJoin={() => void handleOpenShift()}
+              submitting={submitting}
+            />
+
+            <QuickActions
+              shiftReady={shiftReady}
+              sellDisabled={sessions.length === 0}
+              retailDisabled={!shift}
+              onCheckIn={() => {
+                setCheckInInitialMode('WALK_IN')
+                setCheckInDialog(true)
+              }}
+              onSell={() => {
+                if (sessions.length === 0) {
+                  notifyError('Chưa có phiên đang chơi để bán kèm')
+                  return
+                }
+                if (sessions.length === 1) {
+                  setSellSession(sessions[0])
+                } else {
+                  setSellPickOpen(true)
+                }
+              }}
+              onRetail={() => setRetailOpen(true)}
+            />
+
+            {bookingsBlock}
+
+            <section className="rounded-xl border border-border-default bg-surface-elevated shadow-sm">
+              <div className="flex items-baseline justify-between gap-3 border-b border-border-default px-4 py-3">
+                <h2 className="text-sm font-semibold text-text-primary">Đang chơi</h2>
+                <p className="min-w-0 truncate text-xs tabular-nums text-text-tertiary">
+                  {activePlayers} người chơi
+                  {pausedCount > 0 && (
+                    <span className="text-warning"> · {pausedCount} tạm dừng</span>
+                  )}
+                </p>
+              </div>
+
+              {sessions.length === 0 ? (
+                <EmptyState
+                  icon={Timer}
+                  message="Chưa có phiên đang chơi"
+                  description={shiftReady ? 'Bắt đầu bằng một lượt check-in.' : 'Mở ca để bắt đầu vận hành.'}
                 />
-              ))}
-            </div>
-          )}
-        </section>
+              ) : (
+                <div className="divide-y divide-border-default">
+                  {sessions.map((session, index) => (
+                    <ActiveSessionCard
+                      key={session.id}
+                      session={session}
+                      index={index}
+                      checkoutDisabled={!shiftReady}
+                      pauseDisabled={!shiftReady}
+                      onCheckout={() => { setCheckoutFrozenAt(new Date().toISOString()); setCheckoutSession(session) }}
+                      onPause={() => void handlePause(session)}
+                      onResume={() => void handleResume(session)}
+                      onPausePlayer={(playerId) => void handlePausePlayer(session, playerId)}
+                      onResumePlayer={(playerId) => void handleResumePlayer(session, playerId)}
+                      onRenamePlayer={(playerId, name) => handleRenamePlayer(session, playerId, name)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </div>
 
       <OpenShiftDialog
@@ -700,4 +766,4 @@ export function TodayShiftScreen() {
 
     </div>
   )
-}
+              }

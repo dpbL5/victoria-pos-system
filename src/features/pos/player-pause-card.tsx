@@ -66,7 +66,7 @@ export function PlayerPauseCard({
   const hasPaused = pausedSeconds > 0
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex items-center justify-between gap-3 py-2.5">
       {/* Trái — tên + dòng Nghỉ (reserve chỗ để tránh layout shift khi bấm Dừng) */}
       <div className="flex min-w-0 flex-col gap-0.5">
         {editing ? (
@@ -94,8 +94,8 @@ export function PlayerPauseCard({
             <p
               className={
                 isPaused
-                  ? 'truncate text-base font-semibold text-amber-600 transition-colors duration-200 dark:text-amber-400'
-                  : 'truncate text-base font-semibold text-zinc-950 transition-colors duration-200 dark:text-white'
+                  ? 'truncate text-sm font-semibold text-warning transition-colors duration-200'
+                  : 'truncate text-sm font-semibold text-text-primary transition-colors duration-200'
               }
             >
               {displayName}
@@ -104,8 +104,8 @@ export function PlayerPauseCard({
               size={12}
               className={
                 isPaused
-                  ? 'shrink-0 text-amber-600 dark:text-amber-400'
-                  : 'shrink-0 text-zinc-400'
+                  ? 'shrink-0 text-warning'
+                  : 'shrink-0 text-text-tertiary'
               }
             />
           </button>
@@ -115,8 +115,8 @@ export function PlayerPauseCard({
           className={`inline-flex items-center gap-1 text-xs tabular-nums transition-colors duration-200 ${
             hasPaused
               ? isPaused
-                ? 'text-amber-600 dark:text-amber-400'
-                : 'text-zinc-500 dark:text-zinc-400'
+                ? 'text-warning'
+                : 'text-text-tertiary'
               : 'invisible'
           }`}
         >
@@ -125,8 +125,8 @@ export function PlayerPauseCard({
             className={
               hasPaused
                 ? isPaused
-                  ? 'text-amber-600 dark:text-amber-400'
-                  : 'text-zinc-400 dark:text-zinc-500'
+                  ? 'text-warning'
+                  : 'text-text-tertiary'
                 : ''
             }
           />
@@ -138,12 +138,12 @@ export function PlayerPauseCard({
       <div className="flex shrink-0 flex-col items-end gap-2">
         <SessionTimer elapsed={elapsed} isPaused={isPaused} />
         {isPaused ? (
-          <Button variant="inverse" size="xs" disabled={pauseDisabled} onClick={onResume} title="Tiếp tục chơi">
+        <Button variant="contrast" size="xs" disabled={pauseDisabled} onClick={onResume} title="Tiếp tục chơi">
             <Play size={12} className="mr-1" />
             Chơi
           </Button>
         ) : (
-          <Button variant="secondary" size="xs" disabled={pauseDisabled} onClick={onPause} title="Tạm dừng người này">
+        <Button variant="white" size="xs" disabled={pauseDisabled} onClick={onPause} title="Tạm dừng người này">
             <Pause size={12} className="mr-1" />
             Dừng
           </Button>

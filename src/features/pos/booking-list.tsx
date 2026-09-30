@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { CalendarClock, Check, Phone, Users } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CalendarClock, Check, CircleX, Phone, Users } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input, Label } from '@/components/ui/input'
@@ -19,6 +20,11 @@ export interface BookingItem {
   customerPhone: string | null
   status: 'BOOKED' | 'CHECKED_IN' | 'CANCELLED'
   customer: { id: string; fullName: string; phone: string | null; type: string } | null
+}
+
+export function isBookingOverdue(booking: BookingItem, now = Date.now()) {
+  const scheduledAt = Date.parse(booking.scheduledAt)
+  return booking.status === 'BOOKED' && Number.isFinite(scheduledAt) && scheduledAt < now
 }
 
 function toTimeInput(value: Date | string) {
@@ -39,19 +45,28 @@ function toCheckInTime(value: string, now: Date) {
 export function BookingCards({
   bookings,
   onCheckIn,
+  onCancel,
   busyId,
   actionDisabled = false,
   shiftOpenedAt,
 }: {
   bookings: BookingItem[]
   onCheckIn?: (booking: BookingItem, startTime: string) => void
+  onCancel?: (booking: BookingItem) => void
   busyId?: string | null
   actionDisabled?: boolean
   shiftOpenedAt?: string | null
 }) {
   const [confirmingBooking, setConfirmingBooking] = useState<BookingItem | null>(null)
+  const [cancellingBooking, setCancellingBooking] = useState<BookingItem | null>(null)
   const [checkInAt, setCheckInAt] = useState('')
   const [timeError, setTimeError] = useState('')
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const openConfirmation = (booking: BookingItem) => {
     setConfirmingBooking(booking)
@@ -64,32 +79,35 @@ export function BookingCards({
     setTimeError('')
   }
 
-  if (!bookings.length) {
-    return <p className="px-4 py-4 text-sm text-zinc-500 dark:text-zinc-400">Chưa có lịch đặt trong ngày.</p>
-  }
+  // Danh sách rỗng: màn Ca tự render dòng "Không có lịch đặt hôm nay" kèm lối vào
+  // /bookings. Trả null ở đây để không lặp lại thông báo rỗng đó hai lần.
+  if (!bookings.length) return null
 
   return (
     <>
-    <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+    <ul className="divide-y divide-border-default">
       {bookings.map((booking) => {
         const name = booking.customer?.fullName ?? booking.customerName ?? 'Khách lẻ'
         const phone = booking.customer?.phone ?? booking.customerPhone
         const depositLeft = Number(booking.depositAmount) - Number(booking.depositAppliedAmount) - Number(booking.depositRefundedAmount)
+        const overdue = isBookingOverdue(booking, now)
+        const canCancel = overdue && depositLeft <= 0 && onCancel
         return (
           <li key={booking.id} className="flex items-start justify-between gap-3 px-4 py-3">
             <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">{name}</p>
+              <p className="truncate text-sm font-semibold text-text-primary">{name}</p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="inline-flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="inline-flex items-center gap-1 text-xs text-text-tertiary">
                   <CalendarClock size={13} />{formatClock(booking.scheduledAt)}
                 </span>
-                <span className="inline-flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="inline-flex items-center gap-1 text-xs text-text-tertiary">
                   <Users size={13} />{booking.playerCount} người
                 </span>
+                  {overdue && <Badge variant="warning" size="sm">Quá giờ hẹn</Badge>}
                 {phone && (
                   <a
                     href={`tel:${phone}`}
-                    className="inline-flex items-center gap-1 text-xs text-zinc-500 underline-offset-2 transition-colors hover:text-zinc-900 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-zinc-400 dark:hover:text-zinc-200 dark:focus:ring-blue-400"
+                    className="inline-flex items-center gap-1 text-xs text-text-tertiary underline-offset-2 transition-colors hover:text-text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-focus-ring"
                     aria-label={`Gọi ${phone}`}
                   >
                     <Phone size={12} />{phone}
@@ -97,17 +115,23 @@ export function BookingCards({
                 )}
               </div>
             </div>
-            {(depositLeft > 0 || (onCheckIn && booking.status === 'BOOKED')) && (
+              {(depositLeft > 0 || (onCheckIn && booking.status === 'BOOKED') || canCancel) && (
               <div className="flex shrink-0 flex-col items-end gap-2">
-                {depositLeft > 0 && <p className="whitespace-nowrap text-base font-semibold text-emerald-700 dark:text-emerald-400">Đã cọc {formatVND(depositLeft)}</p>}
+                {depositLeft > 0 && <p className="whitespace-nowrap text-base font-semibold text-success">Đã cọc {formatVND(depositLeft)}</p>}
+                {overdue && depositLeft > 0 && <p role="status" className="max-w-32 text-right text-xs text-warning">Xử lý cọc trước khi hủy</p>}
                 {onCheckIn && booking.status === 'BOOKED' && (
-                  <Button variant="inverse" size="sm" disabled={actionDisabled || busyId === booking.id} onClick={() => openConfirmation(booking)}>
+                <Button variant="contrast" size="sm" disabled={actionDisabled || busyId === booking.id} onClick={() => openConfirmation(booking)}>
                     <Check size={14} />
                     {busyId === booking.id ? 'Đang xử lý...' : 'Xác nhận & Chơi'}
                   </Button>
                 )}
-              </div>
+                {canCancel && (
+                <Button variant="red" size="sm" disabled={busyId === booking.id} onClick={() => setCancellingBooking(booking)}>
+              <CircleX size={14} />Hủy lịch
+                  </Button>
             )}
+          </div>
+      )}
           </li>
         )
       })}
@@ -132,7 +156,7 @@ export function BookingCards({
       }}
       body={(
         <div className="space-y-4">
-          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+          <p className="text-sm leading-relaxed text-text-secondary">
             Bắt đầu phiên cho {confirmingBooking?.customer?.fullName ?? confirmingBooking?.customerName ?? 'Khách lẻ'} ({confirmingBooking?.playerCount} người).
           </p>
           <div>
@@ -146,11 +170,24 @@ export function BookingCards({
                 setTimeError('')
               }}
             />
-            {timeError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{timeError}</p>}
-          </div>
+              {timeError && <p className="mt-1 text-xs text-danger">{timeError}</p>}
         </div>
+              </div>
       )}
+    />
+    <ConfirmDialog
+      open={!!cancellingBooking}
+      onClose={() => setCancellingBooking(null)}
+      title="Hủy lịch quá giờ hẹn?"
+        description={`Lịch của ${cancellingBooking?.customer?.fullName ?? cancellingBooking?.customerName ?? 'khách'} sẽ được đánh dấu đã hủy.`}
+      confirmLabel="Hủy lịch"
+        submitting={busyId === cancellingBooking?.id}
+      onConfirm={() => {
+        if (!cancellingBooking || !onCancel) return
+        onCancel(cancellingBooking)
+        setCancellingBooking(null)
+              }}
     />
     </>
   )
-}
+        }
