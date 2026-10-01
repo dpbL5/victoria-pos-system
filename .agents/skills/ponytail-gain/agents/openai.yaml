@@ -1,0 +1,3 @@
+interface:
+  display_name: "Ponytail Gain"
+  short_description: "Show ponytail's measured impact scoreboard"

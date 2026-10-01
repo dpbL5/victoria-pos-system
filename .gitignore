@@ -51,3 +51,6 @@ next-env.d.ts
 # tooling internals
 .commandcode/
 .impeccable/
+
+# công cụ kiểm chứng cục bộ (puppeteer-core + Chrome có sẵn trên máy)
+.tools/
