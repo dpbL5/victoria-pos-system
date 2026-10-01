@@ -20,6 +20,7 @@ import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 
 interface Tool {
   id: string
@@ -177,9 +178,9 @@ export function ToolsScreen() {
       cellClassName: 'px-4 py-3',
       render: (item) => (
         <div className="flex gap-1.5">
-          <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa" />
-          <Button variant="outline-danger" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteTool(item)} title="Xoá" />
-        </div>
+        <Button variant="white" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa" />
+      <Button variant="red-soft" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteTool(item)} title="Xoá" />
+    </div>
       ),
     },
   ], [submitting, openEdit])
@@ -210,9 +211,9 @@ export function ToolsScreen() {
       label: '',
       render: (item) => (
         <div className="flex gap-1.5">
-          <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa" />
-          <Button variant="outline-danger" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteTool(item)} title="Xoá" />
-        </div>
+        <Button variant="white" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa" />
+      <Button variant="red-soft" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteTool(item)} title="Xoá" />
+      </div>
       ),
     },
   ], [submitting, openEdit])
@@ -226,16 +227,16 @@ export function ToolsScreen() {
       <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
-            <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
-              <Wrench size={24} className="text-amber-500" />
+            <h1 className={`flex items-center gap-2 ${PAGE_TITLE_CLASS}`}>
+            <Wrench size={24} className="text-warning" />
               Dụng cụ quầy
             </h1>
           </div>
           <div className="flex gap-2">
-            <Button variant="primary" size="sm" icon={Plus} onClick={openCreate}>
+          <Button variant="contrast" size="sm" icon={Plus} onClick={openCreate}>
               Thêm
-            </Button>
-          </div>
+        </Button>
+      </div>
         </header>
 
         {error && (
@@ -305,8 +306,8 @@ export function ToolsScreen() {
           submitting={submitting}
           onConfirm={handleConfirmDelete}
         />
-      </div>
-    </div>
+        </div>
+        </div>
   )
 }
 
@@ -335,14 +336,14 @@ function ToolFormModal({
       size="md"
       footer={
         <Button
-          variant="inverse"
+          variant="contrast"
           size="lg"
           fullWidth
           disabled={submitting || !form.name.trim()}
           onClick={onSubmit}
         >
           {submitting ? 'Đang lưu...' : tool ? 'Cập nhật' : 'Tạo dụng cụ'}
-        </Button>
+            </Button>
       }
     >
       <div className="space-y-3">
@@ -396,7 +397,7 @@ function ToolFormModal({
             id="tool-required"
             checked={form.isRequired}
             onChange={(event) => onChange({ ...form, isRequired: event.target.checked })}
-            className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+            className="h-4 w-4 rounded border-zinc-300 text-info focus:ring-focus-ring"
           />
           <div>
             <Label htmlFor="tool-required">Bắt buộc kiểm đếm</Label>
@@ -405,7 +406,7 @@ function ToolFormModal({
             </p>
           </div>
         </div>
-      </div>
+          </div>
     </Modal>
   )
 }

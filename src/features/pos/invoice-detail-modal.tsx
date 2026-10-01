@@ -63,7 +63,7 @@ export function InvoiceDetailModal({ invoiceId, open, onClose }: InvoiceDetailMo
           tone="danger"
           title="Không tải được dữ liệu"
           description={error}
-          action={<Button variant="secondary" size="sm" onClick={loadInvoice}>Thử lại</Button>}
+          action={<Button variant="white" size="sm" onClick={loadInvoice}>Thử lại</Button>}
         />
       ) : invoice ? (
         <InvoiceDetailContent invoice={invoice} />

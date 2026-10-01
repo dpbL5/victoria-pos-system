@@ -2,21 +2,27 @@
 
 /**
  * ── DIRECTION CONTRACT — Ca hôm nay (màn /sessions) ────────────────────────
- * THESIS: Màn này có HAI hình dạng, không phải một danh sách card xếp chồng.
- *   Chưa mở ca thì cả màn chỉ còn một việc; mở ca rồi thì phiên chơi chiếm
- *   phần còn lại. Từ chối: bốn card luôn hiện (hai card rỗng) + một overlay
- *   modal `fixed inset-0` phủ lên chính màn hình vốn đã trống.
- * OWN-WORLD: Ink & Gold Ledger — thang neutral zinc, vàng #edc92c chỉ làm HÌNH
- *   (1.62:1 trên trắng, không bao giờ là chữ trên nền sáng); khi cần vàng làm
+ * THESIS: Màn này có BA hình dạng, không phải một danh sách card xếp chồng.
+ *   (A) STAFF chưa vào ca thì cả màn chỉ còn một việc; (B) đang trong ca thì
+ *   phiên chơi chiếm phần còn lại; (C) ADMIN/MANAGER chưa vào ca thì bảng vẫn
+ *   hiện ở chế độ CHỈ XEM — không render nút thao tác nào, chỉ một lối vào ca.
+ *   Từ chối: bốn card luôn hiện (hai card rỗng) + một overlay modal
+ *   `fixed inset-0` phủ lên chính màn hình vốn đã trống, và từ chối nút bật mà
+ *   bấm vào là lỗi (thao tác tiền cần ca của chính mình — `canOperate`, đúng
+ *   bằng guard `SHIFT_REQUIRED` của backend).
+ * OWN-WORLD: Ink & Gold Ledger — thang neutral zinc, vàng #ffd444 chỉ làm HÌNH
+ *   (1.43:1 trên trắng, không bao giờ là chữ trên nền sáng); khi cần vàng làm
  *   chữ thì dùng bước đậm #8a6a00 (5.07:1). Phẳng mặc định, viền hairline 1px,
  *   chữ 12/14px, số tabular-nums. Nguồn màu: src/app/globals.css.
  * STORY: Nhân viên biết ngay mình đang ở chế độ nào, việc kế tiếp là gì, và
  *   phiên nào đang cần chú ý (tạm dừng / chưa thu hết).
- * FIRST VIEWPORT (mobile 390px): chưa mở ca → một panel duy nhất, canh giữa,
- *   status mark + tiêu đề + một nút contrast, không nút disabled, cộng một dòng
- *   link "Lịch đặt" để giữ lối vào /bookings. Mở ca → dải ca 2 dòng (chấm trạng
- *   thái + tiền đầu ca), hàng 3 hành động cao 48px, rồi danh sách phiên. Không
- *   hành động nào nằm sau một lần bấm mở rộng.
+ * FIRST VIEWPORT (mobile 390px): STAFF chưa vào ca → một panel duy nhất, canh
+ *   giữa, status mark + tiêu đề + một nút contrast, không nút disabled, cộng
+ *   một dòng link "Lịch đặt" để giữ lối vào /bookings. Đang trong ca → dải ca
+ *   2 dòng (chấm trạng thái + tiền đầu ca), hàng 3 hành động cao 56px, rồi danh
+ *   sách phiên. Chế độ chỉ xem → cùng dải ca đó nhưng có nhãn "Chỉ xem", không
+ *   hàng hành động, và mỗi phiên không có nút Dừng/Thu. Không hành động nào nằm
+ *   sau một lần bấm mở rộng.
  * FORM: code-led (không sinh comp). Seed key b03671b6, dealt #4 of 7.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the
  *   finish review, the verdict, and DESIGN.md.
@@ -36,7 +42,9 @@ import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { useApi } from '@/hooks/use-api'
+import { getBoardAccess } from './board-access'
 import { QuickActions } from './quick-actions'
 import { SellPickDialog } from './sell-pick-dialog'
 import { ShiftGate } from './shift-gate'
@@ -48,7 +56,7 @@ import { ToolCountDialog } from './tool-count-dialog'
 import { SellDialog } from './sell-dialog'
 import { RetailDialog } from './retail-dialog'
 import { CheckInDialog } from './check-in-dialog'
-import { BookingCards, type BookingItem } from './booking-list'
+import { BookingCards, isBookingOnVnDay, type BookingItem } from './booking-list'
 import { CheckoutDrawer } from './checkout-drawer'
 import type {
   Product,
@@ -101,8 +109,17 @@ export function TodayShiftScreen() {
   const shift = shiftQuery.data?.success ? shiftQuery.data.data?.myShift ?? null : null
   const openOperationalShift = shiftQuery.data?.success ? shiftQuery.data.data?.openShift ?? null : null
   const sessions = sessionsQuery.data?.success ? sessionsQuery.data.data ?? [] : []
+  // `GET /api/bookings` trả cả tuần (Mon–Sun) khi không truyền `weekStart`, nên
+  // khối "Lịch đặt trong ngày" phải tự lọc theo ngày giờ VN. Cả tuần nằm ở
+  // /bookings (nút "Quản lý").
+  // ponytail: lọc tại render, không có timer riêng — máy để nguyên màn qua nửa
+  // đêm vẫn thấy danh sách hôm qua tới lần render/revalidate kế tiếp (SWR
+  // revalidate khi focus lại tab). Muốn chính xác tuyệt đối thì cho đồng hồ
+  // `useNow()` vào đây và lọc theo nó.
   const bookings = bookingsQuery.data?.success
-    ? (bookingsQuery.data.data ?? []).filter((booking) => booking.status === 'BOOKED')
+    ? (bookingsQuery.data.data ?? []).filter((booking) => (
+        booking.status === 'BOOKED' && isBookingOnVnDay(booking)
+      ))
     : []
   const products = productsQuery.data?.success ? productsQuery.data.data ?? [] : []
   const tools = toolsQuery.data?.success ? toolsQuery.data.data ?? [] : []
@@ -127,11 +144,9 @@ export function TodayShiftScreen() {
     ?? ''
   const productsLoading = productsQuery.isLoading && !productsQuery.data
   const toolsLoading = toolsQuery.isLoading && !toolsQuery.data
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    const id = window.setInterval(() => setTick((value) => value + 1), 1000)
-    return () => window.clearInterval(id)
-  }, [])
+  // Đồng hồ realtime nằm trong từng thẻ phiên (`useNow` ở ActiveSessionCard /
+  // PlayerPauseCard), không tick ở đây — tick ở màn gốc làm cả màn + mọi dialog
+  // re-render mỗi giây.
 
   const refreshResources = useCallback(async (keys: string[]) => {
     const results = await Promise.allSettled(keys.map((key) => Promise.resolve().then(() => mutateCache(key))))
@@ -189,11 +204,11 @@ export function TodayShiftScreen() {
     }
   }
 
-  const handleBookingCancel = async (booking: BookingItem) => {
+  const handleBookingCancel = async (booking: BookingItem, depositRefunded: boolean) => {
     setBusyBookingId(booking.id)
     try {
       const response = await apiJson(`/api/bookings/${booking.id}`, {
-        ...jsonRequest({ status: 'CANCELLED' }),
+        ...jsonRequest({ status: 'CANCELLED', ...(depositRefunded ? { depositRefunded: true } : {}) }),
         method: 'PATCH',
       })
       if (!response.success) {
@@ -227,10 +242,16 @@ export function TodayShiftScreen() {
   // Phiên đang tạm dừng là phiên đang không được tính tiền — đếm lên header
   // để trạng thái cần chú ý không bị chôn trong danh sách.
   const pausedCount = sessions.filter((session) => session.pausedAt).length
-  const isAdmin = authRole === 'ADMIN'
-  const shiftReady = isAdmin || !!shift
-  const canJoinCurrentShift = isAdmin && !!authUserId && !!shift && shift.status === 'OPEN'
-    && !shift.participants?.some((participant) => (
+  // ── Quyền trên bảng: thao tác tiền ≠ được xem bảng ──
+  // ADMIN/MANAGER xem được phiên đang chơi + lịch đặt dù chưa vào ca (chỉ xem);
+  // mọi hành động tiền vẫn cần ca của chính mình — đúng bằng guard
+  // `SHIFT_REQUIRED` của backend nên không còn nút bật mà bấm vào là lỗi.
+  const { canOperate, canMonitor, showBoard } = getBoardAccess(authRole, !!shift)
+  // Ca để hiển thị ở dải ca: ca của mình, hoặc ca quầy đang mở của người khác
+  // (chế độ giám sát) — để quản lý biết mình đang xem ca nào và vào được ca đó.
+  const boardShift = shift ?? openOperationalShift
+  const canJoinBoardShift = !!boardShift && boardShift.status === 'OPEN' && !!authUserId
+    && !boardShift.participants?.some((participant) => (
       !participant.leftAt && participant.staff.id === authUserId
     ))
   // Đã đếm dụng cụ khi có ít nhất một ShiftTool.openCount > 0
@@ -499,10 +520,12 @@ export function TodayShiftScreen() {
       </div>
       <BookingCards
         bookings={bookings}
-        onCheckIn={(booking, startTime) => void handleBookingCheckIn(booking, startTime)}
-        onCancel={(booking) => void handleBookingCancel(booking)}
+        // Chế độ giám sát (chưa vào ca): không truyền handler → BookingCards
+        // render hàng chữ trần, không còn nút xám vô nghĩa.
+        onCheckIn={canOperate ? (booking, startTime) => void handleBookingCheckIn(booking, startTime) : undefined}
+        onCancel={canOperate ? (booking, depositRefunded) => void handleBookingCancel(booking, depositRefunded) : undefined}
         busyId={busyBookingId}
-        actionDisabled={!shift}
+        actionDisabled={!canOperate}
         shiftOpenedAt={shift?.openedAt}
       />
     </section>
@@ -542,7 +565,7 @@ export function TodayShiftScreen() {
     <div className="min-h-full bg-surface-secondary px-4 py-4 md:px-6 md:py-6">
       <div className="mx-auto flex max-w-content flex-col gap-4">
         <header className="hidden md:block">
-          <h1 className="text-xl font-bold leading-7 tracking-wide text-text-primary">
+          <h1 className={PAGE_TITLE_CLASS}>
             Ca hôm nay
           </h1>
         </header>
@@ -556,7 +579,7 @@ export function TodayShiftScreen() {
           />
         )}
 
-        {!shiftReady ? (
+        {!showBoard ? (
           <>
             <ShiftGate
               openShiftAt={openOperationalShift?.openedAt ?? null}
@@ -568,23 +591,27 @@ export function TodayShiftScreen() {
         ) : (
           <>
             <ShiftStrip
-              shift={shift}
+              shift={boardShift}
+              readOnly={!canOperate}
               onOpen={() => setOpenShiftDialog(true)}
               onClose={() => setCloseShiftDialog(true)}
               onViewTransactions={() => {
-                if (shift) router.push(`/transactions?shiftId=${shift.id}`)
+                if (boardShift) router.push(`/transactions?shiftId=${boardShift.id}`)
               }}
               onCountTools={() => setCountToolsDialog(true)}
               hasCounted={hasCountedTools}
-              canJoin={canJoinCurrentShift}
+              canJoin={canJoinBoardShift}
               onJoin={() => void handleOpenShift()}
               submitting={submitting}
             />
 
+            {/* Chế độ giám sát không có hàng hành động: cả 3 tile đều là thao tác
+                tiền, mà thao tác tiền cần ca của chính mình. */}
+            {canOperate && (
             <QuickActions
-              shiftReady={shiftReady}
+              shiftReady={canOperate}
               sellDisabled={sessions.length === 0}
-              retailDisabled={!shift}
+              retailDisabled={!canOperate}
               onCheckIn={() => {
                 setCheckInInitialMode('WALK_IN')
                 setCheckInDialog(true)
@@ -602,6 +629,7 @@ export function TodayShiftScreen() {
               }}
               onRetail={() => setRetailOpen(true)}
             />
+            )}
 
             {bookingsBlock}
 
@@ -620,7 +648,9 @@ export function TodayShiftScreen() {
                 <EmptyState
                   icon={Timer}
                   message="Chưa có phiên đang chơi"
-                  description={shiftReady ? 'Bắt đầu bằng một lượt check-in.' : 'Mở ca để bắt đầu vận hành.'}
+                  description={canOperate
+                    ? 'Bắt đầu bằng một lượt check-in.'
+                    : canMonitor ? 'Chưa có phiên nào đang chơi.' : 'Mở ca để bắt đầu vận hành.'}
                 />
               ) : (
                 <div className="divide-y divide-border-default">
@@ -629,8 +659,7 @@ export function TodayShiftScreen() {
                       key={session.id}
                       session={session}
                       index={index}
-                      checkoutDisabled={!shiftReady}
-                      pauseDisabled={!shiftReady}
+                      readOnly={!canOperate}
                       onCheckout={() => { setCheckoutFrozenAt(new Date().toISOString()); setCheckoutSession(session) }}
                       onPause={() => void handlePause(session)}
                       onResume={() => void handleResume(session)}
@@ -686,7 +715,7 @@ export function TodayShiftScreen() {
       <CheckInDialog
         open={checkInDialog}
         initialMode={checkInInitialMode}
-        shiftReady={shiftReady}
+        shiftReady={canOperate}
         shiftOpenedAt={shift?.openedAt}
         submitting={submitting}
         setSubmitting={setSubmitting}
@@ -708,7 +737,7 @@ export function TodayShiftScreen() {
           [SESSIONS_KEY, PRODUCTS_KEY],
           'Đã bỏ dòng bán kèm nhưng danh sách chưa cập nhật. Hãy tải lại màn hình.'
         )}
-        shiftReady={shiftReady}
+        shiftReady={canOperate}
         submitting={submitting}
         setSubmitting={setSubmitting}
         onClose={() => { setCheckoutSession(null); setCheckoutFrozenAt(null) }}
@@ -726,7 +755,7 @@ export function TodayShiftScreen() {
         productsLoading={productsLoading}
         productsError={productsError}
         onRetryProducts={retryProducts}
-        shiftReady={shiftReady}
+        shiftReady={canOperate}
         submitting={submitting}
         setSubmitting={setSubmitting}
         onClose={() => setSellSession(null)}
@@ -753,7 +782,7 @@ export function TodayShiftScreen() {
         productsLoading={productsLoading}
         productsError={productsError}
         onRetryProducts={retryProducts}
-        shiftReady={!!shift}
+        shiftReady={canOperate}
         submitting={submitting}
         setSubmitting={setSubmitting}
         onClose={() => setRetailOpen(false)}

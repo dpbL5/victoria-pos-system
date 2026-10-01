@@ -1,4 +1,4 @@
-import { formatVND, roundToNearestThousand } from '@/lib/shared/utils'
+import { formatVND, formatVnDate, roundToNearestThousand, toInputDate } from '@/lib/shared/utils'
 import {
   calculatePlayPrice,
   calculateTieredSubtotal,
@@ -27,6 +27,24 @@ export function formatDay(dateValue: string | Date): string {
     month: '2-digit',
     year: 'numeric',
   })
+}
+
+/**
+ * Nhãn ngày cho phiên chơi: `null` khi phiên bắt đầu trong ngày hôm nay (giờ
+ * VN), ngược lại trả `Hôm qua` hoặc `dd/MM/yyyy`.
+ *
+ * Phiên `ACTIVE` sót lại từ hôm trước trông y hệt phiên vừa mở nếu thẻ chỉ in
+ * `HH:mm` — nhãn này là thứ duy nhất phân biệt được, và là tín hiệu để nhân
+ * viên thu nốt phiên đó trước khi đóng ca. So sánh theo NGÀY giờ VN (không theo
+ * múi giờ máy người dùng) để phiên mở 23:30 hôm trước không bị tính là hôm nay.
+ */
+export function sessionDayLabel(startTime: string | Date, now: number): string | null {
+  const startedOn = toInputDate(new Date(startTime))
+  const todayOn = toInputDate(new Date(now))
+  if (startedOn === todayOn) return null
+
+  const yesterday = toInputDate(new Date(now - 24 * 60 * 60 * 1000))
+  return startedOn === yesterday ? 'Hôm qua' : formatVnDate(startTime)
 }
 
 export function calcElapsedHMS(startTime: string, endTime?: string | Date, pausedSeconds = 0): string {

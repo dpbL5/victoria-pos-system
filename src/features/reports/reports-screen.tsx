@@ -6,6 +6,7 @@ import { AppSkeleton } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
 import type { UserSession } from '@/features/pos/types'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { ReportsOverview, type ReportsOverviewHandle } from './reports-overview'
 import { ReportsInventory } from './reports-inventory'
 
@@ -50,7 +51,7 @@ export function ReportsScreen() {
       <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
+            <h1 className={PAGE_TITLE_CLASS}>
               Báo cáo
             </h1>
           </div>

@@ -76,16 +76,30 @@ export async function updateBooking(
 }
 
 export async function setBookingStatus(
-  input: { bookingId: string; staffId: string; status: 'CANCELLED' },
+  input: { bookingId: string; staffId: string; status: 'CANCELLED'; depositRefunded?: boolean },
   deps: Repositories = repositories
 ): Promise<Result<{ id: string; status: 'CANCELLED' }>> {
   const booking = await deps.booking!.findById(input.bookingId)
   if (!booking) return err('BOOKING_NOT_FOUND')
-  if (Number(booking.depositAmount) > 0) return err('BOOKING_HAS_DEPOSIT')
+  const depositRemaining = Number(booking.depositAmount) - Number(booking.depositAppliedAmount) - Number(booking.depositRefundedAmount)
+  // Cọc chỉ bỏ qua được khi lịch đã quá giờ hẹn VÀ nhân viên xác nhận đã hoàn
+  // tiền mặt cho khách ngoài hệ thống — không tạo hoá đơn cọc/hoàn cọc.
+  const externalRefund = depositRemaining > 0
+    && new Date(booking.scheduledAt).getTime() < Date.now()
+    && input.depositRefunded === true
+  if (depositRemaining > 0 && !externalRefund) return err('BOOKING_HAS_DEPOSIT')
   const result = await runInTransaction(async (tx) => {
-    const updated = await tx.booking!.transition(input.bookingId, 'BOOKED', input.status)
+    const updated = await tx.booking!.transition(input.bookingId, 'BOOKED', input.status, externalRefund)
     if (!updated.count) fail('BOOKING_NOT_EDITABLE')
-    await tx.audit.append({ userId: input.staffId, action: `BOOKING_${input.status}`, entityType: 'Booking', entityId: input.bookingId, details: {} })
+    await tx.audit.append({
+      userId: input.staffId,
+      action: `BOOKING_${input.status}`,
+      entityType: 'Booking',
+      entityId: input.bookingId,
+      details: externalRefund
+        ? { depositRefundedExternally: depositRemaining, depositPaymentMethod: booking.depositPaymentMethod }
+        : {},
+    })
     return { id: input.bookingId, status: input.status }
   })
   return result.ok ? ok(result.value) : result

@@ -37,7 +37,7 @@ export function SellPickDialog({
                 {calcElapsedHMS(session.startTime)} · {formatClock(session.startTime)}
               </p>
             </div>
-            <Badge variant={session.customer?.type === 'MEMBER' ? 'purple' : 'default'} size="sm">
+          <Badge variant={session.customer?.type === 'MEMBER' ? 'yellow' : 'default'} size="sm">
               {session.customer?.type === 'MEMBER' ? 'Hội viên' : 'Vãng lai'}
             </Badge>
           </button>

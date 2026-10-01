@@ -11,7 +11,7 @@ import type { Prisma } from '@/generated/prisma/client'
 export interface UpdateSessionInput {
   sessionId: string
   staffId: string
-  role: 'ADMIN' | 'MANAGER' | 'STAFF'
+  role: 'ADMIN' | 'MANAGER' | 'STAFF' | 'TEACHER'
   data: Prisma.SessionUncheckedUpdateInput
   notes?: string | null
 }

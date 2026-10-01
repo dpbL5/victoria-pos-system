@@ -31,7 +31,7 @@ export function ToolCountFields({
             <div className="flex items-baseline justify-between gap-2">
               <Label htmlFor={`tool-${tool.id}`}>
                 {tool.name}
-                {tool.isRequired && <span className="ml-1 text-red-500">*</span>}
+              {tool.isRequired && <span className="ml-1 text-danger">*</span>}
               </Label>
               {tool.quantity > 0 && (
                 <span className="shrink-0 text-[10px] text-zinc-400 dark:text-zinc-500">

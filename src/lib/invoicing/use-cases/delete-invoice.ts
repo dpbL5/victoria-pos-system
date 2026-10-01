@@ -10,7 +10,7 @@ import { repositories } from '@/lib/infrastructure/repositories'
 export interface DeleteInvoiceInput {
   invoiceId: string
   staffId: string
-  role: 'ADMIN' | 'MANAGER' | 'STAFF'
+  role: 'ADMIN' | 'MANAGER' | 'STAFF' | 'TEACHER'
 }
 
 export interface DeleteInvoiceResult {

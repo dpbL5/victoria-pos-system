@@ -21,6 +21,7 @@ import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import type { UserSession } from '@/features/pos/types'
 import { formatVND } from '@/lib/shared/utils'
 
@@ -106,7 +107,7 @@ export function MembershipPlansScreen() {
   const renderActions = useCallback((plan: MembershipPlan) => (
     <div className="flex gap-1.5">
       <Button
-        variant="secondary"
+        variant="white"
         size="sm"
         icon={Edit3}
         disabled={submitting}
@@ -114,7 +115,7 @@ export function MembershipPlansScreen() {
         title="Sửa gói"
       />
       <Button
-        variant="outline-danger"
+        variant="red-soft"
         size="sm"
         icon={Trash2}
         disabled={submitting}
@@ -236,7 +237,7 @@ export function MembershipPlansScreen() {
       <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
+            <h1 className={PAGE_TITLE_CLASS}>
               Gói hội viên
             </h1>
           </div>
@@ -255,7 +256,7 @@ export function MembershipPlansScreen() {
         ) : (
           <>
             <Button
-              variant="inverse"
+              variant="contrast"
               size="lg"
               fullWidth
               icon={Plus}
@@ -417,7 +418,7 @@ function MembershipPlanDialog({
       description="Gói đang bán sẽ xuất hiện trong đăng ký mới và gia hạn hội viên"
       size="lg"
       footer={
-        <Button variant="inverse" size="lg" fullWidth disabled={submitting} onClick={submit}>
+      <Button variant="contrast" size="lg" fullWidth disabled={submitting} onClick={submit}>
           {submitting ? 'Đang lưu...' : 'Lưu gói hội viên'}
         </Button>
       }
@@ -447,7 +448,7 @@ function PlanForm({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div>
+      <div>
           <Label htmlFor="plan-duration" required>Số tháng</Label>
           <Input
             id="plan-duration"
@@ -473,7 +474,7 @@ function PlanForm({
         </div>
       </div>
 
-      <div>
+        <div>
         <Label htmlFor="plan-status">Trạng thái</Label>
         <Select
           id="plan-status"
@@ -485,7 +486,7 @@ function PlanForm({
         </Select>
       </div>
 
-      <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
+    <div className="rounded-xl border border-info-border bg-info-bg p-3 text-xs text-info border-info-border bg-info-bg text-info">
         Gói ngừng dùng vẫn giữ lịch sử hội viên và thanh toán cũ, nhưng không xuất hiện trong form đăng ký hoặc gia hạn mới.
       </div>
     </div>

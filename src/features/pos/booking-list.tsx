@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input, Label } from '@/components/ui/input'
-import { formatVND } from '@/lib/shared/utils'
+import { formatVND, toInputDate } from '@/lib/shared/utils'
 import { formatClock } from './format'
 
 export interface BookingItem {
@@ -25,6 +25,22 @@ export interface BookingItem {
 export function isBookingOverdue(booking: BookingItem, now = Date.now()) {
   const scheduledAt = Date.parse(booking.scheduledAt)
   return booking.status === 'BOOKED' && Number.isFinite(scheduledAt) && scheduledAt < now
+}
+
+/**
+ * Lịch đặt có thuộc NGÀY hôm nay theo giờ VN không.
+ *
+ * `GET /api/bookings` trả cả tuần (thứ Hai → Chủ nhật) khi không truyền
+ * `weekStart`, nên màn Ca hôm nay phải tự lọc: khối "Lịch đặt trong ngày" chỉ
+ * được chứa lịch hôm nay, còn cả tuần nằm ở `/bookings`. So sánh theo ngày giờ
+ * VN để lịch 06:00 sáng mai không bị coi là hôm nay ở máy đặt múi giờ khác.
+ */
+export function isBookingOnVnDay(booking: BookingItem, now = Date.now()): boolean {
+  return toInputDate(new Date(booking.scheduledAt)) === toInputDate(new Date(now))
+}
+
+function depositLeftOf(booking: BookingItem) {
+  return Number(booking.depositAmount) - Number(booking.depositAppliedAmount) - Number(booking.depositRefundedAmount)
 }
 
 function toTimeInput(value: Date | string) {
@@ -52,7 +68,7 @@ export function BookingCards({
 }: {
   bookings: BookingItem[]
   onCheckIn?: (booking: BookingItem, startTime: string) => void
-  onCancel?: (booking: BookingItem) => void
+  onCancel?: (booking: BookingItem, depositRefunded: boolean) => void
   busyId?: string | null
   actionDisabled?: boolean
   shiftOpenedAt?: string | null
@@ -89,49 +105,77 @@ export function BookingCards({
       {bookings.map((booking) => {
         const name = booking.customer?.fullName ?? booking.customerName ?? 'Khách lẻ'
         const phone = booking.customer?.phone ?? booking.customerPhone
-        const depositLeft = Number(booking.depositAmount) - Number(booking.depositAppliedAmount) - Number(booking.depositRefundedAmount)
+        const depositLeft = depositLeftOf(booking)
         const overdue = isBookingOverdue(booking, now)
-        const canCancel = overdue && depositLeft <= 0 && onCancel
+        const canCancel = overdue && onCancel
+        const showAction = (onCheckIn && booking.status === 'BOOKED') || canCancel
         return (
+          /* Cùng khuôn với thẻ người đang chơi: cột trái là danh tính + meta,
+             cột phải là CON SỐ rồi tới hai nút nhỏ cạnh nhau.
+             Ở thẻ phiên chơi, slot con số là đồng hồ đếm giờ; ở lịch đặt, slot
+             đó là tiền cọc — thứ nhân viên cần biết khi khách tới.
+             Nút dùng size sm và bố cục `[phụ][chính]` y như Dừng/Thu, nên cột
+             phải chỉ ~133px thay vì 138px của bản cũ (hai nút xếp dọc). */
           <li key={booking.id} className="flex items-start justify-between gap-3 px-4 py-3">
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className="flex min-w-0 flex-col gap-2">
               <p className="truncate text-sm font-semibold text-text-primary">{name}</p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="inline-flex items-center gap-1 text-xs text-text-tertiary">
-                  <CalendarClock size={13} />{formatClock(booking.scheduledAt)}
+                <span className="inline-flex items-center gap-1 text-xs tabular-nums text-text-tertiary">
+                  <CalendarClock size={13} aria-hidden />{formatClock(booking.scheduledAt)}
                 </span>
-                <span className="inline-flex items-center gap-1 text-xs text-text-tertiary">
-                  <Users size={13} />{booking.playerCount} người
+                <span className="inline-flex items-center gap-1 text-xs tabular-nums text-text-tertiary">
+                  <Users size={13} aria-hidden />{booking.playerCount} người
                 </span>
-                  {overdue && <Badge variant="warning" size="sm">Quá giờ hẹn</Badge>}
+                {overdue && <Badge variant="warning" size="sm">Quá giờ hẹn</Badge>}
                 {phone && (
                   <a
                     href={`tel:${phone}`}
-                    className="inline-flex items-center gap-1 text-xs text-text-tertiary underline-offset-2 transition-colors hover:text-text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-focus-ring"
+                    className="inline-flex items-center gap-1 text-xs tabular-nums text-text-tertiary underline-offset-2 transition-colors hover:text-text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-focus-ring"
                     aria-label={`Gọi ${phone}`}
                   >
-                    <Phone size={12} />{phone}
+                    <Phone size={12} aria-hidden />{phone}
                   </a>
                 )}
               </div>
             </div>
-              {(depositLeft > 0 || (onCheckIn && booking.status === 'BOOKED') || canCancel) && (
-              <div className="flex shrink-0 flex-col items-end gap-2">
-                {depositLeft > 0 && <p className="whitespace-nowrap text-base font-semibold text-success">Đã cọc {formatVND(depositLeft)}</p>}
-                {overdue && depositLeft > 0 && <p role="status" className="max-w-32 text-right text-xs text-warning">Xử lý cọc trước khi hủy</p>}
-                {onCheckIn && booking.status === 'BOOKED' && (
-                <Button variant="contrast" size="sm" disabled={actionDisabled || busyId === booking.id} onClick={() => openConfirmation(booking)}>
-                    <Check size={14} />
-                    {busyId === booking.id ? 'Đang xử lý...' : 'Xác nhận & Chơi'}
-                  </Button>
-                )}
-                {canCancel && (
-                <Button variant="red" size="sm" disabled={busyId === booking.id} onClick={() => setCancellingBooking(booking)}>
-              <CircleX size={14} />Hủy lịch
-                  </Button>
-            )}
-          </div>
-      )}
+
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              {depositLeft > 0 && (
+                <p className="whitespace-nowrap text-base font-semibold text-success">
+                  <span className="text-xs font-normal text-text-tertiary">Đã cọc </span>
+                  <span className="tabular-nums">{formatVND(depositLeft)}</span>
+                </p>
+              )}
+              {showAction && (
+                <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
+                  {canCancel && (
+                    <Button
+                      variant="red-soft"
+                      size="sm"
+                      className="px-1.5 sm:px-2.5"
+                      aria-label="Hủy lịch"
+                      disabled={busyId === booking.id}
+                      onClick={() => setCancellingBooking(booking)}
+                    >
+                      <CircleX size={14} aria-hidden />
+                      <span className="hidden sm:inline">Hủy</span>
+                    </Button>
+                  )}
+                  {onCheckIn && booking.status === 'BOOKED' && (
+                    <Button
+                      variant="contrast"
+                      size="sm"
+                      className="px-3"
+                      disabled={actionDisabled || busyId === booking.id}
+                      onClick={() => openConfirmation(booking)}
+                    >
+                      <Check size={14} aria-hidden />
+                      {busyId === booking.id ? 'Đang xử lý' : 'Xác nhận'}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
           </li>
         )
       })}
@@ -179,12 +223,20 @@ export function BookingCards({
       open={!!cancellingBooking}
       onClose={() => setCancellingBooking(null)}
       title="Hủy lịch quá giờ hẹn?"
-        description={`Lịch của ${cancellingBooking?.customer?.fullName ?? cancellingBooking?.customerName ?? 'khách'} sẽ được đánh dấu đã hủy.`}
-      confirmLabel="Hủy lịch"
+        description={(() => {
+          if (!cancellingBooking) return undefined
+          const name = cancellingBooking.customer?.fullName ?? cancellingBooking.customerName ?? 'khách'
+          const left = depositLeftOf(cancellingBooking)
+          return left > 0
+            ? `Lịch của ${name} còn ${formatVND(left)} tiền cọc. Đã hoàn cọc cho khách chưa?`
+            : `Lịch của ${name} sẽ được đánh dấu đã hủy.`
+        })()}
+      confirmLabel={cancellingBooking && depositLeftOf(cancellingBooking) > 0 ? 'Đã hoàn, hủy lịch' : 'Hủy lịch'}
+        cancelLabel={cancellingBooking && depositLeftOf(cancellingBooking) > 0 ? 'Chưa hoàn' : 'Hủy'}
         submitting={busyId === cancellingBooking?.id}
       onConfirm={() => {
         if (!cancellingBooking || !onCancel) return
-        onCancel(cancellingBooking)
+        onCancel(cancellingBooking, depositLeftOf(cancellingBooking) > 0)
         setCancellingBooking(null)
               }}
     />

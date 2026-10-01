@@ -90,7 +90,7 @@ export function RenewMemberDialog({
       title={member ? `Gia hạn - ${member.fullName}` : 'Gia hạn hội viên'}
       description="Kỳ mới tự nối tiếp nếu hội viên còn hạn"
       footer={
-        <Button variant="inverse" size="lg" fullWidth disabled={submitting} onClick={submit}>
+      <Button variant="yellow" size="lg" fullWidth disabled={submitting} onClick={submit}>
           {submitting ? 'Đang gia hạn...' : 'Thu phí & gia hạn'}
         </Button>
       }

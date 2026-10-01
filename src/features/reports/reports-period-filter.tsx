@@ -58,7 +58,7 @@ export function ReportsPeriodFilter({
               onClick={() => onPeriodChange(item.key)}
               className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 period === item.key
-                  ? 'bg-blue-600 text-white'
+                ? 'bg-info text-white'
                   : 'bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:bg-zinc-800'
               }`}
             >
@@ -69,7 +69,7 @@ export function ReportsPeriodFilter({
       </div>
 
       <details className="group mt-3">
-        <summary className="flex cursor-pointer items-center gap-1 text-xs font-medium text-blue-600 [&::-webkit-details-marker]:hidden dark:text-blue-400">
+      <summary className="flex cursor-pointer items-center gap-1 text-xs font-medium text-info [&::-webkit-details-marker]:hidden text-info">
           <span>Tuỳ chỉnh ngày</span>
           <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
         </summary>
@@ -94,7 +94,7 @@ export function ReportsPeriodFilter({
           </div>
         </div>
         <div className="mt-3 flex justify-end">
-          <Button variant="inverse" size="xs" disabled={loading} onClick={onApply}>
+        <Button variant="blue" size="xs" disabled={loading} onClick={onApply}>
             {loading ? 'Đang tải' : 'Xem'}
           </Button>
         </div>

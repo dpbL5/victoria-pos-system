@@ -38,7 +38,7 @@ export interface BookingRepository {
     customerPhone?: string | null
     notes?: string | null
   }): Promise<{ count: number }>
-  transition(id: string, from: 'BOOKED', to: 'CANCELLED'): Promise<{ count: number }>
+  transition(id: string, from: 'BOOKED', to: 'CANCELLED', allowDeposit?: boolean): Promise<{ count: number }>
   markCheckedIn(id: string, sessionId: string): Promise<{ count: number }>
   applyDeposit(id: string, expectedApplied: number, amount: number): Promise<{ count: number }>
   reverseDeposit(id: string, amount: number): Promise<{ count: number }>

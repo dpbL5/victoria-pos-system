@@ -107,8 +107,8 @@ export function TransactionDetailScreen({ id }: Props) {
 
   if (error || !invoice) {
     return (
-      <div className="min-h-full bg-[var(--color-surface-secondary)] px-4 py-6 dark:bg-black md:px-8 md:py-10">
-        <div className="mx-auto max-w-content space-y-6">
+    <div className="min-h-full bg-[var(--color-surface-secondary)] px-4 py-6 dark:bg-black md:px-8 md:py-10">
+      <div className="mx-auto max-w-content space-y-6">
           <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.back()}>
             Quay lại
           </Button>
@@ -125,8 +125,8 @@ export function TransactionDetailScreen({ id }: Props) {
   }
 
   return (
-    <div className="min-h-full bg-[var(--color-surface-secondary)] px-4 py-6 dark:bg-black md:px-8 md:py-10">
-      <div className="mx-auto max-w-content space-y-6">
+      <div className="min-h-full bg-[var(--color-surface-secondary)] px-4 py-6 dark:bg-black md:px-8 md:py-10">
+        <div className="mx-auto max-w-content space-y-6">
         {/* ── Folio chrome ── */}
         <div className="flex items-center justify-between gap-3">
           <Button
@@ -142,8 +142,8 @@ export function TransactionDetailScreen({ id }: Props) {
             <div className="flex items-center gap-2">
               {invoice.status === 'PAID' && (
                 <>
-                  <Button
-                    variant="secondary"
+                <Button
+                  variant="white"
                     size="sm"
                     icon={Pencil}
                     onClick={() => setEditOpen(true)}
@@ -151,7 +151,7 @@ export function TransactionDetailScreen({ id }: Props) {
                     Sửa
                   </Button>
                   <Button
-                    variant="outline-danger"
+                    variant="red"
                     size="sm"
                     icon={XCircle}
                     onClick={() => setConfirmVoidOpen(true)}
@@ -161,8 +161,8 @@ export function TransactionDetailScreen({ id }: Props) {
                 </>
               )}
               {invoice.status === 'DRAFT' && (
-                <Button
-                  variant="outline-danger"
+                  <Button
+                    variant="red"
                   size="sm"
                   icon={Trash2}
                   onClick={() => setConfirmDeleteOpen(true)}

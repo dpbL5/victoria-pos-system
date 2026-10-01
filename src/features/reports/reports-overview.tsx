@@ -10,7 +10,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { buttonClass } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
@@ -275,10 +275,10 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
             <div className="flex items-start justify-between gap-3 p-4 pb-3">
               <div>
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
-                  <TrendingUp size={17} className="text-emerald-500" />
+                <TrendingUp size={17} className="text-success" />
                   {singleDay ? 'Doanh thu theo giờ' : 'Doanh thu theo ngày'}
                 </h2>
-                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                   {dashboard?.scope === 'STAFF' ? 'Số liệu của ca và tài khoản của bạn' : 'Số liệu toàn bộ hệ thống'}
                 </p>
               </div>
@@ -293,24 +293,24 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
               ) : singleDay ? (
                 // 1 ngày: lấy từ trends.byHour (granularity giờ). Fallback rỗng khi chưa có trends.
                 trends && trends.byHour.length > 0 ? (
-                  <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+                <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
                     <HourlyBarChart data={trends.byHour} height={220} />
                   </div>
                 ) : (
-                  <EmptyState
-                    icon={BarChart3}
+                <EmptyState
+                  icon={BarChart3}
                     message="Chưa có doanh thu trong ngày"
                     description="Chưa có giao dịch nào được ghi nhận hôm nay."
                   />
                 )
               ) : revenue.length === 0 ? (
-                <EmptyState
-                  icon={BarChart3}
+                  <EmptyState
+                    icon={BarChart3}
                   message="Chưa có doanh thu"
                   description="Thử đổi khoảng ngày hoặc kiểm tra các giao dịch đã thu."
                 />
               ) : (
-                <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+                  <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
                   <AreaChart
                     data={revenue.map((item) => ({ label: item.period, value: item.revenue }))}
                     axisLabels={[formatReportDate(revenue[0].period), formatReportDate(revenue[revenue.length - 1].period)]}
@@ -325,7 +325,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
           {trends && (
             <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Lưu lượng theo ngày</h2>
-              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                 Số người chơi và số phiên trong kỳ
               </p>
               <div className="mt-4">
@@ -420,7 +420,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
               {canExport ? (
                 <a
                   href={`/api/reports/export?type=${exportType}&from=${from}&to=${to}`}
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white sm:w-auto"
+                  className={buttonClass({ variant: 'white', className: 'shrink-0 sm:w-auto' })}
                 >
                   <Download size={16} />
                   CSV
@@ -429,7 +429,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
                 <button
                   type="button"
                   disabled
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-zinc-200 px-3 py-2 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500 sm:w-auto"
+                  className={buttonClass({ variant: 'white', className: 'shrink-0 sm:w-auto' })}
                 >
                   <Download size={16} />
                   CSV
@@ -451,7 +451,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
       )}
     </div>
   )
-  }
+}
 )
 
 // ── HeroScoreboard: 1 doanh thu focal (số to + growth badge) + 2 chỉ số phụ ──
@@ -477,7 +477,7 @@ function HeroScoreboard({
   return (
     <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       {/* Focal: doanh thu — số to, growth badge, dải emerald */}
-      <div className="relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-emerald-500 sm:p-5">
+    <div className="relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-success-bg0 sm:p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
@@ -491,8 +491,8 @@ function HeroScoreboard({
             <span
               className={`inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
                 revenueGrowth >= 0
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-                  : 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300'
+                ? 'bg-success-bg text-success'
+                : 'bg-danger-bg text-danger bg-danger-bg text-danger'
               }`}
             >
               {revenueGrowth >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
@@ -604,7 +604,7 @@ function paymentMethodLabelFor(method: PaymentMethod): string {
 
 const itemColors: Record<ItemType, string> = {
   PLAY_TIME: '#3b82f6', // blue-500
-  MEMBERSHIP_FEE: '#a855f7', // purple-500
+  MEMBERSHIP_FEE: '#ffd444', // vàng yellow hội viên (light, khớp token --color-yellow)
   PRODUCT: '#10b981', // emerald-500
   SERVICE: '#f59e0b', // amber-500
   DISCOUNT: '#ef4444', // red-500
@@ -627,7 +627,7 @@ function buildPaymentSlices(rows: TrendData['byPaymentMethod']): Array<{ label: 
   return paymentMethods
     .map((method) => ({ label: paymentMethodLabelFor(method), value: map.get(method) ?? 0, color: methodColors[method] }))
     .filter((d) => d.value > 0)
-}
+  }
 
 function buildItemSlices(items: ItemBreakdown): Array<{ label: string; value: number; color: string }> {
   const labels: Record<ItemType, string> = {

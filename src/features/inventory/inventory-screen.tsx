@@ -20,6 +20,7 @@ import { isManagerOrAdmin } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { money, toNumber } from '@/features/pos/format'
 import type { Product, ProductType, UserSession } from '@/features/pos/types'
 
@@ -137,7 +138,7 @@ export function InventoryScreen() {
         const low = item.stockQuantity <= item.minStockLevel
         return (
           <span className={`font-semibold ${
-            out ? 'text-red-600 dark:text-red-300' : low ? 'text-amber-600 dark:text-amber-300' : 'text-zinc-950 dark:text-white'
+            out ? 'text-danger' : low ? 'text-warning' : 'text-zinc-950 dark:text-white'
           }`}>
             {item.stockQuantity}
           </span>
@@ -156,9 +157,9 @@ export function InventoryScreen() {
       render: (item) => (
         item.type === 'PRODUCT' && canManageStock ? (
           <div className="flex gap-1">
-            <Button variant="secondary" size="sm" icon={PackagePlus} onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
-            <Button variant="danger" size="sm" icon={Trash2} onClick={() => setDeleteProduct(item)}>Xóa</Button>
-          </div>
+          <Button variant="white" size="sm" icon={PackagePlus} onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
+        <Button variant="red" size="sm" icon={Trash2} onClick={() => setDeleteProduct(item)}>Xóa</Button>
+      </div>
         ) : null
       ),
     },
@@ -197,7 +198,7 @@ export function InventoryScreen() {
         const low = item.stockQuantity <= item.minStockLevel
         return (
           <span className={`font-semibold tabular-nums ${
-            out ? 'text-red-600 dark:text-red-300' : low ? 'text-amber-600 dark:text-amber-300' : 'text-zinc-950 dark:text-white'
+            out ? 'text-danger' : low ? 'text-warning' : 'text-zinc-950 dark:text-white'
           }`}>
             {item.stockQuantity}
           </span>
@@ -214,9 +215,9 @@ export function InventoryScreen() {
       render: (item) => (
         item.type === 'PRODUCT' && canManageStock ? (
           <div className="flex gap-1">
-          <Button variant="secondary" size="sm" icon={PackagePlus} onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
-            <Button variant="danger" size="sm" icon={Trash2} onClick={() => setDeleteProduct(item)}>Xóa</Button>
-          </div>
+          <Button variant="white" size="sm" icon={PackagePlus} onClick={() => setMovementProduct(item)}>Nhập / chỉnh</Button>
+        <Button variant="red" size="sm" icon={Trash2} onClick={() => setDeleteProduct(item)}>Xóa</Button>
+      </div>
         ) : null
       ),
     },
@@ -255,14 +256,14 @@ export function InventoryScreen() {
       <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
+            <h1 className={PAGE_TITLE_CLASS}>
               Hàng hóa & dịch vụ
             </h1>
           </div>
         </header>
 
         {error && (
-          <NoticeCard
+        <NoticeCard
             tone="danger"
             title="Không tải được dữ liệu"
             description={error}
@@ -306,8 +307,8 @@ export function InventoryScreen() {
         </section>
 
         {canManageStock && (
-          <Button
-            variant="inverse"
+        <Button
+          variant="contrast"
             size="lg"
             fullWidth
             icon={PackagePlus}
@@ -354,7 +355,7 @@ export function InventoryScreen() {
             emptyDescription="Thử đổi bộ lọc hoặc thêm hàng hóa mới."
           />
         </div>
-      </div>
+    </div>
 
       <CreateProductDialog
         open={createOpen}
@@ -378,7 +379,7 @@ export function InventoryScreen() {
         onClose={() => setDeleteProduct(null)}
         onDone={handleDelete}
       />
-    </div>
+        </div>
   )
 }
 
@@ -401,15 +402,15 @@ function InventoryStat({
       onClick={onClick}
       className={`rounded-xl border p-3 text-left shadow-sm transition-colors ${
         active
-          ? 'border-blue-300 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10'
+        ? 'border-info-border bg-info-bg border-info-border bg-info-bg'
           : 'border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800'
       }`}
     >
       <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
       <p className={`mt-1 text-xl font-bold tabular-nums ${
-        warning ? 'text-amber-600 dark:text-amber-300' : 'text-zinc-950 dark:text-white'
+        warning ? 'text-warning' : 'text-zinc-950 dark:text-white'
       }`}
-      >
+    >
         {value}
       </p>
     </button>
@@ -487,7 +488,7 @@ function CreateProductDialog({
       description="Hàng hóa có tồn kho, dịch vụ chỉ dùng để bán kèm khi checkout"
       footer={
         <Button
-          variant="inverse"
+          variant="contrast"
           size="lg"
           fullWidth
           disabled={submitting}
@@ -509,7 +510,7 @@ function CreateProductDialog({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
+        <div>
             <Label htmlFor="product-type">Loại</Label>
             <Select
               id="product-type"
@@ -522,7 +523,7 @@ function CreateProductDialog({
           </div>
           <div>
             <Label htmlFor="product-sku">SKU</Label>
-            <Input
+          <Input
               id="product-sku"
               value={sku}
               onChange={(event) => setSku(event.target.value)}
@@ -531,9 +532,9 @@ function CreateProductDialog({
           </div>
         </div>
 
-        <div>
+          <div>
           <Label htmlFor="product-price" required>Giá bán</Label>
-          <Input
+            <Input
             id="product-price"
             type="number"
             min="0"
@@ -545,7 +546,7 @@ function CreateProductDialog({
 
         {type === 'PRODUCT' && (
           <div className="grid grid-cols-2 gap-3">
-            <div>
+          <div>
               <Label htmlFor="product-stock">Tồn đầu</Label>
               <Input
                 id="product-stock"
@@ -569,7 +570,7 @@ function CreateProductDialog({
             </div>
           </div>
         )}
-      </div>
+        </div>
     </Modal>
   )
 }
@@ -649,8 +650,8 @@ function StockMovementDialog({
       title={product ? `Nhập / chỉnh - ${product.name}` : 'Nhập / chỉnh kho'}
       description="Nhập kho dùng số dương, điều chỉnh có thể tăng hoặc giảm tồn"
       footer={
-        <Button
-          variant="inverse"
+          <Button
+            variant="contrast"
           size="lg"
           fullWidth
           disabled={submitting}
@@ -672,7 +673,7 @@ function StockMovementDialog({
             <div className="mt-2 flex items-center justify-between gap-3 text-sm">
               <span className="text-zinc-500 dark:text-zinc-400">Sau cập nhật</span>
               <span className={`font-semibold tabular-nums ${
-                nextStock < 0 ? 'text-red-600 dark:text-red-300' : 'text-zinc-950 dark:text-white'
+                nextStock < 0 ? 'text-danger' : 'text-zinc-950 dark:text-white'
               }`}
               >
                 {Number.isFinite(nextStock) ? nextStock : product.stockQuantity}
@@ -708,7 +709,7 @@ function StockMovementDialog({
             </div>
           </div>
 
-          <div>
+            <div>
             <Label htmlFor="stock-reason">Lý do</Label>
             <Textarea
               id="stock-reason"
@@ -718,7 +719,7 @@ function StockMovementDialog({
               placeholder="Ví dụ: nhập thêm nước, kiểm kho cuối ngày"
             />
           </div>
-        </div>
+          </div>
       )}
     </Modal>
   )
@@ -744,13 +745,13 @@ function DeleteProductConfirmDialog({
       description={product ? `Bạn có chắc muốn xóa "${product.name}" khỏi kho?` : ''}
       footer={
         <div className="flex gap-2">
-          <Button variant="secondary" disabled={submitting} onClick={onClose}>Hủy</Button>
-          <Button variant="danger" loading={submitting} onClick={onDone}>{actionLabel}</Button>
-        </div>
+        <Button variant="white" disabled={submitting} onClick={onClose}>Hủy</Button>
+      <Button variant="red" loading={submitting} onClick={onDone}>{actionLabel}</Button>
+          </div>
       }
-    >
+      >
       {product && (
-        <NoticeCard
+          <NoticeCard
           tone={product.isActive ? 'warning' : 'info'}
           title={product.isActive ? 'Ngưng bán' : 'Xoá cứng'}
           description={product.isActive
@@ -766,7 +767,7 @@ function DeleteProductConfirmDialog({
 function isLowStock(product: Product): boolean {
   return product.type === 'PRODUCT'
     && product.stockQuantity <= Math.max(1, product.minStockLevel)
-}
+  }
 
 function buildCreateProductPayload(input: {
   name: string
@@ -801,5 +802,5 @@ function buildCreateProductPayload(input: {
       minStockLevel,
       isActive: true,
     },
-  }
+}
 }

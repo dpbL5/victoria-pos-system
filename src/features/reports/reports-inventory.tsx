@@ -111,7 +111,7 @@ export function ReportsInventory() {
           description={error}
           action={
             <Button
-              variant="secondary"
+              variant="white"
               size="sm"
               icon={RefreshCw}
               onClick={handleView}
@@ -134,9 +134,9 @@ export function ReportsInventory() {
         <div className="space-y-4">
           {/* Hero: tổng quan kỳ */}
           <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-emerald-500 sm:p-5">
+          <div className="relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-success-bg0 sm:p-5">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
-                <TrendingUp size={17} className="text-emerald-500" />
+              <TrendingUp size={17} className="text-success" />
                 Bán hàng từ kho
               </h2>
               <div className="mt-2">
@@ -167,7 +167,7 @@ export function ReportsInventory() {
             <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex items-center justify-between gap-2 border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800/50">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
-                  <Package size={15} className="text-blue-500" />
+                <Package size={15} className="text-info" />
                   Còn lại
                 </h3>
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -195,7 +195,7 @@ export function ReportsInventory() {
 
 function PodiumSlot({ item, rank }: { item: TopProductRow; rank: number }) {
   const rankTone = rank === 1
-    ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+  ? 'bg-warning-bg0 text-white shadow-sm shadow-warning/30'
     : rank === 2
       ? 'bg-zinc-300 text-zinc-800 dark:bg-zinc-600 dark:text-zinc-100'
       : 'bg-orange-300 text-orange-900 dark:bg-orange-700/60 dark:text-orange-100'

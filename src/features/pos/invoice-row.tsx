@@ -10,12 +10,12 @@ export function InvoiceRow({
   warning?: boolean
 }) {
   const valueClass = warning
-    ? 'tabular-nums text-red-600 dark:text-red-300'
+  ? 'tabular-nums text-danger'
     : 'tabular-nums text-zinc-950 dark:text-white'
   const labelClass = strong
     ? 'text-zinc-950 dark:text-white'
     : warning
-      ? 'text-red-500 dark:text-red-300'
+    ? 'text-danger'
       : 'text-zinc-500 dark:text-zinc-400'
 
   return (

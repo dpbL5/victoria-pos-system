@@ -2,13 +2,13 @@ import { LogIn, Package, ShoppingCart } from 'lucide-react'
 import { buttonClass } from '@/components/ui/button'
 
 /**
- * Ba hành động chính của ca — một hàng ngang, mỗi tile cao đúng 48px.
+ * Ba hành động chính của ca — một hàng ngang, mỗi tile cao đúng 56px.
  *
  * `size="sm"` + `whitespace-nowrap`: ở 390px, nhãn 14px bị wrap giữa từ
- * ("Bán/kèm", "Check-/in") và đẩy tile lên 56px. Nhãn 12px trên một dòng vừa
+ * ("Bán/kèm", "Check-/in") và đẩy tile vượt 56px. Nhãn 12px trên một dòng vừa
  * trong 1/3 bề ngang điện thoại.
  *
- * Desktop: track cố định 9rem và canh phải — nếu để grid 3 cột chia đều
+ * Desktop: track cố định 9rem và canh giữa — nếu để grid 3 cột chia đều
  * `max-w-content`, mỗi tile phình ~286px, thành hàng điện thoại kéo giãn.
  *
  * `sellDisabled`: chưa có phiên nào thì "Bán kèm" không có gì để bán — nút chỉ
@@ -36,14 +36,14 @@ export function QuickActions({
   ] as const
 
   return (
-    <div className="grid grid-cols-3 gap-2 md:grid-cols-[repeat(3,minmax(0,9rem))] md:justify-end">
+    <div className="grid grid-cols-3 gap-2 md:grid-cols-[repeat(3,minmax(0,9rem))] md:justify-center">
       {actions.map(({ label, Icon, onClick, variant, disabled }) => (
         <button
           key={label}
           type="button"
           disabled={!shiftReady || disabled}
           onClick={onClick}
-          className={buttonClass({ variant, size: 'sm', className: 'min-h-12 whitespace-nowrap px-3' })}
+          className={buttonClass({ variant, size: 'sm', className: 'min-h-14 whitespace-nowrap px-3' })}
         >
           <Icon size={20} aria-hidden />
           <span>{label}</span>

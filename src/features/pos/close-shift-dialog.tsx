@@ -75,7 +75,7 @@ export function CloseShiftDialog({
       description={shift ? `Ca mở từ ${formatClock(shift.openedAt)}` : undefined}
       footer={
         <Button
-          variant="inverse"
+          variant="red"
           size="lg"
           fullWidth
           disabled={submitting || !closingCash}
@@ -88,7 +88,7 @@ export function CloseShiftDialog({
       <div className="space-y-3">
         {toolsLoading && <p className="text-sm text-zinc-500 dark:text-zinc-400">Đang tải dụng cụ...</p>}
         {toolsError && (
-          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+        <div role="alert" className="rounded-lg border border-danger-border bg-danger-bg p-3 text-sm text-danger border-danger-border bg-danger-bg text-danger">
             <p>Không tải được danh sách dụng cụ: {toolsError}</p>
             <button type="button" className="mt-2 font-medium underline" onClick={onRetryTools}>Thử lại</button>
           </div>
@@ -138,11 +138,11 @@ export function CloseShiftDialog({
                       <span className="tabular-nums text-zinc-500 dark:text-zinc-400">Đầu ca: {tc.openCount}</span>
                       {closed ? (
                         equal ? (
-                          <span className="flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
+                        <span className="flex items-center gap-1 font-medium text-success">
                             <CheckCircle2 size={13} /> Khớp
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1 font-medium text-red-600 dark:text-red-400">
+                        <span className="flex items-center gap-1 font-medium text-danger">
                             <XCircle size={13} /> Lệch
                           </span>
                         )
@@ -154,7 +154,7 @@ export function CloseShiftDialog({
                 )
               })}
             </div>
-            <p className={`text-xs font-medium ${mismatches.length === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+          <p className={`text-xs font-medium ${mismatches.length === 0 ? 'text-success' : 'text-danger'}`}>
               {matches.length}/{countedTools.length} dụng cụ khớp với đầu ca
             </p>
           </div>

@@ -216,7 +216,7 @@ export interface SessionRepository {
 
 /** Pause giây đã tích lũy của 1 player tại thời điểm now (gồm cả đang tạm dừng) */
 export function playerPausedSeconds(
-  player: { pausedAt: Date | null; totalPausedSeconds: number },
+  player: { pausedAt: Date | string | null; totalPausedSeconds: number },
   now: Date
 ): number {
   let seconds = player.totalPausedSeconds
@@ -228,7 +228,7 @@ export function playerPausedSeconds(
 
 /** Pause giây của 1 group = tổng các player + phần đang tạm dừng */
 export function groupPausedSeconds(
-  group: { players: Array<{ pausedAt: Date | null; totalPausedSeconds: number }> },
+  group: { players: Array<{ pausedAt: Date | string | null; totalPausedSeconds: number }> },
   now: Date
 ): number {
   return group.players.reduce((sum, player) => sum + playerPausedSeconds(player, now), 0)
@@ -236,7 +236,7 @@ export function groupPausedSeconds(
 
 /** Pause giây session-level tại thời điểm now (fallback cho phiên cũ pause toàn phiên) */
 export function sessionPauseSeconds(
-  session: { pausedAt: Date | null; totalPausedSeconds: number },
+  session: { pausedAt: Date | string | null; totalPausedSeconds: number },
   now: Date
 ): number {
   let seconds = session.totalPausedSeconds

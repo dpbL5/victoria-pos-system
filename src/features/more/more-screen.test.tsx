@@ -35,6 +35,16 @@ it('ADMIN thấy mục Google Calendar trong tab Thêm', () => {
   expect(html).toContain('Google Calendar')
 })
 
+it('mọi ô lối tắt dùng chung một màu vàng brand', () => {
+  session.role = 'ADMIN'
+  const html = renderToStaticMarkup(<MoreScreen />)
+
+  const tiles = html.match(/flex h-11 w-11 items-center justify-center[^"]*/g) ?? []
+  expect(tiles.length).toBeGreaterThan(0)
+  const yellow = tiles.filter((tile) => tile.includes('bg-yellow-bg text-yellow-dark'))
+  expect(yellow).toHaveLength(tiles.length)
+})
+
 it('STAFF không thấy mục Google Calendar', () => {
   session.role = 'STAFF'
   const html = renderToStaticMarkup(<MoreScreen />)

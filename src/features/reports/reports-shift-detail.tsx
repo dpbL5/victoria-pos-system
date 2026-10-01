@@ -11,7 +11,7 @@ import {
   Users,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonClass } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { AppSkeleton } from '@/components/ui/skeleton'
@@ -131,7 +131,7 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
           tone="danger"
           title="Không tải được dữ liệu"
           description={error || 'Không tìm thấy ca'}
-          action={<Button variant="secondary" size="sm" onClick={loadDetail}>Thử lại</Button>}
+          action={<Button variant="white" size="sm" onClick={loadDetail}>Thử lại</Button>}
         />
       </Modal>
     )
@@ -167,23 +167,23 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
               {canEdit && !editing && (
                 <Button variant="ghost" size="xs" icon={Edit3} onClick={startEdit}>
                   Điều chỉnh
-                </Button>
-              )}
+              </Button>
+            )}
             </div>
 
             {detail.status === 'CLOSED' ? (
               <div className="mt-3 space-y-3">
                 <div className="grid grid-cols-4 gap-2">
-                  <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
-                    <p className="text-[10px] text-zinc-400">Đầu ca</p>
-                    <p className="mt-1 text-sm font-semibold tabular-nums">{money(detail.openingCash)}</p>
-                  </div>
-                  <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
+                <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
+                  <p className="text-[10px] text-zinc-400">Đầu ca</p>
+                  <p className="mt-1 text-sm font-semibold tabular-nums">{money(detail.openingCash)}</p>
+                </div>
+                <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
                     <p className="text-[10px] text-zinc-400">+Tiền mặt thu</p>
-                    <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-600">{money(detail.cashRevenue)}</p>
-                  </div>
-                  <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
-                    <p className="text-[10px] text-zinc-400">Dự kiến</p>
+                  <p className="mt-1 text-sm font-semibold tabular-nums text-success">{money(detail.cashRevenue)}</p>
+                </div>
+                <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
+                  <p className="text-[10px] text-zinc-400">Dự kiến</p>
                     <p className="mt-1 text-sm font-semibold tabular-nums">{money(detail.expectedCash ?? 0)}</p>
                   </div>
                   <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
@@ -193,7 +193,7 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
                 </div>
 
                 {editing ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/20 dark:bg-amber-500/10">
+                <div className="rounded-lg border border-warning-border bg-warning-bg p-3 border-warning-border bg-warning-bg">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label htmlFor="edit-diff">Chênh lệch thực tế</Label>
@@ -215,10 +215,10 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
                       </div>
                     </div>
                     <div className="mt-3 flex gap-2">
-                      <Button size="xs" onClick={saveEdit} disabled={saving}>
+                    <Button variant="contrast" size="xs" onClick={saveEdit} disabled={saving}>
                         {saving ? 'Đang lưu...' : 'Lưu'}
-                      </Button>
-                      <Button variant="secondary" size="xs" onClick={cancelEdit} disabled={saving}>
+                </Button>
+              <Button variant="white" size="xs" onClick={cancelEdit} disabled={saving}>
                         Huỷ
                       </Button>
                     </div>
@@ -241,21 +241,21 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
               </div>
             ) : (
               <div className="mt-3 grid grid-cols-3 gap-2">
-                <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
-                  <p className="text-[10px] text-zinc-400">Đầu ca</p>
-                  <p className="mt-1 text-sm font-semibold tabular-nums">{money(detail.openingCash)}</p>
-                </div>
-                <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
+                  <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
+                    <p className="text-[10px] text-zinc-400">Đầu ca</p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums">{money(detail.openingCash)}</p>
+                  </div>
+                  <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
                   <p className="text-[10px] text-zinc-400">Tiền mặt thu</p>
-                  <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-600">{money(detail.cashRevenue)}</p>
-                </div>
-                <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
-                  <p className="text-[10px] text-zinc-400">Dự kiến</p>
+                <p className="mt-1 text-sm font-semibold tabular-nums text-success">{money(detail.cashRevenue)}</p>
+              </div>
+                  <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
+                    <p className="text-[10px] text-zinc-400">Dự kiến</p>
                   <p className="mt-1 text-sm font-semibold tabular-nums">{money((detail.openingCash) + detail.cashRevenue)}</p>
                 </div>
               </div>
-            )}
-          </section>
+              )}
+            </section>
 
           {/* Payment Methods */}
           {detail.byPaymentMethod && (
@@ -265,7 +265,7 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
                 {(['CASH', 'TRANSFER', 'CARD', 'MEMBER'] as const).map((method) => (
                   <div key={method} className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-950">
                     <div className="flex items-center gap-1.5">
-                      {method === 'CASH' ? <Banknote size={13} className="text-emerald-500" /> : method === 'MEMBER' ? <Users size={13} className="text-purple-500" /> : <CreditCard size={13} className="text-blue-500" />}
+                      {method === 'CASH' ? <Banknote size={13} className="text-success" /> : method === 'MEMBER' ? <Users size={13} className="text-yellow-dark" /> : <CreditCard size={13} className="text-info" />}
                       <p className="text-[10px] text-zinc-400">
                         {method === 'CASH' ? 'Tiền mặt' : method === 'TRANSFER' ? 'CK' : method === 'CARD' ? 'Thẻ' : 'Hội viên'}
                       </p>
@@ -284,11 +284,11 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
               <h3 className="text-sm font-semibold text-zinc-950 dark:text-white">Nguồn doanh thu</h3>
               <div className="mt-3 space-y-2">
                 {[
-                  { key: 'PLAY_TIME', label: 'Giờ chơi', color: 'bg-blue-500' },
-                  { key: 'MEMBERSHIP_FEE', label: 'Phí hội viên', color: 'bg-purple-500' },
-                  { key: 'PRODUCT', label: 'Hàng hóa', color: 'bg-emerald-500' },
-                  { key: 'SERVICE', label: 'Dịch vụ', color: 'bg-amber-500' },
-                  { key: 'DISCOUNT', label: 'Giảm giá', color: 'bg-red-500' },
+                  { key: 'PLAY_TIME', label: 'Giờ chơi', color: 'bg-info-bg0' },
+                  { key: 'MEMBERSHIP_FEE', label: 'Phí hội viên', color: 'bg-yellow' },
+                  { key: 'PRODUCT', label: 'Hàng hóa', color: 'bg-success-bg0' },
+                  { key: 'SERVICE', label: 'Dịch vụ', color: 'bg-warning-bg0' },
+                  { key: 'DISCOUNT', label: 'Giảm giá', color: 'bg-danger-bg0' },
                   { key: 'SURCHARGE', label: 'Phí gửi xe', color: 'bg-rose-500' },
                   { key: 'DEPOSIT', label: 'Tiền cọc', color: 'bg-sky-500' },
                   { key: 'DEPOSIT_APPLIED', label: 'Khấu trừ cọc', color: 'bg-teal-500' },
@@ -346,7 +346,7 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
                         <p className="text-xs font-medium text-zinc-950 dark:text-white">
                           {tc.tool.name}
                         </p>
-                        {tc.tool.isRequired && <span className="text-[10px] text-red-500">*</span>}
+                          {tc.tool.isRequired && <span className="text-[10px] text-danger">*</span>}
                       </div>
                       <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
                         Chuẩn {tc.tool.quantity} · Mở: {tc.openCount}
@@ -360,8 +360,8 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
                     )}
                   </div>
                 ))}
-              </div>
-            </section>
+            </div>
+          </section>
           )}
 
           {/* Giao dịch — xem toàn bộ ở trang riêng */}
@@ -373,9 +373,9 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
               {canExport && detail.transactions.length > 0 && (
                 <a
                   href={exportUrl}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white"
+                  className={buttonClass({ variant: 'white', size: 'sm' })}
                 >
-                  <Download size={13} />
+              <Download size={16} />
                   CSV
                 </a>
               )}
@@ -385,14 +385,14 @@ export function ReportsShiftDetail({ shiftId, isAdmin, canExport, onClose, onUpd
                 Danh sách giao dịch đầy đủ và tổng hợp thu chi theo ca.
               </p>
               <Button
-                variant="secondary"
+                variant="white"
                 size="sm"
                 icon={ReceiptText}
                 onClick={() => router.push(`/transactions?shiftId=${shiftId}`)}
               >
                 Xem toàn bộ giao dịch
-              </Button>
-            </div>
+                      </Button>
+                  </div>
           </section>
         </div>
       </Modal>

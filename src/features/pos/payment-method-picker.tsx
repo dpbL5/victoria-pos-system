@@ -65,7 +65,7 @@ export function PaymentMethodPicker({
 
       {method === 'TRANSFER' && (
         <div className="mt-3">
-          <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          <p className="mb-2 text-xs font-medium text-text-secondary">
             Quét mã QR để chuyển khoản
           </p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -79,7 +79,7 @@ export function PaymentMethodPicker({
       )}
 
       {method === 'CASH' && (
-        <div className="mt-4 grid gap-3 border-t border-zinc-200 pt-4 sm:grid-cols-2 dark:border-zinc-800">
+        <div className="mt-4 grid gap-3 border-t border-border-default pt-4 sm:grid-cols-2">
           <div>
             <Label htmlFor={`${id}-cash`}>Tiền khách đưa</Label>
             <Input
@@ -105,19 +105,21 @@ export function PaymentMethodPicker({
                   key={suggestion.value}
                   type="button"
                   onClick={() => setCashReceived(formatCashInput(suggestion.value))}
-                  className="rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-tertiary"
                 >
                   {suggestion.label}
                 </button>
               ))}
             </div>
           </div>
-          <div className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/70">
-            <span className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          {/* ≤sm: nhãn trái / số phải (một hàng). ≥sm: khối hai dòng canh phải để
+              nhãn không rời khỏi số khi cột rộng ra, và số vẫn về đúng rail tiền. */}
+          <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-center sm:gap-0.5">
+            <span className="text-sm text-text-secondary">
               {hasCashReceived && changeAmount >= 0 ? 'Tiền trả lại' : 'Còn thiếu'}
             </span>
-            <span className="mt-1 block text-lg font-bold tabular-nums text-zinc-950 dark:text-white">
-              {hasCashReceived ? money(Math.abs(changeAmount)) : '—'}
+            <span className="text-right text-lg font-bold tabular-nums text-text-primary">
+              {hasCashReceived ? money(Math.abs(changeAmount), false) : '—'}
             </span>
           </div>
         </div>

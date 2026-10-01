@@ -52,8 +52,8 @@ export function createBookingRepository(store: BookingStore): BookingRepository 
     updateBooked(id, input) {
       return store.booking.updateMany({ where: { id, status: 'BOOKED' }, data: input })
     },
-    transition(id, from, to) {
-      return store.booking.updateMany({ where: { id, status: from, depositAmount: 0 }, data: { status: to } })
+    transition(id, from, to, allowDeposit = false) {
+      return store.booking.updateMany({ where: { id, status: from, ...(allowDeposit ? {} : { depositAmount: 0 }) }, data: { status: to } })
     },
     markCheckedIn(id, sessionId) {
       return store.booking.updateMany({ where: { id, status: 'BOOKED' }, data: { status: 'CHECKED_IN', sessionId } })

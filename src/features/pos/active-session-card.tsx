@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { ChevronDown, LogIn, Pause, Phone, Play, Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { calcElapsedHMS, formatClock, formatPausedHMS, money, pausedSecondsUntil, toNumber } from './format'
+import { useNow } from '@/hooks/use-now'
+import { calcElapsedHMS, formatClock, formatPausedHMS, money, pausedSecondsUntil, sessionDayLabel, toNumber } from './format'
 import { PlayerPauseCard } from './player-pause-card'
 import { SessionTimer } from './session-timer'
 import type { SessionRow } from './types'
 
 export function ActiveSessionCard({
   session,
-  checkoutDisabled,
-  pauseDisabled,
+  /** Chế độ giám sát (ADMIN/MANAGER chưa vào ca): chỉ đọc, không render nút */
+  readOnly = false,
   /** Vị trí trong danh sách — dùng stagger cho entry animation */
   index = 0,
   onCheckout,
@@ -20,8 +21,7 @@ export function ActiveSessionCard({
   onRenamePlayer,
 }: {
   session: SessionRow
-  checkoutDisabled: boolean
-  pauseDisabled: boolean
+  readOnly?: boolean
   index?: number
   onCheckout: () => void
   onPause: () => void
@@ -59,12 +59,18 @@ export function ActiveSessionCard({
   // Đang đổi tên 1 người chơi — disable để tránh bấm nhầm / submit lồng nhau
   const [renaming, setRenaming] = useState(false)
 
-  const elapsed = isPaused
-    ? calcElapsedHMS(session.startTime, session.pausedAt ?? undefined, session.totalPausedSeconds ?? 0)
-    : calcElapsedHMS(session.startTime, undefined, session.totalPausedSeconds ?? 0)
+  // Đồng hồ dùng chung: một lần tick chỉ re-render thẻ này, không phải cả màn.
+  const now = useNow()
+  const dayLabel = sessionDayLabel(session.startTime, now)
+
+  const elapsed = calcElapsedHMS(
+    session.startTime,
+    isPaused ? session.pausedAt ?? undefined : new Date(now),
+    session.totalPausedSeconds ?? 0,
+  )
 
   // Thời gian đã tạm dừng (phiên 1 người / legacy): khi đang paused → tick live từ pausedAt
-  const pausedSeconds = pausedSecondsUntil(session.pausedAt, session.totalPausedSeconds ?? 0)
+  const pausedSeconds = pausedSecondsUntil(session.pausedAt, session.totalPausedSeconds ?? 0, now)
   const hasPausedSeconds = pausedSeconds > 0
 
   // Thu trước: số người còn lại chưa thu so với tổng số người của phiên.
@@ -91,17 +97,22 @@ export function ActiveSessionCard({
             {session.customerName ?? session.customer?.fullName ?? 'Khách lẻ'}
           </p>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            {/* Hội viên: vàng là hình (chấm), không bao giờ là chữ — #edc92c trên
-                nền sáng chỉ đạt 1,6:1. Chữ "Hội viên" giữ màu ink cho đủ tương phản. */}
+            {/* Hội viên: vàng là hình (chấm), không bao giờ là chữ — #ffd444 trên
+                nền sáng chỉ đạt 1,43:1. Chữ "Hội viên" giữ màu ink cho đủ tương phản. */}
             {isMember && (
               <span className="inline-flex items-center gap-1 text-xs text-text-secondary">
                 <span className="size-1.5 shrink-0 rounded-full bg-yellow" aria-hidden />
                 Hội viên
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-xs tabular-nums text-text-tertiary">
+            {/* Phiên sót lại từ hôm trước trông y hệt phiên vừa mở nếu chỉ in
+                giờ — nhãn ngày là tín hiệu duy nhất phân biệt được, nên nó đi
+                kèm giờ bắt đầu và đổi sang màu cảnh báo. */}
+            <span
+              className={`inline-flex items-center gap-1 text-xs tabular-nums ${dayLabel ? 'font-medium text-warning' : 'text-text-tertiary'}`}
+            >
               <LogIn size={12} className="shrink-0" />
-              {formatClock(session.startTime)}
+              {dayLabel ? `${dayLabel} ${formatClock(session.startTime)}` : formatClock(session.startTime)}
             </span>
             {settled > 0 && (
               <span className="text-xs tabular-nums text-text-tertiary">
@@ -180,42 +191,41 @@ export function ActiveSessionCard({
               {collapsed ? `Mở ${playerCount} người chơi` : 'Thu gọn'}
             </Button>
           )}
-          <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
-            {!isGroup && (isPaused ? (
+          {!readOnly && (
+            <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
+              {!isGroup && (isPaused ? (
+                <Button
+                  variant="contrast"
+                  size="sm"
+                  onClick={onResume}
+                  title="Tiếp tục chơi"
+                  className="flex flex-row px-2.5 md:px-3"
+                >
+                  <Play size={14} />
+                  <span className="hidden sm:inline">Chơi</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="white"
+                  size="sm"
+                  onClick={onPause}
+                  title="Tạm dừng"
+                  className="px-1.5 sm:px-2.5 md:px-3"
+                >
+                  <Pause size={14} className="shrink-0" />
+                  <span className="hidden sm:inline">Dừng</span>
+                </Button>
+              ))}
               <Button
                 variant="contrast"
                 size="sm"
-                disabled={pauseDisabled}
-                onClick={onResume}
-                title="Tiếp tục chơi"
-                className="flex flex-row px-2.5 md:px-3"
+                onClick={onCheckout}
+                className="px-3 md:px-4"
               >
-                <Play size={14} />
-                <span className="hidden sm:inline">Chơi</span>
+                Thu
               </Button>
-            ) : (
-              <Button
-                variant="white"
-                size="sm"
-                disabled={pauseDisabled}
-                onClick={onPause}
-                title="Tạm dừng"
-                className="px-1.5 sm:px-2.5 md:px-3"
-              >
-                <Pause size={14} className="shrink-0" />
-                <span className="hidden sm:inline">Dừng</span>
-              </Button>
-            ))}
-            <Button
-              variant="contrast"
-              size="sm"
-              disabled={checkoutDisabled}
-              onClick={onCheckout}
-              className="px-3 md:px-4"
-            >
-              Thu
-            </Button>
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -239,7 +249,7 @@ export function ActiveSessionCard({
                   player={player}
                   index={playerIndex}
                   startTime={session.startTime}
-                  pauseDisabled={pauseDisabled}
+                  readOnly={readOnly}
                   renaming={renaming}
                   onPause={() => onPausePlayer?.(player.id)}
                   onResume={() => onResumePlayer?.(player.id)}

@@ -1,14 +1,14 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { Minus, Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/input'
-import { Modal } from '@/components/ui/modal'
-import { useToast } from '@/components/ui/toast'
-import { apiJson, jsonRequest } from '@/lib/api'
-import { money, toNumber } from './format'
-import type { Product, SessionRow } from './types'
+import { useEffect, useState } from "react";
+import { Minus, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
+import { useToast } from "@/components/ui/toast";
+import { apiJson, jsonRequest } from "@/lib/api";
+import { money, toNumber } from "./format";
+import type { Product, SessionRow } from "./types";
 
 export function SellDialog({
   session,
@@ -22,27 +22,27 @@ export function SellDialog({
   onClose,
   onDone,
 }: {
-  session: SessionRow | null
-  products: Product[]
-  productsLoading: boolean
-  productsError: string
-  onRetryProducts: () => void
-  shiftReady: boolean
-  submitting: boolean
-  setSubmitting: (value: boolean) => void
-  onClose: () => void
-  onDone: () => Promise<boolean | void>
+  session: SessionRow | null;
+  products: Product[];
+  productsLoading: boolean;
+  productsError: string;
+  onRetryProducts: () => void;
+  shiftReady: boolean;
+  submitting: boolean;
+  setSubmitting: (value: boolean) => void;
+  onClose: () => void;
+  onDone: () => Promise<boolean | void>;
 }) {
-  const { success: notifySuccess, error: notifyError } = useToast()
-  const [cart, setCart] = useState<Record<string, number>>({})
+  const { success: notifySuccess, error: notifyError } = useToast();
+  const [cart, setCart] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (session) {
       /* eslint-disable react-hooks/set-state-in-effect */
-      setCart({})
+      setCart({});
       /* eslint-enable react-hooks/set-state-in-effect */
     }
-  }, [session])
+  }, [session]);
 
   const cartLines = products
     .map((product) => ({
@@ -50,76 +50,92 @@ export function SellDialog({
       quantity: cart[product.id] ?? 0,
       total: (cart[product.id] ?? 0) * toNumber(product.price),
     }))
-    .filter((line) => line.quantity > 0)
+    .filter((line) => line.quantity > 0);
 
-  const grandTotal = cartLines.reduce((sum, line) => sum + line.total, 0)
+  const grandTotal = cartLines.reduce((sum, line) => sum + line.total, 0);
 
   const changeCart = (product: Product, delta: number) => {
     setCart((current) => {
-      const currentQuantity = current[product.id] ?? 0
-      const nextQuantity = currentQuantity + delta
+      const currentQuantity = current[product.id] ?? 0;
+      const nextQuantity = currentQuantity + delta;
       if (nextQuantity <= 0) {
-        const next = { ...current }
-        delete next[product.id]
-        return next
+        const next = { ...current };
+        delete next[product.id];
+        return next;
       }
-      if (product.type === 'PRODUCT' && nextQuantity > product.stockQuantity) return current
-      return { ...current, [product.id]: nextQuantity }
-    })
-  }
+      if (product.type === "PRODUCT" && nextQuantity > product.stockQuantity)
+        return current;
+      return { ...current, [product.id]: nextQuantity };
+    });
+  };
 
   const handleSell = async () => {
-    if (!session) return
+    if (!session) return;
     if (!shiftReady) {
-      notifyError('Cần mở ca trước khi thêm vào phiên')
-      return
+      notifyError("Cần mở ca trước khi thêm vào phiên");
+      return;
     }
     if (cartLines.length === 0) {
-      notifyError('Chưa chọn sản phẩm hoặc dịch vụ')
-      return
+      notifyError("Chưa chọn sản phẩm hoặc dịch vụ");
+      return;
     }
 
-    setSubmitting(true)
+    setSubmitting(true);
     try {
-      const data = await apiJson(`/api/sessions/${session.id}/sell`, jsonRequest({
-        items: cartLines.map((line) => ({
-          productId: line.product.id,
-          quantity: line.quantity,
-        })),
-      }))
+      const data = await apiJson(
+        `/api/sessions/${session.id}/sell`,
+        jsonRequest({
+          items: cartLines.map((line) => ({
+            productId: line.product.id,
+            quantity: line.quantity,
+          })),
+        }),
+      );
 
       if (!data.success) {
-        notifyError(data.error || 'Không thêm được vào phiên')
-        return
+        notifyError(data.error || "Không thêm được vào phiên");
+        return;
       }
 
-      const refreshed = await onDone()
-      notifySuccess(refreshed === false
-        ? 'Đã thêm hàng vào phiên; danh sách chưa cập nhật. Hãy tải lại màn hình.'
-        : `Đã thêm ${money(grandTotal)} vào phiên`)
+      const refreshed = await onDone();
+      notifySuccess(
+        refreshed === false
+          ? "Đã thêm hàng vào phiên; danh sách chưa cập nhật. Hãy tải lại màn hình."
+          : `Đã thêm ${money(grandTotal)} vào phiên`,
+      );
     } catch {
-      notifyError('Lỗi kết nối máy chủ')
+      notifyError("Lỗi kết nối máy chủ");
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   return (
     <Modal
       open={!!session}
       onClose={onClose}
-      title={session ? `Bán kèm - ${session.customerName ?? session.customer?.fullName ?? 'Khách lẻ'}` : 'Bán kèm'}
-      description="Thêm đồ uống / dịch vụ vào phiên. Tiền sẽ được tính khi thu."
+      title={
+        session
+          ? `Bán kèm - ${session.customerName ?? session.customer?.fullName ?? "Khách lẻ"}`
+          : "Bán kèm"
+      }
+      description=""
       size="lg"
       footer={
         <Button
-          variant="primary"
+          variant="contrast"
           size="lg"
           fullWidth
-          disabled={submitting || productsLoading || !!productsError || !shiftReady || cartLines.length === 0}
+          disabled={
+            submitting ||
+            productsLoading ||
+            !!productsError ||
+            !shiftReady ||
+            cartLines.length === 0
+          }
           onClick={handleSell}
         >
-          {submitting ? 'Đang xử lý...' : `Thêm vào phiên ${money(grandTotal)}`}
+          {submitting ? "Đang xử lý..." : `Thêm vào phiên ${money(grandTotal)}`}
         </Button>
       }
     >
@@ -134,11 +150,22 @@ export function SellDialog({
             </div>
             <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
               {productsLoading ? (
-                <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">Đang tải danh sách sản phẩm...</p>
+                <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
+                  Đang tải danh sách sản phẩm...
+                </p>
               ) : productsError ? (
-                <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                <div
+                  role="alert"
+                  className="rounded-lg border border-danger-border bg-danger-bg p-3 text-sm text-danger border-danger-border bg-danger-bg text-danger"
+                >
                   <p>Không tải được sản phẩm: {productsError}</p>
-                  <button type="button" className="mt-2 font-medium underline" onClick={onRetryProducts}>Thử lại</button>
+                  <button
+                    type="button"
+                    className="mt-2 font-medium underline"
+                    onClick={onRetryProducts}
+                  >
+                    Thử lại
+                  </button>
                 </div>
               ) : products.length === 0 ? (
                 <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
@@ -146,8 +173,9 @@ export function SellDialog({
                 </p>
               ) : (
                 products.map((product) => {
-                  const quantity = cart[product.id] ?? 0
-                  const outOfStock = product.type === 'PRODUCT' && product.stockQuantity <= 0
+                  const quantity = cart[product.id] ?? 0;
+                  const outOfStock =
+                    product.type === "PRODUCT" && product.stockQuantity <= 0;
                   return (
                     <div
                       key={product.id}
@@ -159,7 +187,9 @@ export function SellDialog({
                         </p>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
                           {money(product.price)}
-                          {product.type === 'PRODUCT' ? ` · còn ${product.stockQuantity}` : ' · dịch vụ'}
+                          {product.type === "PRODUCT"
+                            ? ` · còn ${product.stockQuantity}`
+                            : " · dịch vụ"}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -184,7 +214,7 @@ export function SellDialog({
                         </button>
                       </div>
                     </div>
-                  )
+                  );
                 })
               )}
             </div>
@@ -192,5 +222,5 @@ export function SellDialog({
         </div>
       )}
     </Modal>
-  )
+  );
 }

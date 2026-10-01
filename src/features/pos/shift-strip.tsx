@@ -1,6 +1,7 @@
 'use client'
 
 import { ClipboardList, Receipt, UserPlus } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatClock, formatDay, money } from './format'
 import type { Shift } from './types'
@@ -13,11 +14,16 @@ import type { Shift } from './types'
  * trong state nên mỗi lần vào màn lại phải nhớ nó đang ở đâu. Bỏ toggle = bỏ một
  * trạng thái ẩn, một cú bấm, và một nhánh render.
  *
- * `shift = null` là trường hợp ADMIN chưa mở ca: vẫn được vận hành (backend cho
- * phép), nên dải chỉ nói đúng sự thật đó và đưa ra một nút — không chặn.
+ * `shift = null` là trường hợp chưa có ca quầy nào đang mở: dải chỉ nói đúng sự
+ * thật đó và đưa ra một nút — không chặn.
+ *
+ * `readOnly` là chế độ giám sát: ADMIN/MANAGER xem ca đang mở mà không tham gia.
+ * Đếm dụng cụ / Giao dịch / Đóng ca là thao tác của người trực ca nên không
+ * render ở đây — quản lý muốn thao tác thì bấm `Tham gia ca` trước.
  */
 export function ShiftStrip({
   shift,
+  readOnly = false,
   onOpen,
   onClose,
   onViewTransactions,
@@ -28,6 +34,7 @@ export function ShiftStrip({
   submitting,
 }: {
   shift: Shift | null
+  readOnly?: boolean
   onOpen: () => void
   onClose: () => void
   onViewTransactions: () => void
@@ -42,10 +49,12 @@ export function ShiftStrip({
       <section className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-warning-border bg-warning-bg px-4 py-2.5">
         <p className="flex min-w-0 items-center gap-2 text-sm text-text-primary">
           <span className="size-2 shrink-0 rounded-full bg-warning" aria-hidden />
-          <span className="min-w-0">Chưa mở ca — thao tác sẽ không gắn ca</span>
+          <span className="min-w-0">
+            {readOnly ? 'Chưa mở ca — chỉ xem, chưa thao tác được' : 'Chưa mở ca — không thu tiền được'}
+          </span>
         </p>
         <Button variant="contrast" size="sm" disabled={submitting} onClick={onOpen}>
-          Mở / Tham gia ca
+          Mở ca
         </Button>
       </section>
     )
@@ -64,9 +73,12 @@ export function ShiftStrip({
         <div className="flex min-w-0 items-start gap-2">
           <span className="mt-1.5 size-2 shrink-0 rounded-full bg-success" aria-hidden />
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-text-primary">
-              Ca {formatClock(shift.openedAt)} · {formatDay(shift.openedAt)}
-            </h2>
+            <div className="flex min-w-0 items-center gap-2">
+              <h2 className="truncate text-sm font-semibold text-text-primary">
+                Ca {formatClock(shift.openedAt)} · {formatDay(shift.openedAt)}
+              </h2>
+              {readOnly && <Badge variant="default" size="sm">Chỉ xem</Badge>}
+            </div>
             {participantLabel && (
               <p className="mt-0.5 truncate text-xs text-text-tertiary">{participantLabel}</p>
             )}
@@ -81,6 +93,15 @@ export function ShiftStrip({
         </div>
       </div>
 
+      {readOnly ? (
+        canJoin && (
+          <div className="mt-3 grid grid-cols-1 gap-2 md:flex md:justify-end">
+            <Button variant="contrast" size="sm" icon={UserPlus} disabled={submitting} onClick={onJoin}>
+              {submitting ? 'Đang tham gia...' : 'Tham gia ca'}
+            </Button>
+          </div>
+        )
+      ) : (
       <div className="mt-3 grid grid-cols-2 gap-2 md:flex md:flex-wrap md:justify-end">
         <Button
           variant={hasCounted ? 'white' : 'contrast'}
@@ -100,16 +121,19 @@ export function ShiftStrip({
           Giao dịch
         </Button>
         {/* 3 nút (không có Tham gia ca) → Đóng ca chiếm trọn hàng dưới để không
-            hở một ô trống cạnh hành động phá huỷ. 4 nút → lưới 2×2 kín sẵn. */}
+            hở một ô trống cạnh hành động phá huỷ. 4 nút → lưới 2×2 kín sẵn.
+            `min-h-9` = 36px, đúng chiều cao điều khiển chuẩn của hệ — nút đóng ca
+            là hành động không thể đảo nên cao hơn `size="sm"` (28px) một bậc. */}
         <Button
           variant="red"
           size="sm"
-          className={canJoin ? 'md:col-auto' : 'col-span-2 md:col-auto'}
+          className={`min-h-9 ${canJoin ? 'md:col-auto' : 'col-span-2 md:col-auto'}`}
           onClick={onClose}
         >
           Đóng ca
         </Button>
       </div>
+      )}
     </section>
   )
 }
