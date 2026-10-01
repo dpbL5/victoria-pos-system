@@ -31,11 +31,11 @@ export function Card({
 }: CardProps) {
   return (
     <div
-      className={`rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${
+      className={`rounded-xl border border-border-default bg-surface-elevated shadow-sm ${
         paddingClasses[padding]
       } ${
         interactive
-          ? "motion-hover-lift cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+        ? "motion-hover-lift cursor-pointer hover:bg-surface-tertiary"
           : ""
       } ${className}`}
       {...props}

@@ -58,7 +58,7 @@ Nghiệp vụ đã chốt (nguồn: `AGENTS.md` Business Invariants + `docs/`):
 - Tên: **Victoria Archery Club**.
 - Logo: `public/logo.jpg` (chữ V + mũi tên, đen + vàng đồng).
 - Wordmark: `VICTORIA` (chữ in hoa, tracking rộng) + tagline `ARCHERY CLUB` (chữ in hoa, màu vàng đồng).
-- Bảng màu: brand chính `#2563eb` (light) / charcoal `#1a1a1a` (dark); gold accent `#d4b572` (light) / `#b69854` (dark). Token đầy đủ trong `src/app/globals.css`.
+- Bảng màu: brand chính `#2563eb` (light) / charcoal `#1a1a1a` (dark); gold accent `#ffd444` (cả 2 theme). Token đầy đủ trong `src/app/globals.css`.
 - **Code name nội bộ bắt buộc giữ nguyên:** `qltruongcung` (package name, các localStorage/theme key như `qltrungcung_session`) — không đổi để không vỡ dữ liệu người dùng thật đang vận hành.
 
 ## Evidence on Hand

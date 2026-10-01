@@ -38,7 +38,7 @@ export function ConfirmDialog({
       footer={
         <div className="grid grid-cols-2 gap-2">
           <Button
-            variant="secondary"
+            variant="white"
             size="lg"
             fullWidth
             disabled={submitting}
@@ -47,7 +47,7 @@ export function ConfirmDialog({
             {cancelLabel}
           </Button>
           <Button
-            variant="danger"
+            variant="red"
             size="lg"
             fullWidth
             loading={submitting}

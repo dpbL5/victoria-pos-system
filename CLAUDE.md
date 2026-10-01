@@ -18,7 +18,7 @@
 - **Wordmark:** `VICTORIA` (chữ in hoa, tracking rộng) + tagline `ARCHERY CLUB` (chữ in hoa, tracking dãn, màu vàng đồng)
 - **Bảng màu:**
   - Brand (chính): `#2563eb` (light) / charcoal `#1a1a1a` (dark)
-  - Gold accent: `#d4b572` (light) / `#b69854` (dark) — dùng cho tagline, hover nhấn, viền nhấn (chỉ định nghĩa trong dark mode, tham khảo `globals.css`)
+  - Gold accent: `#ffd444` (cả 2 theme) — dùng cho tagline, hover nhấn, viền nhấn (token `--color-yellow` trong `globals.css`)
   - Surface & text: theo bảng token trong `src/app/globals.css`
 - **Code name nội bộ (giữ nguyên):** `qltruongcung` (tên package, localStorage key, theme key) — không đổi để tránh vỡ dữ liệu người dùng hiện tại.
 
@@ -157,6 +157,7 @@ Catalog đầy đủ (kèm "Dùng khi" + ví dụ code): **`docs/ui-patterns.md`
 - **Animations**: `animate-fade-in`, `animate-slide-up`, `animate-slide-down`, `animate-scale-in` từ globals.css
 - **Tabular numbers**: `tabular-nums` cho số đếm (đồng hồ, tiền) tránh layout shift
 - **Font mono cho số liệu**: `font-mono` cho elapsed time, tiền tệ trong bảng
+- **Tiêu đề trang**: mọi `h1` dùng `PAGE_TITLE_CLASS` từ `@/components/ui/page-title` (Headline 20px/28px, khớp header dán trên cùng ở mobile). Không hardcode cỡ chữ trong `h1`; test `src/components/ui/page-title.test.ts` khoá lại. Wordmark VICTORIA ở sidebar/login là ngoại lệ.
 
 ### 9. TypeScript
 
@@ -266,16 +267,20 @@ export type CreateThingInput = z.infer<typeof createThingSchema>;
 
 **Layout Architecture:**
 - **Desktop (≥768px)**: Fixed sidebar bên trái (`src/components/layout/sidebar.tsx`), collapse (256px / 72px), state localStorage `qltrungcung_sidebar_collapsed`.
-- **Mobile (<768px)**: Bottom tab navigation (`src/components/layout/bottom-nav.tsx`) đúng 5 tabs: `Ca`, `Hội viên`, `Kho`, `Báo cáo`, `Thêm`. Drawer sidebar dùng chung `staffMenuItems` với desktop sidebar để không lệch menu.
+- **Mobile (<768px)**: Bottom tab navigation (`src/components/layout/bottom-nav.tsx`) đúng 5 tab, thứ tự trái → phải `Ca hôm nay`, `Ca làm`, `Báo cáo`, `Lịch học`, `Thêm`, lọc theo guard thật của route qua `getVisibleNavItems`: ADMIN đủ 5; MANAGER `Ca hôm nay`/`Ca làm`/`Thêm`; STAFF `Ca hôm nay`/`Thêm`; TEACHER bộ riêng `Lịch học`/`Lớp học`/`Học viên`/`Thêm`. Test khoá ở `bottom-nav.test.ts`. Màn ẩn khỏi nav trên mobile vẫn vào được từ tab `Thêm` (trừ `/inventory` — chưa có shortcut ở đó).
 - **Main content**: Phải có `pb-16 md:pb-0` để bù cho bottom nav trên mobile.
 - **ToastProvider**: Wrap toàn bộ dashboard layout trong `layout.tsx`.
 
 **Mobile-first POS screen:**
 - `/` redirect về `/sessions`; page chỉ render `TodayShiftScreen` (trong `src/features/pos/`).
-- Chưa có ca mở → disable check-in/checkout + hiển thị hành động `Mở ca`.
+- Không có ca của chính mình → không có thao tác tiền: cờ `canOperate` (`getBoardAccess` trong `src/features/pos/board-access.ts`) khớp đúng guard `SHIFT_REQUIRED` của backend, không render nút bật mà bấm vào là lỗi.
+- Chế độ giám sát (chỉ xem): ADMIN/MANAGER chưa vào ca vẫn thấy phiên đang chơi + lịch đặt — dải ca có nhãn `Chỉ xem`, không hàng hành động, thẻ phiên không có nút Dừng/Thu, hàng lịch đặt không có Xác nhận/Huỷ; `Tham gia ca` vẫn còn khi có ca quầy đang mở. STAFF chưa vào ca vẫn chỉ thấy màn `Mở ca`.
 - Check-in hội viên hiển thị trạng thái membership; hết hạn hoặc hội viên mới → gia hạn trước rồi mới tạo session.
 - **Bảng giá không chọn lúc check-in**: check-in tạo session với `hourlyRate: 0`, `pricingRuleId/snapshot: null`; bảng giá (rule + tiers, từng pricing group) được resolve tại checkout qua `resolveCheckoutPricing` (xem `docs/business-flow-checkin-playing-checkout.md`).
 - Checkout dùng drawer hoá đơn: `PLAY_TIME` + sản phẩm/dịch vụ + phương thức thanh toán. `PRODUCT` tôn trọng tồn kho, không cho chọn vượt tồn.
+- Khối `Lịch đặt trong ngày` chỉ chứa lịch ĐÚNG hôm nay theo giờ VN (`isBookingOnVnDay` trong `booking-list.tsx`) — `GET /api/bookings` trả cả tuần, cả tuần nằm ở `/bookings`. Đừng bỏ bộ lọc này mà không sửa tiêu đề khối.
+- Phiên `ACTIVE` sót từ ngày trước phải hiện nhãn ngày trên thẻ (`sessionDayLabel` → `Hôm qua` / `dd/MM/yyyy`, màu `warning`): thẻ chỉ in `HH:mm` thì phiên chưa thu từ hôm kia trông y hệt phiên vừa mở.
+- Đồng hồ realtime dùng chung một interval qua `useNow()` (`src/hooks/use-now.ts`), gọi trong từng thẻ phiên/người chơi. KHÔNG tick ở component màn (`TodayShiftScreen`) — tick ở đó làm cả màn + mọi dialog re-render mỗi giây.
 
 **Mobile-first shift management screen:**
 - `/shifts` là quản lý ca + lịch sử (không thay thế `/sessions`); page chỉ render `ShiftManagementScreen` (trong `src/features/shifts/`).
@@ -340,12 +345,29 @@ npx prisma generate      # Generate Prisma client (tự động chạy qua posti
 npx prisma studio        # Prisma Studio (DB GUI)
 ```
 
+## Kiểm chứng UI bằng browser (công cụ cục bộ, KHÔNG commit)
+
+`.tools/` bị gitignore, chỉ có trên máy này — dùng để chụp màn thật + thu bằng chứng thay vì suy luận từ code:
+
+```bash
+cd .tools/browser
+node mint-session.mjs [--role MANAGER]        # ký cookie phiên, CHỈ SELECT DB
+node shot.mjs --url http://localhost:3000/sessions --out ../../.impeccable/review/x.png \
+  --width 390 --height 844 [--dark] [--full] [--expect "Chỉ xem"] [--deny "Xác nhận"] [--tick "main"]
+node shot.mjs --fixture-stale-days 1          # giả lập dữ liệu ở tầng client, không ghi DB
+```
+
+- Dùng lại Chrome có sẵn trong `~/.cache/puppeteer` (`puppeteer-core`, không tải browser, không cần quyền ngoài workspace).
+- **DB trong `.env` là Supabase production**: công cụ chỉ được ĐỌC. Không thêm ghi/seed vào script.
+- `shot.mjs` trả JSON: console error, request lỗi, HTTP ≥400, tràn ngang, nút `disabled`, đồng hồ có tick.
+- Chi tiết + cách dùng: `.tools/browser/README.md`.
+
 ## Testing
 
 - **Test runner**: Vitest với `globals: true`, `environment: 'node'`.
 - **Vị trí test**: `src/lib/__tests__/` — test cho business logic (use-cases, pricing engine, validations, helpers). Không tạo thư mục `__tests__` ở root.
 - **Path alias**: Vitest config có alias `@` → `./src` giống như Next.js.
-- **Không test UI components** ở giai đoạn này — tập trung test business logic và validation.
+- **Test UI**: business logic + validation nằm ở `src/lib/__tests__/`; màn/component có test colocated ngay cạnh file (`src/features/<màn>/*.test.tsx`, `src/components/**/*.test.tsx`) — chỉ test hàm thuần export ra ngoài và markup render (`renderToStaticMarkup`), không test tương tác.
 - **Pattern viết test**: Dùng `describe`/`it` blocks, import trực tiếp function từ `@/lib/...`.
   - Use-case test: fake repository với `vi.fn()` — không cần mock `@/lib/prisma`.
   - Pure function test (pricing engine, validation schemas, membership math): test trực tiếp, không cần mock.

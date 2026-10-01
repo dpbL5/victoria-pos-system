@@ -10,34 +10,34 @@ type StatColor = "green" | "blue" | "yellow" | "red" | "purple" | "default";
 
 const colorMap: Record<StatColor, { bg: string; icon: string; dot: string }> = {
   green: {
-    bg: "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20",
-    icon: "text-emerald-600 dark:text-emerald-400",
-    dot: "bg-emerald-500",
+    bg: "bg-success-bg border-success-border",
+    icon: "text-success",
+    dot: "bg-success",
   },
   blue: {
-    bg: "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20",
-    icon: "text-blue-600 dark:text-blue-400",
-    dot: "bg-blue-500",
+    bg: "bg-info-bg border-info-border",
+    icon: "text-info",
+    dot: "bg-info",
   },
   yellow: {
-    bg: "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20",
-    icon: "text-amber-600 dark:text-amber-400",
-    dot: "bg-amber-500",
+    bg: "bg-warning-bg border-warning-border",
+    icon: "text-warning",
+    dot: "bg-warning",
   },
   red: {
-    bg: "bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20",
-    icon: "text-red-600 dark:text-red-400",
-    dot: "bg-red-500",
+    bg: "bg-danger-bg border-danger-border",
+    icon: "text-danger",
+    dot: "bg-danger",
   },
   purple: {
-    bg: "bg-purple-50 dark:bg-purple-500/10 border-purple-200 dark:border-purple-500/20",
-    icon: "text-purple-600 dark:text-purple-400",
-    dot: "bg-purple-500",
+    bg: "bg-accent-purple-bg border-accent-purple-border",
+    icon: "text-accent-purple",
+    dot: "bg-accent-purple",
   },
   default: {
-    bg: "bg-zinc-50 dark:bg-zinc-500/10 border-zinc-200 dark:border-zinc-700",
-    icon: "text-zinc-600 dark:text-zinc-400",
-    dot: "bg-zinc-500",
+    bg: "bg-surface-tertiary border-border-default",
+    icon: "text-text-secondary",
+    dot: "bg-border-strong",
   },
 };
 
@@ -78,15 +78,15 @@ export function StatCard({
           {trend && (
             <div className="mt-1.5 flex items-center gap-1">
               {trend.value > 0 ? (
-                <TrendingUp size={14} className="text-emerald-500" />
+              <TrendingUp size={14} className="text-success" />
               ) : (
-                <TrendingDown size={14} className="text-red-500" />
+              <TrendingDown size={14} className="text-danger" />
               )}
               <span
                 className={`text-xs font-medium ${
                   trend.value > 0
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-red-600 dark:text-red-400"
+                  ? "text-success"
+                  : "text-danger"
                 }`}
               >
                 {trend.value > 0 ? "+" : ""}
@@ -99,7 +99,7 @@ export function StatCard({
           )}
         </div>
         {Icon && (
-          <div className={`shrink-0 rounded-lg p-2 ${c.icon} bg-white/60 dark:bg-zinc-800/60`}>
+        <div className={`shrink-0 rounded-lg bg-surface-elevated p-2 ${c.icon}`}>
             <Icon size={20} />
           </div>
         )}

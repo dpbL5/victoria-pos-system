@@ -11,7 +11,7 @@
   /* Brand */
   --color-brand: var(--color-brand);
 
-  /* Yellow — vàng thương hiệu, pick từ logo (victoria_logo.svg): #e8b914 light / #d4b572 dark.
+  /* Yellow — vàng thương hiệu #ffd444, dùng chung cho logo (victoria_logo.svg) và token.
      yellow-dark là bước đậm để làm chữ/icon trên nền sáng; -bg/-border là tint. */
   --color-yellow: var(--color-yellow);
   --color-yellow-dark: var(--color-yellow-dark);
@@ -85,11 +85,11 @@
   /* Brand */
   --color-brand: #2563eb;
 
-  /* Yellow — vàng thương hiệu (gốc logo #e8b914, đẩy sáng hơn); giống nhau ở cả 2 theme. */
-  --color-yellow: #edc92c;
+  /* Yellow — vàng thương hiệu #ffd444; giống nhau ở cả 2 theme. */
+  --color-yellow: #ffd444;
   --color-yellow-dark: #8a6a00;
-  --color-yellow-bg: rgba(237, 201, 44, 0.16);
-  --color-yellow-border: rgba(237, 201, 44, 0.45);
+  --color-yellow-bg: rgba(255, 212, 68, 0.16);
+  --color-yellow-border: rgba(255, 212, 68, 0.45);
 
   /* Surfaces — thang neutral lấy đúng thang zinc đang hiển thị:
      paper (#fff) · canvas (zinc-50) · tint (zinc-100) · card (#fff).
@@ -178,10 +178,10 @@
   --color-brand: #1a1a1a;
 
   /* Yellow — dùng chung đúng vàng của light mode; -dark = chính nó vì đã đủ tương phản trên nền tối. */
-  --color-yellow: #edc92c;
-  --color-yellow-dark: #edc92c;
-  --color-yellow-bg: rgba(237, 201, 44, 0.16);
-  --color-yellow-border: rgba(237, 201, 44, 0.38);
+  --color-yellow: #ffd444;
+  --color-yellow-dark: #ffd444;
+  --color-yellow-bg: rgba(255, 212, 68, 0.16);
+  --color-yellow-border: rgba(255, 212, 68, 0.38);
 
   /* Surfaces — canvas/sidebar/header là zinc-950, card nhấc lên zinc-900, hover zinc-800. */
   --color-surface-primary: #09090b;

@@ -79,19 +79,13 @@ const iconMap: Record<ToastType, typeof CheckCircle> = {
   warning: AlertCircle,
 };
 
-// Nền màu đậm theo loại — toast nổi bật rõ trên mọi nền (light + dark)
+// Nền màu đậm theo loại — toast nổi bật rõ trên mọi nền (light + dark).
+// Fill lấy token semantic; chữ đổi theo theme vì fill sáng ở dark, đậm ở light.
 const colorMap: Record<ToastType, string> = {
-  success: "border-green-600 bg-green-600 text-white",
-  error: "border-red-600 bg-red-600 text-white",
-  info: "border-blue-600 bg-blue-600 text-white",
-  warning: "border-amber-500 bg-amber-500 text-white",
-};
-
-const iconColorMap: Record<ToastType, string> = {
-  success: "text-white",
-  error: "text-white",
-  info: "text-white",
-  warning: "text-white",
+  success: "border-success bg-success text-white dark:text-zinc-900",
+  error: "border-danger bg-danger text-white dark:text-zinc-900",
+  info: "border-info bg-info text-white dark:text-zinc-900",
+  warning: "border-warning bg-warning text-white dark:text-zinc-900",
 };
 
 function ToastItem({ toast: t, onDismiss }: { toast: Toast; onDismiss: () => void }) {
@@ -107,11 +101,11 @@ function ToastItem({ toast: t, onDismiss }: { toast: Toast; onDismiss: () => voi
           : "animate-toast-pop"
       } ${colorMap[t.type]}`}
     >
-      <Icon size={18} className={`shrink-0 ${iconColorMap[t.type]}`} />
+  <Icon size={18} className="shrink-0" />
       <p className="flex-1 text-sm font-medium">{t.message}</p>
       <button
         onClick={onDismiss}
-        className="shrink-0 rounded-lg p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+        className="shrink-0 rounded-lg p-1 opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
       >
         <X size={14} />
       </button>

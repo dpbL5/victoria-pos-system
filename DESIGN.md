@@ -15,10 +15,10 @@ colors:
   text-tertiary: "#71717a"
   text-inverse: "#ffffff"
   # Accent — vàng thương hiệu (hồng tâm)
-  yellow: "#edc92c"
+  yellow: "#ffd444"
   yellow-dark: "#8a6a00"
-  yellow-bg: "rgba(237, 201, 44, 0.16)"
-  yellow-border: "rgba(237, 201, 44, 0.45)"
+  yellow-bg: "rgba(255, 212, 68, 0.16)"
+  yellow-border: "rgba(255, 212, 68, 0.45)"
   # Accent — hành động vận hành
   info: "#1d4ed8"
   info-bg: "#eff6ff"
@@ -203,7 +203,7 @@ Bảng màu gần như đơn sắc, chạy trên một thang neutral zinc, với
 ### Primary
 
 - **Sight Blue / xanh hành động** (`--color-info`, `#1d4ed8` → dark `#3b82f6`): màu của mọi hành động vận hành có chủ đích — nav active, nút hành động mặc định, avatar tài khoản, chip filter đang chọn, focus ring (light `#2563eb`). Đây là accent được dùng nhiều nhất trong app, và nó **không** phải `--color-brand`.
-- **Bullseye Gold / vàng hồng tâm** (`--color-yellow`, `#edc92c` ở cả hai theme): vàng thương hiệu lấy từ logo. Chỉ dùng cho: badge/CTA hội viên, tagline wordmark, nhấn liên quan tiền. Trên nền sáng dùng `text-yellow-dark`, trên nền tối dùng `text-yellow`.
+- **Bullseye Gold / vàng hồng tâm** (`--color-yellow`, `#ffd444` ở cả hai theme): vàng thương hiệu lấy từ logo. Chỉ dùng cho: badge/CTA hội viên, tagline wordmark, nhấn liên quan tiền. Trên nền sáng dùng `text-yellow-dark`, trên nền tối dùng `text-yellow`.
 
 ### Secondary
 
@@ -232,7 +232,7 @@ Bảng màu gần như đơn sắc, chạy trên một thang neutral zinc, với
 
 **The Sight Blue Rule.** Hành động vận hành dùng `--color-info`, **không** dùng `--color-brand`. `--color-brand` là token nhận diện: nó chuyển thành charcoal `#1a1a1a` ở dark mode, nên nếu đem làm nút hay link sẽ mất hút trên nền tối.
 
-**The Legibility Floor.** Chữ nhỏ (dưới 18.66px bold / 24px) phải đạt 4.5:1. `--color-text-tertiary` (`#71717a`, 4.6:1 trên canvas) là mức mờ **thấp nhất được phép**. Các bậc mờ hơn như `zinc-400` (2.6:1) và `zinc-300` chỉ được dùng cho icon trang trí hoặc viền, tuyệt đối không cho chữ. Vàng `#edc92c` không bao giờ là chữ trên nền sáng (1.6:1 trên trắng; 12.3:1 trên zinc-950) — trên nền sáng bắt buộc dùng bước đậm `text-yellow-dark` `#8a6a00`, đo được **5.07:1** trên trắng và **4.68:1** trên nền tint vàng, tức đạt AA cho cả chữ nhỏ.
+**The Legibility Floor.** Chữ nhỏ (dưới 18.66px bold / 24px) phải đạt 4.5:1. `--color-text-tertiary` (`#71717a`, 4.6:1 trên canvas) là mức mờ **thấp nhất được phép**. Các bậc mờ hơn như `zinc-400` (2.6:1) và `zinc-300` chỉ được dùng cho icon trang trí hoặc viền, tuyệt đối không cho chữ. Vàng `#ffd444` không bao giờ là chữ trên nền sáng (1.43:1 trên trắng; 13.8:1 trên zinc-950) — trên nền sáng bắt buộc dùng bước đậm `text-yellow-dark` `#8a6a00`, đo được **5.07:1** trên trắng và **4.77:1** trên nền tint vàng, tức đạt AA cho cả chữ nhỏ.
 
 ## Typography
 
@@ -270,11 +270,24 @@ Bố cục là **một cột nội dung duy nhất**, mở rộng bằng sidebar
 
 **Nhịp dọc.** Padding trang: 16px ở mobile, 24px ở desktop (`px-4 py-4 md:px-6 md:py-6`). Khoảng cách giữa các khối: 16px (`space-y-4`). Trong khối: 12px. Bước nhỏ 8px. Thang dùng thật là 8 / 12 / 16 / 24 — không có bước lẻ.
 
-**Grid.** Mặc định một cột; lưới thống kê `grid-cols-1 md:grid-cols-2 lg:grid-cols-4`. Hàng hành động màn Ca trên desktop là 3 track cố định 9rem (`md:grid-cols-[repeat(3,minmax(0,9rem))] md:justify-end`) — không kéo giãn tile điện thoại hết bề rộng `max-w-content`.
+**Grid.** Mặc định một cột; lưới thống kê `grid-cols-1 md:grid-cols-2 lg:grid-cols-4`. Hàng hành động màn Ca trên desktop là 3 track cố định 9rem (`md:grid-cols-[repeat(3,minmax(0,9rem))] md:justify-center`) — không kéo giãn tile điện thoại hết bề rộng `max-w-content`.
 
-**Chiều cao điều khiển.** Nút icon 36px (`h-9`), nút icon nhỏ 28px (`h-7`), hàng hành động màn Ca 48px (`min-h-12`, 3 tile ngang), bottom nav 64px. Vùng chạm mục tiêu **≥44px**; input primitive hiện đo 42px ở mobile (16px padding + 24px line-height + 2px viền) — form chính trên mobile thêm `py-2.5` để vượt ngưỡng.
+**Chiều cao điều khiển.** Nút icon 36px (`h-9`), nút icon nhỏ 28px (`h-7`), hàng hành động màn Ca 56px (`min-h-14`, 3 tile ngang), bottom nav 64px.
 
-**Điểm gãy.** Thực tế chỉ có một điểm gãy kiến trúc: `md` (768px) — nơi đảo nav đổi thành sidebar. `sm` (640px) chỉ dùng cho chi tiết nhỏ (cỡ chữ input, ẩn khối tài khoản trên header).
+**The Row-Action Rule.** Nút hành động **bên trong một hàng danh sách** dùng size `sm` (28px) và đứng **cạnh nhau thành hàng ngang**, bố cục `[phụ][chính]` — như `Dừng`/`Thu` ở thẻ người đang chơi và `Hủy`/`Xác nhận` ở hàng lịch đặt. Đây là chủ ý nhỏ hơn ngưỡng 44px: hàng đã cao ~110px, và mật độ mới là thứ đọc được ở quầy. Ngưỡng **44px áp cho nút đứng riêng** (form, dialog, action bar, tile màn Ca).
+
+Trong hàng, nút phụ ẩn nhãn dưới `sm` (`hidden sm:inline`) và giữ `aria-label`; nút chính giữ **nhãn ngắn** ở mọi bề rộng (`Thu`, `Xác nhận`) — nhãn dài kiểu "Xác nhận & Chơi" chỉ sống trong dialog, nơi có đủ chỗ. Nhãn dài trong hàng sẽ bóp cột thông tin: đo được ở 375px, cột phải 121px là ngưỡng giữ cho hàng meta không tràn thêm dòng.
+
+Input primitive đo 42px ở mobile (16px padding + 24px line-height + 2px viền) — form chính trên mobile thêm `py-2.5` để vượt ngưỡng 44px.
+
+**Điểm gãy.** Có đúng hai điểm gãy, và chúng trả lời hai câu hỏi khác nhau:
+
+- `md` (768px) — điểm gãy **kiến trúc**: đảo nav mobile đổi thành sidebar. Dùng `md:` cho những gì thuộc về *khung* (padding trang, tiêu đề màn, dải sticky).
+- `lg` (1024px) — điểm gãy **mật độ**: nơi lưới/bảng dày được phép chuyển sang dạng hàng ngang nhiều cột. Dùng `lg:` cho những gì thuộc về *chiều rộng nội dung*.
+
+**The Density Breakpoint Rule.** Đừng đặt layout hàng ngang ở `md`. Ở đúng 768px sidebar vừa lấy 240px, nên bề rộng nội dung tụt còn **528px — hẹp hơn cả một điện thoại 640px**. Layout chuyển sang hàng ngang ở `md` sẽ vỡ ngay tại điểm hẹp nhất (đo được trên màn Đặt lịch: cell dải ngày 60px trong khi nội dung cần ~74px, tràn 7px ở 768 và 4px ở 820; đến 1024 cell mới đủ 96px). Layout nội dung phải đổi ở `lg`.
+
+`sm` (640px) chỉ dùng cho chi tiết nhỏ (cỡ chữ input, ẩn khối tài khoản trên header).
 
 ## Elevation & Depth
 
@@ -359,6 +372,18 @@ Thứ tự lớp cố định, dùng ở mọi màn: **Paper** (`surface-primary
 
 Mọi khoản trừ (phí gửi xe, chiết khấu, hoàn) hiển thị bằng chữ `text-danger` kèm dấu `-` tường minh, và tổng được chặn sàn bằng `Math.max(0, ...)`. Số âm không bao giờ hiển thị bằng màu trung tính, và không bao giờ chỉ dựa vào dấu để truyền đạt. Trong bảng, tiền dùng `font-mono tabular-nums` để cột số không nhảy.
 
+### Phiếu thu hai liên (signature)
+
+Mọi dialog thu tiền đọc như một **phiếu hai liên**, không phải một chồng mục:
+
+- **Liên 1 · Tính tiền** — đang tính cái gì: từng người chơi (giá niêm yết + thời gian chơi/nghỉ), hàng hoá/dịch vụ, vùng thêm hàng; kết bằng **Tạm tính**.
+- **Liên 2 · Thu tiền** — vì sao ra số cuối: khuyến mại, phí gửi xe, tiền cọc (khấu trừ), **Tổng**, rồi phương thức thanh toán. Liên 2 nằm trên bước `surface-secondary`, chạy hết tới chân phiếu; đường gấp là 24px giấy trắng + một hairline.
+- **Chân phiếu** — kết quả: **Cần thu** + nút thu. Đây là con số **duy nhất** cỡ Display (24px) trên màn.
+
+Chuỗi số đi một hướng và mỗi khoản xuất hiện đúng **một lần**: `Tạm tính = giờ chơi (giá niêm yết) + hàng hoá`, `Tổng = Tạm tính − khuyến mại − phí gửi xe`, `Cần thu = Tổng − cọc`. Vì vậy mọi số tiền in **chính xác đến từng đồng** (`money(value, false)` — không `Math.ceil` lên hàng nghìn, nếu không các dòng không cộng lại đúng bằng tổng), và mọi số nằm trên **một rail phải cố định** (`MONEY_RAIL`) từ dòng đầu tới chân phiếu. Hàm thuần `src/features/pos/checkout-totals.ts` là nguồn duy nhất của chuỗi này — không tính lại trong JSX.
+
+Khoản điều chỉnh (khuyến mại, phí gửi xe, tiền cọc) là **một lớp mỏng** trong liên 2, tách khỏi danh sách khoản thu; hàng chỉ-để-đọc không nằm lẫn với hàng có control. Bảng giá và phí gửi xe luôn hiện đầy đủ (không thu gọn); khuyến mại chỉ hiện khi có khuyến mại để chọn (lỗi tải vẫn hiện).
+
 ## Do's and Don'ts
 
 ### Do:
@@ -367,6 +392,7 @@ Mọi khoản trừ (phí gửi xe, chiết khấu, hoàn) hiển thị bằng c
 - **Do** để token tự lo dark mode. Mỗi token đã có sẵn giá trị light và dark, nên **không** viết `dark:` cho màu đã có token — `bg-surface-elevated` đã đúng ở cả hai theme.
 - **Do** giữ mỗi màn đúng một điểm vàng làm tiêu điểm (The One Gold Rule), và dùng `text-yellow-dark dark:text-yellow` khi vàng là chữ.
 - **Do** giữ thang ink ở đúng ba bậc: `text-text-primary` / `--secondary` / `--tertiary`. Mức mờ nhất được phép cho chữ là `#71717a` (4.6:1 trên canvas).
+- **Do** dùng `PAGE_TITLE_CLASS` (`src/components/ui/page-title.ts`) cho **mọi** `h1` tiêu đề trang — đó là Headline 20px/28px/+0.025em, cùng cỡ với header dán trên cùng ở mobile, nên desktop và mobile đọc ra một tiêu đề. Cấm hardcode cỡ chữ trong `h1` (24px là cỡ Display, để dành cho con số); ràng buộc khoá ở `page-title.test.ts`. Wordmark `VICTORIA` (sidebar, login) nằm ngoài luật này.
 - **Do** dùng `tabular-nums` cho mọi con số thay đổi, và `font-mono` cho cột số trong bảng dữ liệu dày.
 - **Do** giữ vùng chạm ≥44px; form chính trên mobile thêm `py-2.5` cho field.
 - **Do** load subset tiếng Việt cho font: `subsets: ["latin", "vietnamese"]` trong `src/app/layout.tsx`.
@@ -380,7 +406,7 @@ Mọi khoản trừ (phí gửi xe, chiết khấu, hoàn) hiển thị bằng c
 
 - **Don't** hardcode màu palette: `bg-zinc-*`, `text-slate-*`, `border-gray-*`, hay bất kỳ hex inline nào. Ngoại lệ duy nhất là `src/features/reports/reports-charts.tsx` (ramp biểu đồ) và SVG logo.
 - **Don't** dùng `--color-brand` cho nút, link, hay trạng thái active. Nó thành charcoal `#1a1a1a` ở dark mode. Hành động dùng `--color-info` (The Sight Blue Rule).
-- **Don't** dùng `text-zinc-400` (hay mờ hơn) cho chữ ở light mode — 2.6:1, dưới ngưỡng AA. Cũng đừng dùng vàng `#edc92c` làm chữ trên nền sáng (1.6:1).
+- **Don't** dùng `text-zinc-400` (hay mờ hơn) cho chữ ở light mode — 2.6:1, dưới ngưỡng AA. Cũng đừng dùng vàng `#ffd444` làm chữ trên nền sáng (1.43:1).
 - **Don't** thêm màu thứ năm. Hệ đã có đúng một màu trang trí (vàng) và hai màu chức năng (xanh, bộ ba trạng thái) — màu mới phải thay thế một màu cũ, không phải xếp thêm.
 - **Don't** tự nghĩ ra màu cho series biểu đồ. Mọi chart lấy từ ramp duy nhất trong `reports-charts.tsx`; không hardcode `bg-rose-500`/`bg-sky-500`/`bg-teal-500` rải rác trong màn.
 - **Don't** dùng gradient, glow, neon, chữ phát sáng, animation nền, hay hiệu ứng phát sáng khi hover. Đây là sổ điểm vận hành, không phải UI game.

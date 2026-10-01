@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from 'react'
-import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { LogIn } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Logo } from '@/components/ui/logo'
 import { PasswordInput } from '@/components/ui/password-input'
 
 export default function LoginPage() {
@@ -44,21 +44,14 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface-secondary px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-border-default bg-surface-primary p-8 shadow-2xl">
+      <div className="w-full max-w-sm rounded-2xl border border-border-default bg-surface-elevated p-8 shadow-2xl">
         <div className="mb-3 flex flex-col items-center justify-center gap-3">
-          <div className="rounded-xl bg-white p-2 shadow-md">
-            <Image
-              src="/logo.jpg"
-              alt="Victoria Archery Club"
-              width={80}
-              height={80}
-              className="h-20 w-20 object-contain"
-              priority
-            />
+        <div className="rounded-xl bg-surface-tertiary p-2">
+            <Logo className="h-20 w-20" />
           </div>
           <div className="text-center">
             <h1 className="text-xl font-bold tracking-wide text-text-primary">VICTORIA</h1>
-            <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-gold-dark dark:text-gold">
+          <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-yellow-dark dark:text-yellow">
               Archery Club
             </p>
           </div>
@@ -94,7 +87,7 @@ export default function LoginPage() {
 
           <Button
             type="submit"
-            variant="primary"
+              variant="contrast"
             size="md"
             fullWidth
             icon={LogIn}

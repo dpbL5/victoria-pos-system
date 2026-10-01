@@ -5,29 +5,47 @@ import { usePathname } from 'next/navigation'
 import {
   BarChart3,
   CalendarClock,
+  GraduationCap,
   MoreHorizontal,
-  Package,
-  ShieldCheck,
+  School,
   Timer,
+  Users,
   type LucideIcon,
 } from 'lucide-react'
+import { canAccessTraining, isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
 
 interface NavItem {
   href: string
   label: string
   Icon: LucideIcon
+  /** Guard thật của route (đọc ở page.tsx tương ứng); thiếu = mọi role mở được */
+  canAccess?: (role: string | undefined) => boolean
 }
 
-// /customers (Hội viên) được đưa lên đầu để STAFF thấy [Hội viên, Ca, Thêm].
-// MANAGER/ADMIN luôn loại trừ /customers nên thứ tự này chỉ ảnh hưởng STAFF.
+// Thứ tự trái → phải: Ca hôm nay · Ca làm · Báo cáo · Lịch học · Thêm.
+// Tab chỉ hiện với role mà guard của route cho mở — /shifts (MANAGER/ADMIN),
+// /reports (ADMIN), /lessons (ADMIN/TEACHER).
 const navItems: NavItem[] = [
-  { href: '/customers', label: 'Hội viên', Icon: ShieldCheck },
-  { href: '/sessions', label: 'Ca', Icon: Timer },
-  { href: '/shifts', label: 'Ca làm', Icon: CalendarClock },
-  { href: '/inventory', label: 'Kho', Icon: Package },
-  { href: '/reports', label: 'Báo cáo', Icon: BarChart3 },
+  { href: '/sessions', label: 'Ca hôm nay', Icon: Timer },
+  { href: '/shifts', label: 'Ca làm', Icon: CalendarClock, canAccess: isManagerOrAdmin },
+  { href: '/reports', label: 'Báo cáo', Icon: BarChart3, canAccess: isAdminOnly },
+  { href: '/lessons', label: 'Lịch học', Icon: GraduationCap, canAccess: canAccessTraining },
   { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
 ]
+
+// Giáo viên không trực quầy — giữ nav riêng theo các màn đào tạo họ mở được.
+const teacherNavItems: NavItem[] = [
+  { href: '/lessons', label: 'Lịch học', Icon: GraduationCap },
+  { href: '/classes', label: 'Lớp học', Icon: School },
+  { href: '/students', label: 'Học viên', Icon: Users },
+  { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
+]
+
+/** Tab hiện với một role — chỉ những route mà guard thật sự cho mở */
+export function getVisibleNavItems(userRole?: string): NavItem[] {
+  const source = userRole === 'TEACHER' ? teacherNavItems : navItems
+  return source.filter((item) => !item.canAccess || item.canAccess(userRole))
+}
 
 interface BottomNavProps {
   userRole?: string
@@ -35,16 +53,7 @@ interface BottomNavProps {
 
 export function BottomNav({ userRole }: BottomNavProps) {
   const pathname = usePathname()
-  // STAFF: Hội viên, Ca, Thêm (Hội viên sang trái). MANAGER/ADMIN: Ca, Ca làm (/shifts), thay thế Hội viên bằng /shifts.
-  const visibleItems = navItems.filter((item) => {
-    if (userRole === 'STAFF') {
-      return item.href === '/sessions' || item.href === '/customers' || item.href === '/settings'
-    }
-    if (userRole === 'MANAGER') {
-      return item.href !== '/reports' && item.href !== '/customers'
-    }
-    return item.href !== '/customers'
-  })
+  const visibleItems = getVisibleNavItems(userRole)
 
   const isActive = (href: string) =>
     href === '/sessions'
@@ -67,15 +76,15 @@ export function BottomNav({ userRole }: BottomNavProps) {
               aria-current={active ? 'page' : undefined}
               className={`motion-press relative flex min-w-0 flex-col items-center justify-center gap-0.5 py-1 ${
                 active
-                  ? 'text-blue-600 dark:text-blue-400 nav-active'
+                ? 'text-info nav-active'
                   : 'text-zinc-400 dark:text-zinc-500'
-              }`}
-            >
-              <div
-                className={`flex items-center justify-center rounded-lg p-1 transition-colors ${
-                  active ? 'bg-blue-50 dark:bg-blue-500/15' : ''
                 }`}
               >
+              <div
+                className={`flex items-center justify-center rounded-lg p-1 transition-colors ${
+                  active ? 'bg-info-bg' : ''
+              }`}
+            >
                 <Icon size={20} />
               </div>
               <span className="max-w-16 truncate text-[10px] font-medium">

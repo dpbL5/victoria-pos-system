@@ -10,6 +10,7 @@
 | `StatCard` | `@/components/ui/stat-card` | Card thống kê (doanh thu, số phiên, KH mới...) |
 | `EmptyState` | `@/components/ui/empty-state` | Table/list không có dữ liệu |
 | `AppSkeleton` | `@/components/ui/skeleton` | Loading placeholder dùng chung |
+| `Logo` | `@/components/ui/logo` | Brand mark. Inline SVG, mực theo `currentColor` + vàng theo token nên tự đổi theo theme app. **Không** dùng `<Image src="/victoria_logo.svg">` — file đó dùng `prefers-color-scheme`, bám theo theme OS chứ không bám class `.dark`, nên sai màu khi 2 theme lệch nhau |
 | `Modal` | `@/components/ui/modal` | Dialog/modal (responsive: bottom sheet mobile, overlay desktop) |
 | `ToastProvider` | `@/components/ui/toast` | Wrap dashboard layout — cung cấp toast notifications |
 | `useToast` | `@/components/ui/toast` | Hook: `const { success, error } = useToast()` |
@@ -17,11 +18,22 @@
 | `Select` | `@/components/ui/input` | Select dropdown thống nhất |
 | `Label` | `@/components/ui/input` | Form label (có required indicator) |
 | `Textarea` | `@/components/ui/input` | Textarea input thống nhất |
-| `Button` | `@/components/ui/button` | Nút (6 variants: primary/secondary/danger/ghost/inverse/outline-danger, 4 sizes, loading state, icon) |
+| `Button` | `@/components/ui/button` | Nút (8 variants: accent `blue`/`red`/`red-soft`/`yellow` + trung tính `white`/`grey`/`contrast` + `ghost`, 4 sizes, loading state, icon). Link/`<a>` cần hình dạng button thì dùng `buttonClass({ variant, size })` từ cùng file |
 | `FilterButton` | `@/components/ui/filter-button` | Nút filter toggle (active/onClick) |
 | `NoticeCard` | `@/components/ui/notice-card` | Card thông báo (4 tones: info/success/warning/danger, title + description + action) |
 | `SortableCardList` | `@/components/ui/sortable-card-list` | Danh sách card kéo thả (dụng cụ) |
 | `SortableTable` | `@/components/ui/sortable-table` | Bảng kéo thả (dụng cụ) |
+
+## Phiếu thu (dialog thu tiền — POS checkout)
+
+Mọi dialog thu tiền dùng cấu trúc **phiếu hai liên** + **một rail tiền**:
+
+- Liên 1 (TÍNH TIỀN) = đang tính cái gì → kết bằng **Tạm tính**. Liên 2 (THU TIỀN) = giảm gì, thu thế nào → **Tổng** → trừ cọc → chân phiếu **Cần thu** + nút thu. Liên 2 nằm trên bước `surface-secondary`, chạy tới chân phiếu; đường gấp là 24px giấy trắng + hairline.
+- **Chuỗi số là một hàm thuần duy nhất**: `checkoutTotals()` trong `src/features/pos/checkout-totals.ts` (+ test). Không tính lại trong JSX. Công thức: `Tạm tính = giờ chơi (giá niêm yết) + hàng hoá`; `Tổng = Tạm tính − khuyến mại − phí gửi xe`; `Cần thu = Tổng − cọc (không vượt quá Tổng)`.
+- **In số chính xác đến từng đồng** trong dialog thu tiền: dùng `money(value, false)`. `money()` mặc định `Math.ceil` lên hàng nghìn, nên các dòng sẽ không cộng lại đúng bằng tổng và lệch với số hoá đơn ghi.
+- Mọi số tiền nằm trên `MONEY_RAIL` (`checkout-player-picker.tsx`), từ dòng đầu tới con số Display ở chân phiếu. Chỉ **một** con số cỡ 24px trên màn.
+- Giá từng người chơi là **giá niêm yết**; khuyến mại là một dòng trừ riêng trong liên 2 (không net sẵn vào từng dòng).
+- Bảng giá và phí gửi xe luôn hiện đầy đủ, không thu gọn; phí gửi xe áp cho cả hội viên (server không chặn theo hạng khách); khuyến mại chỉ hiện khi có khuyến mại để chọn hoặc đang có lỗi tải.
 
 ## Bề rộng nội dung trang (bắt buộc — mọi trang giống nhau)
 
@@ -90,24 +102,48 @@ Quy tắc:
 
 Nguồn sự thật: **`src/app/globals.css`** — CSS custom properties định nghĩa trong `:root` (light) và `.dark` (dark mode), gồm `--color-brand`, `--color-surface-*`, `--color-border-*`, `--color-text-*`, `--color-success/warning/danger/info-*`, `--color-accent-purple-*`, `--shadow-*`, `--radius-*`.
 
-Từ Tailwind v4, `globals.css` có block `@theme inline` **map token → utility class**. Token dùng được trực tiếp dưới dạng `bg-brand`, `text-gold`, `border-danger`, `bg-surface-primary`… (light + dark tự động theo CSS var). Mỗi token có thể dùng với prefix `bg-`/`text-`/`border-`/`ring-`/`fill-`/`stroke-`:
+Từ Tailwind v4, `globals.css` có block `@theme inline` **map token → utility class**. Token dùng được trực tiếp dưới dạng `bg-brand`, `text-yellow`, `border-danger`, `bg-surface-primary`… (light + dark tự động theo CSS var). Mỗi token có thể dùng với prefix `bg-`/`text-`/`border-`/`ring-`/`fill-`/`stroke-`:
 
 | Token | Utility | Giá trị light | Giá trị dark | Dùng cho |
 |-------|---------|---------------|--------------|----------|
 | `--color-brand` | `bg-brand`, `text-brand` | `#2563eb` | `#1a1a1a` (charcoal) | Nút primary, nav active (light) |
-| `--color-gold` | `text-gold` | `#d4b572` | `#d4b572` | Tagline `ARCHERY CLUB`, wordmark |
-| `--color-gold-dark` | `text-gold-dark` | `#b69854` | `#b69854` | Tagline trên nền sáng |
+| `--color-yellow` | `bg-yellow`, `text-yellow` | `#ffd444` | `#ffd444` | Vàng thương hiệu — dùng chung cả 2 theme |
+| `--color-yellow-dark` | `text-yellow-dark`, `bg-yellow-dark` | `#8a6a00` | `#ffd444` | Bước đậm của yellow để làm chữ/icon trên nền sáng (tagline, hội viên) |
+| `--color-yellow-bg` / `-border` | `bg-yellow-bg`, `border-yellow-border` | tint `rgba(255,212,68,.16/.45)` | tint `rgba(255,212,68,.16/.38)` | Nền/viền nhạt cho badge, chip hội viên |
+| `--color-text-tertiary` | `text-text-tertiary` | `#71717a` | `#a1a1aa` | Chữ mờ (nút `ghost`, placeholder) — đủ tương phản 4.5:1 |
 | `--color-surface-primary` | `bg-surface-primary` | `#ffffff` | `#18181b` | Nền trang chính |
 | `--color-surface-secondary` | `bg-surface-secondary` | `#f8fafc` | `#27272a` | Cards, sidebar |
 | `--color-border-default` | `border-border-default` | `#e2e8f0` | `#3f3f46` | Card/table border |
 | `--color-text-primary` | `text-text-primary` | `#0f172a` | `#fafafa` | Headings |
-| `--color-success` | `text-success`, `bg-success` | `#16a34a` | `#22c55e` | Trạng thái thành công |
-| `--color-warning` | `text-warning`, `bg-warning` | `#d97706` | `#f59e0b` | Cảnh báo |
-| `--color-danger` | `text-danger`, `bg-danger` | `#dc2626` | `#ef4444` | Lỗi |
-| `--color-accent-purple` | `text-accent-purple` | `#7c3aed` | `#8b5cf6` | Member badge |
-| `--color-info` | `text-info`, `bg-info` | `#2563eb` | `#3b82f6` | Thông tin |
+| `--color-success` | `text-success`, `bg-success` | `#15803d` | `#22c55e` | Trạng thái thành công |
+| `--color-warning` | `text-warning`, `bg-warning` | `#b45309` | `#f59e0b` | Cảnh báo |
+| `--color-danger` | `text-danger`, `bg-danger` | `#b91c1c` | `#ef4444` | Lỗi |
+| `--color-accent-purple` | `text-accent-purple` | `#6d28d9` | `#8b5cf6` | Nhãn không thuộc hội viên (vai trò ADMIN, "Bắt buộc", "Hôm nay") |
 
-> Lưu ý: `--color-brand` đổi thành charcoal trong dark mode (theo thương hiệu). Với nút primary giữ nguyên màu xanh ở dark, dùng `dark:bg-blue-600` thay vì `dark:bg-brand`.
+| `--color-info` | `text-info`, `bg-info` | `#1d4ed8` | `#3b82f6` | Thông tin |
+
+> Lưu ý: `--color-brand` đổi thành charcoal trong dark mode (theo thương hiệu). Nút `blue` dùng `--color-info` (không dùng `--color-brand`) để vẫn là màu xanh ở dark.
+
+### Bộ variant cho nút — accent + trung tính
+
+`Button` có 4 accent (`blue`/`red`/`red-soft`/`yellow`) + 3 trung tính (`white`/`grey`/`contrast`) + `ghost`, mỗi variant map vào token có sẵn (không hardcode màu):
+
+| Variant | Vai trò | Token nền | Token tint |
+|---|---|---|---|
+| `blue` | Hành động brand: tạo mới, đăng nhập, mở dialog, điều hướng, Xem báo cáo | `--color-info` | `info-bg`/`info-border` |
+| `red` | Phá huỷ & kết thúc: Xoá, Huỷ hoá đơn, Huỷ lịch, Ngắt kết nối, Đăng xuất, Kết thúc lớp, Vô hiệu hoá, Đóng ca | `--color-danger` | `danger-bg`/`danger-border` |
+| `red-soft` | `red` bản nhạt cho nút icon trong bảng/card | `--color-danger-bg` | `--color-danger-border` |
+| `yellow` | Mọi thao tác thuộc hội viên (chọn chế độ Hội viên, đăng ký, gia hạn) | `--color-yellow` | `yellow-bg`/`yellow-border` |
+| `white` | Trung tính: Huỷ, Quay lại, Thử lại, Xem, Tìm, phân trang, sửa/xem (icon trong row) | `surface-elevated` + `border-default` | `surface-tertiary` (hover) |
+| `grey` | Trung tính nền xám, không viền — tile hành động màn Ca (Bán kèm, Bán lẻ) | `surface-tertiary` | — |
+| `contrast` | **Nút hành động chính**: đảo màu (đậm ở light, trắng ở dark) — Thêm/Tạo, Lưu, Cập nhật, Thu tiền, Check-in, Mở ca, Đăng nhập, tile Check-in màn Ca | `text-primary` + `text-inverse` | — |
+| `ghost` | Tiện ích nền trong suốt: đóng modal, chevron, toggle filter | — | `surface-tertiary` (hover) |
+
+Quy ước chọn variant:
+- Nút hành động chính (thêm/tạo, submit form, thu tiền, check-in, mở ca) dùng `contrast`; nút phụ (huỷ, quay lại, thử lại, xem, phân trang) dùng `white`.
+- Hành động xoá/kết thúc: có chữ → `red`; icon-only trong bảng/card → `red-soft`.
+- Thao tác liên quan hội viên → `yellow`.
+- Mặc định khi không truyền `variant` là `blue`.
 
 ### Card primitive
 
@@ -153,6 +189,7 @@ import { Modal } from "@/components/ui/modal";
   title="Tiêu đề"
   description="Mô tả phụ (tuỳ chọn)"
   size="md"            // "sm" | "md" | "lg" | "full"
+  overlayColor="rgba(0,0,0,0.5)" // màu overlay (mặc định --color-surface-overlay)
   footer={<>Nút ở đây</>}
 >
   {children}
@@ -179,7 +216,7 @@ import { Badge } from "@/components/ui/badge";
 <Badge variant="success">Đang chơi</Badge>
 <Badge variant="warning">Tạm dừng</Badge>
 <Badge variant="danger">Đã nghỉ</Badge>
-<Badge variant="purple">Hội viên</Badge>
+<Badge variant="yellow">Hội viên</Badge>
 <Badge variant="default">Vãng lai</Badge>
 <Badge variant="outline">Nháp</Badge>
 <Badge size="sm">Nhỏ</Badge>          // size="sm" | "md" (default)

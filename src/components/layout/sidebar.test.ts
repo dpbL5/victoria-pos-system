@@ -27,15 +27,21 @@ describe('getVisibleMenuGroups', () => {
     const hrefs = groups.flatMap((group) => group.items.map((item) => item.href))
     expect(hrefs).not.toContain('/pricing')
     expect(hrefs).not.toContain('/cashflow')
-    expect(hrefs).toEqual(['/sessions', '/shifts', '/customers', '/inventory', '/settings'])
+    expect(hrefs).toEqual(['/sessions', '/bookings', '/shifts', '/customers', '/inventory', '/settings'])
     expect(groups.map((group) => group.label)).toEqual(['Vận hành', 'Khách hàng', 'Kho', 'Hệ thống'])
   })
 
   it('STAFF không thấy mục staffHidden, chỉ còn 3 nhóm', () => {
     const groups = getVisibleMenuGroups('STAFF')
     const hrefs = groups.flatMap((group) => group.items.map((item) => item.href))
-    expect(hrefs).toEqual(['/sessions', '/customers', '/settings'])
+    expect(hrefs).toEqual(['/sessions', '/bookings', '/customers', '/settings'])
     expect(groups.every((group) => group.items.length > 0)).toBe(true)
+  })
+
+  it('TEACHER chỉ thấy các mục thuộc Đào tạo', () => {
+    const groups = getVisibleMenuGroups('TEACHER')
+    expect(groups.map((group) => group.label)).toEqual(['Đào tạo'])
+    expect(groups[0]?.items.map((item) => item.href)).toEqual(['/lessons', '/classes', '/students'])
   })
 
   it('mọi href trong menu đều duy nhất', () => {
@@ -43,5 +49,5 @@ describe('getVisibleMenuGroups', () => {
       group.items.map((item) => item.href)
     )
     expect(new Set(hrefs).size).toBe(hrefs.length)
-  })
+})
 })

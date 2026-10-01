@@ -88,23 +88,24 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
 - Mobile-first staff UI:
   1. The first operational screen is `/sessions` as `Ca hôm nay`.
   2. Keep POS UI in `src/features/pos/`; route pages should stay thin.
-  3. Bottom mobile navigation has five staff tabs: Ca, Hội viên, Kho, Báo cáo, Thêm.
-  4. Disable check-in/checkout when there is no open shift.
-  5. Member check-in must show membership status and require renewal before session creation when expired.
-  6. `/customers` is the staff membership screen, not a generic customer CRUD table.
-  7. Keep membership UI in `src/features/memberships/`.
-  8. New member registration must create customer, membership, invoice, and payment (`kind = MEMBERSHIP`) in one backend transaction.
-  9. `/inventory` is the staff `Kho quầy` screen. Keep it mobile-first and keep UI logic in `src/features/inventory/`.
-  10. Staff can view/search/filter inventory; only admin can create products/services or post stock movements.
-  11. Inventory UI must distinguish `PRODUCT` stock states (`Hết`, `Sắp hết`, `Đủ`) from `SERVICE` items that do not track stock.
-  12. `/reports` is the mobile operational report screen. Keep UI logic in `src/features/reports/`. It has two tabs: `Tổng quan` (ReportsOverview — dashboard stats, revenue trend charts, recent payments) and `Kho` (ReportsInventory — top products sold via `/api/reports/top-products`).
-  13. Staff reports should show the current staff account/shift scope (`invoice.staffId` filter); admin reports can show all-system scope and CSV export.
-  14. `/settings` is the mobile `Thêm` tab, not a plain settings page. Keep UI logic in `src/features/more/`.
-  15. The `Thêm` tab should show account, current shift status, admin shortcuts first (các tab ẩn trên mobile: Bảng giá, Khuyến mại, Dụng cụ, Nhân viên, Gói hội viên), then operational shortcuts, theme controls, system status, and logout.
-  16. Admin-only shortcuts such as pricing and staff management must be hidden from staff users in the `Thêm` tab.
-  17. `/pricing` is the admin pricing-rule screen. Keep UI logic in `src/features/pricing/`.
-  18. `/promotions` is the admin promotion-rule screen. Keep UI logic in `src/features/promotions/`. Only admin can create/edit/disable promotions; changes must write `ActivityLog`.
-  19. `/tools` is the admin equipment screen. Keep UI logic in `src/features/tools/`. Only admin can create/edit/delete tools; POS reads them for per-shift tool counts.
+  3. Bottom mobile navigation is role-filtered, ordered left → right: `Ca hôm nay`, `Ca làm` (MANAGER/ADMIN), `Báo cáo` (ADMIN), `Lịch học` (ADMIN/TEACHER), `Thêm`. TEACHER gets its own set (`Lịch học`, `Lớp học`, `Học viên`, `Thêm`). Never show a tab to a role whose route guard rejects it.
+  4. Disable check-in/checkout when there is no open shift. The UI flag is `canOperate` (`getBoardAccess` in `src/features/pos/board-access.ts`) and it must mean exactly "the acting staff has their own open shift" — the same condition the backend enforces with `SHIFT_REQUIRED` (`findOpenIdForStaff`). Never render a money control enabled in a state the API rejects.
+  5. ADMIN/MANAGER may open `/sessions` without participating in a shift and see the live board (active sessions + today's bookings) in **read-only monitor mode**: the shift strip carries a `Chỉ xem` badge, the money-action row is not rendered, session cards render without pause/checkout buttons (no disabled buttons), and booking rows render without confirm/cancel actions. `Tham gia ca` stays available while a shared shift is open. STAFF without a shift still sees only the open-shift gate.
+  6. Member check-in must show membership status and require renewal before session creation when expired.
+  7. `/customers` is the staff membership screen, not a generic customer CRUD table.
+  8. Keep membership UI in `src/features/memberships/`.
+  9. New member registration must create customer, membership, invoice, and payment (`kind = MEMBERSHIP`) in one backend transaction.
+  10. `/inventory` is the staff `Kho quầy` screen. Keep it mobile-first and keep UI logic in `src/features/inventory/`.
+  11. Staff can view/search/filter inventory; only admin can create products/services or post stock movements.
+  12. Inventory UI must distinguish `PRODUCT` stock states (`Hết`, `Sắp hết`, `Đủ`) from `SERVICE` items that do not track stock.
+  13. `/reports` is the mobile operational report screen. Keep UI logic in `src/features/reports/`. It has two tabs: `Tổng quan` (ReportsOverview — dashboard stats, revenue trend charts, recent payments) and `Kho` (ReportsInventory — top products sold via `/api/reports/top-products`).
+  14. Staff reports should show the current staff account/shift scope (`invoice.staffId` filter); admin reports can show all-system scope and CSV export.
+  15. `/settings` is the mobile `Thêm` tab, not a plain settings page. Keep UI logic in `src/features/more/`.
+  16. The `Thêm` tab should show account, current shift status, admin shortcuts first (các tab ẩn trên mobile: Bảng giá, Khuyến mại, Dụng cụ, Nhân viên, Gói hội viên), then operational shortcuts, theme controls, system status, and logout.
+  17. Admin-only shortcuts such as pricing and staff management must be hidden from staff users in the `Thêm` tab.
+  18. `/pricing` is the admin pricing-rule screen. Keep UI logic in `src/features/pricing/`.
+  19. `/promotions` is the admin promotion-rule screen. Keep UI logic in `src/features/promotions/`. Only admin can create/edit/disable promotions; changes must write `ActivityLog`.
+  20. `/tools` is the admin equipment screen. Keep UI logic in `src/features/tools/`. Only admin can create/edit/delete tools; POS reads them for per-shift tool counts.
 
 - Check-in:
   1. Staff should have an open shift; current backend attaches it when present, and the UI should make opening shift mandatory before POS operations.
