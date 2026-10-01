@@ -99,11 +99,11 @@ export function AttendanceDialog({
     }
   }
 
-  const saveButton = <Button variant="inverse" size="lg" fullWidth disabled={submitting || conflict || (!canAttend && !lesson.students.some(row => entries[row.studentId]?.note !== (row.note ?? '')))} onClick={handleSubmit}>
+  const saveButton = <Button variant="contrast" size="lg" fullWidth disabled={submitting || conflict || (!canAttend && !lesson.students.some(row => entries[row.studentId]?.note !== (row.note ?? '')))} onClick={handleSubmit}>
     {submitting ? 'Đang lưu...' : canAttend ? 'Lưu điểm danh' : 'Lưu ghi chú chuẩn bị'}
   </Button>
   const content = <>
-      {conflict && <Button type="button" variant="secondary" disabled={submitting} onClick={async () => {
+    {conflict && <Button type="button" variant="white" disabled={submitting} onClick={async () => {
         setSubmitting(true)
         try {
           const result = await apiJson<Lesson>(`/api/lessons/${lesson.id}`)
@@ -149,7 +149,7 @@ export function AttendanceDialog({
                     disabled={submitting || !canAttend}
                     aria-pressed={completed}
                     onClick={() => setEntries((prev) => ({ ...prev, [ls.studentId]: { ...prev[ls.studentId], status: 'COMPLETED' } }))}
-                    className={`min-h-11 flex-1 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:min-w-24 ${completed ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}
+                    className={`min-h-11 flex-1 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:min-w-24 ${completed ? 'bg-success-bg text-success' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}
                   >
                     <CheckCircle2 size={16} className="mr-1 inline" />Có mặt
                   </button>
@@ -158,7 +158,7 @@ export function AttendanceDialog({
                     disabled={submitting || !canAttend}
                     aria-pressed={absent}
                     onClick={() => setEntries((prev) => ({ ...prev, [ls.studentId]: { ...prev[ls.studentId], status: 'ABSENT' } }))}
-                    className={`min-h-11 flex-1 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:min-w-24 ${absent ? 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}
+                    className={`min-h-11 flex-1 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:min-w-24 ${absent ? 'bg-danger-bg text-danger bg-danger-bg text-danger' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}
                   >
                     <XCircle size={16} className="mr-1 inline" />Vắng mặt
                   </button>

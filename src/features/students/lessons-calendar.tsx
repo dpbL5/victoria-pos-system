@@ -39,7 +39,7 @@ export function getOverlapStackIndex(lesson: Lesson, lessons: Lesson[]) {
     })
     .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt) || a.id.localeCompare(b.id))
     .findIndex(candidate => candidate.id === lesson.id)
-}
+  }
 export default function LessonsCalendar() {
   const hour12 = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 ?? false
   const [initial] = useState(() => new URLSearchParams(window.location.search))
@@ -126,7 +126,7 @@ export default function LessonsCalendar() {
       await mutate()
     } catch { info.revert(); toast.error('Không lưu được thay đổi. Hãy tải lại lịch'); await mutate() }
     finally { setBusy(false) }
-  }
+}
   return <div className="lessons-calendar lessons-calendar-shell min-h-full bg-white p-3 text-zinc-950 dark:bg-zinc-950 dark:text-white md:p-5">
     {/* Thanh công cụ — thứ tự theo trình tự dùng: chọn khoảng thời gian → đọc tiêu đề →
         chọn cách xem / lọc → lối tắt màn khác (gọn trong ⋯) → tạo buổi học. */}
@@ -152,8 +152,8 @@ export default function LessonsCalendar() {
           </Link>
         </div>
       </div>
-      <Button className="add-lesson-button" size="sm" icon={Plus} onClick={() => openNew(date)}>Thêm buổi</Button>
-    </div>
+    <Button variant="contrast" className="add-lesson-button" size="sm" icon={Plus} onClick={() => openNew(date)}>Thêm buổi</Button>
+  </div>
     <div className="calendar-body flex min-h-0 flex-1 flex-col gap-4 md:flex-row"><aside className={`${filtersOpen ? 'filter-panel-open' : 'hidden'} space-y-4 md:block md:w-48 md:shrink-0`}><div className="flex items-center justify-between md:hidden"><h2 className="font-semibold">Bộ lọc lịch</h2><Button variant="ghost" size="sm" icon={X} aria-label="Đóng bộ lọc" onClick={() => setFiltersOpen(false)} /></div>
       <div><Label htmlFor="calendar-date">Đến ngày</Label><Input id="calendar-date" type="date" value={date} onChange={e => { if (e.target.value) ref.current?.getApi().gotoDate(e.target.value) }} /></div>
       <div><Label htmlFor="calendar-class">Lớp</Label><Select id="calendar-class" value={classFilter} onChange={e => { setClassFilter(e.target.value); persist({ classId: e.target.value }) }}><option value="">Tất cả lớp</option>{classes?.data?.classes?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></div>
@@ -161,7 +161,7 @@ export default function LessonsCalendar() {
       <div><Label htmlFor="calendar-status">Trạng thái</Label><Select id="calendar-status" value={status} onChange={e => { setStatus(e.target.value); persist({ status: e.target.value }) }}><option value="">Các buổi chưa huỷ</option><option value="SCHEDULED">Đã xếp lịch</option><option value="COMPLETED">Hoàn thành</option><option value="CANCELLED">Đã huỷ</option></Select></div>
       <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Giờ Việt Nam · Kéo chọn để tạo buổi. Bấm buổi học để chỉnh sửa và ghi chú.</p>
     </aside><main className="calendar-main flex min-h-0 min-w-0 flex-1 flex-col">
-      {(error || data?.success === false) && <NoticeCard tone="danger" title="Không tải được lịch" description={data?.error ?? 'Kiểm tra kết nối và thử lại'} action={<Button variant="secondary" size="sm" onClick={() => void mutate()}>Thử lại</Button>} />}
+      {(error || data?.success === false) && <NoticeCard tone="danger" title="Không tải được lịch" description={data?.error ?? 'Kiểm tra kết nối và thử lại'} action={<Button variant="white" size="sm" onClick={() => void mutate()}>Thử lại</Button>} />}
       {data?.data?.warning && <NoticeCard tone="warning" title="Lịch chưa được sinh đầy đủ" description={data.data.warning} />}
       <div className="mb-2 flex min-h-5 items-center gap-2 text-xs text-text-secondary" aria-live="polite"><span className="min-w-0 flex-1 truncate">{isLoading ? 'Đang tải lịch...' : `${lessons.length} buổi trong khoảng đang xem`}</span>{busy && <span>Đang lưu...</span>}<span className="shrink-0">GMT+7</span></div>
         <div className="calendar-grid flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl ring-1 ring-border-default">
@@ -174,8 +174,8 @@ export default function LessonsCalendar() {
         eventClick={info => { const lesson = lessons.find(l => l.id === info.event.id); if (lesson) startTransition(() => setEditor({ lesson, start: lesson.startsAt, end: new Date(Date.parse(lesson.startsAt) + lesson.durationMin * 60000).toISOString() })) }} eventDrop={info => void move(info)} eventResize={info => void move(info)}
         eventContent={info => { const lesson = info.event.extendedProps.lesson as Lesson | undefined; if (!lesson) return <div className="px-1">{info.timeText}</div>; return <p ref={el => { if (!el || !info.view.type.startsWith('timeGrid')) return; const wrapper = el.closest('.lesson-calendar-event')?.parentElement; if (wrapper) { wrapper.classList.add('lesson-stack-wrapper'); wrapper.style.setProperty('--lesson-overlap-index', String(info.isMirror ? 0 : info.event.extendedProps.overlapStackIndex ?? 0)) } }} className="whitespace-normal break-words px-1 font-medium leading-tight">{lesson.title}</p> }}
         eventDidMount={info => { const lesson = info.event.extendedProps.lesson as Lesson | undefined; if (!lesson || info.isMirror) return; const startsAt = info.event.start?.toISOString() ?? lesson.startsAt; const endsAt = info.event.end?.toISOString() ?? new Date(Date.parse(lesson.startsAt) + lesson.durationMin * 60000).toISOString(); const startLabel = localTime(startsAt).replace('T', ' '); const endLabel = localTime(endsAt).slice(11); const studentsLabel = lesson.students.map(s => s.student.fullName).join(', '); info.el.setAttribute('data-lesson-event', lesson.id); if (lesson.seriesId) info.el.setAttribute('data-lesson-series', lesson.seriesId); info.el.setAttribute('tabindex', '0'); info.el.setAttribute('role', 'button'); info.el.setAttribute('aria-label', `${lesson.title}, từ ${startLabel} đến ${endLabel}${lesson.series?.class?.name ?? lesson.class?.name ? `, lớp ${lesson.series?.class?.name ?? lesson.class?.name}` : ''}${lesson.seriesId ? ', thuộc chuỗi lặp' : ''}, mở để chỉnh sửa`); info.el.setAttribute('title', [lesson.title, `${startLabel} - ${endLabel}`, `Lớp: ${lesson.series?.class?.name ?? lesson.class?.name ?? 'chưa gán'}`, studentsLabel && `Học viên: ${studentsLabel}`, lesson.coachName && `Huấn luyện viên: ${lesson.coachName}`].filter(Boolean).join('\n')); info.el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); info.el.click() } } }}
-      /><Button className="add-lesson-fab md:hidden" aria-label="Thêm buổi học" title="Thêm buổi học" icon={Plus} onClick={() => openNew(date)} /></div>
+        /><Button variant="contrast" className="add-lesson-fab md:hidden" aria-label="Thêm buổi học" title="Thêm buổi học" icon={Plus} onClick={() => openNew(date)} /></div>
     </main></div>
     {editor && <LessonEditor key={`${editor.lesson?.id ?? 'new'}:${editor.start}`} {...editor} onClose={() => startTransition(() => setEditor(null))} onSaved={() => { startTransition(() => setEditor(null)); void mutate(); void mutateCache('/api/google/status') }} onNotesSaved={() => void mutate()} />}
-  </div>
+    </div>
 }

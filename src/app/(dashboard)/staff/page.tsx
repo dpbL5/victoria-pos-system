@@ -35,7 +35,7 @@ import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { toInputDate } from '@/lib/shared/utils'
 import type { UserSession } from '@/features/pos/types'
 import type { UserRole } from '@/types'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { getRoleLabel, isAdminOnly } from '@/lib/shared/roles'
 
 interface UserRow {
   id: string
@@ -136,24 +136,24 @@ export default function StaffPage() {
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
             <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
-              <UserCog size={24} className="text-blue-500" />
+            <UserCog size={24} className="text-info" />
               Nhân viên
             </h1>
           </div>
           {user && (
             <Badge variant={isAdmin ? 'purple' : 'default'}>
               {isAdmin ? 'Admin' : 'Staff'}
-            </Badge>
-          )}
+          </Badge>
+        )}
         </header>
 
         {error && (
-          <NoticeCard
-            tone="danger"
+        <NoticeCard
+          tone="danger"
             title="Không tải được dữ liệu"
             description={error}
-          />
-        )}
+        />
+      )}
 
         {isAdmin ? (
           <StaffAdminPanel />
@@ -233,7 +233,7 @@ function TabButton({
       onClick={onClick}
       className={`flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
         active
-          ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+        ? 'bg-info-bg text-info bg-info-bg text-info'
           : 'text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
       }`}
     >
@@ -342,7 +342,7 @@ function AccountsTab({
       }
 
       notifySuccess(
-        `Đã cập nhật vai trò ${roleEditTarget.fullName} → ${selectedRole === 'ADMIN' ? 'Quản trị viên' : selectedRole === 'MANAGER' ? 'Quản lý' : 'Nhân viên'}`,
+        `Đã cập nhật vai trò ${roleEditTarget.fullName} → ${selectedRole === 'ADMIN' ? 'Quản trị viên' : getRoleLabel(selectedRole)}`,
       )
       setRoleEditTarget(null)
       await onReload()
@@ -396,7 +396,7 @@ function AccountsTab({
       cellClassName: 'px-4 py-3',
       render: (item) => (
         <Badge variant={isAdminOnly(item.role) ? 'purple' : 'default'} size="sm">
-          {item.role === 'ADMIN' ? 'Admin' : item.role === 'MANAGER' ? 'Quản lý' : 'Nhân viên'}
+          {item.role === 'ADMIN' ? 'Admin' : getRoleLabel(item.role)}
         </Badge>
       ),
     },
@@ -405,9 +405,9 @@ function AccountsTab({
       label: 'Trạng thái',
       cellClassName: 'px-4 py-3 font-medium',
       render: (item) => (
-        <span className={item.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
+      <span className={item.isActive ? 'text-success' : 'text-danger'}>
           {item.isActive ? 'Đang mở' : 'Đã khoá'}
-        </span>
+      </span>
       ),
     },
     {
@@ -421,25 +421,25 @@ function AccountsTab({
       cellClassName: 'px-4 py-3',
       render: (item) => (
         <div className="flex gap-1.5">
-          <Button
-            variant="secondary"
+        <Button
+          variant="white"
             size="sm"
             icon={Edit2}
             title="Sửa vai trò"
-            onClick={() => {
+              onClick={() => {
               setRoleEditTarget(item)
               setSelectedRole(item.role)
             }}
           />
-          <Button
-            variant="secondary"
+        <Button
+          variant="white"
             size="sm"
             icon={Key}
             onClick={() => setResetTarget(item)}
             title="Đổi mật khẩu"
           />
           <Button
-            variant={item.isActive ? 'outline-danger' : 'secondary'}
+            variant={item.isActive ? 'red-soft' : 'white'}
             size="sm"
             icon={item.isActive ? UserX : UserCheck}
             disabled={submitting}
@@ -460,9 +460,9 @@ function AccountsTab({
         <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
           {item.fullName}
           <Badge variant={isAdminOnly(item.role) ? 'purple' : 'default'} size="sm">
-            {item.role === 'ADMIN' ? 'Admin' : item.role === 'MANAGER' ? 'Quản lý' : 'Nhân viên'}
-          </Badge>
-        </span>
+            {item.role === 'ADMIN' ? 'Admin' : getRoleLabel(item.role)}
+            </Badge>
+          </span>
       ),
     },
     {
@@ -474,7 +474,7 @@ function AccountsTab({
       key: 'isActive',
       label: 'Trạng thái',
       render: (item) => (
-        <span className={`font-medium ${item.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+      <span className={`font-medium ${item.isActive ? 'text-success' : 'text-danger'}`}>
           {item.isActive ? 'Đang mở' : 'Đã khoá'}
         </span>
       ),
@@ -489,7 +489,7 @@ function AccountsTab({
       render: (item) => (
         <div className="flex gap-1.5">
           <Button
-            variant="secondary"
+            variant="white"
             size="sm"
             icon={Edit2}
             title="Sửa vai trò"
@@ -499,14 +499,14 @@ function AccountsTab({
             }}
           />
           <Button
-            variant="secondary"
+            variant="white"
             size="sm"
             icon={Key}
             onClick={() => setResetTarget(item)}
             title="Đổi mật khẩu"
           />
           <Button
-            variant={item.isActive ? 'outline-danger' : 'secondary'}
+            variant={item.isActive ? 'red-soft' : 'white'}
             size="sm"
             icon={item.isActive ? UserX : UserCheck}
             disabled={submitting}
@@ -542,15 +542,15 @@ function AccountsTab({
       )}
 
       <div className="flex justify-end gap-2">
-        <Button
-          variant="secondary"
+          <Button
+            variant="white"
           size="sm"
-          icon={RefreshCw}
+                icon={RefreshCw}
           onClick={() => void onReload()}
           title="Làm mới"
         />
-        <Button
-          variant="primary"
+          <Button
+            variant="contrast"
           size="sm"
           icon={Plus}
           onClick={() => setShowCreate((value) => !value)}
@@ -562,7 +562,7 @@ function AccountsTab({
       {showCreate && (
           <form
             onSubmit={handleCreate}
-            className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-500/20 dark:bg-blue-500/10"
+            className="rounded-xl border border-info-border bg-info-bg p-4 border-info-border bg-info-bg"
           >
             <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_160px_auto] md:items-end">
               <div>
@@ -602,22 +602,23 @@ function AccountsTab({
                   value={form.role}
                   onChange={(event) => setForm({ ...form, role: event.target.value as UserRole })}
                 >
-                  <option value="STAFF">Nhân viên</option>
-                  <option value="MANAGER">Quản lý</option>
-                  <option value="ADMIN">Quản trị viên</option>
-                </Select>
-              </div>
-              <div className="flex gap-2">
-                <Button
+              <option value="STAFF">Nhân viên</option>
+              <option value="MANAGER">Quản lý</option>
+            <option value="TEACHER">Giáo viên</option>
+              <option value="ADMIN">Quản trị viên</option>
+            </Select>
+          </div>
+            <div className="flex gap-2">
+            <Button
                   type="submit"
-                  variant="inverse"
+                    variant="contrast"
                   size="md"
                   loading={submitting}
                   disabled={submitting}
                 >
                   Tạo
                 </Button>
-                <Button
+              <Button
                   type="button"
                   variant="ghost"
                   size="md"
@@ -628,7 +629,7 @@ function AccountsTab({
               </div>
             </div>
           </form>
-      )}
+        )}
 
       {/* Mobile: card list */}
       <div className="md:hidden">
@@ -644,6 +645,7 @@ function AccountsTab({
           filters={[
             { key: 'STAFF', label: 'Nhân viên', matches: (u) => u.role === 'STAFF' },
             { key: 'MANAGER', label: 'Quản lý', matches: (u) => u.role === 'MANAGER' },
+            { key: 'TEACHER', label: 'Giáo viên', matches: (u) => u.role === 'TEACHER' },
             { key: 'ADMIN', label: 'Quản trị viên', matches: (u) => u.role === 'ADMIN' },
           ]}
           sortableKeys={['fullName', 'username', 'isActive', 'createdAt']}
@@ -685,8 +687,8 @@ function AccountsTab({
         footer={
           <div className="flex justify-end gap-2">
             <Button
-              variant="secondary"
-              onClick={() => {
+              variant="white"
+            onClick={() => {
                 setResetTarget(null)
                 setNewPassword('')
               }}
@@ -694,6 +696,7 @@ function AccountsTab({
               Huỷ
             </Button>
             <Button
+              variant="contrast"
               loading={submitting}
               disabled={submitting || newPassword.length < 6}
               onClick={() => void handleResetPassword()}
@@ -711,8 +714,8 @@ function AccountsTab({
           placeholder="Ít nhất 6 ký tự"
         />
         {newPassword.length > 0 && newPassword.length < 6 && (
-          <p className="mt-1 text-xs text-red-500">Mật khẩu phải có ít nhất 6 ký tự</p>
-        )}
+        <p className="mt-1 text-xs text-danger">Mật khẩu phải có ít nhất 6 ký tự</p>
+      )}
       </Modal>
 
       <Modal
@@ -723,10 +726,11 @@ function AccountsTab({
         description={roleEditTarget ? `Tài khoản ${roleEditTarget.fullName}` : undefined}
         footer={
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setRoleEditTarget(null)}>
+          <Button variant="white" onClick={() => setRoleEditTarget(null)}>
               Hủy
             </Button>
-            <Button
+              <Button
+                variant="contrast"
               loading={submitting}
               disabled={submitting}
               onClick={() => void handleSaveRole()}
@@ -744,12 +748,13 @@ function AccountsTab({
               value={selectedRole}
               onChange={(event) => setSelectedRole(event.target.value as UserRole)}
             >
-              <option value="STAFF">Nhân viên</option>
-              <option value="MANAGER">Quản lý</option>
-              <option value="ADMIN">Quản trị viên</option>
-            </Select>
-          </div>
-        </div>
+                  <option value="STAFF">Nhân viên</option>
+                  <option value="MANAGER">Quản lý</option>
+                <option value="TEACHER">Giáo viên</option>
+                  <option value="ADMIN">Quản trị viên</option>
+                </Select>
+              </div>
+            </div>
       </Modal>
     </div>
   )
@@ -807,7 +812,7 @@ function ActivityLogsTab({ users }: { users: UserRow[] }) {
           </div>
           <div className="flex-1">
             <Label htmlFor="activity-search">Tìm kiếm</Label>
-            <div className="flex gap-2">
+              <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search
                   size={15}
@@ -827,30 +832,30 @@ function ActivityLogsTab({ users }: { users: UserRow[] }) {
                   placeholder="Tên nhân viên, hành động, đối tượng"
                 />
               </div>
-              <Button
-                variant="secondary"
+                <Button
+                  variant="white"
                 onClick={() => setSearchQuery(searchInput)}
               >
                 Tìm
               </Button>
-              <Button
-                variant="secondary"
-                icon={RefreshCw}
+                <Button
+                  variant="white"
+          icon={RefreshCw}
                 onClick={() => void loadLogs()}
                 title="Làm mới"
               />
-            </div>
           </div>
         </div>
+      </div>
       </section>
 
       {error && (
-        <NoticeCard
-          tone="danger"
+          <NoticeCard
+            tone="danger"
           title="Không tải được nhật ký"
           description={error}
-        />
-      )}
+          />
+        )}
 
       <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
@@ -890,7 +895,7 @@ function ActivityLogsTab({ users }: { users: UserRow[] }) {
               </div>
             ))}
           </div>
-        )}
+          )}
       </section>
     </div>
   )
@@ -902,28 +907,28 @@ function ActivityLogItem({ log }: { log: ActivityLogRow }) {
     <div className="flex items-center gap-3 px-4 py-3">
       <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconColor.bg}`}>
         {getLogIcon(log.action)}
-      </div>
+    </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm">
           <span className="font-semibold text-zinc-900 dark:text-white">{log.user.fullName}</span>
           {' '}
           <span className="text-zinc-500 dark:text-zinc-400">
             {actionLabels[log.action] ?? log.action.replaceAll('_', ' ').toLowerCase()}
-          </span>
+        </span>
         </p>
       </div>
       <span className="shrink-0 text-xs tabular-nums text-zinc-400 dark:text-zinc-500">
         {formatDateTime(log.createdAt)}
-      </span>
-    </div>
+        </span>
+        </div>
   )
 }
 
 function getLogColor(action: string) {
-  if (action.startsWith('SESSION') || action.startsWith('PLAYER')) return { bg: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' }
-  if (action.startsWith('SHIFT')) return { bg: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' }
-  if (action.startsWith('MEMBERSHIP')) return { bg: 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400' }
-  if (action.startsWith('PRICING') || action.startsWith('PRODUCT') || action.startsWith('STOCK')) return { bg: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' }
+  if (action.startsWith('SESSION') || action.startsWith('PLAYER')) return { bg: 'bg-success-bg text-success' }
+  if (action.startsWith('SHIFT')) return { bg: 'bg-warning-bg text-warning bg-warning-bg text-warning' }
+  if (action.startsWith('MEMBERSHIP')) return { bg: 'bg-yellow-bg text-yellow-dark' }
+  if (action.startsWith('PRICING') || action.startsWith('PRODUCT') || action.startsWith('STOCK')) return { bg: 'bg-info-bg text-info bg-info-bg text-info' }
   return { bg: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-500/20 dark:text-zinc-400' }
 }
 

@@ -93,7 +93,7 @@ export function StudentLessonNote({
         value={value}
         onChange={(event) => setValue(event.target.value)}
       />
-      {conflict && <Button type="button" variant="secondary" disabled={saving} onClick={async () => {
+        {conflict && <Button type="button" variant="white" disabled={saving} onClick={async () => {
         setSaving(true)
         try {
           const result = await apiJson<Lesson>(`/api/lessons/${lessonId}`)
@@ -108,7 +108,7 @@ export function StudentLessonNote({
         finally { setSaving(false) }
       }}>Tải bản mới, giữ nội dung đang soạn</Button>}
       <div className="flex gap-2">
-        <Button variant="secondary" size="sm" disabled={saving || conflict || value === savedNote} onClick={handleSave}>
+      <Button variant="contrast" size="sm" disabled={saving || conflict || value === savedNote} onClick={handleSave}>
           {saving ? 'Đang lưu...' : 'Lưu ghi chú'}
         </Button>
         <Button variant="ghost" size="sm" disabled={saving} onClick={() => setOpen(false)}>Huỷ</Button>

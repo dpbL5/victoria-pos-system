@@ -47,7 +47,7 @@ export function StudentFormModal({ open, student, form, submitting, onChange, on
     title={student ? 'Sửa học viên' : 'Thêm học viên'}
     size="md"
     footer={
-      <Button variant="inverse" size="lg" fullWidth disabled={submitting || !form.fullName.trim()} onClick={onSubmit}>
+    <Button variant="contrast" size="lg" fullWidth disabled={submitting || !form.fullName.trim()} onClick={onSubmit}>
         {submitting ? 'Đang lưu...' : student ? 'Cập nhật' : 'Thêm học viên'}
       </Button>
     }

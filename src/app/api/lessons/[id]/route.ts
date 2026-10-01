@@ -1,7 +1,7 @@
 import { repositories } from '@/lib/infrastructure/repositories'
 import { z } from 'zod'
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { updateLessonSchema } from '@/lib/students'
 import { updateLesson, deleteLesson, mapUpdateLessonError, mapDeleteLessonError } from '@/lib/students'
@@ -17,7 +17,7 @@ type Params = { params: Promise<{ id: string }> }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     await validateCSRF(request)
     const { id } = await params
     const body = await request.json()
@@ -56,7 +56,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     await validateCSRF(request)
     const { id } = await params
 
@@ -78,7 +78,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
 export async function GET(_request: NextRequest, { params }: Params) {
   try {
-    await requireAdmin()
+    await requireTrainingAccess()
     const lesson = await repositories.lesson.findById((await params).id)
     return lesson ? apiSuccess(lesson) : apiError({ code: 'NOT_FOUND', message: 'Không tìm thấy buổi học', status: 404 })
   } catch (error) {

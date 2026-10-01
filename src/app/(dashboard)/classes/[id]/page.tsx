@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { requireAuth } from '@/lib/shared/auth'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { canAccessTraining } from '@/lib/shared/roles'
 import { ClassDetailScreen } from '@/features/classes/class-detail-screen'
 
 export default async function ClassDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -11,7 +11,7 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ id
     redirect('/login')
   }
 
-  if (!isAdminOnly(user?.role)) {
+  if (!canAccessTraining(user?.role)) {
     redirect('/sessions')
   }
 

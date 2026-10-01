@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { markAttendanceSchema } from '@/lib/students'
 import { markAttendance, mapMarkAttendanceError } from '@/lib/students'
@@ -15,7 +15,7 @@ type Params = { params: Promise<{ id: string }> }
 
 export async function POST(request: NextRequest, { params }: Params) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     await validateCSRF(request)
     const { id } = await params
     const body = await request.json()

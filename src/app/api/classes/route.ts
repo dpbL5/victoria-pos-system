@@ -1,12 +1,12 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { createClassSchema, createClass, listClasses, mapCreateClassError, parseSlotDates, type ClassSlotInput } from '@/lib/students'
 import { apiSuccess, apiError, ERR_UNAUTHORIZED, ERR_FORBIDDEN, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin()
+    await requireTrainingAccess()
     const statusParam = request.nextUrl.searchParams.get('status')
     const status = statusParam === 'ACTIVE' || statusParam === 'ENDED' ? statusParam : undefined
     const classes = await listClasses({ status, search: request.nextUrl.searchParams.get('search') || undefined })
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     await validateCSRF(request)
     const parsed = createClassSchema.safeParse(await request.json())
     if (!parsed.success) return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })

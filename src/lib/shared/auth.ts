@@ -6,11 +6,11 @@ import { generateCSRFToken, setCSRFCookie, clearCSRFCookie, validateCSRF } from 
 import { rateLimit } from "@/lib/shared/rate-limit";
 import { withRetry } from "@/lib/infrastructure/db-retry";
 import type { SessionPayload } from "@/types";
-import { isAdminOnly, isManagerOrAdmin } from './roles';
+import { canAccessTraining, isAdminOnly, isManagerOrAdmin } from './roles';
 import { measureApiAuth, recordApiRetry } from '@/lib/infrastructure/api-diagnostics'
 
 // Re-export for API route usage
-export { isAdminOnly, isManagerOrAdmin };
+export { canAccessTraining, isAdminOnly, isManagerOrAdmin };
 
 // ── Config ─────────────────────────────────────────────
 const rawSessionSecret = process.env.SESSION_SECRET;
@@ -146,8 +146,7 @@ export async function requireAuth(): Promise<SessionPayload> {
 
 // ── Require admin role (ADMIN only — quản trị hệ thống) ──
 // MANAGER không có quyền quản trị (bảng giá, khuyến mại, dụng cụ, nhân viên,
-// học viên, thu chi, sửa/xoá hoá đơn...). Các quyền vận hành (báo cáo, kho,
-// đóng ca) dùng isManagerOrAdmin() trực tiếp trong route.
+// thu chi, sửa/xoá hoá đơn...). Module Đào tạo dùng requireTrainingAccess().
 export async function requireAdmin(): Promise<SessionPayload> {
   const session = await requireAuth();
   if (!isAdminOnly(session.role)) {
@@ -165,6 +164,14 @@ export async function requireAdminOnly(): Promise<SessionPayload> {
   return session;
 }
 
+export async function requireTrainingAccess(): Promise<SessionPayload> {
+  const session = await requireAuth();
+  if (!canAccessTraining(session.role)) {
+    throw new Error("FORBIDDEN");
+  }
+  return session;
+}
+
 // ── Require auth + CSRF cho mutation endpoints ──────────
 // Dùng thay requireAuth() trong POST/PUT/DELETE handlers.
 // Tự động áp dụng rate limiting (30 req/phút) + CSRF check.
@@ -173,7 +180,7 @@ export async function requireMutationAuth(request: Request): Promise<SessionPayl
   const rl = await rateLimit(request, { maxRequests: 30, windowSeconds: 60, prefix: 'mutation' });
   if (!rl.ok) {
     throw new Error("RATE_LIMITED");
-  }
+}
 
   const session = await requireAuth();
   await validateCSRF(request);

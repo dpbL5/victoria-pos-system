@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { disconnectCalendar, mapConnectCalendarError } from '@/lib/students'
 import {
@@ -12,7 +12,7 @@ import {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     await validateCSRF(request)
 
     const result = await disconnectCalendar({ staffId: auth.userId })

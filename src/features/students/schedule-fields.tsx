@@ -132,7 +132,7 @@ export function ScheduleFields({ idPrefix, form, onChange, disabled = false, sho
             key={label}
             type="button"
             aria-pressed={form.days.includes(index)}
-            className={`min-h-9 min-w-9 rounded-lg border text-sm ${form.days.includes(index) ? 'border-blue-600 bg-blue-600 text-white' : 'border-zinc-300 dark:border-zinc-700'}`}
+            className={`min-h-9 min-w-9 rounded-lg border text-sm ${form.days.includes(index) ? 'border-info bg-info text-white' : 'border-zinc-300 dark:border-zinc-700'}`}
             onClick={() => patch({ days: form.days.includes(index) ? form.days.filter(day => day !== index) : [...form.days, index] })}
           >
             {label}

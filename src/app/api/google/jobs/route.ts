@@ -1,9 +1,9 @@
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { apiError, apiSuccess, ERR_UNAUTHORIZED, ERR_FORBIDDEN } from '@/lib/infrastructure/api-helpers'
 export async function GET() {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     const connection = await repositories.calendarConnection.findByUser(auth.userId)
     if (!connection) return apiSuccess([])
     const jobs = await repositories.calendarSync.list(connection.id)

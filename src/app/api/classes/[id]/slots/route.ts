@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { classSlotSchema, createClassSlot, mapCreateClassSlotError, parseSlotDates } from '@/lib/students'
 import { apiSuccess, apiError, ERR_UNAUTHORIZED, ERR_FORBIDDEN, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
@@ -8,7 +8,7 @@ type Params = { params: Promise<{ id: string }> }
 
 export async function POST(request: NextRequest, { params }: Params) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     await validateCSRF(request)
     const parsed = classSlotSchema.safeParse(await request.json())
     if (!parsed.success) return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
