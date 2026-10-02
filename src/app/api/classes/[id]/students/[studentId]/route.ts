@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { addClassStudent, removeClassStudent, mapSetClassRosterError } from '@/lib/students'
 import { apiSuccess, apiError, ERR_UNAUTHORIZED, ERR_FORBIDDEN, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
@@ -8,7 +8,7 @@ type Params = { params: Promise<{ id: string; studentId: string }> }
 
 export async function POST(request: NextRequest, { params }: Params) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     await validateCSRF(request)
     const { id, studentId } = await params
     const result = await addClassStudent({ staffId: auth.userId, classId: id, studentId })
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     await validateCSRF(request)
     const { id, studentId } = await params
     const result = await removeClassStudent({ staffId: auth.userId, classId: id, studentId })

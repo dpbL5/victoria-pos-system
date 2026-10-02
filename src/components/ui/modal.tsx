@@ -17,6 +17,8 @@ interface ModalProps {
   size?: "sm" | "md" | "lg" | "full";
   /** center = modal giữa màn hình (mặc định); sheet = bottom-sheet trên mobile, center trên desktop; fullscreen = full màn hình trên mobile, modal giữa trên desktop */
   variant?: "center" | "sheet" | "fullscreen";
+  /** Màu nền overlay phía sau modal — mặc định token --color-surface-overlay */
+  overlayColor?: string;
   className?: string;
 }
 
@@ -48,6 +50,7 @@ export function Modal({
   footer,
   size = "md",
   variant = "center",
+  overlayColor,
   className = "",
 }: ModalProps) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -124,9 +127,9 @@ export function Modal({
               variant === "sheet"
                 ? "items-end justify-center md:items-center"
                 : "items-center justify-center"
-            }`
+              }`
       }
-      style={{ background: "var(--color-surface-overlay)" }}
+      style={{ background: overlayColor ?? "var(--color-surface-overlay)" }}
       onClick={onClose}
     >
       <div
@@ -139,7 +142,7 @@ export function Modal({
                 variant === "sheet"
                   ? "max-h-[92dvh] rounded-b-none rounded-t-2xl self-end md:max-h-[95vh] md:rounded-2xl"
                   : ""
-              }`
+            }`
         } ${className}`}
         onClick={(e) => e.stopPropagation()}
       >

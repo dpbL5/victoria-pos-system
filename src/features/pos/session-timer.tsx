@@ -13,16 +13,16 @@ export function SessionTimer({
   /** Chuỗi thời gian chơi đã format (HH:MM:SS) */
   elapsed: string
   isPaused: boolean
-  /** Màu timer khi đang chạy — hội viên dùng 'purple' */
-  accent?: 'emerald' | 'purple'
+  /** Màu timer khi đang chạy — hội viên dùng 'yellow' */
+  accent?: 'emerald' | 'yellow'
 }) {
-  const runningColor = accent === 'purple'
-    ? 'text-purple-600 dark:text-purple-400'
-    : 'text-emerald-600 dark:text-emerald-400'
+  const runningColor = accent === 'yellow'
+  ? 'text-yellow-dark'
+  : 'text-success'
 
   return (
-    <span className={`inline-flex items-center gap-1.5 text-base font-semibold tabular-nums ${isPaused ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-950 dark:text-white'}`}>
-      <Timer size={18} className={isPaused ? 'text-amber-600 dark:text-amber-400' : runningColor} />
+  <span className={`inline-flex items-center gap-1.5 text-base font-semibold tabular-nums ${isPaused ? 'text-warning' : 'text-text-primary'}`}>
+<Timer size={18} className={isPaused ? 'text-warning' : runningColor} />
       {elapsed}
     </span>
   )

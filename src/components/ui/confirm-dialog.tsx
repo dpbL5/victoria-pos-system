@@ -15,6 +15,11 @@ interface ConfirmDialogProps {
   onConfirm: () => void
   submitting?: boolean
   size?: "sm" | "md" | "lg"
+  /**
+   * Màu nút xác nhận. Mặc định `red` cho hành động phá huỷ (xoá/huỷ); dùng
+   * `contrast` khi xác nhận không phá huỷ gì (vd thoát và lưu lại).
+   */
+  confirmVariant?: "red" | "contrast" | "white"
 }
 
 export function ConfirmDialog({
@@ -28,6 +33,7 @@ export function ConfirmDialog({
   onConfirm,
   submitting = false,
   size = "md",
+  confirmVariant = "red",
 }: ConfirmDialogProps) {
   return (
     <Modal
@@ -38,7 +44,7 @@ export function ConfirmDialog({
       footer={
         <div className="grid grid-cols-2 gap-2">
           <Button
-            variant="secondary"
+            variant="white"
             size="lg"
             fullWidth
             disabled={submitting}
@@ -47,7 +53,7 @@ export function ConfirmDialog({
             {cancelLabel}
           </Button>
           <Button
-            variant="danger"
+            variant={confirmVariant}
             size="lg"
             fullWidth
             loading={submitting}

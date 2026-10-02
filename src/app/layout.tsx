@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   title: "Victoria Archery Club - POS",
   description: "Hệ thống POS vận hành Victoria Archery Club",
   icons: {
-    icon: [{ url: "/logo.jpg", type: "image/jpeg" }],
+    icon: [{ url: "/victoria_logo.svg", type: "image/svg+xml" }],
   },
 };
 

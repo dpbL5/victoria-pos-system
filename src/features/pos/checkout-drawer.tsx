@@ -1,8 +1,37 @@
 "use client";
 
+/**
+ * ── DIRECTION CONTRACT — Dialog thu tiền (CheckoutDrawer) ─────────────────
+ * THESIS: Hoá đơn là một PHIẾU HAI LIÊN, không phải một chồng mục. Liên 1
+ *   TÍNH TIỀN nói đang tính cái gì (từng người chơi, hàng hoá/dịch vụ) và kết
+ *   bằng Tạm tính; liên 2 THU TIỀN nói giảm gì và thu thế nào (khuyến mại,
+ *   gửi xe, tiền cọc, phương thức) rồi kết ở chân phiếu bằng Cần thu. Từ chối:
+ *   chuỗi tiền chạy qua ba khu vực rời — số từng người ở mục "Giờ chơi", hàng
+ *   hoá ở mục "Tổng tiền", tổng ở footer — nên không đọc lại được phép cộng;
+ *   và hàng chỉ-để-đọc nằm lẫn với hàng có control trong cùng một mục.
+ * OWN-WORLD: Ink & Gold Ledger — token trong src/app/globals.css, chữ 12/14px,
+ *   số tabular-nums trên một rail phải cố định, viền hairline 1px, phẳng mặc
+ *   định; khoản trừ dùng text-danger kèm dấu trừ tường minh.
+ * STORY: Nhân viên đọc liên 1 để biết đang tính gì, đọc liên 2 để biết vì sao
+ *   ra số cuối, rồi bấm một nút ở chân — không phải cộng nhẩm.
+ * FIRST VIEWPORT (mobile 390px): dải khách → LIÊN 1 · TÍNH TIỀN (mỗi người
+ *   chơi một dòng tiền trên rail chung) → TẠM TÍNH → LIÊN 2 · THU TIỀN
+ *   (khuyến mại, phí gửi xe, tiền cọc) → TỔNG → phương thức → chân dính
+ *   "Cần thu" + nút Thu.
+ * FORM: phiếu hai liên — người dùng chốt trong tay 3 cấu trúc (seed surface
+ *   bb34d5e8), code-led, không sinh comp. Nâng từ 3 cấu trúc thua: rail tiền
+ *   cố định (màn ký tự), dòng đổi thì giữ nguyên chỗ và chỉ mờ đi (bảng sân
+ *   bay), các khoản điều chỉnh là MỘT lớp mỏng tách khỏi danh sách khoản thu
+ *   (lá acetate).
+ * FINISH: unreviewed and undocumented is unfinished; this build ends with the
+ *   finish review, the verdict, and DESIGN.md.
+ * ─────────────────────────────────────────────────────────────────────────
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Loader2, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Select } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
@@ -16,6 +45,9 @@ import {
 } from "./format";
 import { formatPromotionOption } from "./promotion-option";
 import { PaymentMethodPicker } from "./payment-method-picker";
+import { groupPausedSeconds } from "@/lib/sessions/ports";
+import { precalcPlayTime, type PrecalcPlayer, type PrecalcRule } from "./checkout-precalc";
+import { checkoutTotals } from "./checkout-totals";
 import {
   CheckoutPlayerPicker,
   GROUP_LABEL,
@@ -23,131 +55,87 @@ import {
   type PickerGroup,
   type PickerMemberStat,
 } from "./checkout-player-picker";
-import {
-  InlineProductEditor,
-} from "./invoice-detail-content";
-import type { InvoiceEditorLine } from "./invoice-edit-logic";
-import type { PlayTimeQuote, PromotionSnapshot } from "@/types";
+import { CheckoutItemLedger, stepperButton } from "./checkout-item-rows";
+import { ProductPickerSheet } from "./product-picker-sheet";
+import type { PlayTimeQuote, PendingSellItem, PromotionSnapshot, SessionPricingGroupDTO } from "@/types";
 import type { PaymentMethod, Product, SessionRow } from "./types";
 
-/** Cụm chi tiết trong hoá đơn: nhãn nhỏ dạng uppercase + các dòng bên dưới */
-function LedgerGroup({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className={GROUP_LABEL}>{title}</h3>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
+/**
+ * Phiếu ghi số tiền chính xác đến từng đồng — không làm tròn lên hàng nghìn,
+ * vì các dòng phải cộng lại đúng bằng Tạm tính/Tổng hiện trên phiếu và đúng
+ * bằng số hoá đơn sẽ ghi.
+ */
+function billMoney(value: number | string | null | undefined): string {
+  return money(value, false);
 }
 
-/** Dòng chi tiết: [checkbox?] nhãn + meta ‖ tiền trên rail chung */
+/** Dòng chỉ-để-đọc của phiếu: nhãn + meta ‖ tiền trên rail chung */
 function LedgerRow({
   label,
   meta,
   amount,
-  checked = true,
-  busy,
-  onUncheck,
+  dimmed,
 }: {
   label: string;
   meta?: ReactNode;
   amount: string;
-  checked?: boolean;
-  busy?: boolean;
-  onUncheck?: () => void;
+  /** Số chưa được server xác nhận — làm mờ để không đọc như số chốt */
+  dimmed?: boolean;
 }) {
-  const content = (
-    <>
-      {onUncheck ? (
-        <input
-          type="checkbox"
-          checked={checked}
-          disabled={busy}
-          onChange={onUncheck}
-          tabIndex={-1}
-          className="relative mt-1 h-5 w-5 shrink-0 appearance-none rounded-full border border-zinc-400 bg-white checked:border-emerald-600 checked:bg-emerald-600 after:absolute after:inset-0 after:m-auto after:h-[8px] after:w-[4px] after:rotate-45 after:border-b-2 after:border-r-2 after:border-white after:opacity-0 after:content-[''] checked:after:opacity-100 focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-zinc-500 dark:bg-zinc-800 dark:checked:border-emerald-500 dark:checked:bg-emerald-500"
-        />
-      ) : null}
+  return (
+    <div className="flex items-start gap-3 py-2.5">
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] leading-tight text-zinc-950 dark:text-white">
+        <span className="block truncate text-sm leading-tight text-text-primary">
           {label}
         </span>
         {meta ? (
-          <span className="block text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+          <span className="block text-xs tabular-nums text-text-tertiary">
             {meta}
           </span>
         ) : null}
       </span>
       <span
-        className={`${MONEY_RAIL} pt-0.5 text-[15px] font-medium ${
-          checked
-            ? "text-zinc-950 dark:text-white"
-            : "text-zinc-400 line-through dark:text-zinc-600"
+        className={`${MONEY_RAIL} text-sm font-medium text-text-primary ${
+          dimmed ? "opacity-60" : ""
         }`}
       >
         {amount}
       </span>
-    </>
-  );
-
-  return onUncheck ? (
-    <label
-      className={`flex items-start gap-3 py-2 ${
-        busy ? "opacity-50" : "cursor-pointer"
-      }`}
-    >
-      {content}
-    </label>
-  ) : (
-    <div className="flex items-start gap-3 py-2">{content}</div>
+    </div>
   );
 }
 
-/** Dòng tổng hợp: nhãn ‖ tiền, tuỳ điều khiển nằm ở dòng dưới để rail thẳng hàng */
-function SumRow({
+/** Dòng điều chỉnh của liên 2: nhãn + gợi ý ‖ tiền, control nằm dòng dưới */
+function AdjustRow({
   label,
   hint,
   amount,
   tone = "plain",
+  dimmed,
   control,
 }: {
   label: string;
-  hint?: ReactNode;
-  amount: ReactNode;
+  hint?: string;
+  amount: string;
   tone?: "plain" | "minus" | "muted";
+  dimmed?: boolean;
   control?: ReactNode;
 }) {
   return (
-    <div className="py-2">
+    <div className="py-2.5">
       <div className="flex items-start gap-3">
-        <span className="min-w-0 flex-1 text-sm text-zinc-700 dark:text-zinc-200">
+        <span className="min-w-0 flex-1 text-sm text-text-secondary">
           {label}
-          {hint ? (
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">
-              {' '}
-              · {hint}
-            </span>
-          ) : null}
+          {hint ? <span className="text-xs text-text-secondary"> · {hint}</span> : null}
         </span>
-        <span
-          className={`${MONEY_RAIL} text-sm font-semibold ${
+          <span
+          className={`${MONEY_RAIL} text-sm ${
             tone === "minus"
-              ? "text-red-600 dark:text-red-300"
+              ? "font-medium text-danger"
               : tone === "muted"
-                ? "font-normal text-zinc-500 dark:text-zinc-400"
-                : "text-zinc-950 dark:text-white"
-          }`}
+                ? "text-text-secondary"
+                : "font-medium text-text-primary"
+          } ${dimmed ? "opacity-60" : ""}`}
         >
           {amount}
         </span>
@@ -157,13 +145,60 @@ function SumRow({
   );
 }
 
-const stepperMinus =
-  "flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 dark:border-zinc-700 dark:text-zinc-300";
-const stepperPlus =
-  "flex h-11 w-11 items-center justify-center rounded-lg bg-zinc-950 text-white active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 dark:bg-white dark:text-zinc-950";
+/**
+ * Dòng chốt của phiếu. `sub` = tạm tính của liên 1 (mực nhạt hơn); `final` =
+ * tổng thật của liên 2 (mực đậm nhất trong thân phiếu, ngang hàng với Cần thu
+ * ở chân — nên chân phiếu không cần thêm một cỡ chữ Display thứ hai).
+ */
+function TotalRow({
+  label,
+  amount,
+  dimmed,
+  emphasis = "sub",
+}: {
+  label: string;
+  amount: string;
+  dimmed?: boolean;
+  emphasis?: "sub" | "final";
+}) {
+  const isFinal = emphasis === "final";
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 border-t py-2.5 ${
+        isFinal ? "border-border-strong" : "border-border-default"
+      }`}
+    >
+      <span
+        className={`text-sm ${
+          isFinal
+            ? "font-semibold text-text-primary"
+            : "text-text-secondary"
+        }`}
+      >
+        {label}
+      </span>
+      <span
+        className={`${MONEY_RAIL} text-sm ${
+          isFinal
+            ? "font-semibold text-text-primary"
+            : "font-medium text-text-secondary"
+        } ${dimmed ? "opacity-60" : ""}`}
+      >
+        {amount}
+      </span>
+    </div>
+  );
+}
+
 interface CheckoutResponse {
   grandTotal: number;
 }
+
+/**
+ * Tiền tố ID dòng hàng chưa vào phiên (mới chọn lúc thu) — phân biệt với
+ * `sessionSellItemId` thật của dòng đã bán kèm lúc chơi.
+ */
+const CART_LINE_PREFIX = "cart-";
 
 interface PricingRuleOption {
   id: string;
@@ -179,10 +214,11 @@ export function CheckoutDrawer({
   productsLoading,
   productsError,
   onRetryProducts,
-  onSellItemsChanged,
   shiftReady,
   submitting,
   setSubmitting,
+  onItemsOptimistic,
+  onItemsSaved,
   onClose,
   onDone,
 }: {
@@ -192,17 +228,26 @@ export function CheckoutDrawer({
   productsLoading: boolean;
   productsError: string;
   onRetryProducts: () => void;
-  onSellItemsChanged: () => Promise<boolean>;
   shiftReady: boolean;
   submitting: boolean;
   setSubmitting: (value: boolean) => void;
+  /**
+   * Ghi số tiền hàng LẠC QUAN vào card phiên — chỉ sửa cache, KHÔNG gọi mạng.
+   * Tách khỏi `onItemsSaved` là cố ý: gọi làm mới ngay lúc này sẽ đọc DB trước
+   * khi PATCH ghi xong và xoá mất số vừa ghi.
+   */
+  onItemsOptimistic: (sessionId: string, itemsTotal: number) => void;
+  /** Làm mới danh sách phiên — chỉ gọi SAU khi PATCH đã xong */
+  onItemsSaved: () => Promise<boolean> | void;
   onClose: () => void;
   onDone: () => Promise<boolean | void>;
 }) {
   const { success: notifySuccess, error: notifyError } = useToast();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
-  const [cart, setCart] = useState<Record<string, number>>({});
   const [playQuote, setPlayQuote] = useState<PlayTimeQuote | null>(null);
+  // Tham số mà quote server hiện tại tương ứng — dùng để biết quote còn khớp
+  // với lựa chọn đang hiển thị hay không (thay vì xoá trắng số khi tính lại).
+  const [quoteKey, setQuoteKey] = useState("");
   const [promotions, setPromotions] = useState<PromotionSnapshot[]>([]);
   const [promotionRuleId, setPromotionRuleId] = useState("");
   const [promotionsLoading, setPromotionsLoading] = useState(false);
@@ -218,31 +263,41 @@ export function CheckoutDrawer({
   const [pickerGroups, setPickerGroups] = useState<PickerGroup[]>([]);
   const nextGroupKey = useRef(0);
   const lastPreviewSessionId = useRef<string | null>(null);
-  // Legacy: session cũ không có player rows — giữ stepper số người như trước
-  const [selectedGroupId, setSelectedGroupId] = useState("");
-  const [checkoutPlayerCount, setCheckoutPlayerCount] = useState(1);
-  // Dòng bán kèm đang gọi API bỏ khỏi phiên
-  const [removingSellItemId, setRemovingSellItemId] = useState("");
-  const [quoteReloadKey, setQuoteReloadKey] = useState(0);
+  // Dòng hàng chỉ nằm trong bộ nhớ cho tới lúc bấm Thu tiền:
+  // `cart` = hàng mới chọn lúc thu, `qtyOverride` = số lượng sửa trên dòng đã
+  // bán kèm lúc chơi. Không gọi API khi thêm/tăng/giảm.
+  const [cart, setCart] = useState<Record<string, number>>({});
+  const [qtyOverride, setQtyOverride] = useState<Record<string, number>>({});
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickedCount, setPickedCount] = useState(0);
+  // Xếp hàng các lần lưu hàng hoá — hai request về lệch thứ tự thì phiên giữ
+  // danh sách cũ, nên lần sau chỉ chạy khi lần trước đã xong
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  // Hỏi lại trước khi thoát khi hàng hoá vừa sửa chưa ghi vào phiên
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 
   const isMember =
     session?.customer?.type === "MEMBER" || !!session?.membership;
   const sessionPlayerCount = session?.playerCount ?? 1;
-  const isGroupSession = sessionPlayerCount > 1;
 
-  // Session check-in mới (để trống giá) — cần chọn bảng giá khi thu tiền
+  // Nhóm CHƯA chốt giá = chưa có snapshot + rate 0.
+  // Điều kiện phải xét theo TỪNG NHÓM, không phải cả phiên: sau khi một nhóm thu
+  // xong, nhóm còn chơi vẫn chưa có giá và phải chọn được bảng giá riêng. Gộp cả
+  // phiên thành một điều kiện sẽ khoá cứng nhóm còn chơi theo nhóm đã thu.
+  const groupNeedsRule = (group: SessionPricingGroupDTO) =>
+    !group.pricingSnapshot && Number(group.hourlyRate) === 0;
+  // Session check-in mới (MỌI nhóm để trống giá) — chia nhóm + chọn giá tại checkout
   const needsPricing =
     !!session &&
     !isMember &&
     (session.pricingGroups?.length ?? 0) > 0 &&
-    session.pricingGroups!.every(
-      (g) => !g.pricingSnapshot && Number(g.hourlyRate) === 0,
-    );
-  // Phiên có player rows (per-player) — dùng picker; không có → legacy stepper
-  const sessionHasPlayers =
-    (session?.pricingGroups ?? []).some((g) => (g.players?.length ?? 0) > 0);
-  // Dùng picker khi vãng lai và có player rows
-  const pickerActive = !!session && !isMember && sessionHasPlayers;
+    session.pricingGroups!.every(groupNeedsRule);
+  // Còn nhóm nào chưa chốt giá — gồm cả nhóm còn chơi của phiên đã thu một phần
+  const hasUnpricedGroups =
+    !!session && !isMember && (session.pricingGroups ?? []).some(groupNeedsRule);
+  // Mọi phiên đều có player rows (kể cả phiên 1 người — check-in luôn tạo row),
+  // nên vãng lai luôn thu qua picker.
+  const pickerActive = !!session && !isMember;
 
   // Tất cả người chưa thu của phiên
   const allUncheckedPlayers = useMemo(
@@ -266,7 +321,6 @@ export function CheckoutDrawer({
     if (session) {
       /* eslint-disable react-hooks/set-state-in-effect */
       setPaymentMethod("CASH");
-      setCart({});
       setPromotionRuleId("");
       setPromotions([]);
       setPromotionsError("");
@@ -274,22 +328,28 @@ export function CheckoutDrawer({
       setApplicablePricingRules([]);
       setPickerGroups([]);
       nextGroupKey.current = 0;
-      setSelectedGroupId("");
-      setCheckoutPlayerCount(1);
-      setRemovingSellItemId("");
-
-      if (!isMember && !needsPricing && sessionHasPlayers) {
-        // ── Phiên đã gán giá (mode B): build nhóm cố định từ pricing groups ──
+      setCart({});
+      setQtyOverride({});
+      setPickerOpen(false);
+      setConfirmCloseOpen(false);
+      setPickedCount(0);
+      if (!isMember && !needsPricing) {
+        // ── Phiên đã gán giá: build nhóm cố định từ pricing groups ──
         // Mỗi nhóm còn người chưa thu = 1 nhóm; mặc định chọn tất cả (thu hết).
+        // Phiên chưa gán giá để nhóm trống — effect tải bảng giá bên dưới dựng
+        // nhóm chưa khoá từ toàn bộ người chơi.
         const groups: PickerGroup[] = (session.pricingGroups ?? [])
           .filter((g) => g.remainingCount > 0)
           .map((g) => {
             const unchecked = (g.players ?? []).filter((p) => !p.checkedOutAt);
             const snapshot = g.pricingSnapshot;
+            // Nhóm đã chốt giá ở lần thu trước → khoá (giá không tính lại).
+            // Nhóm còn chơi chưa có giá → KHÔNG khoá, vẫn chọn được bảng giá riêng.
+            const needsRule = groupNeedsRule(g);
             return {
               key: g.id,
               label: g.label,
-              locked: true,
+              locked: !needsRule,
               pricingRuleId: g.pricingRuleId ?? "",
               pricingRuleName: snapshot?.name,
               remainingCount: g.remainingCount,
@@ -299,22 +359,15 @@ export function CheckoutDrawer({
             };
           });
         setPickerGroups(groups);
-      } else if (!isMember && !needsPricing && !sessionHasPlayers) {
-        // Legacy: chọn nhóm + stepper số người
-        const groups = session.pricingGroups ?? [];
-        const firstActive = groups.find((g) => g.remainingCount > 0);
-        setSelectedGroupId(firstActive?.id ?? "");
-        setCheckoutPlayerCount(
-          firstActive?.remainingCount ?? session.playerCount ?? 1,
-        );
       }
       /* eslint-enable react-hooks/set-state-in-effect */
     }
-  }, [session, isMember, needsPricing, sessionHasPlayers]);
+  }, [session, isMember, needsPricing]);
 
-  // Fetch bảng giá hiệu lực khi mở drawer với session cần gán giá (fresh walk-in)
+  // Fetch bảng giá hiệu lực khi drawer có nhóm CHƯA chốt giá: phiên mới, hoặc
+  // nhóm còn chơi sau khi nhóm khác đã thu xong.
   useEffect(() => {
-    if (!session || !needsPricing || !pickerActive) return;
+    if (!session || !hasUnpricedGroups || !pickerActive) return;
     let cancelled = false;
     const allPlayers = (session.pricingGroups ?? [])
       .flatMap((g) => g.players ?? [])
@@ -328,24 +381,33 @@ export function CheckoutDrawer({
         if (data.success && !cancelled) {
           const rules = data.data ?? [];
           setApplicablePricingRules(rules);
-          // Mặc định 1 nhóm gồm toàn bộ người chơi chưa thu, bảng giá đầu tiên
-          setPickerGroups((current) =>
-            current.length > 0
-              ? current
-              : [
-                  {
-                    key: `new-${nextGroupKey.current++}`,
-                    label: "Nhóm 1",
-                    locked: false,
-                    pricingRuleId: rules[0]?.id ?? "",
-                    members: allPlayers.map((p) => ({
-                      id: p.id,
-                      name: p.name ?? null,
-                    })),
-                    selectedIds: allPlayerIds,
-                  },
-                ],
-          );
+          setPickerGroups((current) => {
+            if (current.length === 0) {
+              // Phiên mới: 1 nhóm gồm toàn bộ người chưa thu, bảng giá đầu tiên
+              return [
+                {
+                  key: `new-${nextGroupKey.current++}`,
+                  label: "Nhóm 1",
+                  locked: false,
+                  pricingRuleId: rules[0]?.id ?? "",
+                  members: allPlayers.map((p) => ({
+                    id: p.id,
+                    name: p.name ?? null,
+                  })),
+                  selectedIds: allPlayerIds,
+                },
+              ];
+            }
+            // Nhóm còn chơi chưa có bảng giá → mặc định bảng giá đầu tiên để ô
+            // chọn không bỏ trống (nhân viên vẫn đổi được)
+            return rules[0]
+              ? current.map((group) =>
+                  !group.locked && !group.pricingRuleId
+                    ? { ...group, pricingRuleId: rules[0].id }
+                    : group,
+                )
+              : current;
+          });
         }
       } catch {
         /* bỏ qua — UI hiển thị trạng thái chưa có bảng giá */
@@ -355,14 +417,15 @@ export function CheckoutDrawer({
     return () => {
       cancelled = true;
     };
-  }, [session, needsPricing, pickerActive]);
+  }, [session, hasUnpricedGroups, pickerActive]);
 
   // ── Build request pricing params (dùng chung cho preview và checkout) ──
   // fresh (mode A): gửi groups; đã gán giá (mode B): full đúng 1 nhóm →
-  // pricingGroupId+playerCount, subset/nhiều nhóm → playerIds; legacy → stepper.
+  // pricingGroupId+playerCount, subset/nhiều nhóm → playerIds.
   const buildPricingParams = useCallback(() => {
     if (!session) return null;
-    if (!isMember && needsPricing && pickerActive) {
+    if (!pickerActive) return {};
+    if (needsPricing) {
       const groups = pickerGroups
         .filter((g) => g.selectedIds.length > 0)
         .map((g) => ({
@@ -373,49 +436,46 @@ export function CheckoutDrawer({
       if (groups.length === 0) return null;
       return { groups };
     }
-    if (!isMember && pickerActive) {
-      const singleGroup = pickerGroups.length === 1 ? pickerGroups[0] : null;
-      const singleFull =
-        singleGroup &&
-        singleGroup.selectedIds.length === singleGroup.members.length &&
-        singleGroup.members.length > 0;
-      if (singleFull) {
-        return {
-          pricingGroupId: singleGroup.key,
-          playerCount: singleGroup.selectedIds.length,
-        };
-      }
-      const playerIds = pickerGroups.flatMap((g) => g.selectedIds);
-      if (playerIds.length === 0) return null;
-      return { playerIds };
+    const singleGroup = pickerGroups.length === 1 ? pickerGroups[0] : null;
+    const singleFull =
+      singleGroup &&
+      singleGroup.selectedIds.length === singleGroup.members.length &&
+      singleGroup.members.length > 0;
+    if (singleFull) {
+      return {
+        pricingGroupId: singleGroup.key,
+        playerCount: singleGroup.selectedIds.length,
+      };
     }
-    if (!isMember && !sessionHasPlayers) {
-      // Legacy stepper
-      const groups = session.pricingGroups ?? [];
-      if (selectedGroupId && groups.some((g) => g.id === selectedGroupId)) {
-        return {
-          pricingGroupId: selectedGroupId,
-          playerCount: checkoutPlayerCount,
-        };
+    const playerIds = pickerGroups.flatMap((g) => g.selectedIds);
+    if (playerIds.length === 0) return null;
+    // Nhóm còn chơi chưa chốt giá → gửi kèm bảng giá nhân viên chọn cho nhóm đó.
+    // Nhóm đã có snapshot không gửi (giá đã chốt, không tính lại).
+    const groupPricingRuleIds: Record<string, string> = {};
+    for (const group of pickerGroups) {
+      if (!group.locked && group.selectedIds.length > 0 && group.pricingRuleId) {
+        groupPricingRuleIds[group.key] = group.pricingRuleId;
       }
-      if (isGroupSession && checkoutPlayerCount < sessionPlayerCount) {
-        return { playerCount: checkoutPlayerCount };
-      }
-      return {};
     }
-    return {};
-  }, [
-    session,
-    isMember,
-    needsPricing,
-    pickerActive,
-    sessionHasPlayers,
-    pickerGroups,
-    selectedGroupId,
-    checkoutPlayerCount,
-    isGroupSession,
-    sessionPlayerCount,
-  ]);
+    return Object.keys(groupPricingRuleIds).length > 0
+      ? { playerIds, groupPricingRuleIds }
+      : { playerIds };
+  }, [session, pickerActive, needsPricing, pickerGroups]);
+
+  // Khoá tham số của lần preview hiện tại — quote server chỉ được coi là "tươi"
+  // khi khoá khớp. Đổi lựa chọn (người chơi, bảng giá, khuyến mại) là khoá đổi.
+  const quoteRequestKey = useMemo(
+    () =>
+      !session
+        ? ""
+        : [
+            session.id,
+            promotionRuleId,
+            frozenAt ?? "",
+            JSON.stringify(buildPricingParams() ?? null),
+          ].join("|"),
+    [session, promotionRuleId, frozenAt, buildPricingParams],
+  );
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
@@ -430,7 +490,6 @@ export function CheckoutDrawer({
     const controller = new AbortController();
     const delay = lastPreviewSessionId.current === session.id ? 250 : 0;
     lastPreviewSessionId.current = session.id;
-    setPlayQuote(null);
     setQuoteLoading(true);
     setQuoteError("");
     const loadQuote = async () => {
@@ -444,6 +503,15 @@ export function CheckoutDrawer({
             params.set("groups", JSON.stringify(pricingParams.groups));
           } else if ("playerIds" in pricingParams && pricingParams.playerIds) {
             params.set("playerIds", JSON.stringify(pricingParams.playerIds));
+            if (
+              "groupPricingRuleIds" in pricingParams &&
+              pricingParams.groupPricingRuleIds
+            ) {
+              params.set(
+                "groupPricingRuleIds",
+                JSON.stringify(pricingParams.groupPricingRuleIds),
+              );
+            }
           } else if (pricingParams.pricingGroupId) {
             params.set("pricingGroupId", pricingParams.pricingGroupId);
             if (pricingParams.playerCount)
@@ -463,7 +531,10 @@ export function CheckoutDrawer({
         if (!data.success || !data.data) {
           throw new Error(data.error || "Không tính được tiền giờ chơi");
         }
-        if (!cancelled) setPlayQuote(data.data);
+        if (!cancelled) {
+          setPlayQuote(data.data);
+          setQuoteKey(quoteRequestKey);
+        }
       } catch (quoteLoadError) {
         if (!cancelled && !controller.signal.aborted)
           setQuoteError(
@@ -487,8 +558,119 @@ export function CheckoutDrawer({
     promotionRuleId,
     frozenAt,
     buildPricingParams,
-    quoteReloadKey,
+    quoteRequestKey,
   ]);
+
+  // ── Precalc tiền giờ chơi tại client ─────────────────────
+  // Session row đã mang sẵn snapshot bảng giá + pause từng người, đúng bằng đầu
+  // vào của pure function server dùng — nên tiền hiện tức thì thay vì chờ
+  // /checkout-preview (7 round trip). Chỉ chạy khi đã chốt thời điểm thu: lúc đó
+  // kết quả khớp quote server và không nhảy số theo đồng hồ. Server ghi đè khi về.
+  const localQuote = useMemo<PlayTimeQuote | null>(() => {
+    if (!session || !frozenAt || isMember) return null;
+    const endTime = new Date(frozenAt);
+
+    const promotion = promotionRuleId
+      ? (promotions.find((p) => p.ruleId === promotionRuleId) ?? null)
+      : null;
+    // Đã chọn khuyến mại nhưng chưa có snapshot → không đoán bừa, chờ server
+    if (promotionRuleId && !promotion) return null;
+
+    const ruleOfGroup = (groupId: string): PrecalcRule | null => {
+      const snapshot = (session.pricingGroups ?? []).find(
+        (g) => g.id === groupId,
+      )?.pricingSnapshot;
+      return snapshot
+        ? {
+            name: snapshot.name,
+            ratePerHour: snapshot.ratePerHour,
+            tiers: snapshot.tiers,
+          }
+        : null;
+    };
+    const entryById = new Map(
+      (session.pricingGroups ?? []).flatMap((g) =>
+        (g.players ?? []).map((p) => [p.id, p] as const),
+      ),
+    );
+    const toPlayer = (id: string, rule: PrecalcRule): PrecalcPlayer | null => {
+      const player = entryById.get(id);
+      if (!player || player.checkedOutAt) return null;
+      return {
+        id,
+        name: player.name,
+        pausedAt: player.pausedAt,
+        totalPausedSeconds: player.totalPausedSeconds,
+        rule,
+      };
+    };
+
+    const players: PrecalcPlayer[] = [];
+    for (const group of pickerGroups) {
+      if (group.selectedIds.length === 0) continue;
+      // Phiên chưa gán giá: bảng giá chọn trong picker. Đã gán giá: snapshot của group.
+      const rule = needsPricing
+        ? (applicablePricingRules.find((r) => r.id === group.pricingRuleId) ?? null)
+        : ruleOfGroup(group.key);
+      if (!rule) return null;
+      for (const id of group.selectedIds) {
+        const player = toPlayer(id, rule);
+        if (!player) return null;
+        players.push(player);
+      }
+    }
+
+    const result = precalcPlayTime({
+      startTime: session.startTime,
+      endTime: frozenAt,
+      promotion,
+      players,
+      sessionPause: {
+        pausedAt: session.pausedAt ?? null,
+        totalPausedSeconds: session.totalPausedSeconds ?? 0,
+      },
+    });
+    if (!result) return null;
+
+    return {
+      sessionId: session.id,
+      hourlyRate: 0,
+      isMemberSession: false,
+      promotion,
+      // Dòng bán kèm + đơn giá gửi xe chỉ server biết — giữ giá trị gần nhất
+      pendingSellTotal: playQuote?.pendingSellTotal ?? 0,
+      pendingSellItems: playQuote?.pendingSellItems ?? [],
+      parkingFeeUnitPrice: playQuote?.parkingFeeUnitPrice,
+      pricingGroups: (session.pricingGroups ?? []).map((g) => ({
+        ...g,
+        pausedSeconds: groupPausedSeconds({ players: g.players ?? [] }, endTime),
+      })),
+      ...result,
+    };
+  }, [
+    session,
+    frozenAt,
+    isMember,
+    promotionRuleId,
+    promotions,
+    pickerGroups,
+    needsPricing,
+    applicablePricingRules,
+    playQuote,
+  ]);
+
+  // Quote server chỉ "tươi" khi đúng tham số đang hiển thị. Khi chưa tươi: dùng
+  // số precalc (đúng tham số mới), không có thì giữ số server gần nhất — thay vì
+  // xoá trắng ô tiền mỗi lần tích/bỏ một người chơi.
+  const quoteFresh = !!playQuote && quoteKey === quoteRequestKey;
+  const displayQuote = quoteError
+    ? null
+    : quoteFresh
+      ? playQuote
+      : (localQuote ?? playQuote);
+  // Đang hiển thị số chưa được server xác nhận (precalc hoặc quote cũ giữ lại):
+  // vẫn cho thấy số để không trắng ô, nhưng làm mờ + banner để không đọc như số chốt.
+  const quotePending = !!displayQuote && !quoteFresh;
 
   useEffect(() => {
     if (!session || session.customer?.type === "MEMBER" || !!session.membership)
@@ -525,22 +707,6 @@ export function CheckoutDrawer({
     };
   }, [session]);
 
-  // Preview đã trả tổng per-player (N người được thu) — không nhân count nữa
-  const playSubtotal = playQuote?.subtotal ?? 0;
-  const playTotal = playQuote?.grandTotal ?? 0;
-  const playDiscount = playQuote?.discountAmount ?? 0;
-  const pendingSellItems = useMemo(
-    () => playQuote?.pendingSellItems ?? [],
-    [playQuote],
-  );
-  // Toàn bộ dòng bán kèm chờ thu sẽ được gộp vào hoá đơn khi checkout
-  const pendingSellTotal = useMemo(
-    () => pendingSellItems.reduce((sum, item) => sum + item.subtotal, 0),
-    [pendingSellItems],
-  );
-  const parkingFeeUnitPrice = playQuote?.parkingFeeUnitPrice ?? 0;
-  const parkingFeeTotal = parkingVehicleCount * parkingFeeUnitPrice;
-
   // ── Đồng hồ tick mỗi giây khi chưa chốt thời điểm thu (frozenAt null) ──
   // Giúp tính thời gian chơi/tạm dừng theo từng người mà không gọi Date.now()
   // trực tiếp trong render.
@@ -565,7 +731,7 @@ export function CheckoutDrawer({
       Math.floor((endMs - new Date(session.startTime).getTime()) / 1000),
     );
     const pricedById = new Map(
-      (playQuote?.playerPricing ?? []).map((p) => [p.id, p]),
+      (displayQuote?.playerPricing ?? []).map((p) => [p.id, p]),
     );
     for (const group of session.pricingGroups ?? []) {
       for (const player of group.players ?? []) {
@@ -577,34 +743,32 @@ export function CheckoutDrawer({
         );
         const priced = pricedById.get(player.id);
         stats[player.id] = {
-          amount: priced ? priced.total : null,
+          // Giá niêm yết từng người — khuyến mại nằm ở một dòng riêng của liên 2
+          amount: priced ? priced.subtotal : null,
           playedText: hhmm(
             priced
               ? Math.round(priced.totalHours * 3600)
               : Math.max(0, elapsedTotal - pausedSeconds),
-          ),
+            ),
           pausedText: hhmm(pausedSeconds),
         };
       }
     }
     return stats;
-  }, [session, playQuote, frozenAt, nowTick]);
+  }, [session, displayQuote, frozenAt, nowTick]);
 
   // Thời gian đã tạm dừng hiển thị khi checkout:
   // - Phiên có player rows → pause nằm ở từng người chơi; chỉ tính các player
   //   được thu lần này (đúng lựa chọn picker), chốt theo frozenAt.
-  // - Phiên legacy (không player rows) → pause session-level.
+  // - Phiên hội viên (không thu qua picker) → pause session-level.
   const displayPausedSeconds = useMemo(() => {
     if (!session) return 0;
-    const groupHasPlayers = (session.pricingGroups ?? []).some(
-      (g) => (g.players?.length ?? 0) > 0,
-    );
     const pausedAtRef = frozenAt ? new Date(frozenAt).getTime() : undefined;
-    if (groupHasPlayers && playQuote?.pricingGroups) {
-      const billingIds = pickerActive
-        ? new Set(pickerGroups.flatMap((g) => g.selectedIds))
-        : null;
-      return playQuote.pricingGroups.reduce(
+    const billingIds = pickerActive
+      ? new Set(pickerGroups.flatMap((g) => g.selectedIds))
+      : null;
+    if (displayQuote?.pricingGroups) {
+      return displayQuote.pricingGroups.reduce(
         (sum, g) =>
           sum +
           (g.players ?? [])
@@ -629,7 +793,7 @@ export function CheckoutDrawer({
       session.totalPausedSeconds ?? 0,
       pausedAtRef,
     );
-  }, [session, playQuote, frozenAt, pickerActive, pickerGroups]);
+  }, [session, displayQuote, frozenAt, pickerActive, pickerGroups]);
 
   const playTimeText = session
     ? calcElapsedHMS(
@@ -639,30 +803,82 @@ export function CheckoutDrawer({
       )
     : "00:00:00";
 
-  const cartLines = products
-    .map((product) => ({
-      product,
-      quantity: cart[product.id] ?? 0,
-      total: (cart[product.id] ?? 0) * toNumber(product.price),
-    }))
-    .filter((line) => line.quantity > 0);
-  const cartEditorLines: InvoiceEditorLine[] = cartLines.map((line) => ({
-    productId: line.product.id,
-    name: line.product.name,
-    type: line.product.type,
-    stockQuantity: line.product.stockQuantity,
-    quantity: line.quantity,
-    unitPrice: toNumber(line.product.price),
-  }));
+  /**
+   * Dòng hàng của phiếu — TÍNH TRONG BỘ NHỚ, KHÔNG GỌI API.
+   *
+   * Hai nguồn, dán thành một danh sách:
+   * - `pendingSellItems`: dòng đã bán kèm lúc chơi (đã ghi DB, đã trừ kho). Sửa
+   *   số lượng ở đây chỉ ghi vào `qtyOverride`, chưa động vào server.
+   * - `cart`: hàng mới chọn lúc thu, chỉ tồn tại ở drawer.
+   *
+   * Cả hai được gửi đi ĐÚNG MỘT LẦN trong `POST /checkout` (danh sách cuối),
+   * server tự bù kho cho phần chênh lệch — xem `check-out.ts` và
+   * `session-validations.ts`.
+   */
+  const itemLines = useMemo<PendingSellItem[]>(() => {
+    const sellLines: PendingSellItem[] = (
+      displayQuote?.pendingSellItems ?? []
+    )
+      .map((item) => {
+        const quantity = qtyOverride[item.sessionSellItemId];
+        if (quantity === undefined || quantity === item.quantity) return item;
+        return { ...item, quantity, subtotal: quantity * item.unitPrice };
+      })
+      .filter((item) => item.quantity > 0);
 
-  const productSubtotal = cartLines.reduce((sum, line) => sum + line.total, 0);
-  const sellableTotal = pendingSellTotal + productSubtotal;
-  const grandTotal = Math.max(0, playTotal + sellableTotal - parkingFeeTotal);
-  const depositRemaining = Math.max(0, Number(session?.booking?.depositAmount ?? 0) - Number(session?.booking?.depositAppliedAmount ?? 0) - Number(session?.booking?.depositRefundedAmount ?? 0));
-  const depositApplied = Math.min(depositRemaining, grandTotal);
-  const payableTotal = grandTotal - depositApplied;
+    const cartLines: PendingSellItem[] = products
+      .filter((product) => (cart[product.id] ?? 0) > 0)
+      .map((product) => {
+        const quantity = cart[product.id];
+        return {
+          // Dòng chưa vào phiên nên chưa có ID dòng bán kèm — đánh dấu bằng
+          // tiền tố để phân biệt khi điều chỉnh số lượng.
+          sessionSellItemId: `cart-${product.id}`,
+          productId: product.id,
+          productName: product.name,
+          type: product.type,
+          quantity,
+          unitPrice: toNumber(product.price),
+          subtotal: quantity * toNumber(product.price),
+        };
+      });
 
-  const pricingBlocked = needsPricing && applicablePricingRules.length === 0;
+    return [...sellLines, ...cartLines];
+  }, [displayQuote, qtyOverride, cart, products]);
+
+  const itemsTotal = useMemo(
+    () => itemLines.reduce((sum, item) => sum + item.subtotal, 0),
+    [itemLines],
+  );
+  const parkingFeeUnitPrice = displayQuote?.parkingFeeUnitPrice ?? 0;
+  const parkingFeeTotal = parkingVehicleCount * parkingFeeUnitPrice;
+
+  // ── Chuỗi số của phiếu: Tạm tính → Tổng → Cần thu ──
+  const playGross = displayQuote?.subtotal ?? 0;
+  const playDiscount = displayQuote?.discountAmount ?? 0;
+  const depositRemaining = Math.max(
+    0,
+    Number(session?.booking?.depositAmount ?? 0) -
+      Number(session?.booking?.depositAppliedAmount ?? 0) -
+      Number(session?.booking?.depositRefundedAmount ?? 0),
+  );
+  const totals = checkoutTotals({
+    playGross,
+    itemsTotal,
+    discount: playDiscount,
+    parkingTotal: parkingFeeTotal,
+    depositRemaining,
+  });
+
+  // Chặn thu khi ĐANG CHỌN một nhóm chưa có giá mà không có bảng giá nào hiệu lực.
+  // Không chặn theo cả phiên: nhóm đã chốt giá vẫn thu được dù nhóm còn chơi
+  // chưa chọn được bảng giá.
+  const selectedGroupNeedsRule = pickerGroups.some(
+    (group) => group.selectedIds.length > 0 && !group.locked,
+  );
+  const pricingBlocked =
+    applicablePricingRules.length === 0 &&
+    (needsPricing || selectedGroupNeedsRule);
   // Chọn ít nhất 1 người khi dùng picker
   const hasAssignedPlayers = pickerActive ? selectedCount > 0 : true;
 
@@ -673,49 +889,163 @@ export function CheckoutDrawer({
     pickerGroups.filter((g) => g.selectedIds.length > 0).length > 1 &&
     selectedCount < uncheckedTotal;
 
-  const changeCart = (product: Product, delta: number) => {
-    setCart((current) => {
-      const currentQuantity = current[product.id] ?? 0;
-      const nextQuantity = currentQuantity + delta;
-      if (nextQuantity <= 0) {
-        const next = { ...current };
-        delete next[product.id];
-        return next;
-      }
-      if (product.type === "PRODUCT" && nextQuantity > product.stockQuantity)
-        return current;
-      return { ...current, [product.id]: nextQuantity };
-    });
+  /**
+   * Thêm 1 món vào phiếu — chỉ ghi vào bộ nhớ, KHÔNG gọi API.
+   * Món đã có dòng bán kèm thì tăng ngay dòng đó (không tạo dòng trùng), còn lại
+   * vào `cart`. Toàn bộ được gửi một lần khi bấm Thu tiền.
+   */
+  const addItem = (product: Product) => {
+    const sellLine = (displayQuote?.pendingSellItems ?? []).find(
+      (item) => item.productId === product.id,
+    );
+    if (sellLine) {
+      setQtyOverride((current) => ({
+        ...current,
+        [sellLine.sessionSellItemId]: (qtyOverride[sellLine.sessionSellItemId] ?? sellLine.quantity) + 1,
+      }));
+    } else {
+      setCart((current) => ({
+        ...current,
+        [product.id]: (current[product.id] ?? 0) + 1,
+      }));
+    }
+    setPickedCount((count) => count + 1);
   };
 
-  /** Bỏ 1 dòng bán kèm khỏi phiên (hoàn kho) rồi tính lại preview */
-  const removeSellItem = async (sessionSellItemId: string) => {
-    if (!session) return;
-    setRemovingSellItemId(sessionSellItemId);
-    try {
-      const data = await apiJson(
-        `/api/sessions/${session.id}/sell-items`,
-        {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ itemIds: [sessionSellItemId] }),
-        },
-      );
-      if (!data.success) {
-        notifyError(data.error || "Không bỏ được dòng bán kèm");
-        return;
-      }
-      const refreshed = await onSellItemsChanged();
-      if (!refreshed) {
-        notifyError("Đã bỏ dòng bán kèm nhưng danh sách chưa cập nhật. Không thao tác lại; hãy tải lại màn hình.");
-      }
-      setQuoteReloadKey((k) => k + 1);
-    } catch {
-      notifyError("Lỗi kết nối máy chủ");
-    } finally {
-      setRemovingSellItemId("");
+  /**
+   * Bấm − / + trên dòng hàng. Cũng chỉ ghi bộ nhớ; số lượng về 0 = bỏ dòng khỏi
+   * phiếu (dòng bán kèm thì server hoàn kho lúc checkout).
+   */
+  const changeItemQuantity = (item: PendingSellItem, quantity: number) => {
+    if (item.sessionSellItemId.startsWith(CART_LINE_PREFIX)) {
+      const productId = item.productId;
+      setCart((current) => {
+        const next = { ...current };
+        if (quantity <= 0) delete next[productId];
+        else next[productId] = quantity;
+        return next;
+      });
+      return;
     }
+    setQtyOverride((current) => ({ ...current, [item.sessionSellItemId]: quantity }));
   };
+
+  /** Trần số lượng của 1 dòng: sản phẩm không được vượt tồn */
+  const quantityCeiling = (item: PendingSellItem) => {
+    if (item.type !== "PRODUCT") return 99;
+    const product = products.find((candidate) => candidate.id === item.productId);
+    // Hàng không còn trong danh mục (đã ngừng bán) → để tăng, server mới là chặn
+    if (!product) return item.quantity + 99;
+    // Dòng bán kèm đã trừ kho lúc thêm nên lượng đang giữ vẫn dùng được; dòng
+    // giỏ thì phải nằm trong tồn thật.
+    if (item.sessionSellItemId.startsWith(CART_LINE_PREFIX)) {
+      return Math.max(item.quantity, product.stockQuantity);
+    }
+    return Math.max(item.quantity, product.stockQuantity + item.quantity);
+  };
+
+  /**
+   * Có thay đổi hàng hoá chưa ghi vào phiên hay không. So với dòng bán kèm thật
+   * trên phiên: tăng rồi giảm về đúng số cũ thì KHÔNG tính là thay đổi, nên
+   * đóng drawer trong trường hợp đó không tốn request.
+   */
+  const hasUnsavedItems = useMemo(() => {
+    if (Object.keys(cart).length > 0) return true;
+    return (displayQuote?.pendingSellItems ?? []).some((item) => {
+      const override = qtyOverride[item.sessionSellItemId];
+      return override !== undefined && override !== item.quantity;
+    });
+  }, [cart, qtyOverride, displayQuote]);
+
+  /** Tổng tiền hàng của phiên theo server — mốc để lùi lại nếu lưu thất bại */
+  const serverItemsTotal = useMemo(
+    () =>
+      (displayQuote?.pendingSellItems ?? []).reduce(
+        (sum, item) => sum + item.subtotal,
+        0,
+      ),
+    [displayQuote],
+  );
+
+  /**
+   * Bấm X / overlay / Escape: chưa sửa gì thì thoát luôn, có sửa thì hỏi lại.
+   * Hỏi vì thoát là mất ngữ cảnh đang xem — nhân viên có thể bấm nhầm giữa lúc
+   * đang sửa dở.
+   *
+   * KHÔNG chặn theo trạng thái "đang lưu": lần lưu trước chạy nền, nhân viên vẫn
+   * phải thoát được. Việc xếp thứ tự các lần lưu do `saveQueueRef` lo.
+   */
+  const handleClose = useCallback(() => {
+    if (!hasUnsavedItems) {
+      onClose();
+      return;
+    }
+    setConfirmCloseOpen(true);
+  }, [hasUnsavedItems, onClose]);
+
+  /**
+   * Đã xác nhận thoát: LẠC QUAN — đóng drawer và cập nhật tiền hàng trên card
+   * phiên ngay, không bắt nhân viên đợi 2 vòng mạng. Request chạy nền; lỗi thì
+   * báo và lùi card về số cũ (server là sự thật).
+   *
+   * Các lần lưu được XẾP HÀNG bằng `saveQueueRef`: nhân viên có thể mở lại
+   * drawer rồi thoát tiếp trong lúc request trước còn bay, hai request mà về
+   * lệch thứ tự thì phiên giữ danh sách cũ.
+   */
+  const confirmExit = useCallback(() => {
+    if (!session) return;
+    const sessionId = session.id;
+    const payload = itemLines.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+    }));
+    const optimisticTotal = itemsTotal;
+    const fallbackTotal = serverItemsTotal;
+
+    setConfirmCloseOpen(false);
+    onClose();
+    // Lạc quan: card phiên đổi số NGAY, chỉ ghi cache — không gọi mạng
+    onItemsOptimistic(sessionId, optimisticTotal);
+
+    const request = saveQueueRef.current
+      // Lần lưu trước lỗi thì hàng đợi vẫn phải chạy tiếp
+      .catch(() => undefined)
+      .then(() =>
+        apiJson(`/api/sessions/${sessionId}/sell-items`, {
+          // jsonRequest hardcode method POST — phải đè lại PATCH
+          ...jsonRequest({ items: payload }),
+          method: "PATCH",
+        }),
+      );
+    saveQueueRef.current = request;
+
+    void request
+      .then((data) => {
+        if (!data.success) {
+          notifyError(data.error || "Không lưu được hàng hoá của phiên");
+          // Lùi card về số server trước khi sửa
+          onItemsOptimistic(sessionId, fallbackTotal);
+        }
+      })
+      .catch(() => {
+        notifyError("Lỗi kết nối máy chủ");
+        onItemsOptimistic(sessionId, fallbackTotal);
+      })
+      // Làm mới CHỈ sau khi PATCH xong. Gọi sớm hơn thì GET đọc DB cũ, trả về số
+      // trước khi lưu và ghi đè số lạc quan — card mất "Tạm tính".
+      .finally(() => {
+        void onItemsSaved();
+      });
+  }, [
+    session,
+    itemLines,
+    itemsTotal,
+    serverItemsTotal,
+    onClose,
+    onItemsOptimistic,
+    onItemsSaved,
+    notifyError,
+  ]);
 
   const handleCheckout = async () => {
     if (!session) return;
@@ -738,11 +1068,14 @@ export function CheckoutDrawer({
 
     setSubmitting(true);
     try {
+      // DANH SÁCH HÀNG CUỐI CÙNG của phiếu — gồm cả dòng đã bán kèm lúc chơi
+      // (đã sửa số lượng ở đây) lẫn hàng mới chọn lúc thu. Gửi đúng một lần
+      // này; server tự bù kho cho phần chênh lệch rồi gộp vào hoá đơn.
       const body: Record<string, unknown> = {
         paymentMethod,
         promotionRuleId: promotionRuleId || null,
-        items: cartLines.map((line) => ({
-          productId: line.product.id,
+        items: itemLines.map((line) => ({
+          productId: line.productId,
           quantity: line.quantity,
         })),
       };
@@ -753,6 +1086,12 @@ export function CheckoutDrawer({
           body.groups = pricingParams.groups;
         } else if ("playerIds" in pricingParams && pricingParams.playerIds) {
           body.playerIds = pricingParams.playerIds;
+          if (
+            "groupPricingRuleIds" in pricingParams &&
+            pricingParams.groupPricingRuleIds
+          ) {
+            body.groupPricingRuleIds = pricingParams.groupPricingRuleIds;
+          }
         } else if (pricingParams.pricingGroupId) {
           body.pricingGroupId = pricingParams.pricingGroupId;
           if (pricingParams.playerCount)
@@ -780,7 +1119,7 @@ export function CheckoutDrawer({
       const refreshed = await onDone();
       notifySuccess(refreshed === false
         ? "Đã ghi nhận thanh toán; dữ liệu chưa cập nhật. Không thu lại, hãy tải lại màn hình."
-        : `Đã thu ${money(data.data?.grandTotal ?? payableTotal)}`);
+        : `Đã thu ${billMoney(data.data?.grandTotal ?? totals.payable)}`);
     } catch {
       notifyError("Lỗi kết nối máy chủ");
     } finally {
@@ -789,474 +1128,323 @@ export function CheckoutDrawer({
   };
 
   const getCtaLabel = () => {
-    if (pickerActive) {
-      if (isPartialBySelection) return `Thu trước ${selectedCount} người`;
-      if (uncheckedTotal === 1) return "Thu tiền & kết thúc";
-      return `Thu tiền ${selectedCount} người`;
-    }
-    if (!isMember && !sessionHasPlayers) {
-      const group = selectedGroupId
-        ? session?.pricingGroups?.find((g) => g.id === selectedGroupId)
-        : undefined;
-      if (
-        group &&
-        checkoutPlayerCount < (group.remainingCount ?? sessionPlayerCount)
-      )
-        return `Thu tiền ${checkoutPlayerCount} người`;
-      if (group && (session?.pricingGroups?.length ?? 0) > 0)
-        return `Thu tiền (${group.label ?? ""})`;
-      if (isGroupSession && checkoutPlayerCount < sessionPlayerCount)
-        return `Thu tiền ${checkoutPlayerCount} người`;
-      return "Thu tiền & kết thúc";
-    }
-    return "Thu tiền & kết thúc";
+    if (!pickerActive) return "Thu tiền & kết thúc";
+    // Cọc đã phủ hết hoá đơn: không còn gì để thu, nút chỉ chốt phiên
+    if (totals.payable === 0 && totals.depositApplied > 0)
+      return "Kết thúc (đã trừ cọc)";
+    if (isPartialBySelection) return `Thu trước ${selectedCount} người`;
+    if (uncheckedTotal === 1) return "Thu tiền & kết thúc";
+    return `Thu tiền ${selectedCount} người`;
   };
 
   return (
     <>
-      <Modal
-        open={!!session}
-        onClose={onClose}
-        variant="fullscreen"
-        title={
-          session
-            ? `Chi tiết hoá đơn - ${session.customerName ?? session.customer?.fullName ?? "Khách lẻ"}`
-            : "Chi tiết hoá đơn"
-        }
-        description={
-          session ? (
-            <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  isMember
-                    ? "bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-200"
-                    : "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-200"
-                }`}
-              >
-                {isMember ? "Hội viên" : "Vãng lai"}
-              </span>
-              <span>
-                Vào chơi {new Date(session.startTime).toLocaleTimeString("vi-VN", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-              {session.customerPhone && (
-                <span>
-                  <a
-                    href={`tel:${session.customerPhone}`}
-                    className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
-                  >
-                    {session.customerPhone}
-                  </a>
-                </span>
-              )}
-              {isGroupSession && <span>{sessionPlayerCount} người chơi</span>}
+    <Modal
+      open={!!session}
+      onClose={handleClose}
+      variant="fullscreen"
+      title={
+        session
+          ? `Chi tiết hoá đơn - ${session.customerName ?? session.customer?.fullName ?? "Khách lẻ"}`
+          : "Chi tiết hoá đơn"
+      }
+      description={
+        session ? (
+          <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                isMember
+                  ? "bg-yellow-bg text-yellow-dark"
+                  : "bg-info-bg text-info"
+              }`}
+            >
+              {isMember ? "Hội viên" : "Vãng lai"}
             </span>
-          ) : undefined
-        }
-        size="lg"
-        footer={
-          <div className="space-y-3">
-            {/* Lý do chưa thu được */}
-            {quoteLoading ? (
-              <p className="flex items-center gap-2 rounded-lg bg-zinc-100 px-4 py-2 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                <Loader2 size={14} className="animate-spin" />
-                Đang tính tiền giờ chơi...
-              </p>
-            ) : quoteError ? (
-              <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-                {quoteError}
-              </p>
-            ) : pricingBlocked ? (
-              <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-                Chưa có bảng giá hiệu lực — chưa thể thu tiền.
-              </p>
-            ) : !shiftReady ? (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
-                Cần mở ca trước khi thu tiền.
-              </p>
-            ) : freshMultiGroupPartial ? (
-              <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-                Thu trước chỉ hỗ trợ 1 nhóm — gộp về 1 nhóm hoặc thu hết.
-              </p>
-            ) : pickerActive && !hasAssignedPlayers ? (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
-                Chọn ít nhất 1 người chơi trước khi thu tiền.
-              </p>
-            ) : null}
-            <div className="overflow-hidden rounded-xl border border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-              <div className="flex items-end justify-between gap-3 px-4 py-3">
-                <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                  Tổng cần thu
-                </span>
-                <span className="text-2xl font-bold leading-none tabular-nums text-zinc-950 dark:text-white">
-                  {quoteError ? "—" : money(payableTotal)}
-                </span>
-              </div>
-              <Button
-                variant="inverse"
-                size="lg"
-                fullWidth
-                loading={submitting}
-                disabled={
-                  !shiftReady ||
-                  quoteLoading ||
-                  !!quoteError ||
-                  (!!productsError && Object.values(cart).some((quantity) => quantity > 0)) ||
-                  !playQuote ||
-                  pricingBlocked ||
-                  freshMultiGroupPartial ||
-                  (pickerActive && !hasAssignedPlayers)
-                }
-                onClick={handleCheckout}
-              >
-                {getCtaLabel()}
-              </Button>
-            </div>
+            <span>
+              Vào chơi {new Date(session.startTime).toLocaleTimeString("vi-VN", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+            {session.customerPhone && (
+              <span>
+                <a
+                  href={`tel:${session.customerPhone}`}
+                  className="font-medium text-success underline-offset-2 hover:underline"
+                >
+                  {session.customerPhone}
+                </a>
+              </span>
+            )}
+            {sessionPlayerCount > 1 && <span>{sessionPlayerCount} người chơi</span>}
+          </span>
+        ) : undefined
+      }
+      size="lg"
+      footer={
+        <div className="space-y-3">
+          {/* Lý do chưa thu được */}
+          {quoteLoading ? (
+            <p className="flex items-center gap-2 rounded-lg bg-surface-tertiary px-4 py-2 text-xs text-text-tertiary">
+              <Loader2 size={14} className="animate-spin" />
+              {playQuote
+                ? "Đang tính lại tiền giờ chơi..."
+                : "Đang tính tiền giờ chơi..."}
+            </p>
+          ) : quoteError ? (
+            <p className="rounded-lg border border-danger-border bg-danger-bg px-4 py-2 text-xs text-danger">
+              {quoteError}
+            </p>
+          ) : pricingBlocked ? (
+            <p className="rounded-lg border border-danger-border bg-danger-bg px-4 py-2 text-xs text-danger">
+              Chưa có bảng giá hiệu lực — chưa thể thu tiền.
+            </p>
+          ) : !shiftReady ? (
+            <p className="rounded-lg border border-warning-border bg-warning-bg px-4 py-2 text-xs text-warning">
+              Cần mở ca trước khi thu tiền.
+            </p>
+          ) : freshMultiGroupPartial ? (
+            <p className="rounded-lg border border-danger-border bg-danger-bg px-4 py-2 text-xs text-danger">
+              Thu trước chỉ hỗ trợ 1 nhóm — gộp về 1 nhóm hoặc thu hết.
+            </p>
+          ) : pickerActive && !hasAssignedPlayers ? (
+            <p className="rounded-lg border border-warning-border bg-warning-bg px-4 py-2 text-xs text-warning">
+              Chọn ít nhất 1 người chơi trước khi thu tiền.
+            </p>
+          ) : null}
+          <div className="flex items-end justify-between gap-3">
+            <span className="text-sm font-medium text-text-secondary">
+              Cần thu
+            </span>
+            <span
+              className={`text-right text-2xl font-bold leading-none tabular-nums text-text-primary ${
+                quotePending ? "opacity-60" : ""
+              }`}
+            >
+              {quoteError ? "—" : billMoney(totals.payable)}
+            </span>
           </div>
-        }
-      >
-        {session && (
-          <div className="space-y-6">
-            {/* ══ CHI TIẾT — giờ chơi theo từng người chơi ══ */}
-            {pickerActive ? (
-              pricingBlocked ? (
-                <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-                  Chưa có bảng giá hiệu lực — không thể thu tiền giờ chơi.
-                </p>
-              ) : (
-                <>
-                  <CheckoutPlayerPicker
-                    groups={pickerGroups}
-                    rules={applicablePricingRules}
-                    memberStats={memberStats}
-                    onChange={setPickerGroups}
-                  />
-                  {needsPricing &&
-                    selectedCount > 0 &&
-                    selectedCount < sessionPlayerCount && (
-                      <p className="text-xs text-amber-600 dark:text-amber-300">
-                        Thu trước{" "}
-                        <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">
-                          {selectedCount}
-                        </span>
-                        /{sessionPlayerCount} người — người chưa chọn tiếp tục
-                        chơi.
-                      </p>
-                    )}
-                  {!needsPricing && isPartialBySelection && (
-                    <p className="text-xs text-amber-600 dark:text-amber-300">
-                      Thu trước{" "}
-                      <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">
-                        {selectedCount}
-                      </span>
-                      /{uncheckedTotal} người — người chưa thu tiếp tục chơi.
-                    </p>
-                  )}
-                </>
-              )
+          <Button
+            variant="contrast"
+            size="lg"
+            fullWidth
+            loading={submitting}
+            disabled={
+              !shiftReady ||
+              quoteLoading ||
+              !!quoteError ||
+              !displayQuote ||
+              pricingBlocked ||
+              freshMultiGroupPartial ||
+              (pickerActive && !hasAssignedPlayers)
+            }
+            onClick={handleCheckout}
+          >
+            {getCtaLabel()}
+          </Button>
+        </div>
+      }
+    >
+      {session && (
+        <div className="space-y-6">
+          {/* ══ LIÊN 1 — TÍNH TIỀN: đang tính cái gì ══ */}
+          <section>
+            <h3 className={GROUP_LABEL}>Liên 1 · Tính tiền</h3>
+
+            {pricingBlocked ? (
+              <p className="mt-2 rounded-lg border border-danger-border bg-danger-bg px-3 py-2 text-sm text-danger">
+                Chưa có bảng giá hiệu lực — không thể thu tiền giờ chơi.
+              </p>
+            ) : pickerActive ? (
+              <div className="mt-2">
+                <CheckoutPlayerPicker
+                  groups={pickerGroups}
+                  rules={applicablePricingRules}
+                  memberStats={memberStats}
+                  onChange={setPickerGroups}
+                />
+                {isPartialBySelection && (
+                  <p className="mt-2 text-xs text-warning">
+                    Thu trước{" "}
+                    <span className="font-semibold tabular-nums text-text-primary">
+                      {selectedCount}
+                    </span>
+                    /{uncheckedTotal} người — người chưa thu tiếp tục chơi.
+                  </p>
+                )}
+              </div>
             ) : (
-              <LedgerGroup title="Giờ chơi">
-                <div className="border-t border-zinc-200 dark:border-zinc-800">
-                  <LedgerRow
-                    label={isMember ? "Giờ chơi hội viên" : "Giờ chơi"}
-                    meta={`chơi ${playTimeText} · nghỉ ${formatPausedHMS(
-                      displayPausedSeconds,
-                    )}`}
-                    amount={
-                      quoteLoading
-                        ? "—"
-                        : isMember
-                          ? "Miễn phí"
-                          : money(playSubtotal)
-                    }
-                  />
-                </div>
-              </LedgerGroup>
+              <div className="mt-2 border-y border-border-default">
+                <LedgerRow
+                  label={isMember ? "Giờ chơi hội viên" : "Giờ chơi"}
+                  meta={`chơi ${playTimeText} · nghỉ ${formatPausedHMS(
+                    displayPausedSeconds,
+                  )}`}
+                  amount={isMember ? "Miễn phí" : billMoney(playGross)}
+                  dimmed={quotePending}
+                />
+              </div>
             )}
 
-            {/* Legacy: session cũ không có player rows — chọn nhóm bằng danh sách dòng */}
-            {!isMember &&
-              !sessionHasPlayers &&
-              (session.pricingGroups?.length ?? 0) > 0 && (
-                <LedgerGroup title="Nhóm thu tiền">
-                  <ul className="divide-y divide-zinc-100 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-                    {session
-                      .pricingGroups!.filter((g) => g.remainingCount > 0)
-                      .map((g) => {
-                        const isSelected = selectedGroupId === g.id;
-                        return (
-                          <li key={g.id}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedGroupId(g.id);
-                                setCheckoutPlayerCount(g.remainingCount);
-                              }}
-                              className="flex w-full items-start gap-3 py-2 text-left"
-                            >
-                              <input
-                                type="radio"
-                                readOnly
-                                checked={isSelected}
-                                tabIndex={-1}
-                                aria-label={`Chọn ${g.label}`}
-                                className="mt-1 h-4 w-4 shrink-0 accent-emerald-600"
-                              />
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-[15px] leading-tight text-zinc-950 dark:text-white">
-                                  {g.label}
-                                </span>
-                                <span className="block text-[11px] text-zinc-500 dark:text-zinc-400">
-                                  {g.pricingSnapshot?.name ?? "Bảng giá"} ·{" "}
-                                  {money(g.hourlyRate)}/giờ · còn{" "}
-                                  {g.remainingCount}/{g.playerCount}
-                                </span>
-                              </span>
-                              <span
-                                className={`${MONEY_RAIL} pt-0.5 text-[15px] font-medium text-zinc-950 dark:text-white`}
-                              >
-                                {g.remainingCount} người
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                  </ul>
-                  {selectedGroupId && (
-                    <LegacyStepper
-                      checkoutPlayerCount={checkoutPlayerCount}
-                      maxCount={
-                        session.pricingGroups!.find(
-                          (g) => g.id === selectedGroupId,
-                        )?.remainingCount ?? sessionPlayerCount
-                      }
-                      unitLabel="người trong nhóm"
-                      onDecrease={() =>
-                        setCheckoutPlayerCount((c) => Math.max(1, c - 1))
-                      }
-                      onIncrease={() =>
-                        setCheckoutPlayerCount((c) =>
-                          Math.min(
-                            session.pricingGroups!.find(
-                              (g) => g.id === selectedGroupId,
-                            )?.remainingCount ?? sessionPlayerCount,
-                            c + 1,
-                          ),
-                        )
-                      }
-                      warning={
-                        checkoutPlayerCount <
-                        (session.pricingGroups!.find(
-                          (g) => g.id === selectedGroupId,
-                        )?.remainingCount ?? sessionPlayerCount)
-                          ? `Thu ${checkoutPlayerCount} người — nhóm còn người, thu tiếp sau.`
-                          : undefined
-                      }
-                    />
-                  )}
-                </LedgerGroup>
-              )}
+            {/* Hàng hoá / dịch vụ — một danh sách duy nhất, sửa tại chỗ, thêm
+                bằng một nút. Mọi thao tác chỉ ở bộ nhớ, gửi đi lúc bấm Thu
+                tiền. Xem checkout-item-rows.tsx. */}
+            <CheckoutItemLedger
+              items={itemLines}
+              isAtMax={(item) => item.quantity >= quantityCeiling(item)}
+              onAddClick={() => setPickerOpen(true)}
+              onChangeQuantity={(item, quantity) =>
+                void changeItemQuantity(item, quantity)
+              }
+            />
+
+            <div className="mt-3">
+              <TotalRow
+                label="Tạm tính"
+                amount={billMoney(totals.charges)}
+                dimmed={quotePending}
+              />
+            </div>
+          </section>
+
+          {/* ══ LIÊN 2 — THU TIỀN: giảm gì, thu thế nào ══
+              Liên 2 nằm trên bước tint (tờ giấy than của phiếu hai liên), chạy
+              tới tận chân phiếu nên liên 2 + chân phiếu đọc như một tờ. Đường
+              gấp là 24px giấy trắng cộng một hairline: chỉ riêng bước
+              surface-secondary thì ở màn 1x quá mờ để đọc ra hai tờ. Dùng bước
+              surface-secondary (không phải tertiary) để mọi cỡ chữ nhỏ trên dải
+              vẫn đạt 4.5:1. */}
+          <section className="-mx-4 -mb-3 border-t border-border-default bg-surface-secondary px-4 pb-3 pt-3 sm:-mx-5 sm:-mb-4 sm:px-5 sm:pb-4">
+            <h3 className={GROUP_LABEL}>Liên 2 · Thu tiền</h3>
 
             {!isMember &&
-              !sessionHasPlayers &&
-              (session.pricingGroups?.length ?? 0) === 0 &&
-              isGroupSession && (
-                <LedgerGroup title="Nhóm thu tiền">
-                  <LegacyStepper
-                    checkoutPlayerCount={checkoutPlayerCount}
-                    maxCount={sessionPlayerCount}
-                    unitLabel="người trong phiên"
-                    onDecrease={() =>
-                      setCheckoutPlayerCount((c) => Math.max(1, c - 1))
-                    }
-                    onIncrease={() =>
-                      setCheckoutPlayerCount((c) =>
-                        Math.min(sessionPlayerCount, c + 1),
-                      )
-                    }
-                    warning={
-                      checkoutPlayerCount < sessionPlayerCount
-                        ? `Thu ${checkoutPlayerCount} người — phiên còn ${sessionPlayerCount - checkoutPlayerCount} người, thu tiếp sau.`
-                        : undefined
-                    }
-                  />
-                </LedgerGroup>
-              )}
-
-            {/* ══ CHI TIẾT — hàng hoá / dịch vụ ══ */}
-            <LedgerGroup title="Hàng hoá & dịch vụ">
-              {pendingSellItems.length > 0 ? (
-                <ul className="divide-y divide-zinc-100 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-                  {pendingSellItems.map((item) => (
-                    <li key={item.sessionSellItemId}>
-                      <LedgerRow
-                        label={item.productName}
-                        meta={`Số lượng ${item.quantity} · đã thêm vào phiên`}
-                        amount={money(item.subtotal)}
-                        busy={removingSellItemId === item.sessionSellItemId}
-                        onUncheck={() =>
-                          void removeSellItem(item.sessionSellItemId)
-                        }
-                      />
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {pendingSellItems.length > 0 ? (
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                  Bỏ chọn món đã thêm vào phiên sẽ xoá dòng khỏi phiên và hoàn
-                  kho.
-                </p>
-              ) : null}
-
-              <InlineProductEditor
-                lines={cartEditorLines}
-                products={products.filter(
-                  (product) => product.type === "SERVICE" || product.stockQuantity > 0,
-                )}
-                loading={productsLoading}
-                error={productsError}
-                onRetry={onRetryProducts}
-                onAdd={(product) => changeCart(product, 1)}
-                onDecrease={(productId) => {
-                  const product = products.find((item) => item.id === productId);
-                  if (product) changeCart(product, -1);
-                }}
-                onIncrease={(productId) => {
-                  const product = products.find((item) => item.id === productId);
-                  if (product) changeCart(product, 1);
-                }}
-                onRemove={(productId) =>
-                  setCart((current) => {
-                    const next = { ...current };
-                    delete next[productId];
-                    return next;
-                  })
+              (promotions.length > 0 || !!promotionRuleId || !!promotionsError) && (
+              <AdjustRow
+                label="Khuyến mại giờ chơi"
+                amount={
+                  playDiscount > 0 ? `-${billMoney(playDiscount)}` : "—"
+                }
+                tone={playDiscount > 0 ? "minus" : "muted"}
+                dimmed={quotePending}
+                control={
+                  <>
+                    <Select
+                      id="checkout-promotion"
+                      aria-label="Khuyến mại giờ chơi"
+                      value={promotionRuleId}
+                      disabled={promotionsLoading}
+                      onChange={(event) =>
+                        setPromotionRuleId(event.target.value)
+                      }
+                    >
+                      <option value="">Không áp dụng khuyến mại</option>
+                      {promotions.map((promotion) => (
+                        <option key={promotion.ruleId} value={promotion.ruleId}>
+                          {formatPromotionOption(promotion)}
+                        </option>
+                      ))}
+                    </Select>
+                    {promotionsError ? (
+                      <p className="mt-1 text-xs text-danger">
+                        {promotionsError}
+                      </p>
+                    ) : null}
+                  </>
                 }
               />
-            </LedgerGroup>
+            )}
 
-            {/* ══ TỔNG HỢP — các khoản ngoài dòng giờ chơi đã hiển thị ở trên ══ */}
-            <section>
-              <h3 className={GROUP_LABEL}>Tổng tiền</h3>
-              <div className="mt-2 divide-y divide-zinc-100 border-t border-zinc-300 dark:divide-zinc-800 dark:border-zinc-700">
-                <SumRow
-                  label="Hàng hoá / dịch vụ"
-                  hint={
-                    pendingSellItems.length + cartLines.length > 0
-                      ? `${pendingSellItems.length + cartLines.length} món`
-                      : undefined
-                  }
-                  amount={money(sellableTotal)}
-                  tone={sellableTotal > 0 ? "plain" : "muted"}
-                />
-                {depositApplied > 0 && (
-                  <SumRow
-                    label="Khấu trừ tiền cọc"
-                    amount={`-${money(depositApplied)}`}
-                    tone="minus"
-                  />
-                )}
-                {!isMember && (
-                  <SumRow
-                    label="Khuyến mại giờ chơi"
-                    hint={
-                      promotionRuleId
-                        ? promotions.find((p) => p.ruleId === promotionRuleId)
-                            ?.name
-                        : undefined
-                    }
-                    amount={playDiscount > 0 ? `-${money(playDiscount)}` : "—"}
-                    tone={playDiscount > 0 ? "minus" : "muted"}
-                    control={
-                      <>
-                        <Select
-                          id="checkout-promotion"
-                          value={promotionRuleId}
-                          disabled={promotionsLoading}
-                          onChange={(event) =>
-                            setPromotionRuleId(event.target.value)
-                          }
-                        >
-                          <option value="">Không áp dụng khuyến mại</option>
-                          {promotions.map((promotion) => (
-                            <option
-                              key={promotion.ruleId}
-                              value={promotion.ruleId}
-                            >
-                              {formatPromotionOption(promotion)}
-                            </option>
-                          ))}
-                        </Select>
-                        {promotionsError ? (
-                          <p className="text-xs text-red-600 dark:text-red-300">
-                            {promotionsError}
-                          </p>
-                        ) : null}
-                      </>
-                    }
-                  />
-                )}
-                {!isMember && parkingFeeUnitPrice > 0 && (
-                  <SumRow
-                    label="Phí gửi xe"
-                    hint={`${money(parkingFeeUnitPrice)}/xe`}
-                    amount={
-                      parkingFeeTotal > 0 ? `-${money(parkingFeeTotal)}` : "—"
-                    }
-                    tone={parkingFeeTotal > 0 ? "minus" : "muted"}
-                    control={
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setParkingVehicleCount((c) => Math.max(0, c - 1))
-                          }
-                          disabled={parkingVehicleCount === 0}
-                          aria-label="Giảm số xe"
-                          className={stepperMinus}
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span className="w-8 text-center text-[15px] font-bold tabular-nums text-zinc-950 dark:text-white">
-                          {parkingVehicleCount}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setParkingVehicleCount((c) => Math.min(20, c + 1))
-                          }
-                          aria-label="Tăng số xe"
-                          className={stepperPlus}
-                        >
-                          <Plus size={14} />
-                        </button>
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                          xe
-                        </span>
-                      </div>
-                    }
-                  />
-                )}
-              </div>
-            </section>
+            {/* Phí gửi xe áp cho cả hội viên — server không chặn theo hạng khách */}
+            {parkingFeeUnitPrice > 0 && (
+              <AdjustRow
+                label="Phí gửi xe"
+                hint={`${billMoney(parkingFeeUnitPrice)}/xe`}
+                amount={parkingFeeTotal > 0 ? `-${billMoney(parkingFeeTotal)}` : "—"}
+                tone={parkingFeeTotal > 0 ? "minus" : "muted"}
+                control={
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setParkingVehicleCount((c) => Math.max(0, c - 1))
+                      }
+                      disabled={parkingVehicleCount === 0}
+                      aria-label="Giảm số xe"
+                      className={stepperButton}
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <span className="w-6 text-center text-sm font-semibold tabular-nums text-text-primary">
+                      {parkingVehicleCount}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setParkingVehicleCount((c) => Math.min(20, c + 1))
+                      }
+                      aria-label="Tăng số xe"
+                      className={stepperButton}
+                    >
+                      <Plus size={14} />
+                    </button>
+                    <span className="text-xs text-text-tertiary">xe</span>
+                  </div>
+                }
+              />
+            )}
 
-            {/* ══ PHƯƠNG THỨC THANH TOÁN ══ */}
-            <LedgerGroup title="Phương thức thanh toán">
+            <TotalRow
+              label="Tổng"
+              amount={billMoney(totals.total)}
+              dimmed={quotePending}
+              emphasis="final"
+            />
+
+            {totals.depositApplied > 0 && (
+              <AdjustRow
+                label="Tiền cọc"
+                hint="đã thu khi đặt lịch"
+                amount={`-${billMoney(totals.depositApplied)}`}
+                tone="minus"
+              />
+            )}
+
+            <div className="mt-4">
               <PaymentMethodPicker
-                key={session?.id ?? "retail"}
+                key={session.id}
                 id="payment-method"
-                amount={payableTotal}
+                amount={totals.payable}
                 method={paymentMethod}
                 onMethodChange={setPaymentMethod}
+                label="Phương thức thanh toán"
               />
-            </LedgerGroup>
-          </div>
-        )}
-      </Modal>
-
+            </div>
+          </section>
+        </div>
+      )}
+    </Modal>
+    {/* Tờ chọn hàng nằm SAU drawer để vẽ đè lên nó (cùng z-[60], thứ sau thắng) */}
+    <ProductPickerSheet
+      open={pickerOpen}
+      products={products}
+      loading={productsLoading}
+      error={productsError}
+      pickedCount={pickedCount}
+      onRetry={onRetryProducts}
+      onPick={addItem}
+      onClose={() => setPickerOpen(false)}
+    />
+    {/* Xác nhận thoát — cũng nằm sau drawer để vẽ đè lên (cùng z-[60]) */}
+    <ConfirmDialog
+      open={confirmCloseOpen}
+      title="Bạn vừa sửa hoá đơn check-out, tiếp tục thoát?"
+      description="Hàng hoá bạn vừa sửa sẽ được ghi vào phiên."
+      confirmLabel="Thoát"
+      cancelLabel="Ở lại"
+      confirmVariant="contrast"
+      onClose={() => setConfirmCloseOpen(false)}
+      onConfirm={confirmExit}
+    />
     </>
   );
 }
@@ -1267,62 +1455,4 @@ function hhmm(totalSeconds: number): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   return [h, m].map((v) => v.toString().padStart(2, "0")).join(":");
-}
-
-/** Stepper số người thu — dùng cho session cũ không có player rows (legacy) */
-function LegacyStepper({
-  checkoutPlayerCount,
-  maxCount,
-  unitLabel,
-  onDecrease,
-  onIncrease,
-  warning,
-}: {
-  checkoutPlayerCount: number;
-  maxCount: number;
-  unitLabel: string;
-  onDecrease: () => void;
-  onIncrease: () => void;
-  warning?: string;
-}) {
-  return (
-    <>
-      <div className="border-t border-zinc-200 dark:border-zinc-800" />
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          Số người thu
-        </p>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-          {checkoutPlayerCount} người
-        </span>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={onDecrease}
-          disabled={checkoutPlayerCount <= 1}
-          className={stepperMinus}
-        >
-          <Minus size={14} />
-        </button>
-        <span className="text-lg font-bold tabular-nums text-zinc-950 dark:text-white">
-          {checkoutPlayerCount}
-        </span>
-        <button
-          type="button"
-          onClick={onIncrease}
-          disabled={checkoutPlayerCount >= maxCount}
-          className={stepperPlus}
-        >
-          <Plus size={14} />
-        </button>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-          / {maxCount} {unitLabel}
-        </span>
-      </div>
-      {warning && (
-        <p className="text-xs text-amber-600 dark:text-amber-300">{warning}</p>
-      )}
-    </>
-  );
 }

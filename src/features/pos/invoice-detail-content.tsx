@@ -171,22 +171,22 @@ export function InvoiceDetailContent({
       <Card padding="none" className="overflow-hidden">
         {/* Cancelled banner — replaces the old rotated watermark */}
         {isCancelled && (
-          <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
+        <div className="border-b border-danger-border bg-danger-bg px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-danger border-danger-border bg-danger-bg text-danger">
             Hoá đơn đã huỷ — tiền và tồn kho đã được hoàn trả
           </div>
         )}
 
         {/* Masthead */}
-        <header className="border-b border-zinc-200 px-4 py-4 sm:px-6 dark:border-zinc-800">
+        <header className="border-b border-border-default px-4 py-4 sm:px-6 ">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-              Mã hoá đơn: <span className="font-semibold text-zinc-900 dark:text-white">{invoice.invoiceNo}</span>
-            </h1>
+            <p className="text-sm font-medium text-text-tertiary">
+              Mã hoá đơn: <span className="font-semibold text-text-primary">{invoice.invoiceNo}</span>
+            </p>
             <Badge variant={invoiceStatusVariant} size="sm">
               {invoiceStatusLabel}
             </Badge>
             {earlyCollectionSequence !== undefined && (
-              <div className="inline-flex items-center gap-1.5 border-l-2 border-amber-500 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+            <div className="inline-flex items-center gap-1.5 border-l-2 border-warning bg-warning-bg px-2 py-1 text-xs font-medium text-warning bg-warning-bg text-warning">
                 <Timer size={12} aria-hidden />
                 Thu trước — lần {earlyCollectionSequence}
               </div>
@@ -194,26 +194,26 @@ export function InvoiceDetailContent({
           </div>
 
           {/* Dòng ngày thanh toán */}
-          <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-1.5 text-xs text-text-tertiary">
             {invoice.paidAt
               ? `Thanh toán ${formatDateTime(invoice.paidAt)}`
               : `Lập ${formatDateTime(invoice.createdAt)}`}
-          </p>
+            </p>
 
           {/* Metadata row: Khách hàng · Phiên chơi · Ca & nhân viên */}
-          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 border-t border-zinc-100 pt-3 text-xs dark:border-zinc-800">
-            <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 border-t border-border-default pt-3 text-xs ">
+            <div className="flex items-center gap-1.5 text-text-tertiary">
               <User size={12} />
               <span>Khách hàng: </span>
               {invoice.customer ? (
-                <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                <span className="font-medium text-text-secondary">
                   {invoice.customer.fullName}
                   {invoice.customer.phone && (
                     <>
                       {' · '}
                       <a
                         href={`tel:${invoice.customer.phone}`}
-                        className="font-normal text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
+                        className="font-normal text-success underline-offset-2 hover:underline text-success"
                       >
                         {invoice.customer.phone}
                       </a>
@@ -221,14 +221,14 @@ export function InvoiceDetailContent({
                   )}
                 </span>
               ) : invoice.session?.customerName ? (
-                <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                <span className="font-medium text-text-secondary">
                   {invoice.session.customerName}
                   {invoice.session.customerPhone && (
                     <>
                       {' · '}
                       <a
                         href={`tel:${invoice.session.customerPhone}`}
-                        className="font-normal text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
+                        className="font-normal text-success underline-offset-2 hover:underline text-success"
                       >
                         {invoice.session.customerPhone}
                       </a>
@@ -236,38 +236,38 @@ export function InvoiceDetailContent({
                   )}
                 </span>
               ) : (
-                <span className="text-zinc-400 dark:text-zinc-500">—</span>
+                <span className="text-text-tertiary">—</span>
               )}
             </div>
 
             {invoice.session && (
-              <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+            <div className="flex items-center gap-1.5 text-text-tertiary">
                 <Clock size={12} />
                 <span>Phiên: </span>
-                <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                <span className="font-medium text-text-secondary">
                   {formatTime(invoice.session.startTime)}
-                  <span className="mx-1 font-normal text-zinc-400 dark:text-zinc-500">—</span>
+                  <span className="mx-1 font-normal text-text-tertiary">—</span>
                   {invoice.session.endTime ? formatTime(invoice.session.endTime) : 'đang chơi'}
                 </span>
               </div>
             )}
 
-            <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+              <div className="flex items-center gap-1.5 text-text-tertiary">
               <Users size={12} />
               <span>Nhân viên: </span>
-              <span className="font-medium text-zinc-700 dark:text-zinc-200">{invoice.staff.fullName}</span>
+              <span className="font-medium text-text-secondary">{invoice.staff.fullName}</span>
             </div>
           </div>
         </header>
 
         {editOpen && setEditing && onCloseEdit && (
-          <div className="flex items-center justify-between gap-3 border-b border-blue-200 bg-blue-50 px-4 py-3 sm:px-6 dark:border-blue-500/30 dark:bg-blue-500/10">
-            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Đang sửa hoá đơn</p>
+        <div className="flex items-center justify-between gap-3 border-b border-info-border bg-info-bg px-4 py-3 sm:px-6 border-info-border bg-info-bg">
+        <p className="text-sm font-medium text-info">Đang sửa hoá đơn</p>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={onCloseEdit} disabled={editing}>
                 Huỷ
               </Button>
-              <Button variant="inverse" size="sm" onClick={editor.handleSave} disabled={editing}>
+            <Button variant="contrast" size="sm" onClick={editor.handleSave} disabled={editing}>
                 {editing ? 'Đang lưu...' : 'Lưu'}
               </Button>
             </div>
@@ -276,25 +276,25 @@ export function InvoiceDetailContent({
 
         {/* Itemized lines — table */}
         <section className="px-4 py-5 sm:px-6 sm:py-6">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-text-tertiary">
             Chi tiết dịch vụ
           </h2>
 
           {invoice.items.length === 0 ? (
-            <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-4 text-sm text-text-tertiary">
               Chưa có mục nào được ghi nhận.
             </p>
           ) : (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-200 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                  <tr className="border-b border-border-default text-left text-xs font-medium uppercase tracking-wide text-text-tertiary  ">
                     <th scope="col" className="py-2 pr-3 font-medium">Nội dung</th>
                     <th scope="col" className="w-20 py-2 px-3 text-right font-medium">Số lượng</th>
                     <th scope="col" className="w-32 py-2 pl-3 text-right font-medium">Thành tiền</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                <tbody className="divide-y divide-border-default">
                   {tableRows.map((row) => (
                     <ItemRow
                       key={row.key}
@@ -346,8 +346,8 @@ export function InvoiceDetailContent({
 
         {/* Notes */}
         {(invoice.notes || editOpen) && (
-          <section className="border-t border-zinc-200 px-4 py-4 sm:px-6 dark:border-zinc-800">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          <section className="border-t border-border-default px-4 py-4 sm:px-6 ">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-text-tertiary">
               Ghi chú
             </h2>
             {editOpen ? (
@@ -359,7 +359,7 @@ export function InvoiceDetailContent({
                 placeholder="Ghi chú cho hoá đơn"
               />
             ) : (
-              <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{invoice.notes}</p>
+              <p className="mt-2 text-sm text-text-secondary">{invoice.notes}</p>
             )}
           </section>
         )}
@@ -488,17 +488,17 @@ function ItemRowGeneric({
             size={16}
             className={[
               'mt-0.5 shrink-0',
-              isNegative ? 'text-red-500' : 'text-zinc-400 dark:text-zinc-500',
+              isNegative ? 'text-danger' : 'text-text-tertiary',
             ].join(' ')}
             aria-hidden
           />
           <div className="min-w-0 space-y-1">
-            <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">
+            <p className="truncate text-sm font-medium text-text-primary">
               {item.description}
             </p>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-text-tertiary">
               {item.discountAmount > 0 && (
-                <span className="text-red-600 dark:text-red-400">
+              <span className="text-danger">
                   −{formatVND(item.discountAmount)}
                 </span>
               )}
@@ -508,33 +508,33 @@ function ItemRowGeneric({
       </td>
 
       {/* Số lượng */}
-      <td className="w-28 py-3 px-3 text-right text-sm text-zinc-700 dark:text-zinc-300">
+      <td className="w-28 py-3 px-3 text-right text-sm text-text-secondary">
         {editable ? (
           <div className="flex items-center justify-end gap-1">
             <button
               type="button"
-              aria-label="Giảm số lượng"
-              onClick={() => onDecrease(line.productId, -1)}
+                aria-label="Giảm số lượng"
+                onClick={() => onDecrease(line.productId, -1)}
               disabled={quantity <= 1}
-              className="flex h-7 w-7 items-center justify-center rounded border border-zinc-200 text-zinc-600 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
+              className="flex h-7 w-7 items-center justify-center rounded border border-border-default text-text-secondary disabled:opacity-40  "
             >
               <Minus size={12} aria-hidden />
             </button>
             <span className="w-5 text-center tabular-nums">{quantity}</span>
             <button
               type="button"
-              aria-label="Tăng số lượng"
-              onClick={() => onIncrease(line.productId, 1)}
+                aria-label="Tăng số lượng"
+                onClick={() => onIncrease(line.productId, 1)}
               disabled={line.type === 'PRODUCT' && quantity >= line.stockQuantity}
-              className="flex h-7 w-7 items-center justify-center rounded bg-zinc-950 text-white disabled:opacity-40 dark:bg-white dark:text-zinc-950"
+              className="flex h-7 w-7 items-center justify-center rounded bg-text-primary text-text-inverse disabled:opacity-40"
             >
               <Plus size={12} aria-hidden />
             </button>
             <button
               type="button"
-              aria-label="Xoá mặt hàng"
-              onClick={() => onRemove(line.productId)}
-              className="ml-1 flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+                aria-label="Xoá mặt hàng"
+                onClick={() => onRemove(line.productId)}
+              className="ml-1 flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:bg-danger-bg hover:text-danger "
             >
               <Trash2 size={13} aria-hidden />
             </button>
@@ -549,10 +549,10 @@ function ItemRowGeneric({
         className={[
           'w-32 py-3 pl-3 text-right text-sm font-semibold whitespace-nowrap',
           isNegative || isDiscount
-            ? 'text-red-600 dark:text-red-400'
-            : 'text-zinc-900 dark:text-white',
-        ].join(' ')}
-      >
+          ? 'text-danger'
+            : 'text-text-primary',
+          ].join(' ')}
+        >
         {isNegative ? '−' : ''}
         {formatVND(Math.abs(total))}
       </td>
@@ -582,41 +582,41 @@ export function InlineProductEditor({
   onRemove: (productId: string) => void
 }) {
   return (
-    <div className="mt-5 space-y-3 border-t border-dashed border-zinc-200 pt-4 dark:border-zinc-800">
+    <div className="mt-5 space-y-3 border-t border-dashed border-border-default pt-4">
       <Label>Thêm hàng hoá / dịch vụ</Label>
 
       {lines.length > 0 && (
         <div className="space-y-2">
           {lines.map((line) => (
-            <div key={line.productId} className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-500/10">
-              <span className="min-w-0 flex-1 truncate text-sm text-zinc-900 dark:text-white">{line.name}</span>
-              <button
-                type="button"
-                aria-label="Giảm số lượng"
-                onClick={() => onDecrease(line.productId, -1)}
+          <div key={line.productId} className="flex items-center gap-2 rounded-lg bg-info-bg px-3 py-2">
+              <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{line.name}</span>
+            <button
+              type="button"
+              aria-label="Giảm số lượng"
+              onClick={() => onDecrease(line.productId, -1)}
                 disabled={line.quantity <= 1}
-                className="flex h-7 w-7 items-center justify-center rounded border border-zinc-200 bg-white text-zinc-600 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                className="flex h-7 w-7 items-center justify-center rounded border border-border-default bg-surface-elevated text-text-secondary disabled:opacity-40"
               >
                 <Minus size={12} aria-hidden />
               </button>
-              <span className="w-5 text-center text-sm tabular-nums text-zinc-900 dark:text-white">{line.quantity}</span>
+              <span className="w-5 text-center text-sm tabular-nums text-text-primary">{line.quantity}</span>
               <button
                 type="button"
-                aria-label="Tăng số lượng"
-                onClick={() => onIncrease(line.productId, 1)}
+              aria-label="Tăng số lượng"
+              onClick={() => onIncrease(line.productId, 1)}
                 disabled={line.type === 'PRODUCT' && line.quantity >= line.stockQuantity}
-                className="flex h-7 w-7 items-center justify-center rounded bg-zinc-950 text-white disabled:opacity-40 dark:bg-white dark:text-zinc-950"
+                className="flex h-7 w-7 items-center justify-center rounded bg-text-primary text-text-inverse disabled:opacity-40"
               >
                 <Plus size={12} aria-hidden />
               </button>
-              <span className="w-24 text-right text-sm font-semibold tabular-nums text-zinc-900 dark:text-white">
+              <span className="w-24 text-right text-sm font-semibold tabular-nums text-text-primary">
                 {formatVND(line.quantity * line.unitPrice)}
               </span>
               <button
                 type="button"
-                aria-label="Xoá mặt hàng"
-                onClick={() => onRemove(line.productId)}
-                className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+              aria-label="Xoá mặt hàng"
+              onClick={() => onRemove(line.productId)}
+                className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:bg-danger-bg hover:text-danger"
               >
                 <Trash2 size={13} aria-hidden />
               </button>
@@ -626,28 +626,28 @@ export function InlineProductEditor({
       )}
 
       {error ? (
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+      <div role="alert" className="rounded-lg border border-danger-border bg-danger-bg p-3 text-sm text-danger">
           <p>Không tải được sản phẩm: {error}</p>
-          {onRetry && <button type="button" className="mt-2 font-medium underline" onClick={onRetry}>Thử lại</button>}
+          {onRetry && <Button variant="white" size="sm" className="mt-2" onClick={onRetry}>Thử lại</Button>}
         </div>
       ) : loading ? (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Đang tải danh sách hàng hoá...</p>
+        <p className="text-sm text-text-tertiary">Đang tải danh sách hàng hoá...</p>
       ) : products.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {products.map((product) => (
-            <button
+              <button
               key={product.id}
-              type="button"
+                type="button"
               onClick={() => onAdd(product)}
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-left text-sm transition-colors hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="rounded-lg border border-border-default px-3 py-2 text-left text-sm transition-colors hover:border-border-strong hover:bg-surface-tertiary"
             >
-              <span className="block font-medium text-zinc-900 dark:text-white">{product.name}</span>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">{formatVND(product.price)}</span>
+              <span className="block font-medium text-text-primary">{product.name}</span>
+              <span className="text-xs text-text-tertiary">{formatVND(product.price)}</span>
             </button>
           ))}
         </div>
       ) : (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Không còn hàng hoá hoặc dịch vụ để thêm.</p>
+        <p className="text-sm text-text-tertiary">Không còn hàng hoá hoặc dịch vụ để thêm.</p>
       )}
     </div>
   )
@@ -668,19 +668,19 @@ function PlayerRow({ row }: { row: Extract<TableRow, { kind: 'player' }> }) {
         <div className="flex items-start gap-2">
           <Timer
             size={16}
-            className="mt-0.5 shrink-0 text-zinc-400 dark:text-zinc-500"
+            className="mt-0.5 shrink-0 text-text-tertiary"
             aria-hidden
           />
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">
-              <span className="text-zinc-500 dark:text-zinc-400">Giờ chơi:</span>
+            <p className="truncate text-sm font-medium text-text-primary">
+              <span className="text-text-tertiary">Giờ chơi:</span>
               {name ? ` ${name}` : ''}
               {ruleName && (
-                <span className="text-zinc-600 dark:text-zinc-400">({ruleName})</span>
+                <span className="text-text-tertiary">({ruleName})</span>
               )}
-            </p>
+          </p>
             {discount > 0 && (
-              <p className="mt-0.5 text-xs text-red-600 dark:text-red-400">
+            <p className="mt-0.5 text-xs text-danger">
                 −{formatVND(discount)}
               </p>
             )}
@@ -689,7 +689,7 @@ function PlayerRow({ row }: { row: Extract<TableRow, { kind: 'player' }> }) {
       </td>
 
       {/* Số lượng: số giờ chơi */}
-      <td className="w-20 py-3 px-3 text-right text-sm text-zinc-700 dark:text-zinc-300">
+      <td className="w-20 py-3 px-3 text-right text-sm text-text-secondary">
         {formatHours(player.totalHours ?? 0)}h
       </td>
 
@@ -697,7 +697,7 @@ function PlayerRow({ row }: { row: Extract<TableRow, { kind: 'player' }> }) {
       <td
         className={[
           'w-32 py-3 pl-3 text-right text-sm font-semibold whitespace-nowrap',
-          isNegative ? 'text-red-600 dark:text-red-400' : 'text-zinc-900 dark:text-white',
+          isNegative ? 'text-danger' : 'text-text-primary',
         ].join(' ')}
       >
         {isNegative ? '−' : ''}
@@ -720,7 +720,7 @@ function TotalsBlock({
   isCancelled: boolean
 }) {
   return (
-    <section className="border-y border-zinc-200 bg-zinc-50 px-4 py-4 sm:px-6 dark:border-zinc-800 dark:bg-zinc-900/50">
+    <section className="border-y border-border-default bg-surface-secondary px-4 py-4 sm:px-6  ">
       <dl className="space-y-1.5 text-sm">
         {discountTotal > 0 && (
           <SummaryRow
@@ -738,18 +738,18 @@ function TotalsBlock({
         )}
       </dl>
 
-      <div className="mt-3 flex items-baseline justify-between border-t border-zinc-200 pt-3 dark:border-zinc-800">
-        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+      <div className="mt-3 flex items-baseline justify-between border-t border-border-default pt-3 ">
+        <span className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
           Tổng cộng
         </span>
         <span
           className={[
             'text-2xl font-bold tracking-tight sm:text-3xl',
             isCancelled
-              ? 'text-zinc-400 line-through dark:text-zinc-500'
-              : 'text-zinc-900 dark:text-white',
-          ].join(' ')}
-        >
+              ? 'text-text-tertiary line-through'
+              : 'text-text-primary',
+        ].join(' ')}
+      >
           {formatVND(grandTotal)}
         </span>
       </div>
@@ -771,7 +771,7 @@ function SummaryRow({
       <dt
         className={[
           'text-xs uppercase tracking-wide',
-          tone === 'deduction' ? 'text-red-600 dark:text-red-400' : 'text-zinc-500 dark:text-zinc-400',
+          tone === 'deduction' ? 'text-danger' : 'text-text-tertiary',
         ].join(' ')}
       >
         {label}
@@ -779,7 +779,7 @@ function SummaryRow({
       <dd
         className={[
           'text-sm font-medium',
-          tone === 'deduction' ? 'text-red-600 dark:text-red-400' : 'text-zinc-900 dark:text-white',
+          tone === 'deduction' ? 'text-danger' : 'text-text-primary',
         ].join(' ')}
       >
         {value}
@@ -806,9 +806,9 @@ function PaymentTimeline({
 }) {
   return (
     <section className="px-4 py-5 sm:px-6 sm:py-6">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-text-tertiary">
         Phương thức thanh toán{' '}
-        <span className="ml-1 text-zinc-400 dark:text-zinc-500">
+        <span className="ml-1 text-text-tertiary">
           {payments.length + membershipPayments.length} khoản
         </span>
       </h2>
@@ -854,7 +854,7 @@ function TimelinePayment({
 }) {
   return (
     <li>
-      <p className="text-sm font-medium text-zinc-900 dark:text-white">{label}</p>
+      <p className="text-sm font-medium text-text-primary">{label}</p>
     </li>
   )
 }

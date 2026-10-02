@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { connectCalendar, mapConnectCalendarError } from '@/lib/students'
 import { cookies } from 'next/headers'
 import { apiError } from '@/lib/infrastructure/api-helpers'
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
 
     const code = request.nextUrl.searchParams.get('code')
     const state = request.nextUrl.searchParams.get('state')

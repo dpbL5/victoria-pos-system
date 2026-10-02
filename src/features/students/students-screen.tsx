@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { emptyStudentForm, studentFormBody, StudentFormModal, studentToForm, type StudentForm } from './student-form-modal'
 import { studentClassOf, type Student } from './types'
 
@@ -27,7 +28,7 @@ export function StudentsScreen() {
   const [query, setQuery] = useState('')
   const [offset, setOffset] = useState(0)
   const [filter, setFilter] = useState('')
-  const { data: studentsData, isLoading, mutate } = useApi<Student[]>(`/api/students?limit=20&offset=${offset}&search=${encodeURIComponent(query)}&status=${filter}`,  { dedupingInterval: 60_000 })
+  const { data: studentsData, isLoading, mutate } = useApi<Student[]>(`/api/students?limit=20&offset=${offset}&search=${encodeURIComponent(query)}&status=${filter}`, { dedupingInterval: 60_000 })
 
   const { registerRefresh } = usePageRefresh()
   useEffect(() => {
@@ -112,7 +113,7 @@ export function StudentsScreen() {
   const classCell = (s: Student) => {
     const item = studentClassOf(s)
     return item
-      ? <Link href={`/classes/${item.id}`} className="text-sm text-blue-700 hover:underline dark:text-blue-300">{item.name}</Link>
+    ? <Link href={`/classes/${item.id}`} className="text-sm text-info hover:underline text-info">{item.name}</Link>
       : <span className="text-sm text-zinc-400 dark:text-zinc-500">Chưa vào lớp</span>
   }
 
@@ -145,10 +146,10 @@ export function StudentsScreen() {
       cellClassName: 'px-4 py-3',
       render: (item) => (
         <div className="flex gap-1.5">
-          <Button variant="secondary" size="sm" icon={CalendarClock} disabled={submitting} onClick={() => router.push(`/students/${item.id}`)} title="Lịch học" />
-          <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa" />
-          <Button variant="outline-danger" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteStudent(item)} title="Xoá" />
-        </div>
+        <Button variant="white" size="sm" icon={CalendarClock} disabled={submitting} onClick={() => router.push(`/students/${item.id}`)} title="Lịch học" />
+      <Button variant="white" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa" />
+    <Button variant="red-soft" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteStudent(item)} title="Xoá" />
+    </div>
       ),
     },
   ], [submitting, router])
@@ -170,10 +171,10 @@ export function StudentsScreen() {
       label: '',
       render: (item) => (
         <div className="flex gap-1.5">
-          <Button variant="secondary" size="sm" icon={CalendarClock} disabled={submitting} onClick={() => router.push(`/students/${item.id}`)} title="Lịch học" />
-          <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa" />
-          <Button variant="outline-danger" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteStudent(item)} title="Xoá" />
-        </div>
+        <Button variant="white" size="sm" icon={CalendarClock} disabled={submitting} onClick={() => router.push(`/students/${item.id}`)} title="Lịch học" />
+      <Button variant="white" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa" />
+    <Button variant="red-soft" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteStudent(item)} title="Xoá" />
+      </div>
       ),
     },
   ], [submitting, router])
@@ -187,30 +188,30 @@ export function StudentsScreen() {
       <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
-            <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
-              <GraduationCap size={24} className="text-amber-500" />
+            <h1 className={`flex items-center gap-2 ${PAGE_TITLE_CLASS}`}>
+            <GraduationCap size={24} className="text-warning" />
               Học viên
             </h1>
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" size="sm" icon={CalendarClock} onClick={() => router.push('/lessons')}>
-              Lịch học
-            </Button>
-            <Button variant="primary" size="sm" icon={Plus} onClick={openCreate}>
-              Thêm học viên
-            </Button>
-          </div>
+          <Button variant="white" size="sm" icon={CalendarClock} onClick={() => router.push('/lessons')}>
+            Lịch học
+          </Button>
+        <Button variant="contrast" size="sm" icon={Plus} onClick={openCreate}>
+            Thêm học viên
+          </Button>
+        </div>
         </header>
 
         {/* Mobile actions */}
         <div className="flex gap-2 md:hidden">
-          <Button variant="primary" size="md" icon={Plus} fullWidth onClick={openCreate}>
-            Thêm học viên
-          </Button>
-          <Button variant="secondary" size="md" icon={CalendarClock} fullWidth onClick={() => router.push('/lessons')}>
-            Lịch học
-          </Button>
-        </div>
+        <Button variant="contrast" size="md" icon={Plus} fullWidth onClick={openCreate}>
+              Thêm học viên
+            </Button>
+          <Button variant="white" size="md" icon={CalendarClock} fullWidth onClick={() => router.push('/lessons')}>
+              Lịch học
+            </Button>
+          </div>
 
         {error && <NoticeCard tone="danger" title="Không tải được dữ liệu" description={error} />}
 
@@ -243,7 +244,7 @@ export function StudentsScreen() {
           />
         </div>
 
-        <div className="flex items-center justify-between"><Button variant="secondary" disabled={offset === 0} onClick={() => setOffset(n => Math.max(0, n - 20))}>Trước</Button><span className="text-sm">Trang {offset / 20 + 1}</span><Button variant="secondary" disabled={students.length < 20} onClick={() => setOffset(n => n + 20)}>Tiếp</Button></div>
+      <div className="flex items-center justify-between"><Button variant="white" disabled={offset === 0} onClick={() => setOffset(n => Math.max(0, n - 20))}>Trước</Button><span className="text-sm">Trang {offset / 20 + 1}</span><Button variant="white" disabled={students.length < 20} onClick={() => setOffset(n => n + 20)}>Tiếp</Button></div>
         <StudentFormModal
           open={formOpen}
           student={editStudent}
@@ -263,7 +264,7 @@ export function StudentsScreen() {
           submitting={submitting}
           onConfirm={handleConfirmDelete}
         />
-      </div>
-    </div>
+        </div>
+        </div>
   )
 }

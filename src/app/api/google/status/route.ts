@@ -1,4 +1,4 @@
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { getCalendarStatus } from '@/lib/students'
 import { getGoogleConfig } from '@/lib/google'
 import {
@@ -10,7 +10,7 @@ import {
 
 export async function GET() {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
 
     const { isConfigured } = getGoogleConfig()
     const result = await getCalendarStatus(auth.userId)

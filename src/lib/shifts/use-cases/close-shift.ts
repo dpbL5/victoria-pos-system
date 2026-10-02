@@ -11,7 +11,7 @@ import { isManagerOrAdmin } from '@/lib/shared/roles'
 export interface CloseShiftInput {
   shiftId: string
   staffId: string
-  staffRole: 'ADMIN' | 'MANAGER' | 'STAFF'
+  staffRole: 'ADMIN' | 'MANAGER' | 'STAFF' | 'TEACHER'
   username: string
   fullName: string
   closingCash: number

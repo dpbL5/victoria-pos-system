@@ -12,6 +12,7 @@ import { parseLocalDate, parseLocalDateEnd } from '@/lib/shared/utils'
 import { updatePricingRuleSchema } from '@/lib/pricing'
 import {
   apiError,
+  apiSuccess,
   ERR_UNAUTHORIZED,
   ERR_FORBIDDEN,
   ERR_CSRF,
@@ -99,7 +100,7 @@ export async function DELETE(
     const result = await deletePricingRule({ staffId: auth.userId, ruleId: id })
     if (!result.ok) return apiError(mapDeletePricingRuleError(result.error))
 
-    return apiError({ code: 'OK', message: 'Đã xóa quy tắc bảng giá', status: 200 } as never)
+    return apiSuccess(result.value)
   } catch (error) {
     const message = (error as Error).message
     if (message === 'UNAUTHORIZED') return apiError(ERR_UNAUTHORIZED)

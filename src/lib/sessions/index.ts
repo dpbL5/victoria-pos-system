@@ -4,6 +4,7 @@ export { checkInBooking } from './use-cases/check-in-booking'
 export { checkOut, mapCheckoutError } from './use-cases/check-out'
 export { sellItems, mapSellItemsError } from './use-cases/sell-items'
 export { removeSellItems, mapRemoveSellItemsError } from './use-cases/sell-items'
+export { syncSessionSellItems, mapSyncSessionSellItemsError } from './use-cases/sell-items'
 export { updateSession, mapUpdateSessionError } from './use-cases/update-session'
 export { pauseSession, resumeSession, mapPauseSessionError, mapResumeSessionError } from './use-cases/pause-session'
 export { pausePlayer, resumePlayer, mapPausePlayerError, mapResumePlayerError } from './use-cases/pause-session'
@@ -36,6 +37,10 @@ export type {
 export type {
   RemoveSellItemsInput,
   RemoveSellItemsResult,
+} from './use-cases/sell-items'
+export type {
+  SyncSessionSellItemsInput,
+  SyncSessionSellItemsResult,
 } from './use-cases/sell-items'
 export type {
   PauseSessionInput,

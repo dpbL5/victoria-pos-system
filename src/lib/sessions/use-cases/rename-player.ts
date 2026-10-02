@@ -11,7 +11,7 @@ export interface RenamePlayerInput {
   sessionId: string
   playerId: string
   staffId: string
-  role: 'ADMIN' | 'MANAGER' | 'STAFF'
+  role: 'ADMIN' | 'MANAGER' | 'STAFF' | 'TEACHER'
   /** Tên mới — đã trim; rỗng/undefined → xoá tên (UI fallback "Người N") */
   name?: string | null
 }

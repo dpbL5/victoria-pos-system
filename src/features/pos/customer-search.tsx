@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 import { Search } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import { apiJson } from '@/lib/api'
 import type { Customer } from './types'
 
@@ -123,9 +124,9 @@ export function CustomerSearch<T extends Customer>({
       <div ref={anchorRef} className={`relative ${className}`}>
         <Search
           size={14}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
         />
-        <input
+        <Input
           type="text"
           value={value}
           onChange={(event) => {
@@ -134,7 +135,7 @@ export function CustomerSearch<T extends Customer>({
           }}
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
-          className="h-9 w-full rounded-lg border border-zinc-200 bg-transparent pl-8 pr-3 text-sm outline-none focus:border-zinc-400 dark:border-zinc-800 dark:focus:border-zinc-600"
+          className="h-9 border-border-default bg-surface-elevated py-0 pl-8 pr-3"
         />
       </div>
 

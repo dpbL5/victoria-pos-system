@@ -4,6 +4,19 @@ export function formatVND(amount: number | string): string {
 }
 
 /**
+ * Chuẩn hoá văn bản để tìm kiếm kiểu Việt Nam: viết thường + bỏ dấu.
+ * "Nguyễn Đức" → "nguyen duc" để gõ không dấu vẫn khớp.
+ * NFD tách dấu tổ hợp khỏi nguyên âm; `đ` không tách được nên thay tay.
+ */
+export function normalizeSearchText(text: string): string {
+  return text
+    .toLocaleLowerCase('vi')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+}
+
+/**
  * Rút gọn `invoiceNo` cho list views: chỉ giữ phần cuối sau dấu `-` cuối cùng.
  * Ví dụ: `INV-20260828-222614-35E7A9DE` → `35E7A9DE`.
  * Dùng cho danh sách giao dịch, lịch sử hoá đơn của khách. Màn chi tiết vẫn hiển thị đầy đủ.

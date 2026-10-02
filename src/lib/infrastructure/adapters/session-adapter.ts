@@ -199,6 +199,15 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
       })
     },
 
+    async updateSellItemQuantity(id, quantity) {
+      if (quantity <= 0) {
+        await store.sessionSellItem.deleteMany({ where: { id } })
+        return
+      }
+      // Chỉ đổi quantity — unitPrice là giá chốt lúc thêm vào phiên
+      await store.sessionSellItem.update({ where: { id }, data: { quantity } })
+    },
+
     async removeSellItems(ids) {
       if (ids.length === 0) return
       await store.sessionSellItem.deleteMany({ where: { id: { in: ids } } })

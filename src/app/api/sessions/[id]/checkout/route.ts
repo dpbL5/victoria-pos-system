@@ -39,6 +39,7 @@ async function postCheckout(
       pricingRuleId: parsed.data.pricingRuleId,
       groups: parsed.data.groups,
       playerIds: parsed.data.playerIds,
+      groupPricingRuleIds: parsed.data.groupPricingRuleIds,
     })
 
     return resultToResponse(result, mapCheckoutError)

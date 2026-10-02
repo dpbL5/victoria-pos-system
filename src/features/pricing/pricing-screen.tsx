@@ -22,6 +22,7 @@ import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { formatDay, money } from '@/features/pos/format'
 import type { UserSession } from '@/features/pos/types'
 import { toInputDate } from '@/lib/shared/utils'
@@ -145,7 +146,7 @@ export function PricingScreen() {
   const renderActions = useCallback((rule: PricingRule) => (
     <div className="flex gap-1.5">
       <Button
-        variant="secondary"
+        variant="white"
         size="sm"
         icon={Edit3}
         disabled={submitting}
@@ -153,7 +154,7 @@ export function PricingScreen() {
         title="Sửa quy tắc"
       />
       <Button
-        variant="outline-danger"
+        variant="red-soft"
         size="sm"
         icon={Trash2}
         disabled={submitting}
@@ -273,11 +274,19 @@ export function PricingScreen() {
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
         {filteredRules.length} quy tắc · phủ {stats.coveredDays}/7 ngày trong tuần
       </p>
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-        <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
-        <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hiệu lực: {stats.active}</button>
-        <button type="button" aria-pressed={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')} className={statusFilter === 'FUTURE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Sắp tới: {stats.future}</button>
-        <button type="button" aria-pressed={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')} className={statusFilter === 'EXPIRED' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200'}>Hết hạn: {stats.expired}</button>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <FilterButton active={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')}>
+          Tất cả: {stats.total}
+        </FilterButton>
+        <FilterButton active={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')}>
+          Hiệu lực: {stats.active}
+        </FilterButton>
+        <FilterButton active={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')}>
+          Sắp tới: {stats.future}
+        </FilterButton>
+        <FilterButton active={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')}>
+          Hết hạn: {stats.expired}
+        </FilterButton>
       </div>
       <div role="group" aria-label="Lọc ngày áp dụng" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
         <FilterButton active={dayFilter === 'ALL'} onClick={() => setDayFilter('ALL')}>Tất cả ngày</FilterButton>
@@ -299,7 +308,7 @@ export function PricingScreen() {
       <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
+            <h1 className={PAGE_TITLE_CLASS}>
               Bảng giá
             </h1>
           </div>
@@ -317,8 +326,8 @@ export function PricingScreen() {
           <AccessDenied />
         ) : (
           <>
-            <Button
-              variant="inverse"
+          <Button
+            variant="contrast"
               size="lg"
               fullWidth
               icon={Plus}
@@ -422,7 +431,7 @@ function TierPricing({ rule }: { rule: PricingRule }) {
   ]
 
   return (
-    <span className="flex flex-col gap-0.5 text-[11px] tabular-nums text-zinc-700 dark:text-zinc-300">
+    <span className="flex flex-col gap-0.5 text-xs tabular-nums text-zinc-700 dark:text-zinc-300">
       {lines.map((line) => (
         <span key={line} className="whitespace-nowrap">{line}</span>
       ))}
@@ -518,7 +527,7 @@ function PricingRuleDialog({
       description="Chọn các thứ trong tuần để quy tắc tự lặp lại hằng tuần."
       size="lg"
       footer={
-        <Button variant="inverse" size="lg" fullWidth disabled={submitting} onClick={submit}>
+      <Button variant="contrast" size="lg" fullWidth disabled={submitting} onClick={submit}>
           {submitting ? 'Đang lưu...' : 'Lưu bảng giá'}
         </Button>
       }
@@ -537,7 +546,7 @@ function PricingForm({
 }) {
   return (
     <div className="space-y-3">
-      <div>
+    <div>
         <Label htmlFor="pricing-name" required>Tên quy tắc</Label>
         <Input
           id="pricing-name"
@@ -556,17 +565,17 @@ function PricingForm({
         <Label htmlFor="pricing-rate" required>Giá mỗi giờ</Label>
         <Input
           id="pricing-rate"
-          type="number"
+            type="number"
           min="1000"
           step="1000"
-          inputMode="numeric"
+            inputMode="numeric"
           value={form.ratePerHour}
           onChange={(event) => setForm({ ...form, ratePerHour: event.target.value })}
         />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div>
+      <div>
           <Label htmlFor="pricing-hour-from" required>Từ giờ</Label>
           <Input
             id="pricing-hour-from"
@@ -578,14 +587,14 @@ function PricingForm({
             onChange={(event) => setForm({ ...form, hourFrom: event.target.value })}
           />
         </div>
-        <div>
+      <div>
           <Label htmlFor="pricing-hour-to">Đến giờ</Label>
           <Input
             id="pricing-hour-to"
-            type="number"
+          type="number"
             min="1"
             max="24"
-            inputMode="numeric"
+          inputMode="numeric"
             value={form.hourTo}
             onChange={(event) => setForm({ ...form, hourTo: event.target.value })}
             placeholder="24"
@@ -614,12 +623,12 @@ function PricingForm({
         </div>
       </div>
 
-      <div>
+        <div>
         <div className="flex items-center justify-between">
           <Label>Giá theo giờ chơi (tuỳ chọn)</Label>
-          <Button
-            variant="secondary"
-            size="xs"
+            <Button
+              variant="contrast"
+                  size="xs"
             onClick={() => setForm({
               ...form,
               tiers: [...(form.tiers ?? []), { minHours: '2', ratePerHour: String(Math.round(Number(form.ratePerHour) * 0.7)) }],
@@ -639,14 +648,14 @@ function PricingForm({
                 <div className="flex-1">
                   <Label>Chơi từ</Label>
                   <div className="relative">
-                    <Input
-                      type="number"
+                  <Input
+                    type="number"
                       min="1"
                       step="1"
                       inputMode="numeric"
                       value={tier.minHours}
-                      onChange={(event) => {
-                        const newTiers = [...(form.tiers ?? [])]
+                    onChange={(event) => {
+                      const newTiers = [...(form.tiers ?? [])]
                         newTiers[idx] = { ...newTiers[idx]!, minHours: event.target.value }
                         setForm({ ...form, tiers: newTiers })
                       }}
@@ -658,22 +667,22 @@ function PricingForm({
                 </div>
                 <div className="flex-2">
                   <Label>Giá/giờ</Label>
-                  <Input
-                    type="number"
+                    <Input
+                      type="number"
                     min="1000"
                     step="1000"
                     inputMode="numeric"
                     value={tier.ratePerHour}
-                    onChange={(event) => {
-                      const newTiers = [...(form.tiers ?? [])]
+                      onChange={(event) => {
+                        const newTiers = [...(form.tiers ?? [])]
                       newTiers[idx] = { ...newTiers[idx]!, ratePerHour: event.target.value }
                       setForm({ ...form, tiers: newTiers })
                     }}
                   />
                 </div>
                 <Button
-                  variant="secondary"
-                  size="xs"
+                  variant="white"
+            size="xs"
                   onClick={() => {
                     const newTiers = [...(form.tiers ?? [])]
                     newTiers.splice(idx, 1)
@@ -689,7 +698,7 @@ function PricingForm({
         )}
       </div>
 
-      <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
+    <div className="rounded-xl border border-info-border bg-info-bg p-3 text-xs text-info border-info-border bg-info-bg text-info">
         Khung giờ dùng dạng từ giờ bắt đầu đến trước giờ kết thúc. Ví dụ 17-21 áp dụng từ 17:00 đến trước 21:00.
       </div>
     </div>
@@ -713,7 +722,7 @@ function WeeklyDaySelector({
   }
 
   return (
-    <div>
+        <div>
       <Label required>Ngày lặp hằng tuần</Label>
       <div className="grid grid-cols-7 gap-1.5">
         {weekDays.map((day) => {
@@ -727,7 +736,7 @@ function WeeklyDaySelector({
               onClick={() => toggleDay(day.value)}
               className={`flex aspect-square min-h-10 items-center justify-center rounded-lg border text-xs font-semibold transition-colors ${
                 active
-                  ? 'border-blue-600 bg-blue-600 text-white shadow-sm dark:border-blue-400 dark:bg-blue-500'
+                ? 'border-info bg-info text-white shadow-sm bg-info'
                   : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
               }`}
             >
@@ -737,17 +746,17 @@ function WeeklyDaySelector({
         })}
       </div>
       <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-        <Button variant="secondary" size="xs" onClick={() => onChange(weekdayDays)}>
+      <Button variant="white" size="xs" onClick={() => onChange(weekdayDays)}>
           T2-T6
         </Button>
-        <Button variant="secondary" size="xs" onClick={() => onChange(weekendDays)}>
+      <Button variant="white" size="xs" onClick={() => onChange(weekendDays)}>
           Cuối tuần
         </Button>
-        <Button variant="secondary" size="xs" onClick={() => onChange(allWeekDays)}>
+      <Button variant="white" size="xs" onClick={() => onChange(allWeekDays)}>
           Cả tuần
         </Button>
       </div>
-    </div>
+      </div>
   )
 }
 

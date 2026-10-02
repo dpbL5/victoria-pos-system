@@ -113,9 +113,9 @@ export function LessonEditor({ lesson: initialLesson, start, end, onClose, onSav
   return <>
     <Modal open onClose={close} title={lesson ? 'Chi tiết buổi học' : 'Thêm buổi học'} variant="fullscreen" size="lg" footer={editingDetails ? <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex items-center gap-2">
-        {lesson && !locked ? <Button variant="outline-danger" disabled={saving} onClick={() => setConfirmDelete(true)}>Huỷ buổi học</Button> : null}
+        {lesson && !locked ? <Button variant="red" disabled={saving} onClick={() => setConfirmDelete(true)}>Huỷ buổi học</Button> : null}
       </div>
-      <Button disabled={saving || lesson?.status === 'CANCELLED' || Boolean(!lesson && (!pickedClassId || pickingClass || !studentIds.length)) || Boolean(recurring && lesson && (!preview?.success || preview.data?.locked))} onClick={() => void save()}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div> : undefined}>
+    <Button variant="contrast" disabled={saving || lesson?.status === 'CANCELLED' || Boolean(!lesson && (!pickedClassId || pickingClass || !studentIds.length)) || Boolean(recurring && lesson && (!preview?.success || preview.data?.locked))} onClick={() => void save()}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div> : undefined}>
       <div className="space-y-5">
       {lesson && !editingDetails ? (
         <section className="flex flex-wrap items-center justify-between gap-3">
@@ -127,7 +127,7 @@ export function LessonEditor({ lesson: initialLesson, start, end, onClose, onSav
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{localTime(lesson.startsAt).replace('T', ' ')} · {lesson.durationMin} phút</p>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">{lesson.coachName || 'Chưa phân công huấn luyện viên'}</p>
           </div>
-          {lesson.status !== 'CANCELLED' && <Button type="button" variant="secondary" size="sm" icon={Pencil} onClick={() => setEditingDetails(true)}>Sửa thông tin</Button>}
+            {lesson.status !== 'CANCELLED' && <Button type="button" variant="white" size="sm" icon={Pencil} onClick={() => setEditingDetails(true)}>Sửa thông tin</Button>}
         </section>
       ) : <form className="space-y-4 [&_input]:placeholder:text-zinc-500 dark:[&_input]:placeholder:text-zinc-400 [&_textarea]:placeholder:text-zinc-500 dark:[&_textarea]:placeholder:text-zinc-400 dark:[&_input]:[color-scheme:dark]" onChange={() => setDirty(true)} onSubmit={e => { e.preventDefault(); void save() }}>
         {locked && <p className="text-sm text-zinc-600 dark:text-zinc-300">{lesson?.status === 'CANCELLED' ? 'Buổi học đã huỷ không thể chỉnh sửa.' : 'Buổi đã điểm danh chỉ cho chỉnh ghi chú.'}</p>}
@@ -142,7 +142,7 @@ export function LessonEditor({ lesson: initialLesson, start, end, onClose, onSav
           <div><Label htmlFor="lesson-title" required>Tiêu đề</Label><Input autoFocus={Boolean(lesson)} id="lesson-title" maxLength={150} value={title} onChange={e => setTitle(e.target.value)} placeholder="Ví dụ: Lớp cung cơ bản" /></div>
           <div><Label htmlFor="lesson-coach">Huấn luyện viên</Label><Input id="lesson-coach" value={coachName} onChange={e => setCoachName(e.target.value)} maxLength={100} placeholder="Tên huấn luyện viên" /></div>
           {lesson?.series && <div><Label htmlFor="lesson-scope">Phạm vi thay đổi</Label><Select id="lesson-scope" value={scope} onChange={e => { if (e.target.value !== 'SINGLE' && noteChanged) { toast.error('Hãy lưu ghi chú cho buổi này trước khi đổi phạm vi'); return }; setScope(e.target.value) }}><option value="SINGLE">Buổi này</option><option value="FOLLOWING">Buổi này và các buổi sau</option><option value="ALL">Toàn bộ chuỗi (giữ lịch sử)</option></Select></div>}
-          {recurring && lesson && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={changeRule} onChange={e => setChangeRule(e.target.checked)} />Thay đổi quy tắc lặp từ buổi đang chọn</label>}
+          {recurring && lesson && <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-info" checked={changeRule} onChange={e => setChangeRule(e.target.checked)} />Thay đổi quy tắc lặp từ buổi đang chọn</label>}
           <div className={editingRule ? 'space-y-3 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900' : ''}>
             <ScheduleFields
               idPrefix="lesson-schedule"
@@ -151,7 +151,7 @@ export function LessonEditor({ lesson: initialLesson, start, end, onClose, onSav
               startsOnLabel={recurring ? 'Ngày bắt đầu lặp' : 'Ngày học'}
               onChange={value => { setSchedule(value); setDirty(true); if (lesson) setChangeRule(true) }}
             />
-            {ruleError && <p className="text-sm text-red-600 dark:text-red-400">{ruleError}</p>}
+              {ruleError && <p className="text-sm text-danger">{ruleError}</p>}
           </div>
         </fieldset>
         {!recurring && <div><Label htmlFor="lesson-note">Ghi chú buổi học</Label><Textarea disabled={saving || lesson?.status === 'CANCELLED'} id="lesson-note" value={note} onChange={e => setNote(e.target.value)} maxLength={2000} rows={4} placeholder="Nội dung buổi học, tiến độ và điều cần lưu ý" /></div>}

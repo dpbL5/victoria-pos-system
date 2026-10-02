@@ -76,10 +76,10 @@ export function CalendarConnection({ menuItem = false, onOpen, compact = false }
     ) : compact ? (
       <span className="relative inline-flex">
         <Button variant="ghost" icon={TriggerIcon} size="sm" aria-label="Liên kết tài khoản Google" title={triggerText} onClick={() => setOpen(true)} />
-        {needsAttention && <span className="pointer-events-none absolute right-0.5 top-0.5 size-2 rounded-full bg-amber-500 ring-2 ring-surface-secondary" aria-hidden />}
+          {needsAttention && <span className="pointer-events-none absolute right-0.5 top-0.5 size-2 rounded-full bg-warning-bg0 ring-2 ring-surface-secondary" aria-hidden />}
       </span>
     ) : (
-      <Button variant="secondary" size="sm" icon={TriggerIcon} aria-label="Google Calendar" title="Google Calendar" onClick={() => setOpen(true)}>
+    <Button variant="white" size="sm" icon={TriggerIcon} aria-label="Google Calendar" title="Google Calendar" onClick={() => setOpen(true)}>
         <span className="lg:inline">{triggerText}</span>
       </Button>
     )}
@@ -87,16 +87,16 @@ export function CalendarConnection({ menuItem = false, onOpen, compact = false }
       <div className="space-y-4 dark:[&_input]:[color-scheme:dark]">
         <p className="text-sm text-zinc-600 dark:text-zinc-300">Lịch học đồng bộ một chiều từ ứng dụng lên lịch của bạn. Hãy chỉnh lịch trong ứng dụng; các thay đổi trên Google không được nhập về.</p>
         <p className="text-sm text-zinc-600 dark:text-zinc-300">Mỗi quản trị viên kết nối tài khoản Google của riêng mình. Sửa lịch trong ứng dụng không tự đồng bộ — bấm “Đồng bộ với Google Calendar” thì lịch mới được đẩy lên.</p>
-        {!status?.isConfigured && <p className="text-sm text-amber-700 dark:text-amber-300">Google Calendar chưa được cấu hình. Liên hệ người quản trị hệ thống.</p>}
-        {status?.isConfigured && <Button disabled={busy} onClick={() => { window.location.href = '/api/google/connect' }}>{status.connected ? 'Kết nối lại tài khoản Google' : 'Kết nối Google Calendar'}</Button>}
+          {!status?.isConfigured && <p className="text-sm text-warning">Google Calendar chưa được cấu hình. Liên hệ người quản trị hệ thống.</p>}
+        {status?.isConfigured && <Button variant="contrast" disabled={busy} onClick={() => { window.location.href = '/api/google/connect' }}>{status.connected ? 'Kết nối lại tài khoản Google' : 'Kết nối Google Calendar'}</Button>}
         {status?.connected && <>
           <div><Label htmlFor="google-calendar">Lịch CLB</Label><Select id="google-calendar" value={chosen || status.calendarId || ''} onChange={e => setChosen(e.target.value)}><option value="">Chọn lịch có quyền chỉnh sửa</option>{calendars?.data?.map(c => <option key={c.id} value={c.id}>{c.summary}</option>)}</Select></div>
-          {calendars?.success === false && <p className="text-sm text-red-600">{calendars.error}</p>}
-          <Button disabled={busy || !chosen} onClick={() => status.calendarId && status.calendarId !== chosen ? setConfirmChange(true) : void action('/api/google/calendars', 'PUT', { calendarId: chosen })}>Lưu lịch đích</Button>
-          <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700"><Button variant="secondary" icon={RefreshCw} disabled={busy || !status.calendarId} onClick={() => void syncNow()}>{busy ? 'Đang đồng bộ...' : 'Đồng bộ toàn bộ lịch'}</Button><p className="mt-2 text-xs text-zinc-500">Đang chờ: {status.pending ?? 0} · Lỗi: {status.failed ?? 0}</p></div>
+            {calendars?.success === false && <p className="text-sm text-danger">{calendars.error}</p>}
+        <Button variant="contrast" disabled={busy || !chosen} onClick={() => status.calendarId && status.calendarId !== chosen ? setConfirmChange(true) : void action('/api/google/calendars', 'PUT', { calendarId: chosen })}>Lưu lịch đích</Button>
+      <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700"><Button variant="white" icon={RefreshCw} disabled={busy || !status.calendarId} onClick={() => void syncNow()}>{busy ? 'Đang đồng bộ...' : 'Đồng bộ toàn bộ lịch'}</Button><p className="mt-2 text-xs text-zinc-500">Đang chờ: {status.pending ?? 0} · Lỗi: {status.failed ?? 0}</p></div>
           {status.lastSyncedAt && <p className="text-xs text-zinc-500">Đồng bộ gần nhất: {formatVnDateTime(status.lastSyncedAt)}</p>}
-          {jobs?.data?.filter(j => j.lastError).map(j => <p key={j.entityKey} className="text-sm text-red-600 dark:text-red-300">{j.title}: {j.lastError}</p>)}
-          <Button variant="outline-danger" disabled={busy} onClick={() => setConfirmDisconnect(true)}>Ngắt kết nối</Button>
+      {jobs?.data?.filter(j => j.lastError).map(j => <p key={j.entityKey} className="text-sm text-danger">{j.title}: {j.lastError}</p>)}
+    <Button variant="red" disabled={busy} onClick={() => setConfirmDisconnect(true)}>Ngắt kết nối</Button>
         </>}
       </div>
     </Modal>

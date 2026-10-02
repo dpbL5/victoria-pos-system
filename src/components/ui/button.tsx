@@ -3,7 +3,16 @@
 import { Loader2, type LucideIcon } from 'lucide-react'
 import { type ButtonHTMLAttributes, forwardRef } from 'react'
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'inverse' | 'outline-danger'
+export type ButtonVariant =
+  | 'blue'
+  | 'red'
+  | 'red-soft'
+  | 'success'
+  | 'yellow'
+  | 'white'
+  | 'grey'
+  | 'contrast'
+  | 'ghost'
 type ButtonSize = 'xs' | 'sm' | 'md' | 'lg'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -14,19 +23,30 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean
 }
 
+// MỌI variant đều có đúng 1px viền — variant nền đặc dùng viền trong suốt.
+// Không có viền thì nút thấp hơn 2px và đứng cạnh nhau trong cùng một hàng sẽ
+// lệch (đo được: Hủy/red-soft 30px cạnh Xác nhận/contrast 28px). DESIGN.md ghi
+// các nút có nhãn cùng một chiều cao, nên viền là phần của hình dạng, không
+// phải phần của màu — đổi màu không được đổi chiều cao.
 const variantClasses: Record<ButtonVariant, string> = {
-  primary:
-    'bg-brand text-white hover:bg-brand-dark shadow-sm dark:bg-blue-600 dark:hover:bg-blue-700',
-  secondary:
-    'border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700',
-  danger:
-    'bg-red-600 text-white hover:bg-red-700',
+  blue:
+    'border border-transparent bg-info text-white shadow-sm hover:opacity-90',
+  red:
+    'border border-transparent bg-danger text-white shadow-sm hover:opacity-90',
+  'red-soft':
+    'border border-danger-border bg-danger-bg text-danger hover:bg-danger-border',
+  success:
+    'border border-success-border bg-success-bg text-success hover:bg-success-border',
+  yellow:
+    'border border-transparent bg-yellow text-zinc-900 shadow-sm hover:opacity-90',
+  white:
+    'border border-border-default bg-surface-elevated text-text-primary shadow-sm hover:bg-surface-tertiary',
+  grey:
+    'border border-transparent bg-surface-tertiary text-text-primary shadow-sm hover:opacity-90',
+  contrast:
+    'border border-transparent bg-text-primary text-text-inverse shadow-sm hover:opacity-90',
   ghost:
-    'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300',
-  inverse:
-    'bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200',
-  'outline-danger':
-    'border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/15',
+    'border border-transparent text-text-tertiary hover:bg-surface-tertiary hover:text-text-primary',
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -43,8 +63,30 @@ const iconOnlyClasses: Record<ButtonSize, string> = {
   lg: 'p-2',
 }
 
+const baseClasses =
+  'inline-flex items-center justify-center rounded-lg font-medium transition-colors active:scale-[0.97] motion-safe:transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100'
+
+/** Class của primitive — dùng cho `<Link>`/`<a>` cần hình dạng button mà không render được `<button>`. */
+export function buttonClass({
+  variant = 'blue',
+  size = 'md',
+  iconOnly = false,
+  fullWidth = false,
+  className = '',
+}: {
+  variant?: ButtonVariant
+  size?: ButtonSize
+  iconOnly?: boolean
+  fullWidth?: boolean
+  className?: string
+} = {}) {
+  return `${baseClasses} ${variantClasses[variant]} ${
+    iconOnly ? iconOnlyClasses[size] : sizeClasses[size]
+  } ${fullWidth ? 'w-full' : ''} ${className}`
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'primary', size = 'md', icon: Icon, loading, fullWidth, className = '', children, disabled, ...props }, ref) => {
+  ({ variant = 'blue', size = 'md', icon: Icon, loading, fullWidth, className = '', children, disabled, ...props }, ref) => {
     const isIconOnly = Icon && !children
     const isDisabled = disabled || loading
 
@@ -52,11 +94,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={isDisabled}
-        className={`inline-flex items-center justify-center rounded-lg font-medium transition-colors active:scale-[0.97] motion-safe:transition-transform disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 ${
-          variantClasses[variant]
-        } ${
-          isIconOnly ? iconOnlyClasses[size] : sizeClasses[size]
-        } ${fullWidth ? 'w-full' : ''} ${className}`}
+        className={buttonClass({ variant, size, iconOnly: isIconOnly, fullWidth, className })}
         {...props}
       >
         {loading ? (
@@ -67,7 +105,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {children && <span className="button-label flex items-center gap-1.5">{children}</span>}
       </button>
     )
-  }
+  },
 )
 
 Button.displayName = 'Button'

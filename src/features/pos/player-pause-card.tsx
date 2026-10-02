@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pause, Pencil, Play, Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useNow } from '@/hooks/use-now'
 import { calcElapsedHMS, formatPausedHMS, pausedSecondsUntil } from './format'
 import { SessionTimer } from './session-timer'
 import type { SessionPlayerDTO } from '@/types'
@@ -15,7 +16,7 @@ export function PlayerPauseCard({
   player,
   index,
   startTime,
-  pauseDisabled,
+  readOnly = false,
   renaming,
   onPause,
   onResume,
@@ -24,7 +25,8 @@ export function PlayerPauseCard({
   player: SessionPlayerDTO
   index: number
   startTime: string
-  pauseDisabled: boolean
+  /** Chế độ giám sát: chỉ hiện tên + đồng hồ, không có nút đổi tên/Dừng */
+  readOnly?: boolean
   renaming: boolean
   onPause: () => void
   onResume: () => void
@@ -57,16 +59,25 @@ export function PlayerPauseCard({
     if (ok) setEditing(false)
   }
 
-  const elapsed = isPaused
-    ? calcElapsedHMS(startTime, player.pausedAt ?? undefined, player.totalPausedSeconds)
-    : calcElapsedHMS(startTime, undefined, player.totalPausedSeconds)
+  // Đồng hồ dùng chung: một lần tick chỉ re-render đúng hàng người chơi này.
+  const now = useNow()
+
+  const elapsed = calcElapsedHMS(
+    startTime,
+    isPaused ? player.pausedAt ?? undefined : new Date(now),
+    player.totalPausedSeconds,
+  )
 
   // Thời gian đã tạm dừng: khi đang paused → tick live từ pausedAt
-  const pausedSeconds = pausedSecondsUntil(player.pausedAt, player.totalPausedSeconds)
+  const pausedSeconds = pausedSecondsUntil(player.pausedAt, player.totalPausedSeconds, now)
   const hasPaused = pausedSeconds > 0
 
+  const nameClass = isPaused
+    ? 'truncate text-sm font-semibold text-warning transition-colors duration-200'
+    : 'truncate text-sm font-semibold text-text-primary transition-colors duration-200'
+
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex items-center justify-between gap-3 py-2.5">
       {/* Trái — tên + dòng Nghỉ (reserve chỗ để tránh layout shift khi bấm Dừng) */}
       <div className="flex min-w-0 flex-col gap-0.5">
         {editing ? (
@@ -83,29 +94,25 @@ export function PlayerPauseCard({
             }}
             onBlur={() => void commitRename()}
           />
+        ) : readOnly ? (
+          <p className={nameClass}>{displayName}</p>
         ) : (
           <button
             type="button"
             onClick={startEditing}
             disabled={renaming}
-            className="flex min-w-0 items-center gap-1 self-start rounded text-left"
+            className="flex min-w-0 items-center gap-1 self-start rounded text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
             title="Đổi tên người chơi"
           >
-            <p
-              className={
-                isPaused
-                  ? 'truncate text-base font-semibold text-amber-600 transition-colors duration-200 dark:text-amber-400'
-                  : 'truncate text-base font-semibold text-zinc-950 transition-colors duration-200 dark:text-white'
-              }
-            >
+            <p className={nameClass}>
               {displayName}
             </p>
             <Pencil
               size={12}
               className={
                 isPaused
-                  ? 'shrink-0 text-amber-600 dark:text-amber-400'
-                  : 'shrink-0 text-zinc-400'
+                  ? 'shrink-0 text-warning'
+                  : 'shrink-0 text-text-tertiary'
               }
             />
           </button>
@@ -115,8 +122,8 @@ export function PlayerPauseCard({
           className={`inline-flex items-center gap-1 text-xs tabular-nums transition-colors duration-200 ${
             hasPaused
               ? isPaused
-                ? 'text-amber-600 dark:text-amber-400'
-                : 'text-zinc-500 dark:text-zinc-400'
+                ? 'text-warning'
+                : 'text-text-tertiary'
               : 'invisible'
           }`}
         >
@@ -125,8 +132,8 @@ export function PlayerPauseCard({
             className={
               hasPaused
                 ? isPaused
-                  ? 'text-amber-600 dark:text-amber-400'
-                  : 'text-zinc-400 dark:text-zinc-500'
+                  ? 'text-warning'
+                  : 'text-text-tertiary'
                 : ''
             }
           />
@@ -137,17 +144,17 @@ export function PlayerPauseCard({
       {/* Phải — timer chính + nút Dừng/Chơi xếp dọc */}
       <div className="flex shrink-0 flex-col items-end gap-2">
         <SessionTimer elapsed={elapsed} isPaused={isPaused} />
-        {isPaused ? (
-          <Button variant="inverse" size="xs" disabled={pauseDisabled} onClick={onResume} title="Tiếp tục chơi">
+        {!readOnly && (isPaused ? (
+        <Button variant="contrast" size="xs" onClick={onResume} title="Tiếp tục chơi">
             <Play size={12} className="mr-1" />
             Chơi
           </Button>
         ) : (
-          <Button variant="secondary" size="xs" disabled={pauseDisabled} onClick={onPause} title="Tạm dừng người này">
+        <Button variant="white" size="xs" onClick={onPause} title="Tạm dừng người này">
             <Pause size={12} className="mr-1" />
             Dừng
           </Button>
-        )}
+        ))}
       </div>
     </div>
   )

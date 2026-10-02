@@ -132,8 +132,8 @@ export function ReportsShifts({ user }: ReportsShiftsProps) {
         </div>
 
         <div className="mt-3 grid grid-cols-4 gap-2">
-          <Button variant="secondary" size="xs" onClick={() => applyQuickRange(7)}>7 ngày</Button>
-          <Button variant="secondary" size="xs" onClick={() => applyQuickRange(30)}>30 ngày</Button>
+        <Button variant="white" size="xs" onClick={() => applyQuickRange(7)}>7 ngày</Button>
+      <Button variant="white" size="xs" onClick={() => applyQuickRange(30)}>30 ngày</Button>
           <div className="col-span-1">
             <Select
               value={statusFilter}
@@ -144,7 +144,7 @@ export function ReportsShifts({ user }: ReportsShiftsProps) {
               <option value="CLOSED">Đã đóng</option>
             </Select>
           </div>
-          <Button variant="inverse" size="xs" disabled={loading} onClick={() => loadShifts(1)}>
+        <Button variant="blue" size="xs" disabled={loading} onClick={() => loadShifts(1)}>
             {loading ? 'Đang tải' : 'Xem'}
           </Button>
         </div>
@@ -185,7 +185,7 @@ export function ReportsShifts({ user }: ReportsShiftsProps) {
       {pagination.totalPages > 1 && (
         <div className="flex items-center justify-center gap-3">
           <Button
-            variant="secondary"
+            variant="white"
             size="sm"
             icon={ArrowLeft}
             disabled={pagination.page <= 1 || loading}
@@ -197,7 +197,7 @@ export function ReportsShifts({ user }: ReportsShiftsProps) {
             {pagination.page} / {pagination.totalPages}
           </span>
           <Button
-            variant="secondary"
+            variant="white"
             size="sm"
             icon={ArrowRight}
             disabled={pagination.page >= pagination.totalPages || loading}
@@ -232,10 +232,10 @@ function ShiftCard({
   const diffColor =
     diff != null
       ? diff === 0
-        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+      ? 'bg-success-bg text-success'
         : diff < 0
-          ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
-          : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+        ? 'bg-danger-bg text-danger bg-danger-bg text-danger'
+        : 'bg-warning-bg text-warning bg-warning-bg text-warning'
       : ''
 
   return (
@@ -304,13 +304,13 @@ function ShiftCard({
                 </p>
               </div>
               <div>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400">Khớp</span>
-                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{shift.toolStats.matched}</p>
-              </div>
-              <div>
-                <span className="text-[10px] text-amber-600 dark:text-amber-400">Lệch</span>
-                <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">{shift.toolStats.mismatched}</p>
-              </div>
+            <span className="text-[10px] text-success">Khớp</span>
+          <p className="text-xs font-semibold text-success">{shift.toolStats.matched}</p>
+      </div>
+      <div>
+    <span className="text-[10px] text-warning">Lệch</span>
+  <p className="text-xs font-semibold text-warning">{shift.toolStats.mismatched}</p>
+    </div>
             </div>
           </summary>
           {shift.toolCounts && shift.toolCounts.length > 0 && (
@@ -324,11 +324,11 @@ function ShiftCard({
                       Mở: {tc.openCount}
                       {tc.closeCount != null && <> · Đóng: {tc.closeCount}</>}
                       {diff != null && (
-                        <span className={diff === 0 ? 'ml-1 text-emerald-600' : 'ml-1 text-amber-600'}>
+                      <span className={diff === 0 ? 'ml-1 text-success' : 'ml-1 text-warning'}>
                           ({diff > 0 ? `+${diff}` : diff})
-                        </span>
-                      )}
                     </span>
+                      )}
+                        </span>
                   </div>
                 )
               })}
@@ -352,12 +352,12 @@ function MiniMetric({
   return (
     <div className="flex items-center gap-1.5">
       <Icon size={13} className="text-zinc-400" />
-      <div>
+              <div>
         <p className="text-[10px] text-zinc-400">{label}</p>
         <p className="text-xs font-semibold tabular-nums text-zinc-950 dark:text-white">
           {value}
         </p>
-      </div>
-    </div>
+              </div>
+              </div>
   )
 }

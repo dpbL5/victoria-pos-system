@@ -56,7 +56,7 @@ src/
 │   │   ├── confirm-dialog.tsx  # ConfirmDialog — dialog xác nhận hành động nguy hiểm
 │   │   ├── input.tsx           # Input, Select, Label, Textarea (style thống nhất)
 │   │   ├── password-input.tsx  # PasswordInput — input mật khẩu có toggle hiện/ẩn
-│   │   ├── button.tsx          # Button (6 variants, 4 sizes, icon, loading, fullWidth)
+│   │   ├── button.tsx          # Button (8 variants: accent + trung tính + ghost)
 │   │   ├── filter-button.tsx   # FilterButton toggle (active/onClick)
 │   │   ├── notice-card.tsx     # NoticeCard (4 tones: info/success/warning/danger)
 │   │   ├── sortable-card-list.tsx  # SortableCardList — danh sách card kéo thả

@@ -140,6 +140,17 @@ Thực hiện tuần tự: P0 → P1 → P2 → P3. P4 và P5 chỉ làm khi d�
 - P3: đã batch pricing rules theo ID cho resolve/preview; dùng session đã tải để tính giá; batch đọc sản phẩm trong transaction cho checkout, bán kèm và bán lẻ. Guard trừ kho có điều kiện, stock movement, giá snapshot và thứ tự dòng giữ nguyên.
 - P4/P5 chưa làm vì chưa có số liệu báo cáo, execution plan, connection saturation hoặc vị trí region làm căn cứ.
 
+### Đo và tối ưu checkout preview — 2026-09-30
+
+Đo read-only bằng script tạm (`tsx`, cùng DB qua pooler production, chạy tại máy dev), xoá script sau khi đo:
+
+- Baseline round trip tới Postgres: ~107–120ms cho `SELECT 1`. `findByIdWithPlayers` = **6 round trip** (session, customer, membership, booking, pricingGroups, players) — Prisma load từng relation một, không song song; đo được 824ms khi nguội, ~640ms khi ấm. `GET /checkout-preview` = **7 round trip tuần tự**, 433ms đo ấm (settings đã cache; khi nguội cả chuỗi ~1.0s). Đây là phần P3 chưa xử lý.
+- Hai phiên ACTIVE trong DB thật đều ở nhánh `needsPricing` (snapshot null, hourlyRate 0) → nhánh chính của quầy là chọn bảng giá tại checkout, không phải snapshot lúc check-in.
+- Thay đổi: `src/features/pos/checkout-precalc.ts` tính tiền giờ chơi ngay tại client bằng chính pure function `calculatePlayerPrice` + snapshot/pause đã có trên session row; drawer chỉ precalc khi đã chốt `frozenAt` nên kết quả trùng quote server và không nhảy theo đồng hồ. Không đổi API/contract; `POST /checkout` vẫn tính lại toàn bộ server-side.
+- P2.6: không xoá trắng ô tiền khi đổi lựa chọn, nhưng số chưa được server xác nhận thì làm mờ + banner “Đang tính lại…”, và guard submit giữ nguyên (nút thu vẫn disabled khi quote chưa khớp lựa chọn hiện tại).
+- Đối chiếu trên dữ liệu thật (phiên ACTIVE, 2 bảng giá hiệu lực): precalc khớp tuyệt đối với biểu thức route preview dùng (0.28h → 28.000đ và 16.800đ). CPU 0.05–0.43ms cho mỗi lần tính, thay cho 538ms mạng chỉ riêng phần đọc session + sell items.
+- Kiểm tra: `npx tsc --noEmit`, `eslint` (0 error), `vitest run` 568 test / 66 file, `next build` pass. Chưa đo p95 nhiều máy thu ngân đồng thời trên staging.
+
 Kèm danh sách file đã sửa, commands kiểm tra, phần chưa thực hiện và lý do, cấu hình cần chủ dự án xác nhận. Nếu chưa có quyền production, hoàn thành code/checks độc lập rồi bàn giao cách đo; không bịa benchmark.
 
 ## 6. Tham chiếu deployment

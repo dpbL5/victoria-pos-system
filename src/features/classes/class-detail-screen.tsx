@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { StudentPicker } from '@/features/students/student-picker'
 import { emptySchedule, scheduleBody, scheduleError, ScheduleFields, scheduleToForm, type ScheduleFormState } from '@/features/students/schedule-fields'
 import type { Lesson } from '@/features/students/types'
@@ -54,7 +55,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
     {
       key: 'fullName',
       label: 'Học viên',
-      render: student => <Link href={`/students/${student.id}`} className="font-medium text-zinc-950 hover:text-blue-700 hover:underline dark:text-white dark:hover:text-blue-300">{student.fullName}</Link>,
+      render: student => <Link href={`/students/${student.id}`} className="font-medium text-zinc-950 hover:text-info hover:underline dark:text-white ">{student.fullName}</Link>,
     },
     { key: 'phone', label: 'SĐT', render: student => student.phone || '—' },
   ]
@@ -198,7 +199,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
   }
 
   if (!detail) {
-    return <div className="p-4"><NoticeCard tone="danger" title="Không tải được lớp học" description={error || 'Lớp không tồn tại hoặc đã bị xoá'} /><Link href="/classes" className="mt-3 inline-block text-sm text-blue-700 hover:underline dark:text-blue-300">Về danh sách lớp</Link></div>
+    return <div className="p-4"><NoticeCard tone="danger" title="Không tải được lớp học" description={error || 'Lớp không tồn tại hoặc đã bị xoá'} /><Link href="/classes" className="mt-3 inline-block text-sm text-info hover:underline text-info">Về danh sách lớp</Link></div>
   }
 
   return <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
@@ -209,17 +210,17 @@ export function ClassDetailScreen({ id }: { id: string }) {
 
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
+          <h1 className={`flex flex-wrap items-center gap-2 ${PAGE_TITLE_CLASS}`}>
             {detail.name}
             {detail.isActive ? <Badge variant="success">Đang hoạt động</Badge> : <Badge variant="default">Đã kết thúc</Badge>}
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" icon={CalendarClock} onClick={() => router.push(`/lessons?classId=${id}`)}>Xem lịch</Button>
-          <Button variant="secondary" size="sm" icon={Edit3} onClick={() => setInfoOpen(true)}>Sửa thông tin</Button>
-          {detail.isActive && <Button variant="outline-danger" size="sm" icon={StopCircle} onClick={() => setEndOpen(true)}>Kết thúc lớp</Button>}
-          <Button variant="outline-danger" size="sm" icon={Trash2} onClick={() => setDeleteOpen(true)} title="Xoá lớp thêm nhầm">Xoá lớp</Button>
-        </div>
+        <Button variant="white" size="sm" icon={CalendarClock} onClick={() => router.push(`/lessons?classId=${id}`)}>Xem lịch</Button>
+      <Button variant="white" size="sm" icon={Edit3} onClick={() => setInfoOpen(true)}>Sửa thông tin</Button>
+        {detail.isActive && <Button variant="red" size="sm" icon={StopCircle} onClick={() => setEndOpen(true)}>Kết thúc lớp</Button>}
+    <Button variant="red" size="sm" icon={Trash2} onClick={() => setDeleteOpen(true)} title="Xoá lớp thêm nhầm">Xoá lớp</Button>
+  </div>
       </header>
 
       {error && <NoticeCard tone="danger" title="Không tải được lớp học" description={error} />}
@@ -265,22 +266,22 @@ export function ClassDetailScreen({ id }: { id: string }) {
             />
           </div>
           {detail.isActive && <details className="group rounded-lg border border-zinc-200 bg-white px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-900">
-            <summary className="w-fit cursor-pointer text-sm font-medium text-zinc-600 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-zinc-300 dark:hover:text-white">Chỉnh sửa sổ học viên</summary>
+          <summary className="w-fit cursor-pointer text-sm font-medium text-zinc-600 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring dark:text-zinc-300 dark:hover:text-white">Chỉnh sửa sổ học viên</summary>
             <div className="mt-3 space-y-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Thay đổi áp dụng cho lịch lặp và các buổi chưa điểm danh.</p>
               <StudentPicker key={detail.id} value={selectedStudents} disabled={submitting} onChange={setRosterIds} initial={detail.roster} availableForClassId={detail.id} />
               <div className="flex justify-end">
-                <Button variant="primary" size="sm" disabled={submitting || !rosterChanged} onClick={() => void saveRoster()}>{submitting ? 'Đang lưu...' : 'Lưu thay đổi'}</Button>
-              </div>
+              <Button variant="contrast" size="sm" disabled={submitting || !rosterChanged} onClick={() => void saveRoster()}>{submitting ? 'Đang lưu...' : 'Lưu thay đổi'}</Button>
             </div>
+          </div>
           </details>}
         </section>
 
-        <section className="space-y-3 rounded-xl bg-white p-4 ring-1 ring-border-default dark:bg-zinc-900">
+      <section className="space-y-3 rounded-xl bg-white p-4 ring-1 ring-border-default dark:bg-zinc-900">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="font-semibold text-zinc-950 dark:text-white">Buổi học sắp tới</h2>
             <span className="text-xs text-zinc-500 dark:text-zinc-400">Trong 12 tuần tới</span>
-          </div>
+        </div>
           {lessonData?.success && lessonData.data?.warning && <NoticeCard tone="warning" title="Lịch chưa được sinh đầy đủ" description={lessonData.data.warning} />}
           {lessonsError
             ? <NoticeCard tone="danger" title="Không tải được lịch học" description={lessonsError} />
@@ -312,10 +313,10 @@ export function ClassDetailScreen({ id }: { id: string }) {
         </section>
       </div>
 
-      <section className="space-y-3 rounded-xl bg-white p-4 ring-1 ring-border-default dark:bg-zinc-900">
+        <section className="space-y-3 rounded-xl bg-white p-4 ring-1 ring-border-default dark:bg-zinc-900">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold text-zinc-950 dark:text-white">Lịch lặp của lớp</h2>
-          {detail.isActive && <Button variant="secondary" size="sm" icon={Plus} onClick={() => setSlotTarget('new')}>Thêm lịch lặp</Button>}
+            {detail.isActive && <Button variant="contrast" size="sm" icon={Plus} onClick={() => setSlotTarget('new')}>Thêm lịch lặp</Button>}
         </div>
         <div className="space-y-2">
           {slots.map(slot => (
@@ -325,8 +326,8 @@ export function ClassDetailScreen({ id }: { id: string }) {
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Từ {formatDate(slot.startsOn)} → {formatDate(slot.endsOn)} · {slot.students.length} học viên</p>
               </div>
               <div className="flex gap-1.5">
-                {detail.isActive && <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => setSlotTarget(slot)} title="Sửa lịch lặp" />}
-                {detail.isActive && slot.isActive && <Button variant="outline-danger" size="sm" icon={StopCircle} disabled={submitting} onClick={() => setEndSlotTarget(slot)} title="Kết thúc lịch lặp" />}
+                {detail.isActive && <Button variant="white" size="sm" icon={Edit3} disabled={submitting} onClick={() => setSlotTarget(slot)} title="Sửa lịch lặp" />}
+                {detail.isActive && slot.isActive && <Button variant="red-soft" size="sm" icon={StopCircle} disabled={submitting} onClick={() => setEndSlotTarget(slot)} title="Kết thúc lịch lặp" />}
               </div>
             </div>
           ))}
@@ -368,7 +369,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
       submitting={submitting}
       onConfirm={deleteClass}
     />
-  </div>
+    </div>
 }
 
 function ClassInfoModal({ lessonClass, submitting, onClose, onSubmit }: {
@@ -382,7 +383,7 @@ function ClassInfoModal({ lessonClass, submitting, onClose, onSubmit }: {
   const [note, setNote] = useState(lessonClass.note ?? '')
 
   return <Modal open onClose={onClose} title="Sửa thông tin lớp" size="md" footer={
-    <Button variant="inverse" size="lg" fullWidth disabled={submitting || !name.trim()} onClick={() => void onSubmit({ name: name.trim(), coachName: coachName.trim(), note: note.trim() })}>
+  <Button variant="contrast" size="lg" fullWidth disabled={submitting || !name.trim()} onClick={() => void onSubmit({ name: name.trim(), coachName: coachName.trim(), note: note.trim() })}>
       {submitting ? 'Đang lưu...' : 'Cập nhật'}
     </Button>
   }>
@@ -407,13 +408,13 @@ function SlotModal({ slot, submitting, onClose, onSubmit }: {
   const error = scheduleError(form)
 
   return <Modal open onClose={onClose} title={slot ? 'Sửa lịch lặp' : 'Thêm lịch lặp'} size="md" footer={
-    <Button variant="inverse" size="lg" fullWidth disabled={submitting || Boolean(error)} onClick={() => void onSubmit(scope, form)}>
+  <Button variant="contrast" size="lg" fullWidth disabled={submitting || Boolean(error)} onClick={() => void onSubmit(scope, form)}>
       {submitting ? 'Đang lưu...' : slot ? 'Cập nhật lịch' : 'Thêm lịch'}
     </Button>
   }>
     <div className="space-y-4">
       <ScheduleFields idPrefix={slot ? `slot-${slot.id}` : 'slot-new'} form={form} onChange={setForm} />
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
       {slot && <div>
         <Label htmlFor="slot-scope">Phạm vi thay đổi</Label>
         <Select id="slot-scope" value={scope} onChange={event => setScope(event.target.value as 'FOLLOWING' | 'ALL')}>
@@ -423,6 +424,6 @@ function SlotModal({ slot, submitting, onClose, onSubmit }: {
         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Buổi đã điểm danh không bị đổi lịch; nếu có buổi như vậy, hãy xử lý riêng trên lịch.</p>
       </div>}
       {!slot && <p className="text-xs text-zinc-500 dark:text-zinc-400">Lịch dùng sổ học viên hiện tại của lớp. Sinh buổi tối đa 12 tuần tới.</p>}
-    </div>
+              </div>
   </Modal>
 }

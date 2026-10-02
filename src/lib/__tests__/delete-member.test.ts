@@ -102,6 +102,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findSellItemTotals: vi.fn(async () => ({})),
       findSellItems: vi.fn(async () => []),
       addSellItem: vi.fn(async () => {}),
+      updateSellItemQuantity: vi.fn(async () => {}),
       removeSellItems: vi.fn(async () => {}),
       clearSellItems: vi.fn(async () => {}),
       countCreatedBetween: vi.fn(async () => 0),

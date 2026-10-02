@@ -1,46 +1,61 @@
 import { LogIn, Package, ShoppingCart } from 'lucide-react'
+import { ActionTile } from '@/components/ui/action-tile'
 
+/**
+ * Ba hành động chính của ca — hàng ô lớn, mỗi ô cao đúng 56px.
+ *
+ * Ô là primitive `ActionTile` (`@/components/ui/action-tile`) — mẫu chung của
+ * mọi hàng hành động lớn trong hệ thống, lấy chính từ hàng này. Giữ ở đây vì
+ * thứ tự và nhãn là quyết định riêng của màn Ca hôm nay.
+ *
+ * `layout="column"`: chỉ từ `lg` trở lên mới xếp icon trên nhãn và phóng to
+ * (icon 28px + chữ 16px) — ô cao bằng dải ca (112px), không bị trống. Điện
+ * thoại giữ nguyên hàng ngang 56px như trước.
+ *
+ * `whitespace-nowrap`: nhãn không được wrap giữa từ ("Bán/kèm", "Check-/in").
+ *
+ * Desktop: hàng này nằm CHUNG HÀNG với dải ca, đẩy sang phải (xem
+ * `today-shift-screen.tsx`). Track cố định 26.5rem = 3 ô ~8.8rem + 2 khe 8px:
+ * giữ đúng kích thước ô như điện thoại, đủ chỗ cho dải ca giữ ~56% bề rộng
+ * mà các nút của dải (Đếm dụng cụ · Giao dịch · Đóng ca ≈ 460px) vẫn nằm
+ * được trên một hàng. Tablet (md) chưa đủ chỗ cho hai khối nên vẫn canh giữa.
+ *
+ * `sellDisabled`: chưa có phiên nào thì "Bán kèm" không có gì để bán — nút chỉ
+ * tồn tại để báo lỗi là một control hỏng.
+ */
 export function QuickActions({
   shiftReady,
+  sellDisabled = false,
   retailDisabled = false,
   onCheckIn,
   onSell,
   onRetail,
 }: {
   shiftReady: boolean
+  sellDisabled?: boolean
   retailDisabled?: boolean
   onCheckIn: () => void
   onSell: () => void
   onRetail: () => void
 }) {
   const actions = [
-    { label: 'Check-in', Icon: LogIn, onClick: onCheckIn, tone: 'emerald', disabled: false },
-    { label: 'Bán kèm', Icon: Package, onClick: onSell, tone: 'zinc', disabled: false },
-    { label: 'Bán lẻ', Icon: ShoppingCart, onClick: onRetail, tone: 'amber', disabled: retailDisabled },
-  ] as const
-
-  const toneClasses: Record<typeof actions[number]['tone'], string> = {
-    emerald:
-      'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300',
-    zinc:
-      'border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200',
-    amber:
-      'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300',
-  }
+    { label: 'Bán kèm', icon: Package, tone: 'secondary' as const, onClick: onSell, disabled: sellDisabled },
+    { label: 'Check-in', icon: LogIn, tone: 'primary' as const, onClick: onCheckIn, disabled: false },
+    { label: 'Bán lẻ', icon: ShoppingCart, tone: 'secondary' as const, onClick: onRetail, disabled: retailDisabled },
+  ]
 
   return (
-    <div className="grid grid-cols-3 gap-2">
-      {actions.map(({ label, Icon, onClick, tone, disabled }) => (
-        <button
+    <div className="grid grid-cols-3 gap-2 md:grid-cols-[repeat(3,minmax(0,9rem))] md:justify-center lg:w-[26.5rem] lg:shrink-0">
+      {actions.map(({ label, icon, tone, onClick, disabled }) => (
+        <ActionTile
           key={label}
-          type="button"
+          label={label}
+          icon={icon}
+          tone={tone}
+          layout="column"
           disabled={!shiftReady || disabled}
           onClick={onClick}
-          className={`flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border text-sm font-medium shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${toneClasses[tone]}`}
-        >
-          <Icon size={20} />
-          <span>{label}</span>
-        </button>
+        />
       ))}
     </div>
   )

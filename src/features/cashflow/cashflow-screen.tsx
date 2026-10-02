@@ -14,7 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FilterButton } from "@/components/ui/filter-button";
-import { Input, Label } from "@/components/ui/input";
+import { Input, Label, Textarea } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Modal } from "@/components/ui/modal";
 import { NoticeCard } from "@/components/ui/notice-card";
@@ -37,6 +37,7 @@ import {
 import { usePageRefresh } from "@/components/layout/page-refresh-context";
 import { formatDay, formatClock, money } from "@/features/pos/format";
 import type { UserSession } from "@/features/pos/types";
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 
 // ── Types ──
 
@@ -177,8 +178,8 @@ export function CashflowScreen() {
           <span
             className={`text-sm font-bold tabular-nums ${
               e.type === "INCOME"
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-red-600 dark:text-red-400"
+              ? "text-success"
+              : "text-danger"
             }`}
           >
             {e.type === "INCOME" ? "+" : "-"}
@@ -207,7 +208,7 @@ export function CashflowScreen() {
               title="Sửa"
             />
             <Button
-              variant="ghost"
+              variant="red-soft"
               size="sm"
               icon={Trash2}
               onClick={() => setDeleteTarget(e)}
@@ -245,8 +246,8 @@ export function CashflowScreen() {
           <span
             className={`text-sm font-bold tabular-nums ${
               e.type === "INCOME"
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-red-600 dark:text-red-400"
+              ? "text-success"
+              : "text-danger"
             }`}
           >
             {e.type === "INCOME" ? "+" : "-"}
@@ -280,7 +281,7 @@ export function CashflowScreen() {
               title="Sửa"
             />
             <Button
-              variant="ghost"
+              variant="red-soft"
               size="sm"
               icon={Trash2}
               onClick={() => setDeleteTarget(e)}
@@ -418,7 +419,7 @@ export function CashflowScreen() {
         {/* Header */}
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
+            <h1 className={PAGE_TITLE_CLASS}>
               Thu chi
             </h1>
           </div>
@@ -460,7 +461,7 @@ export function CashflowScreen() {
 
             {/* <div className="flex justify-end"> */}
             <Button
-              variant="inverse"
+              variant="contrast"
               size="lg"
               fullWidth
               icon={Plus}
@@ -584,10 +585,10 @@ function StatCard({
 }) {
   const colorMap = {
     income:
-      "text-emerald-600 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-500/10",
-    expense: "text-red-600 bg-red-50 dark:text-red-300 dark:bg-red-500/10",
-    balance: "text-blue-600 bg-blue-50 dark:text-blue-300 dark:bg-blue-500/10",
-    danger: "text-red-600 bg-red-50 dark:text-red-300 dark:bg-red-500/10",
+      "text-success bg-success-bg text-success bg-success-bg",
+    expense: "text-danger bg-danger-bg text-danger bg-danger-bg",
+    balance: "text-info bg-info-bg text-info bg-info-bg",
+    danger: "text-danger bg-danger-bg text-danger bg-danger-bg",
   };
 
   return (
@@ -602,7 +603,7 @@ function StatCard({
         <p
           className={`mt-1 text-lg font-bold tabular-nums ${
             tone === "danger"
-              ? "text-red-600 dark:text-red-400"
+            ? "text-danger"
               : "text-zinc-950 dark:text-white"
           }`}
         >
@@ -681,7 +682,7 @@ function CashflowFormDialog({
               onClick={() => setType("INCOME")}
               className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
                 type === "INCOME"
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                ? "border-success bg-success-bg text-success border-success-border bg-success-bg text-success"
                   : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               }`}
             >
@@ -693,7 +694,7 @@ function CashflowFormDialog({
               onClick={() => setType("EXPENSE")}
               className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
                 type === "EXPENSE"
-                  ? "border-red-300 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+                ? "border-danger-border bg-danger-bg text-danger"
                   : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               }`}
             >
@@ -751,20 +752,20 @@ function CashflowFormDialog({
           <Label htmlFor="cf-reason" required>
             Lý do
           </Label>
-          <textarea
+          <Textarea
             id="cf-reason"
             rows={3}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="VD: Tiền điện tháng 8"
-            className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder:text-zinc-500 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+            className="mt-1.5"
           />
         </div>
       </div>
 
       <div className="mt-6">
         <Button
-          variant="inverse"
+          variant="contrast"
           size="lg"
           fullWidth
           loading={submitting}

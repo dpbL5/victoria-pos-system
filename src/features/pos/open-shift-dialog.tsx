@@ -54,7 +54,7 @@ export function OpenShiftDialog({
       }
       footer={
         <Button
-          variant="primary"
+          variant="contrast"
           size="lg"
           fullWidth
           disabled={submitting}
@@ -70,13 +70,13 @@ export function OpenShiftDialog({
     >
       <div className="space-y-3">
         {isJoiningExistingShift ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+        <div className="rounded-xl border border-success-border bg-success-bg p-3 border-success-border bg-success-bg">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+            <div>
+          <p className="text-sm font-semibold text-success">
                   Ca đang mở từ {formatClock(existingShift.openedAt)}
                 </p>
-                <p className="mt-1 text-xs text-emerald-700/80 dark:text-emerald-300/80">
+              <p className="mt-1 text-xs text-success/80">
                   Người mở ca: {existingShift.staff?.fullName ?? 'Không rõ'} · Tiền đầu ca {money(existingShift.openingCash)}
                 </p>
               </div>
@@ -95,7 +95,7 @@ export function OpenShiftDialog({
                 onChange={(event) => setOpeningCash(event.target.value)}
               />
             </div>
-            <div>
+              <div>
               <Label htmlFor="opening-notes">Ghi chú</Label>
               <Textarea
                 id="opening-notes"

@@ -103,7 +103,8 @@
 | ToolCountFields | `tool-count-fields.tsx` | ✅ Đã tách |
 | QuickActions | `quick-actions.tsx` | ✅ Đã tách |
 | SellPickDialog | `sell-pick-dialog.tsx` | ✅ Đã tách |
-| ShiftRail | `shift-rail.tsx` | ✅ Đã tách |
+| ShiftStrip | `shift-strip.tsx` | ✅ Đã tách (thay `shift-rail.tsx`, bỏ trạng thái thu gọn) |
+| ShiftGate | `shift-gate.tsx` | ✅ Đã tách (chế độ chưa mở ca — không dùng modal) |
 | ActiveSessionCard | `active-session-card.tsx` | ✅ Đã tách |
 | OpenShiftDialog | `open-shift-dialog.tsx` | ✅ Đã tách |
 | CloseShiftDialog | `close-shift-dialog.tsx` | ✅ Đã tách |

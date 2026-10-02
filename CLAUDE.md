@@ -18,7 +18,7 @@
 - **Wordmark:** `VICTORIA` (chữ in hoa, tracking rộng) + tagline `ARCHERY CLUB` (chữ in hoa, tracking dãn, màu vàng đồng)
 - **Bảng màu:**
   - Brand (chính): `#2563eb` (light) / charcoal `#1a1a1a` (dark)
-  - Gold accent: `#d4b572` (light) / `#b69854` (dark) — dùng cho tagline, hover nhấn, viền nhấn (chỉ định nghĩa trong dark mode, tham khảo `globals.css`)
+  - Gold accent: `#ffd444` (cả 2 theme) — dùng cho tagline, hover nhấn, viền nhấn (token `--color-yellow` trong `globals.css`)
   - Surface & text: theo bảng token trong `src/app/globals.css`
 - **Code name nội bộ (giữ nguyên):** `qltruongcung` (tên package, localStorage key, theme key) — không đổi để tránh vỡ dữ liệu người dùng hiện tại.
 
@@ -62,7 +62,7 @@ Cây thư mục đầy đủ: **`docs/directory-structure.md`**. Vị trí chín
 - `src/components/` — `ui/` (primitives: badge, button, input, modal, toast, skeleton...), `layout/` (sidebar, bottom-nav, header, theme-provider)
 - `src/lib/<domain>/` — business logic theo Port/Adapter pattern (xem §14): mỗi domain có `ports.ts`, `use-cases/`, `helpers.ts`, `validations.ts`, `index.ts`. Các domain: `sessions`, `invoicing`, `memberships`, `shifts`, `pricing`, `promotions`, `reports`, `cashflow`, `settings`, `tools`, `users`, `audit`. Shared cross-cutting: `src/lib/shared/`; infrastructure: `src/lib/infrastructure/`.
 - `src/features/` — UI mobile-first theo từng màn (pos, shifts, inventory, memberships, reports, more, pricing, promotions, tools, cashflow, membership-plans, transactions)
-  - `src/features/pos/` — Đã tách hết dialog: `today-shift-screen.tsx` (~409 dòng, component chính), `check-in-dialog.tsx`, `checkout-drawer.tsx`, `active-session-card.tsx`, `session-timer.tsx`, `player-pause-card.tsx`, `sell-dialog.tsx`, `sell-pick-dialog.tsx`, `group-builder.tsx`, `open-shift-dialog.tsx`, `close-shift-dialog.tsx`, `tool-count-dialog.tsx`/`tool-count-fields.tsx`, `shift-rail.tsx`, `quick-actions.tsx`, `mini-stat.tsx`, `invoice-row.tsx`, `promotion-option.ts`, `invoice-detail-content.tsx`/`invoice-detail-modal.tsx`, `invoice-edit-dialog.tsx`, `transaction-detail-screen.tsx`, helpers (`format.ts`, `types.ts`). Xem `docs/architecture.md` ADR-006.
+  - `src/features/pos/` — Đã tách hết dialog: `today-shift-screen.tsx` (~409 dòng, component chính), `check-in-dialog.tsx`, `checkout-drawer.tsx`, `checkout-item-rows.tsx` (dòng hàng sửa số lượng tại chỗ) + `product-picker-sheet.tsx` (tờ chọn hàng), `active-session-card.tsx`, `session-timer.tsx`, `player-pause-card.tsx`, `sell-dialog.tsx`, `sell-pick-dialog.tsx`, `group-builder.tsx`, `open-shift-dialog.tsx`, `close-shift-dialog.tsx`, `tool-count-dialog.tsx`/`tool-count-fields.tsx`, `shift-rail.tsx`, `quick-actions.tsx`, `mini-stat.tsx`, `invoice-row.tsx`, `promotion-option.ts`, `invoice-detail-content.tsx`/`invoice-detail-modal.tsx`, `invoice-edit-dialog.tsx`, `transaction-detail-screen.tsx`, helpers (`format.ts`, `types.ts`). Xem `docs/architecture.md` ADR-006.
 - `src/types/index.ts` — shared types + enums; `prisma/schema.prisma` — database schema
 
 ## Quy ước code
@@ -107,7 +107,11 @@ interface Customer { id: string; fullName: string; ... }
 - Dùng `<Suspense>` cho streaming các phần chưa sẵn sàng
 - **Không import Server Component vào Client Component** — truyền qua `children` prop
 
-**Shared components bắt buộc (đã extract — dùng lại, không viết lại), import từ `@/components/ui/*`:** `Badge`, `StatCard`, `EmptyState`, `AppSkeleton`, `Modal`, `ToastProvider` + `useToast`, `Input`/`Select`/`Label`/`Textarea`, `Button`, `FilterButton`, `NoticeCard`.
+**Shared components bắt buộc (đã extract — dùng lại, không viết lại), import từ `@/components/ui/*`:** `Badge`, `StatCard`, `EmptyState`, `AppSkeleton`, `Modal`, `ToastProvider` + `useToast`, `Input`/`Select`/`Label`/`Textarea`, `Button`, `ActionTile`, `FilterButton`, `NoticeCard`.
+
+**Hai loại nút, hai primitive — không trộn:**
+- `Button` — nút trong form, dialog, hàng thao tác nhỏ. **Luôn truyền `variant` tường minh** (hành động chính `contrast`, phụ `white`, xoá `red`, icon-only `red-soft`, hội viên `yellow`, điều hướng `blue`, tiện ích `ghost`); test `src/components/ui/button.test.tsx` quét toàn repo và fail nếu quên.
+- `ActionTile` — **ô hành động lớn 56px** (icon + nhãn) cho hàng hành động chính của một màn; mẫu chung lấy từ hàng `Bán kèm · Check-in · Bán lẻ` của màn Ca hôm nay. `size="sm"` (44px) cho hàng dày. `layout="column"` **chỉ từ `lg`**: icon trên nhãn, icon 28px + chữ 16px; dưới `lg` giữ nguyên hàng ngang 56px như cũ. Truyền `active` để thành ô trạng thái (tự phát `aria-pressed`). Không tự chế ô lớn bằng `<button>` + class — đó là cách sinh class trùng và mất focus ring (từng xảy ra ở `attendance-dialog` với `focus-visible:ring-brand`).
 
 Catalog đầy đủ (kèm "Dùng khi" + ví dụ code): **`docs/ui-patterns.md`**. Template Client Component: **`docs/code-conventions.md`**.
 
@@ -157,6 +161,8 @@ Catalog đầy đủ (kèm "Dùng khi" + ví dụ code): **`docs/ui-patterns.md`
 - **Animations**: `animate-fade-in`, `animate-slide-up`, `animate-slide-down`, `animate-scale-in` từ globals.css
 - **Tabular numbers**: `tabular-nums` cho số đếm (đồng hồ, tiền) tránh layout shift
 - **Font mono cho số liệu**: `font-mono` cho elapsed time, tiền tệ trong bảng
+- **Tiêu đề trang**: mọi `h1` dùng `PAGE_TITLE_CLASS` từ `@/components/ui/page-title` (Headline 20px/28px, khớp header dán trên cùng ở mobile). Không hardcode cỡ chữ trong `h1`; test `src/components/ui/page-title.test.ts` khoá lại (quét cả `src/app`). Wordmark VICTORIA ở sidebar/login là ngoại lệ.
+- **Cỡ chữ chỉ lấy từ thang của `DESIGN.md`**: `text-xl` 20 · `text-lg` 18 · `text-sm` 14 · `text-xs` 12 · `text-[10px]` 10 **chỉ cho micro-label viết HOA** (`overline`: 10px/600/tracking .15em). Cấm tự chế `text-[11px]`, `text-[13px]`… — `impeccable detect` báo `design-system-font-size`.
 
 ### 9. TypeScript
 
@@ -266,16 +272,23 @@ export type CreateThingInput = z.infer<typeof createThingSchema>;
 
 **Layout Architecture:**
 - **Desktop (≥768px)**: Fixed sidebar bên trái (`src/components/layout/sidebar.tsx`), collapse (256px / 72px), state localStorage `qltrungcung_sidebar_collapsed`.
-- **Mobile (<768px)**: Bottom tab navigation (`src/components/layout/bottom-nav.tsx`) đúng 5 tabs: `Ca`, `Hội viên`, `Kho`, `Báo cáo`, `Thêm`. Drawer sidebar dùng chung `staffMenuItems` với desktop sidebar để không lệch menu.
+- **Mobile (<768px)**: Bottom tab navigation (`src/components/layout/bottom-nav.tsx`) đúng 5 tab, thứ tự trái → phải `Ca hôm nay`, `Ca làm`, `Báo cáo`, `Lịch học`, `Thêm`, lọc theo guard thật của route qua `getVisibleNavItems`: ADMIN đủ 5; MANAGER `Ca hôm nay`/`Ca làm`/`Thêm`; STAFF `Ca hôm nay`/`Thêm`; TEACHER bộ riêng `Lịch học`/`Lớp học`/`Học viên`/`Thêm`. Test khoá ở `bottom-nav.test.ts`. Màn ẩn khỏi nav trên mobile vẫn vào được từ tab `Thêm` (trừ `/inventory` — chưa có shortcut ở đó).
+- **Mục `Thêm` phải mở được với MỌI role**: bottom nav có sẵn; sidebar giữ `/settings` nhờ cờ `alwaysVisible` (TEACHER vốn chỉ thấy nhóm Đào tạo); `src/proxy.ts` cho TEACHER mở `/settings` + `/api/auth/me`, mọi path khác ngoài Đào tạo vẫn redirect `/lessons` (API trả 403). Vì vậy `MoreScreen` không gọi `/api/shifts` và `/api/settings` cho TEACHER, không render trạng thái ca quầy, và lối tắt của họ chỉ gồm `Lịch học`/`Lớp học`/`Học viên`. Test khoá ở `src/proxy.test.ts`, `sidebar.test.ts`, `more-screen.test.tsx`.
+- **Bố cục desktop của màn POS**: dải ca (`ShiftStrip`) và 3 hành động chính (`QuickActions`) nằm **chung một hàng từ `lg`**: dải ca `flex-1 basis-[26rem] + min-w-0`, hành động `w-[26.5rem] shrink-0` dồn sang phải, `items-stretch` để ô hành động **cao bằng dải ca** (112px) thành một band; mobile vẫn giữ 56px. Tỷ lệ do bề rộng nút của dải quyết định (nút Đếm dụng cụ · Giao dịch · Đóng ca ≈ 460px phải vừa một hàng), không chia đều 50/50. `flex-wrap` + `justify-end` loại trường hợp cửa sổ hẹp: hàng nút rơi xuống dưới thay vì bóp dải ca. Mobile/tablet xếp dọc như cũ. `ShiftStrip` nhận prop `className` cho bề rộng co giãn.
 - **Main content**: Phải có `pb-16 md:pb-0` để bù cho bottom nav trên mobile.
 - **ToastProvider**: Wrap toàn bộ dashboard layout trong `layout.tsx`.
 
 **Mobile-first POS screen:**
 - `/` redirect về `/sessions`; page chỉ render `TodayShiftScreen` (trong `src/features/pos/`).
-- Chưa có ca mở → disable check-in/checkout + hiển thị hành động `Mở ca`.
+- Không có ca của chính mình → không có thao tác tiền: cờ `canOperate` (`getBoardAccess` trong `src/features/pos/board-access.ts`) khớp đúng guard `SHIFT_REQUIRED` của backend, không render nút bật mà bấm vào là lỗi.
+- Chế độ giám sát (chỉ xem): ADMIN/MANAGER chưa vào ca vẫn thấy phiên đang chơi + lịch đặt — dải ca có nhãn `Chỉ xem`, không hàng hành động, thẻ phiên không có nút Dừng/Thu, hàng lịch đặt không có Xác nhận/Huỷ; `Tham gia ca` vẫn còn khi có ca quầy đang mở. STAFF chưa vào ca vẫn chỉ thấy màn `Mở ca`.
 - Check-in hội viên hiển thị trạng thái membership; hết hạn hoặc hội viên mới → gia hạn trước rồi mới tạo session.
 - **Bảng giá không chọn lúc check-in**: check-in tạo session với `hourlyRate: 0`, `pricingRuleId/snapshot: null`; bảng giá (rule + tiers, từng pricing group) được resolve tại checkout qua `resolveCheckoutPricing` (xem `docs/business-flow-checkin-playing-checkout.md`).
 - Checkout dùng drawer hoá đơn: `PLAY_TIME` + sản phẩm/dịch vụ + phương thức thanh toán. `PRODUCT` tôn trọng tồn kho, không cho chọn vượt tồn.
+- Khối `Lịch đặt trong ngày` chỉ chứa lịch ĐÚNG hôm nay theo giờ VN (`isBookingOnVnDay` trong `booking-list.tsx`) — `GET /api/bookings` trả cả tuần, cả tuần nằm ở `/bookings`. Đừng bỏ bộ lọc này mà không sửa tiêu đề khối.
+- Lịch `BOOKED` quá ngày tự chuyển `CANCELLED` khi `GET /api/bookings` chạy (`autoCancelStaleBookings`, giờ hẹn trước 00:00 hôm nay theo giờ VN, audit `BOOKING_CANCELLED` + `details.autoCancelled`); lịch còn cọc chưa xử lý giữ nguyên cho nhân viên xác nhận hoàn cọc qua luồng huỷ thường.
+- Phiên `ACTIVE` sót từ ngày trước phải hiện nhãn ngày trên thẻ (`sessionDayLabel` → `Hôm qua` / `dd/MM/yyyy`, màu `warning`): thẻ chỉ in `HH:mm` thì phiên chưa thu từ hôm kia trông y hệt phiên vừa mở.
+- Đồng hồ realtime dùng chung một interval qua `useNow()` (`src/hooks/use-now.ts`), gọi trong từng thẻ phiên/người chơi. KHÔNG tick ở component màn (`TodayShiftScreen`) — tick ở đó làm cả màn + mọi dialog re-render mỗi giây.
 
 **Mobile-first shift management screen:**
 - `/shifts` là quản lý ca + lịch sử (không thay thế `/sessions`); page chỉ render `ShiftManagementScreen` (trong `src/features/shifts/`).
@@ -340,12 +353,29 @@ npx prisma generate      # Generate Prisma client (tự động chạy qua posti
 npx prisma studio        # Prisma Studio (DB GUI)
 ```
 
+## Kiểm chứng UI bằng browser (công cụ cục bộ, KHÔNG commit)
+
+`.tools/` bị gitignore, chỉ có trên máy này — dùng để chụp màn thật + thu bằng chứng thay vì suy luận từ code:
+
+```bash
+cd .tools/browser
+node mint-session.mjs [--role MANAGER]        # ký cookie phiên, CHỈ SELECT DB
+node shot.mjs --url http://localhost:3000/sessions --out ../../.impeccable/review/x.png \
+  --width 390 --height 844 [--dark] [--full] [--expect "Chỉ xem"] [--deny "Xác nhận"] [--tick "main"]
+node shot.mjs --fixture-stale-days 1          # giả lập dữ liệu ở tầng client, không ghi DB
+```
+
+- Dùng lại Chrome có sẵn trong `~/.cache/puppeteer` (`puppeteer-core`, không tải browser, không cần quyền ngoài workspace).
+- **DB trong `.env` là Supabase production**: công cụ chỉ được ĐỌC. Không thêm ghi/seed vào script.
+- `shot.mjs` trả JSON: console error, request lỗi, HTTP ≥400, tràn ngang, nút `disabled`, đồng hồ có tick.
+- Chi tiết + cách dùng: `.tools/browser/README.md`.
+
 ## Testing
 
 - **Test runner**: Vitest với `globals: true`, `environment: 'node'`.
 - **Vị trí test**: `src/lib/__tests__/` — test cho business logic (use-cases, pricing engine, validations, helpers). Không tạo thư mục `__tests__` ở root.
 - **Path alias**: Vitest config có alias `@` → `./src` giống như Next.js.
-- **Không test UI components** ở giai đoạn này — tập trung test business logic và validation.
+- **Test UI**: business logic + validation nằm ở `src/lib/__tests__/`; màn/component có test colocated ngay cạnh file (`src/features/<màn>/*.test.tsx`, `src/components/**/*.test.tsx`) — chỉ test hàm thuần export ra ngoài và markup render (`renderToStaticMarkup`), không test tương tác.
 - **Pattern viết test**: Dùng `describe`/`it` blocks, import trực tiếp function từ `@/lib/...`.
   - Use-case test: fake repository với `vi.fn()` — không cần mock `@/lib/prisma`.
   - Pure function test (pricing engine, validation schemas, membership math): test trực tiếp, không cần mock.

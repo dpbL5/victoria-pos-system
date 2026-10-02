@@ -153,7 +153,7 @@ export function SortableCardList<T>({
           aria-label="Sắp xếp danh sách"
           className="flex items-center gap-1.5 overflow-x-auto border-b border-zinc-100 px-3 py-2 dark:border-zinc-800"
         >
-          <span className="mr-1 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400">Sắp xếp:</span>
+          <span className="mr-1 shrink-0 text-xs text-zinc-500 dark:text-zinc-400">Sắp xếp:</span>
           {sortableKeys.map((key) => {
             const col = columns.find((c) => c.key === key)
             const label = sortLabels?.[key] || col?.label
@@ -165,9 +165,9 @@ export function SortableCardList<T>({
                 type="button"
                 aria-pressed={active}
                 onClick={() => toggle(key)}
-                className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-1 ${
                   active
-                    ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-300'
+                  ? 'border-info-border bg-info-bg text-info'
                     : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
                 }`}
               >
@@ -192,7 +192,7 @@ export function SortableCardList<T>({
             message={hasActiveSearchOrFilter ? 'Không tìm thấy dữ liệu phù hợp' : emptyMessage}
             description={hasActiveSearchOrFilter ? 'Thử đổi bộ lọc hoặc xoá nội dung tìm kiếm.' : emptyDescription}
             action={hasActiveSearchOrFilter ? (
-              <Button variant="secondary" size="sm" onClick={clearSearchAndFilter}>
+            <Button variant="white" size="sm" onClick={clearSearchAndFilter}>
                 Xoá bộ lọc
               </Button>
             ) : undefined}
@@ -216,7 +216,7 @@ export function SortableCardList<T>({
                       onClick: () => onRowClick?.(item),
                     }
                   : {})}
-                className={`w-full px-4 py-3.5 text-left hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:hover:bg-zinc-800/50 ${
+                  className={`w-full px-4 py-3.5 text-left hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring dark:hover:bg-zinc-800/50 ${
                   interactive ? 'cursor-pointer' : ''
                 }`}
               >
@@ -235,15 +235,15 @@ export function SortableCardList<T>({
                             </span>}
                             <span className={`min-w-0 truncate ${col.cellClassName ?? 'text-zinc-700 dark:text-zinc-300'}`}>
                               {col.render(item)}
-                            </span>
                           </span>
+                            </span>
                         ))}
                       </div>
                     )}
                   </div>
 
                   {actionCols.length > 0 && (
-                    <div
+                  <div
                       className="flex flex-col items-end gap-2 max-md:[&_button]:gap-0 max-md:[&_button]:p-1.5 max-md:[&_.button-label]:hidden"
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
@@ -256,7 +256,7 @@ export function SortableCardList<T>({
                   )}
                 </div>
                 {actionFooter && (
-                  <div
+                    <div
                     className="mt-3 border-t border-zinc-100 pt-2 dark:border-zinc-800"
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}

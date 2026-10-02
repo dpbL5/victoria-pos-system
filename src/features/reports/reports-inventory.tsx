@@ -111,7 +111,7 @@ export function ReportsInventory() {
           description={error}
           action={
             <Button
-              variant="secondary"
+              variant="white"
               size="sm"
               icon={RefreshCw}
               onClick={handleView}
@@ -134,13 +134,13 @@ export function ReportsInventory() {
         <div className="space-y-4">
           {/* Hero: tổng quan kỳ */}
           <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-emerald-500 sm:p-5">
+          <div className="relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-success-bg0 sm:p-5">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
-                <TrendingUp size={17} className="text-emerald-500" />
+              <TrendingUp size={17} className="text-success" />
                 Bán hàng từ kho
               </h2>
               <div className="mt-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   Doanh thu kỳ
                 </p>
                 <p className="mt-1 text-3xl font-extrabold tabular-nums tracking-tight text-zinc-950 dark:text-white md:text-4xl">
@@ -167,7 +167,7 @@ export function ReportsInventory() {
             <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex items-center justify-between gap-2 border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800/50">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
-                  <Package size={15} className="text-blue-500" />
+                <Package size={15} className="text-info" />
                   Còn lại
                 </h3>
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -195,7 +195,7 @@ export function ReportsInventory() {
 
 function PodiumSlot({ item, rank }: { item: TopProductRow; rank: number }) {
   const rankTone = rank === 1
-    ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+  ? 'bg-warning-bg0 text-white shadow-sm shadow-warning/30'
     : rank === 2
       ? 'bg-zinc-300 text-zinc-800 dark:bg-zinc-600 dark:text-zinc-100'
       : 'bg-orange-300 text-orange-900 dark:bg-orange-700/60 dark:text-orange-100'
@@ -214,7 +214,7 @@ function PodiumSlot({ item, rank }: { item: TopProductRow; rank: number }) {
           <p className={`font-semibold text-zinc-950 dark:text-white ${rank === 1 ? 'text-base' : 'text-sm'}`}>
             <span className="line-clamp-1">{item.name}</span>
           </p>
-          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
             {item.quantitySold.toLocaleString('vi-VN')} bán
           </p>
         </div>
@@ -243,14 +243,14 @@ function RankedRow({ item, rank }: { item: TopProductRow; rank: number }) {
   return (
     <li>
       <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-zinc-100 text-[11px] font-semibold tabular-nums text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-zinc-100 text-xs font-semibold tabular-nums text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
           {rank}
         </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-zinc-950 dark:text-white">
             {item.name}
           </p>
-          <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
             {item.quantitySold.toLocaleString('vi-VN')} bán
           </p>
         </div>

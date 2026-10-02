@@ -10,11 +10,12 @@ function getSystemTheme(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
-}
+  }
 
 function applyTheme(theme: Theme): void {
   const resolved = theme === "system" ? getSystemTheme() : theme;
   document.documentElement.classList.toggle("dark", resolved === "dark");
+  document.documentElement.style.colorScheme = resolved;
 }
 
 function readStoredTheme(): Theme {
@@ -39,7 +40,7 @@ function persistTheme(theme: Theme): void {
     document.cookie = `${STORAGE_KEY}=${theme};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
   } catch {
     /* cookie blocked */
-  }
+}
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

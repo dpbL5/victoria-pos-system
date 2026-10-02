@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { repositories } from '@/lib/infrastructure/repositories'
 import {
   apiSuccess,
@@ -12,7 +12,7 @@ type Params = { params: Promise<{ id: string }> }
 
 export async function GET(request: NextRequest, { params }: Params) {
   try {
-    await requireAdmin()
+    await requireTrainingAccess()
 
     const { id } = await params
     const student = await repositories.student.findById(id)

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { updateClassSlotSchema, endClassSlotSchema, updateClassSlot, endClassSlot, mapUpdateClassSlotError } from '@/lib/students'
 import { parseLocalDate, parseLocalDateEnd } from '@/lib/shared/utils'
@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string; slotId: string }> }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     await validateCSRF(request)
     const parsed = updateClassSlotSchema.safeParse(await request.json())
     if (!parsed.success) return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
@@ -47,7 +47,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     await validateCSRF(request)
     const parsed = endClassSlotSchema.safeParse(await request.json())
     if (!parsed.success) return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })

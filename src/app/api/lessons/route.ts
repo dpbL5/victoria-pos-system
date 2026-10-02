@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { calendarRangeSchema, ensureLessonsUntil, mapLessonError, createLessonSchema } from '@/lib/students'
@@ -15,7 +15,7 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
 
     const fromParam = request.nextUrl.searchParams.get('from') ?? ''
     const toParam = request.nextUrl.searchParams.get('to') ?? ''
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     await validateCSRF(request)
     const body = await request.json()
     const parsed = createLessonSchema.safeParse(body)

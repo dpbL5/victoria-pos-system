@@ -1,16 +1,16 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { Minus, Plus, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/input'
-import { Modal } from '@/components/ui/modal'
-import { useToast } from '@/components/ui/toast'
-import { apiJson, jsonRequest } from '@/lib/api'
-import { money, toNumber } from './format'
-import { CustomerSearch } from './customer-search'
-import { PaymentMethodPicker } from './payment-method-picker'
-import type { Customer, PaymentMethod, Product } from './types'
+import { useEffect, useState } from "react";
+import { Minus, Plus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
+import { useToast } from "@/components/ui/toast";
+import { apiJson, jsonRequest } from "@/lib/api";
+import { money, toNumber } from "./format";
+import { CustomerSearch } from "./customer-search";
+import { PaymentMethodPicker } from "./payment-method-picker";
+import type { Customer, PaymentMethod, Product } from "./types";
 
 export function RetailDialog({
   open,
@@ -24,33 +24,33 @@ export function RetailDialog({
   onClose,
   onDone,
 }: {
-  open: boolean
-  products: Product[]
-  productsLoading: boolean
-  productsError: string
-  onRetryProducts: () => void
-  shiftReady: boolean
-  submitting: boolean
-  setSubmitting: (value: boolean) => void
-  onClose: () => void
-  onDone: () => Promise<boolean | void>
+  open: boolean;
+  products: Product[];
+  productsLoading: boolean;
+  productsError: string;
+  onRetryProducts: () => void;
+  shiftReady: boolean;
+  submitting: boolean;
+  setSubmitting: (value: boolean) => void;
+  onClose: () => void;
+  onDone: () => Promise<boolean | void>;
 }) {
-  const { success: notifySuccess, error: notifyError } = useToast()
-  const [cart, setCart] = useState<Record<string, number>>({})
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH')
-  const [customer, setCustomer] = useState<Customer | null>(null)
-  const [customerQuery, setCustomerQuery] = useState('')
+  const { success: notifySuccess, error: notifyError } = useToast();
+  const [cart, setCart] = useState<Record<string, number>>({});
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [customerQuery, setCustomerQuery] = useState("");
 
   useEffect(() => {
     if (open) {
       /* eslint-disable react-hooks/set-state-in-effect */
-      setCart({})
-      setPaymentMethod('CASH')
-      setCustomer(null)
-      setCustomerQuery('')
+      setCart({});
+      setPaymentMethod("CASH");
+      setCustomer(null);
+      setCustomerQuery("");
       /* eslint-enable react-hooks/set-state-in-effect */
     }
-  }, [open])
+  }, [open]);
 
   const cartLines = products
     .map((product) => ({
@@ -58,76 +58,88 @@ export function RetailDialog({
       quantity: cart[product.id] ?? 0,
       total: (cart[product.id] ?? 0) * toNumber(product.price),
     }))
-    .filter((line) => line.quantity > 0)
+    .filter((line) => line.quantity > 0);
 
-  const grandTotal = cartLines.reduce((sum, line) => sum + line.total, 0)
+  const grandTotal = cartLines.reduce((sum, line) => sum + line.total, 0);
 
   const changeCart = (product: Product, delta: number) => {
     setCart((current) => {
-      const currentQuantity = current[product.id] ?? 0
-      const nextQuantity = currentQuantity + delta
+      const currentQuantity = current[product.id] ?? 0;
+      const nextQuantity = currentQuantity + delta;
       if (nextQuantity <= 0) {
-        const next = { ...current }
-        delete next[product.id]
-        return next
+        const next = { ...current };
+        delete next[product.id];
+        return next;
       }
-      if (product.type === 'PRODUCT' && nextQuantity > product.stockQuantity) return current
-      return { ...current, [product.id]: nextQuantity }
-    })
-  }
+      if (product.type === "PRODUCT" && nextQuantity > product.stockQuantity)
+        return current;
+      return { ...current, [product.id]: nextQuantity };
+    });
+  };
 
   const handleSell = async () => {
     if (!shiftReady) {
-      notifyError('Cần mở ca trước khi bán lẻ')
-      return
+      notifyError("Cần mở ca trước khi bán lẻ");
+      return;
     }
     if (cartLines.length === 0) {
-      notifyError('Chưa chọn sản phẩm hoặc dịch vụ')
-      return
+      notifyError("Chưa chọn sản phẩm hoặc dịch vụ");
+      return;
     }
-    setSubmitting(true)
+    setSubmitting(true);
     try {
-      const data = await apiJson('/api/retail-sales', jsonRequest({
-        items: cartLines.map((line) => ({
-          productId: line.product.id,
-          quantity: line.quantity,
-        })),
-        paymentMethod,
-        customerId: customer?.id ?? null,
-      }))
+      const data = await apiJson(
+        "/api/retail-sales",
+        jsonRequest({
+          items: cartLines.map((line) => ({
+            productId: line.product.id,
+            quantity: line.quantity,
+          })),
+          paymentMethod,
+          customerId: customer?.id ?? null,
+        }),
+      );
 
       if (!data.success) {
-        notifyError(data.error || 'Không bán được')
-        return
+        notifyError(data.error || "Không bán được");
+        return;
       }
 
-      const refreshed = await onDone()
-      notifySuccess(refreshed === false
-        ? 'Đã ghi nhận giao dịch; danh sách hàng chưa cập nhật. Không thu lại, hãy tải lại màn hình.'
-        : `Đã thu ${money(grandTotal)}`)
+      const refreshed = await onDone();
+      notifySuccess(
+        refreshed === false
+          ? "Đã ghi nhận giao dịch; danh sách hàng chưa cập nhật. Không thu lại, hãy tải lại màn hình."
+          : `Đã thu ${money(grandTotal)}`,
+      );
     } catch {
-      notifyError('Lỗi kết nối máy chủ')
+      notifyError("Lỗi kết nối máy chủ");
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   return (
     <Modal
       open={open}
       onClose={onClose}
       title="Bán lẻ"
-      description="Bán nước / dịch vụ không gắn phiên. Thu tiền ngay."
+      description=""
       size="lg"
       footer={
         <Button
-          variant="primary"
+          variant="contrast"
           size="lg"
           fullWidth
-          disabled={submitting || productsLoading || !!productsError || !shiftReady || cartLines.length === 0}
+          disabled={
+            submitting ||
+            productsLoading ||
+            !!productsError ||
+            !shiftReady ||
+            cartLines.length === 0
+          }
           onClick={handleSell}
         >
-          {submitting ? 'Đang xử lý...' : `Thu tiền ${money(grandTotal)}`}
+          {submitting ? "Đang xử lý..." : `Thu tiền ${money(grandTotal)}`}
         </Button>
       }
     >
@@ -142,8 +154,8 @@ export function RetailDialog({
                   {customer.fullName}
                 </p>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {customer.type === 'MEMBER' ? 'Hội viên' : 'Vãng lai'}
-                  {customer.phone ? ` · ${customer.phone}` : ''}
+                  {customer.type === "MEMBER" ? "Hội viên" : "Vãng lai"}
+                  {customer.phone ? ` · ${customer.phone}` : ""}
                 </p>
               </div>
               <button
@@ -175,11 +187,18 @@ export function RetailDialog({
           </div>
           <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
             {productsLoading ? (
-              <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">Đang tải danh sách sản phẩm...</p>
+              <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
+                Đang tải danh sách sản phẩm...
+              </p>
             ) : productsError ? (
-              <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+              <div
+                role="alert"
+                className="rounded-lg border border-danger-border bg-danger-bg p-3 text-sm text-danger"
+              >
                 <p>Không tải được sản phẩm: {productsError}</p>
-                <button type="button" className="mt-2 font-medium underline" onClick={onRetryProducts}>Thử lại</button>
+                <Button variant="white" size="sm" className="mt-2" onClick={onRetryProducts}>
+                  Thử lại
+                </Button>
               </div>
             ) : products.length === 0 ? (
               <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
@@ -187,8 +206,9 @@ export function RetailDialog({
               </p>
             ) : (
               products.map((product) => {
-                const quantity = cart[product.id] ?? 0
-                const outOfStock = product.type === 'PRODUCT' && product.stockQuantity <= 0
+                const quantity = cart[product.id] ?? 0;
+                const outOfStock =
+                  product.type === "PRODUCT" && product.stockQuantity <= 0;
                 return (
                   <div
                     key={product.id}
@@ -200,7 +220,9 @@ export function RetailDialog({
                       </p>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">
                         {money(product.price)}
-                        {product.type === 'PRODUCT' ? ` · còn ${product.stockQuantity}` : ' · dịch vụ'}
+                        {product.type === "PRODUCT"
+                          ? ` · còn ${product.stockQuantity}`
+                          : " · dịch vụ"}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -225,7 +247,7 @@ export function RetailDialog({
                       </button>
                     </div>
                   </div>
-                )
+                );
               })
             )}
           </div>
@@ -241,5 +263,5 @@ export function RetailDialog({
         />
       </div>
     </Modal>
-  )
+  );
 }

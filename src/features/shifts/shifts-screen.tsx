@@ -19,6 +19,7 @@ import { AppSkeleton } from "@/components/ui/skeleton";
 import { usePageRefresh } from "@/components/layout/page-refresh-context";
 import { formatClock, money } from "@/features/pos/format";
 import { today } from "@/lib/shared/utils";
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 
 type ShiftStatusFilter = "ALL" | "OPEN" | "CLOSED";
 
@@ -176,7 +177,7 @@ export function ShiftsScreen() {
           }`}
         >
           <div className="hidden min-w-0 md:block">
-            <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
+            <h1 className={`flex items-center gap-2 ${PAGE_TITLE_CLASS}`}>
               Ca làm
             </h1>
             <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
@@ -192,7 +193,7 @@ export function ShiftsScreen() {
                 Trang {pagination.page}/{pagination.totalPages}
               </span>
               <Button
-                variant="secondary"
+                variant="white"
                 size="xs"
                 icon={ArrowLeft}
                 disabled={pagination.page <= 1 || loading}
@@ -201,7 +202,7 @@ export function ShiftsScreen() {
                 Trước
               </Button>
               <Button
-                variant="secondary"
+                variant="white"
                 size="xs"
                 icon={ArrowRight}
                 disabled={pagination.page >= pagination.totalPages || loading}
@@ -354,7 +355,7 @@ function ShiftCard({ shift }: { shift: ShiftRow }) {
       <div
         className={
           shift.status === "OPEN"
-            ? "bg-emerald-500"
+          ? "bg-success-bg0"
             : "bg-zinc-300 dark:bg-zinc-700"
         }
       />
@@ -410,11 +411,11 @@ function ShiftCard({ shift }: { shift: ShiftRow }) {
               </span>{" "}
               món
             </span>
-            <span className="ml-2 text-emerald-600 dark:text-emerald-400">
+          <span className="ml-2 text-success">
               Khớp {shift.toolStats.matched}
             </span>
             {shift.toolStats.mismatched > 0 && (
-              <span className="ml-2 text-amber-600 dark:text-amber-400">
+            <span className="ml-2 text-warning">
                 Lệch {shift.toolStats.mismatched}
               </span>
             )}

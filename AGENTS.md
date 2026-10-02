@@ -59,6 +59,7 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
 - Void invoice must reverse stock for both the PAID invoice's own items AND any merged DRAFT invoices (status CANCELLED, notes `Đã gộp vào hóa đơn {invoiceNo}`). See `docs/architecture.md` ADR-004.
 - A staff shift is required for real POS operations. A shift is a shared counter shift: one open `Shift` can have multiple staff members through `ShiftParticipant`; each money-taking action must still record the acting `staffId`.
 - Do not implement split payment or group bill unless explicitly requested. Current requirement does not need it.
+- Booking no-show expiry: a `BOOKED` booking whose `scheduledAt` is before 00:00 today (VN time) is automatically switched to `CANCELLED` the next time bookings are read — `autoCancelStaleBookings` runs at the start of `GET /api/bookings`, writing audit `BOOKING_CANCELLED` with `details.autoCancelled = true`. Bookings with an unhandled deposit (`depositAmount > depositAppliedAmount + depositRefundedAmount`) are never auto-cancelled; staff must confirm the refund through the normal cancel flow.
 
 ## Target Domain Model
 
@@ -88,23 +89,25 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
 - Mobile-first staff UI:
   1. The first operational screen is `/sessions` as `Ca hôm nay`.
   2. Keep POS UI in `src/features/pos/`; route pages should stay thin.
-  3. Bottom mobile navigation has five staff tabs: Ca, Hội viên, Kho, Báo cáo, Thêm.
-  4. Disable check-in/checkout when there is no open shift.
-  5. Member check-in must show membership status and require renewal before session creation when expired.
-  6. `/customers` is the staff membership screen, not a generic customer CRUD table.
-  7. Keep membership UI in `src/features/memberships/`.
-  8. New member registration must create customer, membership, invoice, and payment (`kind = MEMBERSHIP`) in one backend transaction.
-  9. `/inventory` is the staff `Kho quầy` screen. Keep it mobile-first and keep UI logic in `src/features/inventory/`.
-  10. Staff can view/search/filter inventory; only admin can create products/services or post stock movements.
-  11. Inventory UI must distinguish `PRODUCT` stock states (`Hết`, `Sắp hết`, `Đủ`) from `SERVICE` items that do not track stock.
-  12. `/reports` is the mobile operational report screen. Keep UI logic in `src/features/reports/`. It has two tabs: `Tổng quan` (ReportsOverview — dashboard stats, revenue trend charts, recent payments) and `Kho` (ReportsInventory — top products sold via `/api/reports/top-products`).
-  13. Staff reports should show the current staff account/shift scope (`invoice.staffId` filter); admin reports can show all-system scope and CSV export.
-  14. `/settings` is the mobile `Thêm` tab, not a plain settings page. Keep UI logic in `src/features/more/`.
-  15. The `Thêm` tab should show account, current shift status, admin shortcuts first (các tab ẩn trên mobile: Bảng giá, Khuyến mại, Dụng cụ, Nhân viên, Gói hội viên), then operational shortcuts, theme controls, system status, and logout.
-  16. Admin-only shortcuts such as pricing and staff management must be hidden from staff users in the `Thêm` tab.
-  17. `/pricing` is the admin pricing-rule screen. Keep UI logic in `src/features/pricing/`.
-  18. `/promotions` is the admin promotion-rule screen. Keep UI logic in `src/features/promotions/`. Only admin can create/edit/disable promotions; changes must write `ActivityLog`.
-  19. `/tools` is the admin equipment screen. Keep UI logic in `src/features/tools/`. Only admin can create/edit/delete tools; POS reads them for per-shift tool counts.
+  3. Bottom mobile navigation is role-filtered, ordered left → right: `Ca hôm nay`, `Ca làm` (MANAGER/ADMIN), `Báo cáo` (ADMIN), `Lịch học` (ADMIN/TEACHER), `Thêm`. TEACHER gets its own set (`Lịch học`, `Lớp học`, `Học viên`, `Thêm`). Never show a tab to a role whose route guard rejects it.
+  4. Disable check-in/checkout when there is no open shift. The UI flag is `canOperate` (`getBoardAccess` in `src/features/pos/board-access.ts`) and it must mean exactly "the acting staff has their own open shift" — the same condition the backend enforces with `SHIFT_REQUIRED` (`findOpenIdForStaff`). Never render a money control enabled in a state the API rejects.
+  5. ADMIN/MANAGER may open `/sessions` without participating in a shift and see the live board (active sessions + today's bookings) in **read-only monitor mode**: the shift strip carries a `Chỉ xem` badge, the money-action row is not rendered, session cards render without pause/checkout buttons (no disabled buttons), and booking rows render without confirm/cancel actions. `Tham gia ca` stays available while a shared shift is open. STAFF without a shift still sees only the open-shift gate.
+  6. Member check-in must show membership status and require renewal before session creation when expired.
+  7. `/customers` is the staff membership screen, not a generic customer CRUD table.
+  8. Keep membership UI in `src/features/memberships/`.
+  9. New member registration must create customer, membership, invoice, and payment (`kind = MEMBERSHIP`) in one backend transaction.
+  10. `/inventory` is the staff `Kho quầy` screen. Keep it mobile-first and keep UI logic in `src/features/inventory/`.
+  11. Staff can view/search/filter inventory; only admin can create products/services or post stock movements.
+  12. Inventory UI must distinguish `PRODUCT` stock states (`Hết`, `Sắp hết`, `Đủ`) from `SERVICE` items that do not track stock.
+  13. `/reports` is the mobile operational report screen. Keep UI logic in `src/features/reports/`. It has two tabs: `Tổng quan` (ReportsOverview — dashboard stats, revenue trend charts, recent payments) and `Kho` (ReportsInventory — top products sold via `/api/reports/top-products`).
+  14. Staff reports should show the current staff account/shift scope (`invoice.staffId` filter); admin reports can show all-system scope and CSV export.
+  15. `/settings` is the mobile `Thêm` tab, not a plain settings page. Keep UI logic in `src/features/more/`.
+  16. The `Thêm` tab should show account, current shift status, admin shortcuts first (các tab ẩn trên mobile: Bảng giá, Khuyến mại, Dụng cụ, Nhân viên, Gói hội viên), then operational shortcuts, theme controls, system status, and logout.
+  17. Admin-only shortcuts such as pricing and staff management must be hidden from staff users in the `Thêm` tab.
+  18. Every role must be able to open the `Thêm` tab: bottom nav shows it to all roles, sidebar keeps it via `alwaysVisible`, and `proxy.ts` allows `TEACHER` to open `/settings`. TEACHER additionally must not render counter-shift status and must not call `/api/shifts` or `/api/settings` — its shortcuts stay inside Đào tạo (`Lịch học`, `Lớp học`, `Học viên`).
+  19. `/pricing` is the admin pricing-rule screen. Keep UI logic in `src/features/pricing/`.
+  20. `/promotions` is the admin promotion-rule screen. Keep UI logic in `src/features/promotions/`. Only admin can create/edit/disable promotions; changes must write `ActivityLog`.
+  21. `/tools` is the admin equipment screen. Keep UI logic in `src/features/tools/`. Only admin can create/edit/delete tools; POS reads them for per-shift tool counts.
 
 - Check-in:
   1. Staff should have an open shift; current backend attaches it when present, and the UI should make opening shift mandatory before POS operations.
@@ -119,7 +122,7 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
   2. Resolve pricing at checkout: `input.groups` (per-group rules) or `input.pricingRuleId` (one rule for the whole session), else auto-resolve the rule applicable at checkout time; snapshot rule + tiers into each `SessionPricingGroup.pricingSnapshot`.
   3. Build an invoice.
   4. For `WALK_IN`, add `PLAY_TIME` item from elapsed hours, tiered pricing, and the selected promotion (all from the resolved snapshot; discount goes into the item's `discountAmount`/metadata — no separate `DISCOUNT` line). Checkout can settle one pricing group via `pricingGroupId`, decrementing its `remainingCount`.
-  5. Partial checkout (`thu trước`): checkout can bill a subset of players — pass `pricingGroupId` + `playerCount`, or `playerIds` to settle specific players across any group. `remainingCount` is decremented, billed players get `checkedOutAt`, and the session stays `ACTIVE` until the last group is settled (only then is it marked `COMPLETED`). A `metadata.earlyCollection` sequence marker and note `Thu trước lần N — M người` are written on the `PLAY_TIME` line when billing fewer players than remain.
+  5. Partial checkout (`thu trước`): checkout can bill a subset of players — pass `pricingGroupId` + `playerCount`, or `playerIds` to settle specific players across any group. `remainingCount` is decremented, billed players get `checkedOutAt`, and the session stays `ACTIVE` until the last group is settled (only then is it marked `COMPLETED`). A `metadata.earlyCollection` sequence marker and note `Thu trước lần N — M người` are written on the `PLAY_TIME` line when billing fewer players than remain. A partial run never writes the pricing rule/snapshot onto the group (`preserveCounts`) — the rule applies only to the players billed now, and the players still playing pick the rule effective at their own checkout time.
   6. For active `MEMBER`, play time item should be `0đ` or omitted, but products/services still apply.
   7. Optionally add a parking fee as a `SURCHARGE` line (`metadata.surchargeType: 'PARKING'`) priced from `AppSetting(PARKING_FEE_UNIT_PRICE)` — it reduces the invoice total.
   8. Deduct inventory for stock-tracked products through `StockMovement`.

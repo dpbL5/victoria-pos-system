@@ -11,7 +11,7 @@ export interface UpdateUserInput {
   staffId: string
   userId: string
   fullName?: string
-  role?: 'ADMIN' | 'MANAGER' | 'STAFF'
+  role?: 'ADMIN' | 'MANAGER' | 'STAFF' | 'TEACHER'
   isActive?: boolean
 }
 

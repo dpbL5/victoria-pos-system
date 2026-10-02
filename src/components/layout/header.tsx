@@ -1,9 +1,11 @@
 "use client";
 
-import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
+import { Logo } from '@/components/ui/logo'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { usePageRefresh } from './page-refresh-context'
+import { getRoleLabel } from '@/lib/shared/roles'
 
 interface HeaderProps {
   userFullName: string
@@ -38,25 +40,18 @@ function getTitle(pathname: string): string {
 export function Header({ userFullName, userRole }: HeaderProps) {
   const pathname = usePathname()
   const { refresh } = usePageRefresh()
-  const roleLabel = userRole === 'ADMIN' ? 'Quản trị viên' : userRole === 'MANAGER' ? 'Quản lý' : 'Nhân viên'
+  const roleLabel = getRoleLabel(userRole)
   const initial = userFullName.charAt(0).toUpperCase()
   const title = getTitle(pathname)
 
   return (
     <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 border-b border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md px-4 py-2.5">
       <div className="flex items-center gap-2">
-        <div className="relative h-7 w-7 shrink-0 overflow-hidden rounded-md bg-white p-0.5 shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-800">
-          <Image
-            src="/logo.jpg"
-            alt="Victoria Archery Club"
-            width={28}
-            height={28}
-            className="h-full w-full object-contain"
-            loading='eager'
-          />
+      <div className="relative h-9 w-9 shrink-0">
+          <Logo className="h-full w-full" />
         </div>
         {title && (
-          <h1 className="text-xl font-bold leading-7 tracking-wide text-zinc-900 dark:text-white">
+          <h1 className={PAGE_TITLE_CLASS}>
             {title}
           </h1>
         )}
@@ -77,7 +72,7 @@ export function Header({ userFullName, userRole }: HeaderProps) {
       )}
 
       <div className="hidden sm:flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
+      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-info text-[10px] font-bold text-white">
           {initial}
         </div>
         <div className="text-right">

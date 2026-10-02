@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { requireAuth } from '@/lib/shared/auth'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { canAccessTraining } from '@/lib/shared/roles'
 import { StudentsScreen } from '@/features/students/students-screen'
 
 export default async function StudentsPage() {
@@ -11,7 +11,7 @@ export default async function StudentsPage() {
     redirect('/login')
   }
 
-  if (!isAdminOnly(user?.role)) {
+  if (!canAccessTraining(user?.role)) {
     redirect('/sessions')
   }
 

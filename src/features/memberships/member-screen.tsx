@@ -11,11 +11,12 @@ import {
   X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonClass } from '@/components/ui/button'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { AppSkeleton } from '@/components/ui/skeleton'
+import { FilterButton } from '@/components/ui/filter-button'
 import { useApi } from '@/hooks/use-api'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
@@ -23,6 +24,7 @@ import { useToast } from '@/components/ui/toast'
 import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { formatDay, money, toNumber } from '@/features/pos/format'
 import { PaymentMethodPicker } from '@/features/pos/payment-method-picker'
 import { RenewMemberDialog, type RenewMemberInput } from './renew-member-dialog'
@@ -87,7 +89,7 @@ export function MemberScreen() {
       {isAdmin && (
         <Link
           href={`/customers/${item.id}`}
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          className={buttonClass({ variant: 'white', size: 'sm' })}
         >
           <Settings size={16} />
           <span>Cài đặt</span>
@@ -112,11 +114,11 @@ export function MemberScreen() {
       label: 'Tên hội viên',
       cellClassName: 'px-4 py-3 font-medium',
       render: (item) => (
-        <Link href={`/customers/${item.id}`} className="text-left hover:text-blue-600">
+      <Link href={`/customers/${item.id}`} className="text-left hover:text-info">
           <div className="flex items-center gap-2">
             <span className={memberNameColor(item.membershipStatus)}>{item.fullName}</span>
-            <StatusBadge status={item.membershipStatus} />
-          </div>
+          <StatusBadge status={item.membershipStatus} />
+        </div>
         </Link>
       ),
     },
@@ -146,7 +148,7 @@ export function MemberScreen() {
       render: (item) => (
         <Link href={`/customers/${item.id}`} className={`flex items-center gap-2 text-base font-semibold ${memberNameColor(item.membershipStatus)}`}>
           {item.fullName}
-          <StatusBadge status={item.membershipStatus} />
+            <StatusBadge status={item.membershipStatus} />
         </Link>
       ),
     },
@@ -191,13 +193,21 @@ export function MemberScreen() {
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           {filteredMembers.length} người
         </p>
-        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-          <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
-          <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Còn hạn: {stats.active}</button>
-          <button type="button" aria-pressed={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')} className={statusFilter === 'EXPIRED' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hết hạn: {stats.expired}</button>
-          <button type="button" aria-pressed={statusFilter === 'NONE'} onClick={() => setStatusFilter('NONE')} className={statusFilter === 'NONE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Chưa đóng: {stats.none}</button>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <FilterButton active={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')}>
+            Tất cả: {stats.total}
+          </FilterButton>
+          <FilterButton active={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')}>
+            Còn hạn: {stats.active}
+          </FilterButton>
+          <FilterButton active={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')}>
+            Hết hạn: {stats.expired}
+          </FilterButton>
+          <FilterButton active={statusFilter === 'NONE'} onClick={() => setStatusFilter('NONE')}>
+            Chưa đóng: {stats.none}
+          </FilterButton>
         </div>
-      </div>
+    </div>
     </div>
   )
 
@@ -206,7 +216,7 @@ export function MemberScreen() {
       <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
+            <h1 className={PAGE_TITLE_CLASS}>
               Hội viên
             </h1>
           </div>
@@ -230,7 +240,7 @@ export function MemberScreen() {
 
         <div className="flex gap-2">
           <Button
-            variant="primary"
+            variant="yellow"
             size="lg"
             className="flex-1"
             icon={UserPlus}
@@ -242,7 +252,7 @@ export function MemberScreen() {
           {canManagePlans && (
             <Link
               href="/membership-plans"
-              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                className={buttonClass({ variant: 'white', size: 'lg', className: 'shrink-0' })}
             >
               <Ticket size={16} />
               <span>Gói hội viên</span>
@@ -307,29 +317,29 @@ export function MemberScreen() {
         onDone={handleRenewed}
       />
 
-    </div>
-  )
-}
+      </div>
+    )
+  }
 
 function memberNameColor(status: MemberStatus) {
-  return status === 'EXPIRED' ? 'text-amber-700/70 dark:text-amber-300/70' : 'text-zinc-950 dark:text-white'
+  return status === 'EXPIRED' ? 'text-warning/70' : 'text-zinc-950 dark:text-white'
 }
 
 function StatusBadge({ status }: { status: MemberStatus }) {
   if (status === 'ACTIVE') {
     return (
       <span role="img" aria-label="Còn hạn" title="Còn hạn">
-        <Check size={16} strokeWidth={2.5} className="text-emerald-600 dark:text-emerald-400" />
+      <Check size={16} strokeWidth={2.5} className="text-success" />
       </span>
     )
   }
   if (status === 'EXPIRED') {
     return (
       <span role="img" aria-label="Hết hạn" title="Hết hạn">
-        <X size={16} strokeWidth={2.5} className="text-amber-500 dark:text-amber-400" />
+      <X size={16} strokeWidth={2.5} className="text-warning" />
       </span>
-    )
-  }
+  )
+}
   return <Badge variant="danger" size="sm">Chưa đóng</Badge>
 }
 
@@ -412,7 +422,7 @@ function RegisterMemberDialog({
       title="Đăng ký hội viên"
       description="Tạo hồ sơ và thu phí tháng trong cùng giao dịch"
       footer={
-        <Button variant="primary" size="lg" fullWidth disabled={submitting} onClick={submit}>
+      <Button variant="yellow" size="lg" fullWidth disabled={submitting} onClick={submit}>
           {submitting ? 'Đang đăng ký...' : 'Đăng ký & thu phí'}
         </Button>
       }
@@ -470,7 +480,7 @@ function MemberPaymentForm({
     <div className="space-y-3">
       {showProfileFields && (
         <>
-          <div>
+      <div>
             <Label htmlFor="member-name" required>Họ tên</Label>
             <Input
               id="member-name"
@@ -515,7 +525,7 @@ function MemberPaymentForm({
         onMethodChange={onPaymentMethodChange}
       />
 
-      <div>
+          <div>
         <Label htmlFor="member-notes">Ghi chú</Label>
         <Textarea
           id="member-notes"
@@ -533,6 +543,6 @@ function MemberPaymentForm({
           </span>
         </div>
       </div>
-    </div>
+          </div>
   )
 }

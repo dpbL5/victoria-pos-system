@@ -13,7 +13,7 @@ export interface LogToolCountInput {
   staffId: string
   username: string
   fullName: string
-  role: 'ADMIN' | 'MANAGER' | 'STAFF'
+  role: 'ADMIN' | 'MANAGER' | 'STAFF' | 'TEACHER'
   toolCounts: ToolCountEntry[]
 }
 

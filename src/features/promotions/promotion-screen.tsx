@@ -27,6 +27,7 @@ import { isAdminOnly } from '@/lib/shared/roles'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import type { UserSession } from '@/features/pos/types'
 import { formatVND, toInputDate } from '@/lib/shared/utils'
 import type { PromotionDiscountType, PromotionRule } from '@/types'
@@ -120,8 +121,8 @@ export function PromotionScreen() {
   const renderActions = useCallback((rule: PromotionRule) => (
     <div className="flex gap-1.5">
       <Button
-        variant="secondary"
-        size="sm"
+        variant="white"
+          size="sm"
         icon={Edit3}
         disabled={submitting}
         onClick={() => {
@@ -131,20 +132,20 @@ export function PromotionScreen() {
         title="Sửa khuyến mại"
       />
       {rule.isActive && (
-        <Button
-          variant="outline-danger"
-          size="sm"
+      <Button
+        variant="red-soft"
+        size="sm"
           icon={Pause}
-          disabled={submitting}
+        disabled={submitting}
           onClick={() => setDeactivateRule(rule)}
           title="Tạm dừng"
         />
       )}
-      <Button
-        variant="outline-danger"
+        <Button
+          variant="red-soft"
         size="sm"
         icon={Trash2}
-        disabled={submitting}
+          disabled={submitting}
         onClick={() => setRemoveRule(rule)}
         title="Xoá khuyến mại"
       />
@@ -281,11 +282,19 @@ export function PromotionScreen() {
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
         Mỗi thời điểm chỉ áp dụng một quy tắc, không cộng dồn.
       </p>
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-        <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
-        <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hiệu lực: {stats.active}</button>
-        <button type="button" aria-pressed={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')} className={statusFilter === 'FUTURE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Sắp tới: {stats.future}</button>
-        <button type="button" aria-pressed={statusFilter === 'INACTIVE'} onClick={() => setStatusFilter('INACTIVE')} className={statusFilter === 'INACTIVE' ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200'}>Tạm dừng / hết: {stats.inactive}</button>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <FilterButton active={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')}>
+          Tất cả: {stats.total}
+        </FilterButton>
+        <FilterButton active={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')}>
+          Hiệu lực: {stats.active}
+        </FilterButton>
+        <FilterButton active={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')}>
+          Sắp tới: {stats.future}
+        </FilterButton>
+        <FilterButton active={statusFilter === 'INACTIVE'} onClick={() => setStatusFilter('INACTIVE')}>
+          Tạm dừng / hết: {stats.inactive}
+        </FilterButton>
       </div>
       <div role="group" aria-label="Lọc loại khuyến mại" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
         <FilterButton active={typeFilter === 'ALL'} onClick={() => setTypeFilter('ALL')}>Tất cả loại giảm</FilterButton>
@@ -300,7 +309,7 @@ export function PromotionScreen() {
       <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">
+            <h1 className={PAGE_TITLE_CLASS}>
               Khuyến mại giờ chơi
             </h1>
           </div>
@@ -317,7 +326,7 @@ export function PromotionScreen() {
         {!isAdmin ? <AccessDenied /> : (
           <>
             <Button
-              variant="inverse"
+              variant="contrast"
               size="lg"
               fullWidth
               icon={Plus}
@@ -424,10 +433,10 @@ function PromotionValueChip({ rule }: { rule: PromotionRule }) {
   return (
     <span className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-bold tabular-nums ${
       isPercent
-        ? 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300'
+      ? 'bg-accent-purple-bg text-accent-purple'
         : isFixedAmount
-          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
-          : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
+        ? 'bg-success-bg text-success'
+        : 'bg-warning-bg text-warning bg-warning-bg text-warning'
     }`}>
       {isPercent ? <Percent size={14} /> : isFixedAmount ? <Banknote size={14} /> : <Ticket size={14} />}
       {formatPromotionValue(rule)}
@@ -511,7 +520,7 @@ function PromotionDialog({
       title={mode === 'edit' ? 'Sửa khuyến mại' : 'Thêm khuyến mại'}
       description="Chỉ áp dụng cho giờ chơi của khách vãng lai. Giá giờ chơi sau giảm không thấp hơn 0đ."
       size="lg"
-      footer={<Button variant="inverse" size="lg" fullWidth disabled={submitting} onClick={submit}>{submitting ? 'Đang lưu...' : 'Lưu khuyến mại'}</Button>}
+        footer={<Button variant="contrast" size="lg" fullWidth disabled={submitting} onClick={submit}>{submitting ? 'Đang lưu...' : 'Lưu khuyến mại'}</Button>}
     >
       <PromotionForm form={form} setForm={setForm} />
     </Modal>
@@ -529,7 +538,7 @@ function PromotionForm({
 
   return (
     <div className="space-y-4">
-      <div>
+    <div>
         <Label htmlFor="promotion-name" required>Tên khuyến mại</Label>
         <Input
           id="promotion-name"
@@ -589,7 +598,7 @@ function PromotionForm({
       <WeeklyDaySelector value={form.daysOfWeek} onChange={(daysOfWeek) => setForm({ ...form, daysOfWeek })} />
 
       <div className="grid grid-cols-2 gap-3">
-        <div>
+      <div>
           <Label htmlFor="promotion-hour-from" required>Bắt đầu hiệu lực lúc</Label>
           <Input id="promotion-hour-from" type="number" min="0" max="23" inputMode="numeric" value={form.hourFrom} onChange={(event) => setForm({ ...form, hourFrom: event.target.value })} />
         </div>
@@ -610,13 +619,13 @@ function PromotionForm({
         </div>
       </div>
 
-      <button
-        type="button"
+    <button
+      type="button"
         aria-pressed={form.isActive}
         onClick={() => setForm({ ...form, isActive: !form.isActive })}
         className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
           form.isActive
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200'
+          ? 'border-success-border bg-success-bg text-success'
             : 'border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
         }`}
       >
@@ -627,7 +636,7 @@ function PromotionForm({
         </span>
       </button>
 
-      <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
+    <div className="rounded-xl border border-info-border bg-info-bg p-3 text-xs text-info border-info-border bg-info-bg text-info">
         Ngày và khung giờ chỉ xác định thời gian hiệu lực. Nhân viên sẽ chọn tối đa một khuyến mại khi thu tiền; khung giờ kết thúc không bao gồm thời điểm đó.
       </div>
     </div>
@@ -648,13 +657,13 @@ function PromotionTypeButton({
   onClick: () => void
 }) {
   return (
-    <button
-      type="button"
+      <button
+        type="button"
       aria-pressed={active}
       onClick={onClick}
       className={`rounded-xl border p-3 text-left transition-colors ${
         active
-          ? 'border-blue-500 bg-blue-50 text-blue-800 dark:border-blue-400 dark:bg-blue-500/10 dark:text-blue-200'
+        ? 'border-info bg-info-bg text-info bg-info-bg text-info'
           : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
       }`}
     >
@@ -676,7 +685,7 @@ function WeeklyDaySelector({ value, onChange }: { value: number[]; onChange: (da
   }
 
   return (
-    <div>
+        <div>
       <Label required>Ngày lặp hằng tuần</Label>
       <div className="grid grid-cols-7 gap-1.5">
         {weekDays.map((day) => {
@@ -690,7 +699,7 @@ function WeeklyDaySelector({ value, onChange }: { value: number[]; onChange: (da
               onClick={() => toggleDay(day.value)}
               className={`flex aspect-square min-h-10 items-center justify-center rounded-lg border text-xs font-semibold transition-colors ${
                 active
-                  ? 'border-blue-600 bg-blue-600 text-white shadow-sm dark:border-blue-400 dark:bg-blue-500'
+                ? 'border-info bg-info text-white shadow-sm bg-info'
                   : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
               }`}
             >
@@ -700,11 +709,11 @@ function WeeklyDaySelector({ value, onChange }: { value: number[]; onChange: (da
         })}
       </div>
       <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-        <Button variant="secondary" size="xs" onClick={() => onChange(weekdayDays)}>T2-T6</Button>
-        <Button variant="secondary" size="xs" onClick={() => onChange(weekendDays)}>Cuối tuần</Button>
-        <Button variant="secondary" size="xs" onClick={() => onChange(allWeekDays)}>Cả tuần</Button>
+      <Button variant="white" size="xs" onClick={() => onChange(weekdayDays)}>T2-T6</Button>
+    <Button variant="white" size="xs" onClick={() => onChange(weekendDays)}>Cuối tuần</Button>
+  <Button variant="white" size="xs" onClick={() => onChange(allWeekDays)}>Cả tuần</Button>
       </div>
-    </div>
+      </div>
   )
 }
 

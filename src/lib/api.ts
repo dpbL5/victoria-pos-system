@@ -29,8 +29,20 @@ export async function apiJson<T>(
   }
 
   const response = await fetch(url, init)
-  const data = await response.json()
-  return data as ApiResponse<T>
+
+  try {
+    return (await response.json()) as ApiResponse<T>
+  } catch {
+    // Body không phải JSON: 405 (route không có method này), 404, 502 của proxy…
+    // Ném ra ở đây sẽ rơi vào catch chung và mọi màn đều hiện "Lỗi kết nối máy
+    // chủ" — che mất nguyên nhân thật. Trả về đúng shape ApiResponse để UI hiện
+    // số HTTP, từ đó thấy ngay là sai đường dẫn hay sai method.
+    return {
+      success: false,
+      code: 'HTTP_ERROR',
+      error: `Máy chủ trả về ${response.status} — kiểm tra lại đường dẫn API`,
+    }
+  }
 }
 
 export function jsonRequest(body: unknown): RequestInit {

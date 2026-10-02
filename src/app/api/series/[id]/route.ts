@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { previewSeriesChange, seriesMutationSchema, updateSeries, deleteSeries, mapLessonError } from '@/lib/students'
 import { parseLocalDate, parseLocalDateEnd } from '@/lib/shared/utils'
@@ -8,7 +8,7 @@ type Params = { params: Promise<{ id: string }> }
 
 async function mutate(request: NextRequest, { params }: Params, remove: boolean) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
     await validateCSRF(request)
     const parsed = seriesMutationSchema.safeParse(await request.json())
     if (!parsed.success) return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
@@ -30,7 +30,7 @@ export const DELETE = (request: NextRequest, params: Params) => mutate(request, 
 
 export async function GET(request: NextRequest, { params }: Params) {
   try {
-    await requireAdmin()
+    await requireTrainingAccess()
     const lessonId = request.nextUrl.searchParams.get('lessonId')
     const scope = request.nextUrl.searchParams.get('scope')
     if (!lessonId || (scope !== 'FOLLOWING' && scope !== 'ALL')) return apiError({ code: 'VALIDATION', message: 'Chọn buổi và phạm vi thay đổi', status: 400 })

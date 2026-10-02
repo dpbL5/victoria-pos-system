@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/toast'
 import { useApi } from '@/hooks/use-api'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { StudentPicker } from '@/features/students/student-picker'
 import { emptySchedule, scheduleBody, scheduleError, ScheduleFields, type ScheduleFormState } from '@/features/students/schedule-fields'
 import { formatDateTime, formatSlot, todayInput } from './slot-form'
@@ -123,9 +124,9 @@ export function ClassesScreen() {
       cellClassName: 'px-4 py-3 font-medium text-zinc-950 dark:text-white',
       render: item => (
         <div className="flex items-center gap-2">
-          <Link href={`/classes/${item.id}`} className="text-blue-700 hover:underline dark:text-blue-300">{item.name}</Link>
+        <Link href={`/classes/${item.id}`} className="text-info hover:underline text-info">{item.name}</Link>
           {!item.isActive && <Badge variant="default" size="sm">Đã kết thúc</Badge>}
-        </div>
+      </div>
       ),
     },
     {
@@ -157,10 +158,10 @@ export function ClassesScreen() {
       cellClassName: 'px-4 py-3',
       render: item => (
         <div className="flex gap-1.5">
-          <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa thông tin lớp" />
-          {item.isActive && <Button variant="outline-danger" size="sm" icon={StopCircle} disabled={submitting} onClick={() => setEndTarget(item)} title="Kết thúc lớp" />}
-          <Button variant="outline-danger" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteTarget(item)} title="Xoá lớp thêm nhầm" />
-        </div>
+        <Button variant="white" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa thông tin lớp" />
+          {item.isActive && <Button variant="red-soft" size="sm" icon={StopCircle} disabled={submitting} onClick={() => setEndTarget(item)} title="Kết thúc lớp" />}
+      <Button variant="red-soft" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteTarget(item)} title="Xoá lớp thêm nhầm" />
+    </div>
       ),
     },
   ], [submitting])
@@ -171,7 +172,7 @@ export function ClassesScreen() {
       label: 'Lớp',
       render: item => (
         <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
-          <Link href={`/classes/${item.id}`} className="text-blue-700 hover:underline dark:text-blue-300">{item.name}</Link>
+        <Link href={`/classes/${item.id}`} className="text-info hover:underline text-info">{item.name}</Link>
           {!item.isActive && <Badge variant="default" size="sm">Đã kết thúc</Badge>}
         </span>
       ),
@@ -184,10 +185,10 @@ export function ClassesScreen() {
       label: '',
       render: item => (
         <div className="flex gap-1.5">
-          <Button variant="secondary" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa thông tin lớp" />
-          {item.isActive && <Button variant="outline-danger" size="sm" icon={StopCircle} disabled={submitting} onClick={() => setEndTarget(item)} title="Kết thúc lớp" />}
-          <Button variant="outline-danger" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteTarget(item)} title="Xoá lớp thêm nhầm" />
-        </div>
+        <Button variant="white" size="sm" icon={Edit3} disabled={submitting} onClick={() => openEdit(item)} title="Sửa thông tin lớp" />
+          {item.isActive && <Button variant="red-soft" size="sm" icon={StopCircle} disabled={submitting} onClick={() => setEndTarget(item)} title="Kết thúc lớp" />}
+      <Button variant="red-soft" size="sm" icon={Trash2} disabled={submitting} onClick={() => setDeleteTarget(item)} title="Xoá lớp thêm nhầm" />
+    </div>
       ),
     },
   ], [submitting])
@@ -200,18 +201,18 @@ export function ClassesScreen() {
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
       <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
-            <School size={24} className="text-amber-500" />
+          <h1 className={`flex items-center gap-2 ${PAGE_TITLE_CLASS}`}>
+          <School size={24} className="text-warning" />
             Lớp học
           </h1>
-          <Button variant="primary" size="sm" icon={Plus} onClick={openCreate}>Thêm lớp</Button>
+        <Button variant="contrast" size="sm" icon={Plus} onClick={openCreate}>Thêm lớp</Button>
         </header>
 
         <div className="md:hidden">
-          <Button variant="primary" size="md" icon={Plus} fullWidth onClick={openCreate}>Thêm lớp</Button>
+        <Button variant="contrast" size="md" icon={Plus} fullWidth onClick={openCreate}>Thêm lớp</Button>
         </div>
 
-        {error && <NoticeCard tone="danger" title="Không tải được danh sách lớp" description={error} action={<Button variant="secondary" size="sm" onClick={() => void mutate()}>Thử lại</Button>} />}
+        {error && <NoticeCard tone="danger" title="Không tải được danh sách lớp" description={error} action={<Button variant="white" size="sm" onClick={() => void mutate()}>Thử lại</Button>} />}
 
         {!error && <div className="md:hidden">
           <SortableCardList
@@ -244,7 +245,7 @@ export function ClassesScreen() {
             emptyDescription="Tạo lớp để quản lý lịch học và sổ học viên riêng cho từng lớp."
           />
         </div>}
-      </div>
+        </div>
 
       {formOpen && <ClassFormModal
         key={editClass?.id ?? 'new'}
@@ -273,7 +274,7 @@ export function ClassesScreen() {
         submitting={submitting}
         onConfirm={deleteClass}
       />
-    </div>
+        </div>
   )
 }
 
@@ -301,7 +302,7 @@ function ClassFormModal({ lessonClass, submitting, onClose, onSubmit }: {
     size="lg"
     footer={
       <Button
-        variant="inverse"
+        variant="contrast"
         size="lg"
         fullWidth
         disabled={submitting || !name.trim() || invalidSlot}
@@ -322,15 +323,15 @@ function ClassFormModal({ lessonClass, submitting, onClose, onSubmit }: {
       <div><Label htmlFor="class-note">Ghi chú</Label><Textarea id="class-note" rows={3} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} placeholder="Trình độ, địa điểm, lưu ý của lớp" /></div>
 
       {!lessonClass && <>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={withSlot} onChange={event => setWithSlot(event.target.checked)} />Đặt lịch lặp ngay</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-info" checked={withSlot} onChange={event => setWithSlot(event.target.checked)} />Đặt lịch lặp ngay</label>
         {withSlot && <div className="space-y-4 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
           <ScheduleFields idPrefix="class-slot" form={slot} onChange={setSlot} />
-          {slotError && <p className="text-sm text-red-600 dark:text-red-400">{slotError}</p>}
+            {slotError && <p className="text-sm text-danger">{slotError}</p>}
         </div>}
         <StudentPicker value={studentIds} onChange={setStudentIds} unassignedOnly />
       </>}
 
       {lessonClass && <p className="text-xs text-zinc-500 dark:text-zinc-400">Lịch lặp và sổ học viên quản lý ở trang chi tiết lớp.</p>}
-    </div>
+        </div>
   </Modal>
 }

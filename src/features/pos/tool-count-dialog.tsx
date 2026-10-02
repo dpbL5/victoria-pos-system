@@ -93,7 +93,7 @@ export function ToolCountDialog({
       description={shift ? `Ca đang mở từ ${formatClock(shift.openedAt)}` : undefined}
       footer={
         <Button
-          variant="primary"
+          variant="contrast"
           size="lg"
           fullWidth
           disabled={submitting || toolsLoading || !!toolsError || !shift || hasCounted}
@@ -105,15 +105,15 @@ export function ToolCountDialog({
     >
       <div className="space-y-3">
         {hasCounted ? (
-          <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+        <div className="space-y-3 rounded-xl border border-success-border bg-success-bg p-3 border-success-border bg-success-bg">
             <div className="flex items-center gap-2">
-              <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400" />
-              <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+            <CheckCircle2 size={18} className="text-success" />
+          <p className="text-sm font-semibold text-success">
                 Ca này đã đếm dụng cụ
               </p>
               <Badge variant="success" size="sm">Đã đếm</Badge>
             </div>
-            <p className="text-xs text-emerald-700/80 dark:text-emerald-300/80">
+          <p className="text-xs text-success/80">
               Chỉ được đếm một lần. Số liệu sẽ được dùng để đối soát khi đóng ca.
             </p>
           </div>
@@ -122,9 +122,9 @@ export function ToolCountDialog({
             {toolsLoading ? (
               <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">Đang tải dụng cụ...</p>
             ) : toolsError ? (
-              <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+            <div role="alert" className="rounded-lg border border-danger-border bg-danger-bg p-3 text-sm text-danger">
                 <p>Không tải được danh sách dụng cụ: {toolsError}</p>
-                <button type="button" className="mt-2 font-medium underline" onClick={onRetryTools}>Thử lại</button>
+                <Button variant="white" size="sm" className="mt-2" onClick={onRetryTools}>Thử lại</Button>
               </div>
             ) : tools.length === 0 ? (
               <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">

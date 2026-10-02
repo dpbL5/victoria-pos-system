@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireTrainingAccess } from '@/lib/shared/auth'
 import { buildAuthUrl, getGoogleConfig } from '@/lib/google'
 import { cookies } from 'next/headers'
 
 export async function GET() {
   try {
-    const auth = await requireAdmin()
+    const auth = await requireTrainingAccess()
 
     const config = getGoogleConfig()
     if (!config.isConfigured) {

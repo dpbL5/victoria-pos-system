@@ -49,19 +49,20 @@ export function SortableHeader({
 }) {
   const active = currentSortKey === sortKey
   return (
-    <th
-      className={`cursor-pointer select-none py-3 px-3 text-left ${className}`}
-      onClick={() => onToggle(sortKey)}
-    >
-      <span className="inline-flex items-center gap-1">
+    <th className={`py-3 px-3 text-left ${className}`} aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button
+        type="button"
+        onClick={() => onToggle(sortKey)}
+        className="inline-flex cursor-pointer select-none items-center gap-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+      >
         {label}
         <ArrowUpDown
           size={12}
           className={`shrink-0 transition-colors ${
-            active ? 'text-blue-500' : 'text-zinc-300 dark:text-zinc-600'
+            active ? 'text-info' : 'text-zinc-300 dark:text-zinc-600'
           }`}
         />
-      </span>
+      </button>
     </th>
   )
 }
@@ -122,16 +123,16 @@ export function TablePagination({
         Trang {page}/{totalPages} · {total} mục
       </p>
       <div className="flex items-center gap-1">
-        <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => onPageChange(1)}>
+      <Button variant="white" size="sm" disabled={page <= 1} onClick={() => onPageChange(1)}>
           Đầu
         </Button>
-        <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+      <Button variant="white" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
           Trước
         </Button>
-        <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+      <Button variant="white" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
           Sau
         </Button>
-        <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(totalPages)}>
+      <Button variant="white" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(totalPages)}>
           Cuối
         </Button>
       </div>
@@ -222,7 +223,7 @@ export function SortableTable<T>({
               message={hasActiveSearch ? 'Không tìm thấy dữ liệu phù hợp' : emptyMessage}
               description={hasActiveSearch ? 'Thử xoá nội dung tìm kiếm.' : emptyDescription}
               action={hasActiveSearch ? (
-                <Button variant="secondary" size="sm" onClick={() => setSearchQuery('')}>
+              <Button variant="white" size="sm" onClick={() => setSearchQuery('')}>
                   Xoá tìm kiếm
                 </Button>
               ) : undefined}

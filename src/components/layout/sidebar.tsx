@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   ArrowRightLeft,
@@ -23,7 +22,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useCallback } from "react";
-import { isAdminOnly } from "@/lib/shared/roles";
+import { Logo } from "@/components/ui/logo";
+import { canAccessTraining, isAdminOnly } from "@/lib/shared/roles";
 
 interface MenuItem {
   href: string;
@@ -31,6 +31,9 @@ interface MenuItem {
   Icon: LucideIcon;
   adminOnly?: boolean;
   staffHidden?: boolean;
+  trainingOnly?: boolean;
+  /** Mọi role đều thấy (kể cả TEACHER, vốn chỉ mở module Đào tạo) */
+  alwaysVisible?: boolean;
 }
 
 interface MenuGroup {
@@ -77,9 +80,10 @@ export const menuGroups: MenuGroup[] = [
         label: "Lịch học",
         Icon: GraduationCap,
         adminOnly: true,
+        trainingOnly: true,
       },
-      { href: "/classes", label: "Lớp học", Icon: School, adminOnly: true },
-      { href: "/students", label: "Học viên", Icon: Users, adminOnly: true },
+      { href: "/classes", label: "Lớp học", Icon: School, adminOnly: true, trainingOnly: true },
+      { href: "/students", label: "Học viên", Icon: Users, adminOnly: true, trainingOnly: true },
     ],
   },
   {
@@ -93,7 +97,7 @@ export const menuGroups: MenuGroup[] = [
   },
   {
     label: "Hệ thống",
-    items: [{ href: "/settings", label: "Cài đặt", Icon: Settings }],
+    items: [{ href: "/settings", label: "Cài đặt", Icon: Settings, alwaysVisible: true }],
   },
 ];
 
@@ -102,7 +106,9 @@ export function getVisibleMenuGroups(userRole?: string): MenuGroup[] {
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
-        if (item.adminOnly && !isAdminOnly(userRole)) return false;
+        if (userRole === "TEACHER" && !item.trainingOnly && !item.alwaysVisible) return false;
+        if (item.trainingOnly && !canAccessTraining(userRole)) return false;
+        if (item.adminOnly && !isAdminOnly(userRole) && userRole !== "TEACHER") return false;
         if (item.staffHidden && userRole === "STAFF") return false;
         return true;
       }),
@@ -139,25 +145,15 @@ export function Sidebar({ collapsed, onToggle, userRole }: SidebarProps) {
           collapsed ? "justify-center" : "gap-3"
         }`}
       >
-        <div
-          className={`relative shrink-0 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-800 ${
-            collapsed ? "h-9 w-9" : "h-10 w-10"
-          }`}
-        >
-          <Image
-            src="/logo.jpg"
-            alt="Victoria Archery Club"
-            width={40}
-            height={40}
-            className="h-full w-full object-contain"
-          />
+    <div className={`relative shrink-0 ${collapsed ? "h-9 w-9" : "h-10 w-10"}`}>
+          <Logo className="h-full w-full" />
         </div>
         {!collapsed && (
           <div className="min-w-0">
             <h1 className="truncate text-sm font-bold leading-tight tracking-wide text-zinc-900 dark:text-white">
               VICTORIA
             </h1>
-            <p className="truncate text-[10px] font-medium uppercase tracking-[0.2em] text-gold-dark dark:text-gold">
+          <p className="truncate text-[10px] font-medium uppercase tracking-[0.2em] text-yellow-dark dark:text-yellow">
               Archery Club
             </p>
           </div>
@@ -191,7 +187,7 @@ export function Sidebar({ collapsed, onToggle, userRole }: SidebarProps) {
                       collapsed ? "justify-center px-2" : ""
                     } ${
                       active
-                        ? "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400"
+                      ? "bg-info-bg text-info bg-info-bg text-info"
                         : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-200"
                     }`}
                     title={collapsed ? item.label : undefined}
