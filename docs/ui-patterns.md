@@ -15,10 +15,11 @@
 | `ToastProvider` | `@/components/ui/toast` | Wrap dashboard layout — cung cấp toast notifications |
 | `useToast` | `@/components/ui/toast` | Hook: `const { success, error } = useToast()` |
 | `Input` | `@/components/ui/input` | Text input thống nhất |
-| `Select` | `@/components/ui/input` | Select dropdown thống nhất |
+| `Select` | `@/components/ui/input` | Select dropdown thống nhất — mũi tên là icon lucide, `<select>` được bọc trong khung `relative`. **Bề rộng / flex (`w-*`, `max-w-*`, `flex-1`) đặt cho khung bọc**, không đặt cho `<Select>`; cần khe phải hẹp hơn `pr-9` thì dùng `pr-[1.75rem]` (có test chặn) |
 | `Label` | `@/components/ui/input` | Form label (có required indicator) |
 | `Textarea` | `@/components/ui/input` | Textarea input thống nhất |
-| `Button` | `@/components/ui/button` | Nút (8 variants: accent `blue`/`red`/`red-soft`/`yellow` + trung tính `white`/`grey`/`contrast` + `ghost`, 4 sizes, loading state, icon). Link/`<a>` cần hình dạng button thì dùng `buttonClass({ variant, size })` từ cùng file |
+| `Button` | `@/components/ui/button` | Nút (9 variants: accent `blue`/`red`/`red-soft`/`success`/`yellow` + trung tính `white`/`grey`/`contrast` + `ghost`, 4 sizes, loading state, icon). **Luôn truyền `variant` tường minh** — có test chặn. Link/`<a>` cần hình dạng button thì dùng `buttonClass({ variant, size })` từ cùng file |
+| `ActionTile` | `@/components/ui/action-tile` | **Ô hành động lớn** (56px, icon + nhãn) — hàng hành động chính của một màn. Mẫu chung lấy từ hàng `Bán kèm · Check-in · Bán lẻ` của màn Ca hôm nay |
 | `FilterButton` | `@/components/ui/filter-button` | Nút filter toggle (active/onClick) |
 | `NoticeCard` | `@/components/ui/notice-card` | Card thông báo (4 tones: info/success/warning/danger, title + description + action) |
 | `SortableCardList` | `@/components/ui/sortable-card-list` | Danh sách card kéo thả (dụng cụ) |
@@ -97,6 +98,56 @@ Quy tắc:
 | Hội viên | `Ticket` | Check-in modal |
 | Khách vãng lai | `Users` | Check-in modal |
 | Mật khẩu | `Key` | Reset password |
+
+## Ô hành động lớn (`ActionTile`)
+
+Hàng nút chính của một màn vận hành dùng `ActionTile` — 56px, icon 20px + nhãn một dòng, đúng bằng hàng `Bán kèm · Check-in · Bán lẻ` của màn Ca hôm nay. Mọi màn dùng chung một kích thước, một focus ring, một nhịp nhấn.
+
+```tsx
+<ActionTile label="Check-in" icon={LogIn} tone="primary" onClick={...} />
+<ActionTile label="Xem báo cáo" icon={BarChart3} href="/reports" />   // render <Link>
+<ActionTile label="Có mặt" icon={CheckCircle2} tone="success" active={done} size="sm" />
+<ActionTile label="Check-in" icon={LogIn} tone="primary" layout="column" />   // icon trên nhãn
+```
+
+| Prop | Mặc định | Ý nghĩa |
+|------|----------|---------|
+| `tone` | `secondary` | `primary` = hành động chính của màn (đậm, `contrast`), `secondary` = nền xám, `success`/`danger` = ô trạng thái (tint) |
+| `size` | `md` (56px) | `sm` (44px) cho hàng dày như điểm danh trong danh sách học viên |
+| `layout` | `row` | `column` = **chỉ từ `lg`**: icon trên nhãn, icon 28px + chữ 16px (ô cao bằng dải ca). Dưới `lg` y như `row` |
+| `active` | — | Truyền (kể cả `false`) = ô trạng thái → phát `aria-pressed`, chưa chọn thì rơi về nền xám |
+| `href` | — | Render `<Link>` thay vì `<button>` |
+
+Nguyên tắc: **một hàng hành động chính = một hàng `ActionTile`**. Nút trong form/dialog vẫn dùng `Button`. Không tự chế lại ô lớn bằng `<button>` + class thủ công — đó là cách phát sinh class trùng và mất focus ring.
+
+## Variant của nút — quy ước toàn hệ thống
+
+| Variant | Vai trò |
+|---------|---------|
+| `contrast` | **Hành động chính**: Thêm/Tạo, Lưu, Cập nhật, Thu tiền, Check-in, Mở ca, Đăng nhập |
+| `white` | Nút phụ: Huỷ, Quay lại, Thử lại, Xem, Tìm, phân trang, sửa/xem (icon trong row) |
+| `red` | Xoá / kết thúc (có chữ) |
+| `red-soft` | Xoá icon-only trong bảng/card |
+| `success` | Ô trạng thái tích cực (điểm danh) |
+| `yellow` | Mọi thao tác thuộc hội viên |
+| `blue` | Điều hướng / mở dialog cần màu brand |
+| `ghost` | Tiện ích nền trong suốt: đóng modal, chevron |
+
+`variant` mặc định là `blue` nhưng **không được bỏ trống** — `src/components/ui/button.test.tsx` quét toàn repo và fail nếu có `<Button>` không khai báo variant.
+
+**Mọi variant cùng chiều cao.** Variant nền đặc (`blue`, `red`, `yellow`, `grey`, `contrast`) và `ghost` đều mang `border border-transparent`; variant tint (`red-soft`, `success`, `white`) mang viền màu. Viền là phần của **hình dạng**, không phải của màu — thiếu nó thì nút thấp hơn 2px và hai nút khác màu đứng cạnh nhau sẽ lệch (đo thật: `red-soft` 30px cạnh `contrast` 28px trước khi sửa). Test khoá ở `button.test.tsx`.
+
+## Type ramp (cỡ chữ)
+
+Chỉ dùng bậc có sẵn trong `DESIGN.md → typography`. Không tự chế `text-[11px]` / `text-[13px]` — `impeccable detect` báo `design-system-font-size`.
+
+| Bậc | px | Dùng cho |
+|-----|----|---------|
+| `text-xl` | 20 | Tiêu đề màn (`PAGE_TITLE_CLASS`) |
+| `text-lg` | 18 | Tiêu đề khối lớn |
+| `text-sm` | 14 | Chữ thân, nhãn form, nút |
+| `text-xs` | 12 | Chữ phụ, cột bảng, nhãn nhỏ |
+| `text-[10px]` | 10 | **Chỉ** micro-label viết HOA (`uppercase` + `tracking-wider`) — bậc `overline` |
 
 ## Design tokens (color)
 

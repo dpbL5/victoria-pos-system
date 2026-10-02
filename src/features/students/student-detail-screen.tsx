@@ -182,10 +182,13 @@ export function StudentDetailScreen({ id }: StudentDetailProps) {
           ) : (
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <Select aria-label="Chọn lớp" className="max-w-64" value={classPick} onChange={(event) => setClassPick(event.target.value)}>
-                  <option value="">Chọn lớp…</option>
-                  {classesData?.data?.classes?.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                </Select>
+                {/* Bề rộng đặt ở khung bọc: mũi tên của Select bám mép phải khung */}
+                <div className="max-w-64">
+                  <Select aria-label="Chọn lớp" value={classPick} onChange={(event) => setClassPick(event.target.value)}>
+                    <option value="">Chọn lớp…</option>
+                    {classesData?.data?.classes?.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                  </Select>
+                </div>
               <Button variant="contrast" size="sm" disabled={submitting || !classPick} onClick={() => void assignClass()}>{submitting ? 'Đang lưu...' : 'Xếp vào lớp'}</Button>
             </div>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Học viên đang ở lớp khác phải rời lớp đó trước khi xếp vào lớp mới.</p>

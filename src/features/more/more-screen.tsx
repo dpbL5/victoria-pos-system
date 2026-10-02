@@ -69,8 +69,16 @@ export function MoreScreen() {
       revalidateOnFocus: false,
     },
   );
+  const user = userData?.data ?? null;
+  const role = user?.role;
+  const isAdmin = isAdminOnly(role);
+  const isTeacher = role === "TEACHER";
+
+  // Chờ đọc xong role rồi mới quyết định gọi API. Giáo viên không trực quầy và
+  // proxy chặn ngoài module Đào tạo — gọi sớm sẽ ăn 403 ngay lần render đầu.
+  const canLoadShift = !!role && !isTeacher;
   const { data: shiftData, isLoading: shiftLoading } = useApi<Shift | null>(
-    "/api/shifts?current=true",
+    canLoadShift ? "/api/shifts?current=true" : null,
     {
       dedupingInterval: 60_000,
       revalidateOnFocus: false,
@@ -80,12 +88,11 @@ export function MoreScreen() {
     key: string;
     value: string;
     label: string | null;
-  }>(`/api/settings?key=${PARKING_FEE_KEY}`, {
+  }>(isAdmin ? `/api/settings?key=${PARKING_FEE_KEY}` : null, {
     dedupingInterval: 300_000,
     revalidateOnFocus: false,
   });
 
-  const user = userData?.data ?? null;
   const shift = shiftData?.data ?? null;
   const loading = userLoading || shiftLoading;
   const error = !userData?.success ? ((userData?.error as string) ?? "") : "";
@@ -101,7 +108,6 @@ export function MoreScreen() {
     }
   }, [parkingFeeData, parkingFeeValue]);
 
-  const isAdmin = isAdminOnly(user?.role);
   const canViewShifts = isManagerOrAdmin(user?.role);
   const coreLinks = [
     {
@@ -187,6 +193,32 @@ export function MoreScreen() {
       Icon: Users,
     },
   ] as const;
+
+  // Giáo viên chỉ mở được module Đào tạo — lối tắt vận hành sẽ bị proxy đưa về
+  // `/lessons`, nên tab `Thêm` của họ chỉ liên kết 3 màn đào tạo.
+  const teacherLinks = [
+    {
+      href: "/lessons",
+      label: "Lịch học",
+      Icon: GraduationCap,
+    },
+    {
+      href: "/classes",
+      label: "Lớp học",
+      Icon: School,
+    },
+    {
+      href: "/students",
+      label: "Học viên",
+      Icon: Users,
+    },
+  ] as const;
+
+  const shortcutLinks = isAdmin
+    ? adminLinks
+    : isTeacher
+      ? teacherLinks
+      : coreLinks;
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -282,21 +314,24 @@ export function MoreScreen() {
                   : "Staff"}
             </Badge>
           </div>
-          <p
-            className={`mt-3 text-xs font-medium ${shift ? "text-success" : "text-warning"}`}
-          >
-            {shift
-              ? `Ca đang mở · ${formatClock(shift.openedAt)}`
-              : "Chưa mở ca"}
-            </p>
+          {/* Giáo viên không trực ca quầy nên không hiện trạng thái ca */}
+          {!isTeacher && (
+            <p
+              className={`mt-3 text-xs font-medium ${shift ? "text-success" : "text-warning"}`}
+            >
+              {shift
+                ? `Ca đang mở · ${formatClock(shift.openedAt)}`
+                : "Chưa mở ca"}
+              </p>
+          )}
           </section>
 
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <SectionTitle title="Lối tắt" />
           <div className="mt-2 grid grid-cols-4 gap-1 sm:gap-2">
-            {(isAdmin ? adminLinks : coreLinks).map((item, index) => (
+            {(shortcutLinks.map((item, index) => (
               <ShortcutCard key={item.href} index={index} {...item} />
-            ))}
+            )))}
           </div>
         </section>
 
@@ -337,11 +372,12 @@ export function MoreScreen() {
                     key={option.value}
                     type="button"
                     onClick={() => setTheme(option.value)}
-                    className={`flex min-h-11 items-center justify-center gap-2 rounded-lg border px-2 text-xs font-medium transition-colors ${
+                    className={`flex min-h-11 items-center justify-center gap-2 rounded-lg border px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary ${
                       active
                       ? "border-info-border bg-info-bg text-info"
-                        : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        : "border-border-default bg-surface-elevated text-text-secondary hover:bg-surface-tertiary"
                     }`}
+                    aria-pressed={active}
                   >
                     <Icon size={16} />
                     <span>{option.label}</span>
@@ -405,7 +441,7 @@ function ShortcutCard({
       <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-yellow-bg text-yellow-dark transition-colors group-hover:bg-yellow-border">
         <Icon size={24} strokeWidth={1.85} aria-hidden />
       </span>
-      <span className="text-[11px] font-medium leading-tight text-text-secondary">
+      <span className="text-xs font-medium leading-tight text-text-secondary">
         {label}
       </span>
     </Link>

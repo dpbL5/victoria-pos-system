@@ -62,7 +62,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     promotions: { findAvailable: vi.fn(), findAvailableById: vi.fn(async () => null), findOverlapping: vi.fn(), findMany: vi.fn(), findById: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     settings: { get: vi.fn(), getNumeric: vi.fn(async () => 0), upsert: vi.fn(), getWithLabel: vi.fn(), findAll: vi.fn() },
     session: {
-      findByIdForCheckout: vi.fn(), findByIdWithCustomer: vi.fn(), findActiveByCustomer: vi.fn(), findMany: vi.fn(), findByIdForPreview: vi.fn(), findSellItemTotals: vi.fn(async () => ({})), findSellItems: vi.fn(async () => []), addSellItem: vi.fn(async () => {}), removeSellItems: vi.fn(async () => {}), clearSellItems: vi.fn(async () => {}),
+      findByIdForCheckout: vi.fn(), findByIdWithCustomer: vi.fn(), findActiveByCustomer: vi.fn(), findMany: vi.fn(), findByIdForPreview: vi.fn(), findSellItemTotals: vi.fn(async () => ({})), findSellItems: vi.fn(async () => []), addSellItem: vi.fn(async () => {}), updateSellItemQuantity: vi.fn(async () => {}), removeSellItems: vi.fn(async () => {}), clearSellItems: vi.fn(async () => {}),
       countCreatedBetween: vi.fn(), createWithRefs: vi.fn(), createPricingGroup: vi.fn(), createPlayersForGroup: vi.fn(), updatePricingGroup: vi.fn(), update: vi.fn(),
       decrementGroupRemaining: vi.fn(), sumRemainingPlayers: vi.fn(async () => 0), findByIdWithPlayers: vi.fn(async () => makeSession()),
       findPlayersForPause: vi.fn(), pausePlayer: vi.fn(), resumePlayer: vi.fn(), pausePlayersForSession: vi.fn(), resumePlayersForSession: vi.fn(), renamePlayer: vi.fn(), movePlayersToGroup: vi.fn(), markPlayersCheckedOut: vi.fn(),
@@ -202,5 +202,116 @@ describe('checkOut — guard trước transaction (business invariants)', () => 
       repos
     )
     expect(result).toEqual({ ok: false, error: { code: 'GROUP_PLAYER_COUNT_MISMATCH' } })
+  })
+})
+
+// ── Nhóm còn chơi khi nhóm khác đã thu lần 1 ────────────────────────────────
+// Phiên 2 nhóm (chia bảng giá lúc check-in). Nhóm 1 đã thu lần 1 và có snapshot
+// giá; nhóm 2 vẫn đang chơi, CHƯA có bảng giá. Nhóm 2 phải chọn được bảng giá
+// riêng khi thu — không bị khoá cứng theo nhóm 1.
+describe('checkOut — nhóm còn chơi chưa có giá khi nhóm khác đã thu lần 1', () => {
+  const rule2 = {
+    id: 'rule-2',
+    name: 'Giờ tối',
+    ratePerHour: 80000,
+    tiers: [],
+    daysOfWeek: [] as number[],
+    effectiveFrom: new Date('2020-01-01T00:00:00Z'),
+    effectiveTo: null,
+  }
+
+  function mixedSession(): SessionWithPlayers {
+    return makeSession({
+      playerCount: 2,
+      pricingGroups: [
+        {
+          id: 'group-1', label: 'Nhóm 1', playerCount: 1, remainingCount: 0, hourlyRate: 50000,
+          pricingRuleId: 'rule-1',
+          pricingSnapshot: { ruleId: 'rule-1', name: 'Giờ thường', ratePerHour: 50000, tiers: [] },
+          players: [
+            { id: 'player-1', name: '', pausedAt: null, totalPausedSeconds: 0, checkedOutAt: new Date('2026-08-07T11:00:00Z') },
+          ],
+        },
+        {
+          id: 'group-2', label: 'Nhóm 2', playerCount: 1, remainingCount: 1, hourlyRate: 0,
+          pricingRuleId: null,
+          pricingSnapshot: null,
+          players: [
+            { id: 'player-2', name: '', pausedAt: null, totalPausedSeconds: 0, checkedOutAt: null },
+          ],
+        },
+      ],
+    })
+  }
+
+  function mixedRepos(): Repositories {
+    const base = makeRepositories()
+    return makeRepositories({
+      session: { ...base.session, findByIdWithPlayers: vi.fn(async () => mixedSession()) },
+      pricing: {
+        ...base.pricing,
+        findManyByIdsWithTiers: vi.fn(async () => [rule2] as never),
+        // Không có rule auto → nếu code rơi về bảng giá cấp phiên sẽ lỗi ngay,
+        // thay vì âm thầm tính nhóm 2 bằng giá của nhóm 1.
+        findApplicableRule: vi.fn(async () => null),
+      },
+    })
+  }
+
+  /**
+   * File này CỐ TÌNH không mock prisma (chỉ test pha guard trước transaction),
+   * nên chạy tới `runInTransaction` là nổ TypeError. Trả về null = đã QUA được
+   * pha guard, tức bảng giá đã resolve xong.
+   */
+  async function outcomePastGuards(input: CheckoutInput, repos: Repositories) {
+    try {
+      return await checkOut(input, repos)
+    } catch {
+      return null
+    }
+  }
+
+  it('nhóm 2 chọn bảng giá riêng → resolve xong, không còn PRICING_RULE_NOT_FOUND', async () => {
+    const result = await outcomePastGuards(
+      makeInput({ playerIds: ['player-2'], groupPricingRuleIds: { 'group-2': 'rule-2' } }),
+      mixedRepos()
+    )
+    // null = đã qua pha chốt giá và đi tới transaction
+    expect(result).toBeNull()
+  })
+
+  it('chỉ nạp bảng giá của nhóm chưa chốt, không tính lại giá nhóm 1', async () => {
+    const repos = mixedRepos()
+    await outcomePastGuards(
+      makeInput({ playerIds: ['player-2'], groupPricingRuleIds: { 'group-2': 'rule-2' } }),
+      repos
+    )
+    const loadedIds = (repos.pricing.findManyByIdsWithTiers as ReturnType<typeof vi.fn>).mock.calls
+      .flatMap((call) => call[0] as string[])
+    expect(loadedIds).toContain('rule-2')
+    expect(loadedIds).not.toContain('rule-1')
+  })
+
+  it('không gửi bảng giá cho nhóm 2 và không có rule auto → báo thiếu bảng giá', async () => {
+    const result = await checkOut(makeInput({ playerIds: ['player-2'] }), mixedRepos())
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('PRICING_RULE_NOT_FOUND')
+  })
+
+  it('bảng giá nhóm 2 hết hiệu lực → PRICING_RULE_NOT_EFFECTIVE', async () => {
+    const repos = makeRepositories({
+      session: { ...makeRepositories().session, findByIdWithPlayers: vi.fn(async () => mixedSession()) },
+      pricing: {
+        ...makeRepositories().pricing,
+        findManyByIdsWithTiers: vi.fn(async () => [{ ...rule2, effectiveTo: new Date('2020-02-01T00:00:00Z') }] as never),
+        findApplicableRule: vi.fn(async () => null),
+      },
+    })
+    const result = await checkOut(
+      makeInput({ playerIds: ['player-2'], groupPricingRuleIds: { 'group-2': 'rule-2' } }),
+      repos
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('PRICING_RULE_NOT_EFFECTIVE')
   })
 })

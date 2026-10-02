@@ -140,7 +140,13 @@ export default function LessonsCalendar() {
       </div>
       <p className="min-w-0 flex-1 truncate text-center text-sm font-semibold md:text-base">{title}</p>
       <div ref={menuRef} className="relative flex shrink-0 items-center gap-1">
-        <Select aria-label="Chế độ xem lịch" className="!w-auto max-w-20 border-0 bg-transparent !px-1.5 shadow-none lg:max-w-24" value={view} onChange={e => { setView(e.target.value); ref.current?.getApi().changeView(e.target.value) }}>{Object.entries(VIEWS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select>
+        {/* Bề rộng đặt ở khung bọc (mũi tên của Select bám mép phải khung). Giữ
+            viền TRONG SUỐT thay vì border-0 để chiều cao không hụt 2px so với
+            nút đứng cạnh — cùng lý do đã ghi ở button.tsx. `pr-[1.75rem]` +
+            `text-sm` vì khung chỉ rộng 80px: để `pr-9`/16px thì "Tháng" bị cắt. */}
+        <div className="w-20 lg:w-24">
+          <Select aria-label="Chế độ xem lịch" className="border-transparent bg-transparent pl-1.5 pr-[1.75rem] text-sm" value={view} onChange={e => { setView(e.target.value); ref.current?.getApi().changeView(e.target.value) }}>{Object.entries(VIEWS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select>
+        </div>
         <Button variant="ghost" icon={SlidersHorizontal} size="sm" aria-label={activeFilterCount ? `Bộ lọc lịch, đang áp dụng ${activeFilterCount}` : 'Bộ lọc lịch'} aria-expanded={filtersOpen} className="md:hidden" onClick={() => setFiltersOpen(v => !v)}>{activeFilterCount ? <span className="text-[10px]">{activeFilterCount}</span> : null}</Button>
         <Button variant="ghost" icon={MoreHorizontal} size="sm" aria-label="Lối tắt khác" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)} />
         <div className={`${menuOpen ? '' : 'hidden'} absolute right-0 top-full z-30 mt-1 w-56 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-800 dark:bg-zinc-900`}>

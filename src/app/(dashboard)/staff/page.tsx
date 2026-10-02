@@ -32,6 +32,7 @@ import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { apiJson } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
+import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { toInputDate } from '@/lib/shared/utils'
 import type { UserSession } from '@/features/pos/types'
 import type { UserRole } from '@/types'
@@ -135,7 +136,7 @@ export default function StaffPage() {
       <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <div className="min-w-0">
-            <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-950 dark:text-white">
+            <h1 className={`flex items-center gap-2 ${PAGE_TITLE_CLASS}`}>
             <UserCog size={24} className="text-info" />
               Nhân viên
             </h1>
@@ -231,11 +232,12 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
+      className={`flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary ${
         active
-        ? 'bg-info-bg text-info bg-info-bg text-info'
-          : 'text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
+        ? 'bg-info-bg text-info'
+          : 'text-text-tertiary hover:bg-surface-tertiary hover:text-text-primary'
       }`}
+      aria-pressed={active}
     >
       <Icon size={16} />
       <span>{label}</span>

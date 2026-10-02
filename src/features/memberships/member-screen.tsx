@@ -16,6 +16,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { AppSkeleton } from '@/components/ui/skeleton'
+import { FilterButton } from '@/components/ui/filter-button'
 import { useApi } from '@/hooks/use-api'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
@@ -192,12 +193,20 @@ export function MemberScreen() {
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           {filteredMembers.length} người
         </p>
-        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-        <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-info' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
-      <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-info' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Còn hạn: {stats.active}</button>
-    <button type="button" aria-pressed={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')} className={statusFilter === 'EXPIRED' ? 'font-medium text-info' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hết hạn: {stats.expired}</button>
-  <button type="button" aria-pressed={statusFilter === 'NONE'} onClick={() => setStatusFilter('NONE')} className={statusFilter === 'NONE' ? 'font-medium text-info' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Chưa đóng: {stats.none}</button>
-    </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <FilterButton active={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')}>
+            Tất cả: {stats.total}
+          </FilterButton>
+          <FilterButton active={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')}>
+            Còn hạn: {stats.active}
+          </FilterButton>
+          <FilterButton active={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')}>
+            Hết hạn: {stats.expired}
+          </FilterButton>
+          <FilterButton active={statusFilter === 'NONE'} onClick={() => setStatusFilter('NONE')}>
+            Chưa đóng: {stats.none}
+          </FilterButton>
+        </div>
     </div>
     </div>
   )

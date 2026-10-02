@@ -3,7 +3,16 @@
 import { Loader2, type LucideIcon } from 'lucide-react'
 import { type ButtonHTMLAttributes, forwardRef } from 'react'
 
-type ButtonVariant = 'blue' | 'red' | 'red-soft' | 'yellow' | 'white' | 'grey' | 'contrast' | 'ghost'
+export type ButtonVariant =
+  | 'blue'
+  | 'red'
+  | 'red-soft'
+  | 'success'
+  | 'yellow'
+  | 'white'
+  | 'grey'
+  | 'contrast'
+  | 'ghost'
 type ButtonSize = 'xs' | 'sm' | 'md' | 'lg'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -14,23 +23,30 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean
 }
 
+// MỌI variant đều có đúng 1px viền — variant nền đặc dùng viền trong suốt.
+// Không có viền thì nút thấp hơn 2px và đứng cạnh nhau trong cùng một hàng sẽ
+// lệch (đo được: Hủy/red-soft 30px cạnh Xác nhận/contrast 28px). DESIGN.md ghi
+// các nút có nhãn cùng một chiều cao, nên viền là phần của hình dạng, không
+// phải phần của màu — đổi màu không được đổi chiều cao.
 const variantClasses: Record<ButtonVariant, string> = {
   blue:
-    'bg-info text-white shadow-sm hover:opacity-90',
+    'border border-transparent bg-info text-white shadow-sm hover:opacity-90',
   red:
-    'bg-danger text-white shadow-sm hover:opacity-90',
+    'border border-transparent bg-danger text-white shadow-sm hover:opacity-90',
   'red-soft':
     'border border-danger-border bg-danger-bg text-danger hover:bg-danger-border',
+  success:
+    'border border-success-border bg-success-bg text-success hover:bg-success-border',
   yellow:
-    'bg-yellow text-zinc-900 shadow-sm hover:opacity-90',
+    'border border-transparent bg-yellow text-zinc-900 shadow-sm hover:opacity-90',
   white:
     'border border-border-default bg-surface-elevated text-text-primary shadow-sm hover:bg-surface-tertiary',
   grey:
-    'bg-surface-tertiary text-text-primary shadow-sm hover:opacity-90',
+    'border border-transparent bg-surface-tertiary text-text-primary shadow-sm hover:opacity-90',
   contrast:
-    'bg-text-primary text-text-inverse shadow-sm hover:opacity-90',
+    'border border-transparent bg-text-primary text-text-inverse shadow-sm hover:opacity-90',
   ghost:
-    'text-text-tertiary hover:bg-surface-tertiary hover:text-text-primary',
+    'border border-transparent text-text-tertiary hover:bg-surface-tertiary hover:text-text-primary',
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -65,9 +81,9 @@ export function buttonClass({
   className?: string
 } = {}) {
   return `${baseClasses} ${variantClasses[variant]} ${
-  iconOnly ? iconOnlyClasses[size] : sizeClasses[size]
-} ${fullWidth ? 'w-full' : ''} ${className}`
-  }
+    iconOnly ? iconOnlyClasses[size] : sizeClasses[size]
+  } ${fullWidth ? 'w-full' : ''} ${className}`
+}
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = 'blue', size = 'md', icon: Icon, loading, fullWidth, className = '', children, disabled, ...props }, ref) => {
@@ -89,7 +105,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {children && <span className="button-label flex items-center gap-1.5">{children}</span>}
       </button>
     )
-  }
+  },
 )
 
 Button.displayName = 'Button'

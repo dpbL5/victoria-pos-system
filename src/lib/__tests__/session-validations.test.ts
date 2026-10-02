@@ -28,13 +28,20 @@ describe('checkoutSessionSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('mặc định items = [] và parkingVehicleCount = 0', () => {
+  it('mặc định parkingVehicleCount = 0, items giữ undefined khi không gửi', () => {
     const result = checkoutSessionSchema.safeParse({ paymentMethod: 'CASH' })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.items).toEqual([])
+      // undefined ≠ []: checkout chỉ hoà giải dòng bán kèm khi client gửi `items`
+      expect(result.data.items).toBeUndefined()
       expect(result.data.parkingVehicleCount).toBe(0)
     }
+  })
+
+  it('items = [] vẫn hợp lệ (nghĩa là phiếu không còn dòng hàng nào)', () => {
+    const result = checkoutSessionSchema.safeParse({ paymentMethod: 'CASH', items: [] })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.items).toEqual([])
   })
 
   it('chấp nhận promotionRuleId UUID hoặc null', () => {

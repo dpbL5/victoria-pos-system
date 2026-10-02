@@ -257,23 +257,27 @@ function ShiftPickerBar({
     <div className="flex items-center gap-3">
         <Label
           htmlFor="shift-picker"
-          className="mb-0 shrink-0 text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+          className="mb-0 shrink-0 text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
         >
           Ca làm
         </Label>
-        <Select
-          id="shift-picker"
-            value={selectedShiftId ?? ''}
-          onChange={(event) => onChange(event.target.value)}
-          className="min-w-0 flex-1 text-sm"
-        >
+        {/* flex-1/min-w-0 đặt ở khung bọc: <Select> tự bọc một khung `relative`
+            để giữ mũi tên ở mép phải, nên class layout phải nằm trên khung đó. */}
+        <div className="min-w-0 flex-1">
+          <Select
+            id="shift-picker"
+              value={selectedShiftId ?? ''}
+            onChange={(event) => onChange(event.target.value)}
+            className="text-sm"
+          >
           {shifts.map((s) => (
             <option key={s.id} value={s.id}>
               {s.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'} · {formatDay(s.openedAt)} ·{' '}
               {formatClock(s.openedAt)} · {s.staff?.fullName ?? '—'}
             </option>
           ))}
-        </Select>
+          </Select>
+        </div>
       </div>
     </Card>
   )

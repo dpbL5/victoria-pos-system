@@ -10,6 +10,8 @@ import {
   type PromotionSnapshot,
 } from '@/lib/promotion-calculation'
 import { calculatePlayerPrice, calculateSessionPriceFromLoaded, type PendingGroupPricing, type PricingResult } from '../pricing-engine'
+import { diffSellItems } from '../sell-item-diff'
+import { applySellItemStockDeltas } from './sell-items'
 import { generateInvoiceNo } from '@/lib/invoicing'
 import { getDayType, getVnDay, getVnHour } from '@/lib/shared/utils'
 import { SETTING_KEYS } from '@/lib/settings'
@@ -36,7 +38,11 @@ export interface CheckoutInput {
   paymentMethod: CheckoutPaymentMethod
   promotionRuleId?: string
   endTime?: Date
-  items: CheckoutLineInput[]
+  /**
+   * DANH SÁCH HÀNG CUỐI CÙNG của phiếu. `undefined` = client không gửi (giữ
+   * nguyên dòng bán kèm như cũ); có mảng = hoà giải theo danh sách này.
+   */
+  items?: CheckoutLineInput[]
   notes?: string
   /** ID của pricing group cần checkout (nếu không có, dùng legacy session.playerCount) */
   pricingGroupId?: string
@@ -50,6 +56,11 @@ export interface CheckoutInput {
   groups?: CheckoutPricingGroupInput[]
   /** Thu trước: chọn người chơi cụ thể (bất kỳ nhóm nào) để checkout — loại trừ với groups/pricingGroupId */
   playerIds?: string[]
+  /**
+   * Bảng giá chọn cho từng nhóm CHƯA có giá, key = groupId (dùng cùng `playerIds`).
+   * Nhóm đã chốt giá ở lần thu trước không cần và không được gửi lại.
+   */
+  groupPricingRuleIds?: Record<string, string>
 }
 
 export interface CheckoutResult {
@@ -87,8 +98,11 @@ export interface PendingAssignment {
   snapshot: import('@/types').PricingRuleSnapshot
   /** Người chơi chọn tay vào nhóm này — chuyển player sang group sau khi persist */
   playerIds: string[]
-  /** Thu trước trên session mới: persist bảng giá nhưng GIỮ playerCount/remainingCount
-   *  (nhóm vẫn còn người chưa thu) — không đè counts, không move players. */
+  /**
+   * Thu trước trên nhóm còn người chưa thu: KHÔNG chốt bảng giá vào nhóm (nhóm giữ
+   * nguyên counts + chưa có giá). Bảng giá chỉ áp cho người được thu lần này; phần
+   * người còn lại chọn lại bảng giá theo giờ thu ở lần sau. Bỏ cờ = thu hết nhóm.
+   */
   preserveCounts?: boolean
 }
 
@@ -114,6 +128,11 @@ export interface CheckoutContext {
     quantity: number
     unitPrice: number
   }>
+  /**
+   * Chênh lệch tồn kho do người dùng sửa số lượng lúc thu (dòng bán kèm đã trừ
+   * kho lúc thêm vào phiên): >0 = trừ thêm, <0 = hoàn kho. Chỉ áp cho PRODUCT.
+   */
+  sellStockDeltas: Array<{ productId: string; delta: number }>
   newQuantityByProductId: Map<string, number>
   parkingVehicleCount: number
   checkoutAt: Date
@@ -173,6 +192,7 @@ export async function checkOut(
     pricingRuleId,
     groups,
     playerIds,
+    groupPricingRuleIds,
   } = input
 
   // ── Pha 1: Guard trước transaction ──
@@ -187,9 +207,18 @@ export async function checkOut(
 
   // ── Session khách vãng lai check-in để trống giá → chọn bảng giá tại checkout ──
   const isMemberSession = session.customer?.type === 'MEMBER' || !!session.membership
-  const needsPricingAssignment = !isMemberSession
+  // Nhóm "chưa chốt giá" = chưa có snapshot + rate 0. Điều kiện phải là TỪNG NHÓM,
+  // không phải cả phiên: nhóm đã thu xong có snapshot, nhóm còn chơi thì chưa —
+  // gộp cả phiên thành một điều kiện sẽ khoá cứng nhóm còn chơi theo nhóm đã thu.
+  const isUnpricedGroup = (g: SessionWithPlayers['pricingGroups'][number]) =>
+    !g.pricingSnapshot && Number(g.hourlyRate) === 0
+  /** Còn nhóm nào chưa chốt giá không (nhóm còn chơi, hoặc phiên mới chưa chia) */
+  const hasUnpricedGroups = !isMemberSession
+    && session.pricingGroups.some(isUnpricedGroup)
+  /** Phiên MỚI hoàn toàn: mọi nhóm chưa chốt giá → chia nhóm + chọn giá ngay tại checkout */
+  const isFreshPricing = !isMemberSession
     && session.pricingGroups.length > 0
-    && session.pricingGroups.every(g => !g.pricingSnapshot && Number(g.hourlyRate) === 0)
+    && session.pricingGroups.every(isUnpricedGroup)
 
   const checkoutAt = new Date()
   // Mốc tính pause: không trừ pause sau thời điểm phiên kết thúc (đồng bộ với preview dùng endTime)
@@ -252,34 +281,55 @@ export async function checkOut(
       }
     })
 
-    // Session chưa gán giá (needsPricingAssignment) — resolve 1 rule cho phiên,
-    // persist vào các group sở hữu với preserveCounts (giữ người chưa thu).
-    if (needsPricingAssignment) {
-      const resolved = await resolveCheckoutPricing(deps, session, { pricingRuleId }, checkoutAt)
-      if (!resolved.ok) return resolved
-      const snapshot = resolved.value.pendingGroups[0]?.snapshot
-      if (!snapshot) return err('PRICING_RULE_NOT_FOUND')
-      const owningGroupIds = new Set(groupedByGroup.map((entry) => entry.group.id))
-      pendingAssignments = Array.from(owningGroupIds).map((gid) => ({
-        groupId: gid,
-        label: session.pricingGroups.find((g) => g.id === gid)?.label ?? 'Nhóm 1',
-        playerCount: session.pricingGroups.find((g) => g.id === gid)?.playerCount ?? checkoutCount,
-        pricingRuleId: resolved.value.pendingAssignments[0].pricingRuleId,
-        snapshot,
-        playerIds: [],
-        preserveCounts: true,
-      }))
-      // Gán lại groupRuleMap theo subset index (dùng snapshot vừa resolve)
-      groupRuleMap = new Map()
-      groupedByGroup.forEach((entry, index) => {
+    // Nhóm CHƯA chốt giá (còn chơi, hoặc phiên mới) → chốt NGAY tại lần thu này
+    // theo bảng giá nhân viên chọn. Nhóm đã có snapshot ở lần thu trước giữ
+    // nguyên giá, không đi qua đây.
+    // Hội viên không tính tiền giờ nên không cần chốt bảng giá.
+    const unpricedEntries = isMemberSession
+      ? []
+      : groupedByGroup
+          .map((entry, index) => ({ entry, index }))
+          .filter(({ entry }) => isUnpricedGroup(entry.group))
+    if (unpricedEntries.length > 0) {
+      const resolvedRules = await resolveRulesForUnpricedGroups(
+        deps,
+        {
+          groupIds: unpricedEntries.map(({ entry }) => entry.group.id),
+          ruleIdsByGroup: groupPricingRuleIds,
+          fallbackRuleId: pricingRuleId,
+        },
+        checkoutAt
+      )
+      if (!resolvedRules.ok) return resolvedRules
+
+      pendingAssignments = []
+      pendingGroups = []
+      for (const { entry, index } of unpricedEntries) {
+        const chosen = resolvedRules.value.get(entry.group.id)
+        if (!chosen) return err('PRICING_RULE_NOT_FOUND')
         groupRuleMap!.set(index, {
-          hourlyRate: snapshot.ratePerHour,
-          tiers: snapshot.tiers.map((t) => ({ minHours: t.minHours, ratePerHour: t.ratePerHour })),
-          ruleName: snapshot.name,
+          hourlyRate: chosen.snapshot.ratePerHour,
+          tiers: chosen.snapshot.tiers.map((t) => ({ minHours: t.minHours, ratePerHour: t.ratePerHour })),
+          ruleName: chosen.snapshot.name,
         })
-      })
+        pendingAssignments.push({
+          groupId: entry.group.id,
+          label: entry.group.label,
+          playerCount: entry.group.playerCount,
+          pricingRuleId: chosen.pricingRuleId,
+          snapshot: chosen.snapshot,
+          playerIds: [],
+          // Thu trước: giữ playerCount/remainingCount cho người chưa thu của nhóm
+          preserveCounts: true,
+        })
+        pendingGroups.push({
+          groupId: entry.group.id,
+          playerCount: entry.group.playerCount,
+          snapshot: chosen.snapshot,
+        })
+      }
     }
-  } else if (needsPricingAssignment) {
+  } else if (isFreshPricing) {
     const resolved = await resolveCheckoutPricing(deps, session, { pricingRuleId, groups }, checkoutAt)
     if (!resolved.ok) return resolved
     pendingAssignments = resolved.value.pendingAssignments
@@ -401,7 +451,9 @@ export async function checkOut(
     }
   }
 
-  const pricingResult = needsPricingAssignment && pendingGroups
+  // Có nhóm vừa được chốt giá trong request này → engine phải tính theo snapshot
+  // đó, không rơi về bảng giá cấp phiên (nhóm còn chơi có bảng giá riêng).
+  const pricingResult = hasUnpricedGroups && pendingGroups
     ? await calculateSessionPriceFromLoaded(
         deps,
         session,
@@ -426,30 +478,33 @@ export async function checkOut(
   let playDiscountTotal = pricing.promotionDiscount
   let playTotal = Math.max(0, pricing.grandTotal)
 
-  const quantityByProductId = new Map<string, number>()
-  const newQuantityByProductId = new Map<string, number>()
-
-  // ── Gom dòng bán kèm chờ thu (SessionSellItem — đã trừ kho lúc thêm vào phiên) ──
-  // Checkout gộp TOÀN BỘ dòng bán kèm còn lại vào invoice INV duy nhất.
-  const sellItems = await deps.session.findSellItems(sessionId)
-  const mergedSellItemIds: string[] = sellItems.map((item) => item.id)
-  for (const item of sellItems) {
-    quantityByProductId.set(
+  // ── Hoà giải dòng hàng của phiếu ───────────────────────────────────────
+  // Drawer gửi DANH SÁCH CUỐI CÙNG (cả dòng đã bán kèm lúc chơi đã sửa số lượng
+  // ở chân phiếu, lẫn hàng mới chọn lúc thu). Không gửi `items` (client cũ) =
+  // giữ nguyên dòng bán kèm, chỉ cộng hàng mới.
+  // Phép so này dùng chung với đường lưu-khi-đóng-drawer — xem sell-item-diff.ts.
+  const desiredByProductId = items === undefined ? null : new Map<string, number>()
+  for (const item of items ?? []) {
+    desiredByProductId!.set(
       item.productId,
-      (quantityByProductId.get(item.productId) ?? 0) + item.quantity
+      (desiredByProductId!.get(item.productId) ?? 0) + item.quantity
     )
   }
 
-  // ── Gom sản phẩm từ request checkout hiện tại (cần trừ kho) ──
-  for (const item of items) {
-    quantityByProductId.set(
-      item.productId,
-      (quantityByProductId.get(item.productId) ?? 0) + item.quantity
-    )
-    newQuantityByProductId.set(
-      item.productId,
-      (newQuantityByProductId.get(item.productId) ?? 0) + item.quantity
-    )
+  const sellItems = await deps.session.findSellItems(sessionId)
+  // Mọi dòng bán kèm đều bị gộp vào hoá đơn này rồi xoá khỏi phiên
+  const mergedSellItemIds: string[] = sellItems.map((item) => item.id)
+  const diff = diffSellItems(sellItems, desiredByProductId)
+  const sellItemLines: CheckoutContext['sellItemLines'] = diff.lines
+  const sellStockDeltas: CheckoutContext['sellStockDeltas'] = diff.stockDeltas
+  const newQuantityByProductId = diff.newQuantities
+
+  const quantityByProductId = new Map<string, number>()
+  for (const line of sellItemLines) {
+    quantityByProductId.set(line.productId, (quantityByProductId.get(line.productId) ?? 0) + line.quantity)
+  }
+  for (const [productId, quantity] of newQuantityByProductId) {
+    quantityByProductId.set(productId, (quantityByProductId.get(productId) ?? 0) + quantity)
   }
 
   const productIds = Array.from(quantityByProductId.keys())
@@ -461,7 +516,7 @@ export async function checkOut(
     return err('PRODUCT_NOT_FOUND')
   }
 
-  // ── Dòng hàng mới gửi kèm request checkout (chỉ items hiện tại — bán kèm tạo riêng từ sellItemLines) ──
+  // ── Dòng hàng mới (chưa có trong phiên) — trừ kho toàn bộ ở transaction ──
   const checkoutLines: CheckoutLine[] = products
     .filter((product) => newQuantityByProductId.has(product.id))
     .map((product) => {
@@ -478,8 +533,8 @@ export async function checkOut(
     })
 
   // ── Tổng hàng hoá = hàng mới trong request + hàng bán kèm chờ thu ──
-  const sellSubtotal = sellItems.reduce(
-    (sum, item) => sum + item.quantity * item.unitPrice,
+  const sellSubtotal = sellItemLines.reduce(
+    (sum, line) => sum + line.quantity * line.unitPrice,
     0
   )
   const productSubtotal =
@@ -506,12 +561,8 @@ export async function checkOut(
     checkoutLines,
     productSubtotal,
     mergedSellItemIds,
-    sellItemLines: sellItems.map((item) => ({
-      id: item.id,
-      productId: item.productId,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-    })),
+    sellItemLines,
+    sellStockDeltas,
     newQuantityByProductId,
     parkingVehicleCount,
     checkoutAt,
@@ -589,26 +640,98 @@ export async function checkOut(
  * - Không gửi gì: auto-resolve rule hiệu lực tại giờ checkout.
  * Trả về PendingAssignment[] (để persist vào group) + PendingGroupPricing[] (để tính giá).
  */
+type PricingRuleWithTiers = NonNullable<Awaited<ReturnType<Repositories['pricing']['findByIdWithTiers']>>>
+
+/** Snapshot giá để ghi vào nhóm — MỌI đường chốt giá phải dùng chung hàm này */
+function toPricingSnapshot(rule: PricingRuleWithTiers): PendingAssignment['snapshot'] {
+  return {
+    ruleId: rule.id,
+    name: rule.name,
+    ratePerHour: Number(rule.ratePerHour),
+    tiers: rule.tiers.map((t) => ({ minHours: t.minHours, ratePerHour: Number(t.ratePerHour) })),
+  }
+}
+
+/** Bảng giá có hiệu lực tại `at` không (đúng ngày trong tuần + trong khoảng hiệu lực) */
+function isRuleEffectiveAt(rule: PricingRuleWithTiers, at: Date): boolean {
+  const currentDay = getVnDay(at)
+  const dayMatches = rule.daysOfWeek.length === 0 || rule.daysOfWeek.includes(currentDay)
+  const effectiveFromOk = rule.effectiveFrom <= at
+  const effectiveToOk = !rule.effectiveTo || rule.effectiveTo >= at
+  return dayMatches && effectiveFromOk && effectiveToOk
+}
+
+/**
+ * Chốt bảng giá cho các nhóm CHƯA có snapshot — dùng khi thu một nhóm còn chơi
+ * sau khi nhóm khác đã thu xong (thu trước nhiều lần).
+ *
+ * Nhóm ĐÃ có snapshot không đi qua đây: giá của nhóm đó đã chốt ở lần thu trước
+ * và không được tính lại. Đây chính là chỗ trước kia khoá cứng cả phiên theo
+ * nhóm đầu tiên, làm nhóm còn chơi không chọn được bảng giá.
+ *
+ * Thứ tự chọn bảng giá: bảng giá riêng của nhóm trong request → `pricingRuleId`
+ * của request → auto-resolve bảng giá hiệu lực tại giờ thu (giống nhánh phiên mới).
+ */
+async function resolveRulesForUnpricedGroups(
+  deps: Repositories,
+  input: {
+    groupIds: string[]
+    /** Bảng giá nhân viên chọn cho từng nhóm, key = groupId */
+    ruleIdsByGroup?: Record<string, string>
+    fallbackRuleId?: string
+  },
+  at: Date
+): Promise<Result<Map<string, { pricingRuleId: string; snapshot: PendingAssignment['snapshot'] }>>> {
+  const { groupIds, ruleIdsByGroup, fallbackRuleId } = input
+  const resolved = new Map<string, { pricingRuleId: string; snapshot: PendingAssignment['snapshot'] }>()
+
+  // Nạp một lần mọi bảng giá được chỉ định tường minh
+  const explicitRuleIds = Array.from(
+    new Set([
+      ...groupIds.map((groupId) => ruleIdsByGroup?.[groupId]).filter((id): id is string => !!id),
+      ...(fallbackRuleId ? [fallbackRuleId] : []),
+    ])
+  )
+  const explicitRules = explicitRuleIds.length > 0
+    ? await deps.pricing.findManyByIdsWithTiers(explicitRuleIds)
+    : []
+  const rulesById = new Map(explicitRules.map((rule) => [rule.id, rule]))
+
+  // Auto-resolve tối đa 1 lần, chỉ khi có nhóm không chỉ định bảng giá
+  let autoRule: PricingRuleWithTiers | null = null
+  let autoRuleLoaded = false
+
+  for (const groupId of groupIds) {
+    const ruleId = ruleIdsByGroup?.[groupId] ?? fallbackRuleId
+    let rule: PricingRuleWithTiers | null = null
+
+    if (ruleId) {
+      rule = rulesById.get(ruleId) ?? null
+      if (!rule) return err('PRICING_RULE_NOT_FOUND')
+    } else {
+      if (!autoRuleLoaded) {
+        autoRule = await deps.pricing.findApplicableRule(getVnHour(at), getDayType(at), at)
+        autoRuleLoaded = true
+      }
+      rule = autoRule
+      if (!rule) return err('PRICING_RULE_NOT_FOUND')
+    }
+
+    if (!isRuleEffectiveAt(rule, at)) return err('PRICING_RULE_NOT_EFFECTIVE')
+    resolved.set(groupId, { pricingRuleId: rule.id, snapshot: toPricingSnapshot(rule) })
+  }
+
+  return ok(resolved)
+}
+
 async function resolveCheckoutPricing(
   deps: Repositories,
   session: SessionWithPlayers,
   input: { pricingRuleId?: string; groups?: CheckoutPricingGroupInput[] },
   at: Date
 ): Promise<Result<{ pendingAssignments: PendingAssignment[]; pendingGroups: PendingGroupPricing[] }>> {
-  const snapshotOf = (rule: NonNullable<Awaited<ReturnType<Repositories['pricing']['findByIdWithTiers']>>>): PendingAssignment['snapshot'] => ({
-    ruleId: rule.id,
-    name: rule.name,
-    ratePerHour: Number(rule.ratePerHour),
-    tiers: rule.tiers.map((t) => ({ minHours: t.minHours, ratePerHour: Number(t.ratePerHour) })),
-  })
-
-  const isEffective = (rule: NonNullable<Awaited<ReturnType<Repositories['pricing']['findByIdWithTiers']>>>): boolean => {
-    const currentDay = getVnDay(at)
-    const dayMatches = rule.daysOfWeek.length === 0 || rule.daysOfWeek.includes(currentDay)
-    const effectiveFromOk = rule.effectiveFrom <= at
-    const effectiveToOk = !rule.effectiveTo || rule.effectiveTo >= at
-    return dayMatches && effectiveFromOk && effectiveToOk
-  }
+  const snapshotOf = toPricingSnapshot
+  const isEffective = (rule: PricingRuleWithTiers): boolean => isRuleEffectiveAt(rule, at)
 
   // Nhóm 1 trống đã tồn tại trong DB (check-in), nhóm 2..N tạo mới khi persist
   const existingGroup = session.pricingGroups[0]
@@ -755,6 +878,7 @@ export async function runCheckOutTx(
     productSubtotal,
     mergedSellItemIds,
     sellItemLines,
+    sellStockDeltas,
     newQuantityByProductId,
     parkingVehicleCount,
     checkoutAt,
@@ -788,16 +912,19 @@ export async function runCheckOutTx(
       const assignment = pendingAssignments[i]
       let groupId = assignment.groupId
       if (assignment.groupId) {
-        await tx.session.updatePricingGroup(assignment.groupId, {
-          label: assignment.label,
-          // preserveCounts (thu trước): giữ playerCount/remainingCount — nhóm vẫn còn người chưa thu
-          ...(assignment.preserveCounts
-            ? {}
-            : { playerCount: assignment.playerCount, remainingCount: assignment.playerCount }),
-          hourlyRate: assignment.snapshot.ratePerHour,
-          pricingRuleId: assignment.pricingRuleId,
-          pricingSnapshot: assignment.snapshot,
-        })
+        // preserveCounts = thu trước, nhóm còn người chưa thu → KHÔNG ghi bảng giá
+        // vào nhóm: giá chỉ áp cho người được thu lần này, phần còn lại chọn lại
+        // bảng giá theo giờ thu ở lần sau (không bị khoá theo lần thu trước).
+        if (!assignment.preserveCounts) {
+          await tx.session.updatePricingGroup(assignment.groupId, {
+            label: assignment.label,
+            playerCount: assignment.playerCount,
+            remainingCount: assignment.playerCount,
+            hourlyRate: assignment.snapshot.ratePerHour,
+            pricingRuleId: assignment.pricingRuleId,
+            pricingSnapshot: assignment.snapshot,
+          })
+        }
       } else {
         const created = await tx.session.createPricingGroup({
           sessionId,
@@ -1051,9 +1178,22 @@ export async function runCheckOutTx(
     }
   }
 
-  const productIds = [...new Set([...sellItemLines, ...checkoutLines].map((line) => line.productId))]
+  // Gồm cả sản phẩm chỉ cần bù kho (dòng bị bỏ khỏi phiếu) — không có nó ở đây
+  // thì vòng bù kho dưới không tra được product và bỏ qua, mất hàng không hoàn.
+  const productIds = [...new Set([...sellItemLines, ...checkoutLines, ...sellStockDeltas].map((line) => line.productId))]
   const currentProducts = productIds.length > 0 ? await tx.product.findManyByIds(productIds) : []
   const currentProductsById = new Map(currentProducts.map((product) => [product.id, product]))
+
+  // ── Bù kho cho phần người dùng sửa số lượng lúc thu ──
+  // Dùng chung với đường lưu-khi-đóng-drawer; xem applySellItemStockDeltas.
+  await applySellItemStockDeltas(tx, {
+    deltas: sellStockDeltas,
+    productTypeById: new Map(currentProducts.map((product) => [product.id, product.type])),
+    productNameById: new Map(currentProducts.map((product) => [product.id, product.name])),
+    sessionId,
+    staffId,
+    shiftId,
+  })
 
   // ── Tạo InvoiceItem cho các dòng bán kèm đã chờ thu (không trừ kho — đã trừ lúc bán kèm) ──
   for (const sellLine of sellItemLines) {
@@ -1362,8 +1502,10 @@ export async function runCheckOutTx(
       parkingFeeTotal: parkingFeeTotal || undefined,
       depositApplied: depositApplied || undefined,
       depositRefund: depositRefund || undefined,
-      pricingAssignedAtCheckout: (pendingAssignments?.length ?? 0) > 0,
-      assignedPricingRuleIds: pendingAssignments?.map(a => a.pricingRuleId),
+      // Thu trước: nhóm còn người chưa thu không ghi bảng giá vào nhóm → không tính
+      // là "chốt giá tại checkout"; bảng giá đã dùng vẫn nằm ở metadata PLAY_TIME.
+      pricingAssignedAtCheckout: (pendingAssignments?.filter((a) => !a.preserveCounts).length ?? 0) > 0,
+      assignedPricingRuleIds: pendingAssignments?.filter((a) => !a.preserveCounts).map(a => a.pricingRuleId),
       earlyCollection: earlyCollectionSequence !== undefined
         ? { sequence: earlyCollectionSequence }
         : undefined,

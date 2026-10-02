@@ -32,6 +32,8 @@ interface MenuItem {
   adminOnly?: boolean;
   staffHidden?: boolean;
   trainingOnly?: boolean;
+  /** Mọi role đều thấy (kể cả TEACHER, vốn chỉ mở module Đào tạo) */
+  alwaysVisible?: boolean;
 }
 
 interface MenuGroup {
@@ -95,7 +97,7 @@ export const menuGroups: MenuGroup[] = [
   },
   {
     label: "Hệ thống",
-    items: [{ href: "/settings", label: "Cài đặt", Icon: Settings }],
+    items: [{ href: "/settings", label: "Cài đặt", Icon: Settings, alwaysVisible: true }],
   },
 ];
 
@@ -104,7 +106,7 @@ export function getVisibleMenuGroups(userRole?: string): MenuGroup[] {
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
-        if (userRole === "TEACHER" && !item.trainingOnly) return false;
+        if (userRole === "TEACHER" && !item.trainingOnly && !item.alwaysVisible) return false;
         if (item.trainingOnly && !canAccessTraining(userRole)) return false;
         if (item.adminOnly && !isAdminOnly(userRole) && userRole !== "TEACHER") return false;
         if (item.staffHidden && userRole === "STAFF") return false;

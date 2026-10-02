@@ -628,7 +628,7 @@ export function InlineProductEditor({
       {error ? (
       <div role="alert" className="rounded-lg border border-danger-border bg-danger-bg p-3 text-sm text-danger">
           <p>Không tải được sản phẩm: {error}</p>
-          {onRetry && <button type="button" className="mt-2 font-medium underline" onClick={onRetry}>Thử lại</button>}
+          {onRetry && <Button variant="white" size="sm" className="mt-2" onClick={onRetry}>Thử lại</Button>}
         </div>
       ) : loading ? (
         <p className="text-sm text-text-tertiary">Đang tải danh sách hàng hoá...</p>

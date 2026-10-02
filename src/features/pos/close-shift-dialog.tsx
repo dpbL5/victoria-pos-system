@@ -88,9 +88,9 @@ export function CloseShiftDialog({
       <div className="space-y-3">
         {toolsLoading && <p className="text-sm text-zinc-500 dark:text-zinc-400">Đang tải dụng cụ...</p>}
         {toolsError && (
-        <div role="alert" className="rounded-lg border border-danger-border bg-danger-bg p-3 text-sm text-danger border-danger-border bg-danger-bg text-danger">
+        <div role="alert" className="rounded-lg border border-danger-border bg-danger-bg p-3 text-sm text-danger">
             <p>Không tải được danh sách dụng cụ: {toolsError}</p>
-            <button type="button" className="mt-2 font-medium underline" onClick={onRetryTools}>Thử lại</button>
+            <Button variant="white" size="sm" className="mt-2" onClick={onRetryTools}>Thử lại</Button>
           </div>
         )}
         <div className="rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-950">

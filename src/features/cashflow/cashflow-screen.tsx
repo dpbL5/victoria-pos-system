@@ -14,7 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FilterButton } from "@/components/ui/filter-button";
-import { Input, Label } from "@/components/ui/input";
+import { Input, Label, Textarea } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Modal } from "@/components/ui/modal";
 import { NoticeCard } from "@/components/ui/notice-card";
@@ -752,13 +752,13 @@ function CashflowFormDialog({
           <Label htmlFor="cf-reason" required>
             Lý do
           </Label>
-          <textarea
+          <Textarea
             id="cf-reason"
             rows={3}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="VD: Tiền điện tháng 8"
-              className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-info focus:outline-none focus:ring-1 focus:ring-focus-ring dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder:text-zinc-500 "
+            className="mt-1.5"
           />
         </div>
       </div>

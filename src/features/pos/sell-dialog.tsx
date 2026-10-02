@@ -156,16 +156,12 @@ export function SellDialog({
               ) : productsError ? (
                 <div
                   role="alert"
-                  className="rounded-lg border border-danger-border bg-danger-bg p-3 text-sm text-danger border-danger-border bg-danger-bg text-danger"
+                  className="rounded-lg border border-danger-border bg-danger-bg p-3 text-sm text-danger"
                 >
                   <p>Không tải được sản phẩm: {productsError}</p>
-                  <button
-                    type="button"
-                    className="mt-2 font-medium underline"
-                    onClick={onRetryProducts}
-                  >
+                  <Button variant="white" size="sm" className="mt-2" onClick={onRetryProducts}>
                     Thử lại
-                  </button>
+                  </Button>
                 </div>
               ) : products.length === 0 ? (
                 <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">

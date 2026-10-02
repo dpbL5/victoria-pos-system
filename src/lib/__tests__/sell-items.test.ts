@@ -44,7 +44,7 @@ vi.mock('@/lib/infrastructure/prisma', () => ({
   prisma: { $transaction: (work: (store: unknown) => Promise<unknown>) => work(fakeStore) },
 }))
 
-import { sellItems, removeSellItems } from '@/lib/sessions/use-cases/sell-items'
+import { sellItems, removeSellItems, syncSessionSellItems } from '@/lib/sessions/use-cases/sell-items'
 import { createRepositories } from '@/lib/infrastructure/repositories'
 
 const repos = createRepositories(fakeStore as never)
@@ -212,5 +212,131 @@ describe('removeSellItems', () => {
     const result = await removeSellItems({ sessionId: 'sess-1', staffId: 'staff-1', itemIds: ['ssi-x'] }, repos)
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('SELL_ITEM_NOT_FOUND')
+  })
+})
+
+// Đường ghi khi nhân viên sửa hàng hoá trong màn thu tiền rồi đóng màn đó:
+// đặt danh sách hàng chờ thu đúng bằng danh sách gửi lên, bù kho theo chênh lệch.
+describe('syncSessionSellItems', () => {
+  const existingRow = (overrides: Partial<Record<string, unknown>> = {}) => ({
+    id: 'ssi-1',
+    sessionId: 'sess-1',
+    productId: 'prod-1',
+    quantity: 2,
+    unitPrice: 10000,
+    notes: null,
+    createdAt: new Date('2026-08-07T11:00:00'),
+    ...overrides,
+  })
+
+  beforeEach(() => {
+    resetMocks()
+    fakeStore.sessionSellItem.findMany.mockResolvedValue([existingRow()])
+  })
+
+  it('tăng số lượng: trừ kho đúng phần chênh lệch, giữ giá đã chốt', async () => {
+    const result = await syncSessionSellItems(
+      { sessionId: 'sess-1', staffId: 'staff-1', items: [{ productId: 'prod-1', quantity: 5 }] },
+      repos,
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.itemCount).toBe(1)
+    expect(result.value.grandTotal).toBe(50000)
+
+    expect(fakeStore.product.updateMany).toHaveBeenCalledWith({
+      where: { id: 'prod-1', stockQuantity: { gte: 3 } },
+      data: { stockQuantity: { decrement: 3 } },
+    })
+    // Chỉ đổi quantity, KHÔNG gửi unitPrice lên DB
+    expect(fakeStore.sessionSellItem.update).toHaveBeenCalledWith({
+      where: { id: 'ssi-1' },
+      data: { quantity: 5 },
+    })
+    expect(fakeStore.activityLog.create.mock.calls[0][0].data).toMatchObject({
+      action: 'SESSION_SELL_SYNC',
+    })
+  })
+
+  it('không đổi gì: không ghi DB, không gọi API kho', async () => {
+    const result = await syncSessionSellItems(
+      { sessionId: 'sess-1', staffId: 'staff-1', items: [{ productId: 'prod-1', quantity: 2 }] },
+      repos,
+    )
+
+    expect(result.ok).toBe(true)
+    expect(fakeStore.sessionSellItem.update).not.toHaveBeenCalled()
+    expect(fakeStore.sessionSellItem.deleteMany).not.toHaveBeenCalled()
+    expect(fakeStore.product.updateMany).not.toHaveBeenCalled()
+    expect(fakeStore.stockMovement.create).not.toHaveBeenCalled()
+  })
+
+  it('giảm số lượng: hoàn kho phần lệch, dòng vẫn còn', async () => {
+    const result = await syncSessionSellItems(
+      { sessionId: 'sess-1', staffId: 'staff-1', items: [{ productId: 'prod-1', quantity: 1 }] },
+      repos,
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.grandTotal).toBe(10000)
+    expect(fakeStore.stockMovement.create.mock.calls[0][0].data).toMatchObject({
+      type: 'VOID',
+      quantity: 1,
+    })
+    expect(fakeStore.sessionSellItem.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it('danh sách rỗng: bỏ hết dòng của phiên và hoàn kho toàn bộ', async () => {
+    const result = await syncSessionSellItems(
+      { sessionId: 'sess-1', staffId: 'staff-1', items: [] },
+      repos,
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.itemCount).toBe(0)
+    expect(result.value.grandTotal).toBe(0)
+    expect(fakeStore.sessionSellItem.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['ssi-1'] } } })
+    expect(fakeStore.stockMovement.create.mock.calls[0][0].data).toMatchObject({ type: 'VOID', quantity: 2 })
+  })
+
+  it('hàng mới chọn lúc thu: tạo dòng bán kèm + trừ kho theo giá hiện tại', async () => {
+    fakeStore.sessionSellItem.findMany.mockResolvedValue([])
+    const result = await syncSessionSellItems(
+      { sessionId: 'sess-1', staffId: 'staff-1', items: [{ productId: 'prod-1', quantity: 3 }] },
+      repos,
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.grandTotal).toBe(30000)
+    expect(fakeStore.sessionSellItem.create).toHaveBeenCalled()
+    expect(fakeStore.stockMovement.create.mock.calls[0][0].data).toMatchObject({
+      type: 'SALE',
+      quantity: -3,
+    })
+  })
+
+  it('trả SESSION_NOT_FOUND khi phiên không tồn tại', async () => {
+    fakeStore.session.findUnique.mockResolvedValue(null)
+    const result = await syncSessionSellItems(
+      { sessionId: 'sess-1', staffId: 'staff-1', items: [] },
+      repos,
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('SESSION_NOT_FOUND')
+  })
+
+  it('trả INSUFFICIENT_STOCK khi tăng vượt tồn và không sửa dòng', async () => {
+    fakeStore.product.updateMany.mockResolvedValue({ count: 0 })
+    const result = await syncSessionSellItems(
+      { sessionId: 'sess-1', staffId: 'staff-1', items: [{ productId: 'prod-1', quantity: 9 }] },
+      repos,
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('INSUFFICIENT_STOCK')
+    expect(fakeStore.sessionSellItem.update).not.toHaveBeenCalled()
   })
 })

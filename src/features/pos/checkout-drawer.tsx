@@ -31,6 +31,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Loader2, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Select } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
@@ -54,11 +55,9 @@ import {
   type PickerGroup,
   type PickerMemberStat,
 } from "./checkout-player-picker";
-import {
-  InlineProductEditor,
-} from "./invoice-detail-content";
-import type { InvoiceEditorLine } from "./invoice-edit-logic";
-import type { PlayTimeQuote, PromotionSnapshot } from "@/types";
+import { CheckoutItemLedger, stepperButton } from "./checkout-item-rows";
+import { ProductPickerSheet } from "./product-picker-sheet";
+import type { PlayTimeQuote, PendingSellItem, PromotionSnapshot, SessionPricingGroupDTO } from "@/types";
 import type { PaymentMethod, Product, SessionRow } from "./types";
 
 /**
@@ -70,43 +69,23 @@ function billMoney(value: number | string | null | undefined): string {
   return money(value, false);
 }
 
-/** Dòng hàng của phiếu: [ô chọn] nhãn + meta ‖ tiền trên rail chung */
+/** Dòng chỉ-để-đọc của phiếu: nhãn + meta ‖ tiền trên rail chung */
 function LedgerRow({
   label,
   meta,
   amount,
-  checked = true,
-  busy,
   dimmed,
-  onUncheck,
 }: {
   label: string;
   meta?: ReactNode;
   amount: string;
-  checked?: boolean;
-  busy?: boolean;
   /** Số chưa được server xác nhận — làm mờ để không đọc như số chốt */
   dimmed?: boolean;
-  onUncheck?: () => void;
 }) {
-  const content = (
-    <>
-      {onUncheck ? (
-        <input
-          type="checkbox"
-          checked={checked}
-          disabled={busy}
-          onChange={onUncheck}
-          tabIndex={-1}
-          className="pointer-events-none relative mt-1 h-5 w-5 shrink-0 appearance-none rounded-full border border-border-strong bg-surface-elevated checked:border-info checked:bg-info after:absolute after:inset-0 after:m-auto after:h-[8px] after:w-[4px] after:rotate-45 after:border-b-2 after:border-r-2 after:border-white after:opacity-0 after:content-[''] checked:after:opacity-100 focus-visible:ring-2 focus-visible:ring-focus-ring"
-        />
-      ) : null}
+  return (
+    <div className="flex items-start gap-3 py-2.5">
       <span className="min-w-0 flex-1">
-        <span
-          className={`block truncate text-sm leading-tight ${
-            checked ? "text-text-primary" : "text-text-tertiary"
-          }`}
-        >
+        <span className="block truncate text-sm leading-tight text-text-primary">
           {label}
         </span>
         {meta ? (
@@ -116,29 +95,13 @@ function LedgerRow({
         ) : null}
       </span>
       <span
-        className={`${MONEY_RAIL} text-sm ${
-          checked
-            ? "font-medium text-text-primary"
-            : "text-text-tertiary line-through"
-        } ${dimmed ? "opacity-60" : ""}`}
+        className={`${MONEY_RAIL} text-sm font-medium text-text-primary ${
+          dimmed ? "opacity-60" : ""
+        }`}
       >
         {amount}
       </span>
-    </>
-  );
-
-  return onUncheck ? (
-    <button
-      type="button"
-      onClick={onUncheck}
-      disabled={busy}
-      aria-pressed={checked}
-      className="flex w-full items-start gap-3 py-2.5 text-left transition-colors active:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-not-allowed"
-    >
-      {content}
-    </button>
-  ) : (
-    <div className="flex items-start gap-3 py-2.5">{content}</div>
+    </div>
   );
 }
 
@@ -227,12 +190,15 @@ function TotalRow({
   );
 }
 
-const stepperButton =
-  "flex h-8 w-8 items-center justify-center rounded-lg border border-border-default bg-surface-elevated text-text-secondary transition-colors active:scale-95 disabled:opacity-40 disabled:active:scale-100";
-
 interface CheckoutResponse {
   grandTotal: number;
 }
+
+/**
+ * Tiền tố ID dòng hàng chưa vào phiên (mới chọn lúc thu) — phân biệt với
+ * `sessionSellItemId` thật của dòng đã bán kèm lúc chơi.
+ */
+const CART_LINE_PREFIX = "cart-";
 
 interface PricingRuleOption {
   id: string;
@@ -248,10 +214,11 @@ export function CheckoutDrawer({
   productsLoading,
   productsError,
   onRetryProducts,
-  onSellItemsChanged,
   shiftReady,
   submitting,
   setSubmitting,
+  onItemsOptimistic,
+  onItemsSaved,
   onClose,
   onDone,
 }: {
@@ -261,16 +228,22 @@ export function CheckoutDrawer({
   productsLoading: boolean;
   productsError: string;
   onRetryProducts: () => void;
-  onSellItemsChanged: () => Promise<boolean>;
   shiftReady: boolean;
   submitting: boolean;
   setSubmitting: (value: boolean) => void;
+  /**
+   * Ghi số tiền hàng LẠC QUAN vào card phiên — chỉ sửa cache, KHÔNG gọi mạng.
+   * Tách khỏi `onItemsSaved` là cố ý: gọi làm mới ngay lúc này sẽ đọc DB trước
+   * khi PATCH ghi xong và xoá mất số vừa ghi.
+   */
+  onItemsOptimistic: (sessionId: string, itemsTotal: number) => void;
+  /** Làm mới danh sách phiên — chỉ gọi SAU khi PATCH đã xong */
+  onItemsSaved: () => Promise<boolean> | void;
   onClose: () => void;
   onDone: () => Promise<boolean | void>;
 }) {
   const { success: notifySuccess, error: notifyError } = useToast();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
-  const [cart, setCart] = useState<Record<string, number>>({});
   const [playQuote, setPlayQuote] = useState<PlayTimeQuote | null>(null);
   // Tham số mà quote server hiện tại tương ứng — dùng để biết quote còn khớp
   // với lựa chọn đang hiển thị hay không (thay vì xoá trắng số khi tính lại).
@@ -290,22 +263,38 @@ export function CheckoutDrawer({
   const [pickerGroups, setPickerGroups] = useState<PickerGroup[]>([]);
   const nextGroupKey = useRef(0);
   const lastPreviewSessionId = useRef<string | null>(null);
-  // Dòng bán kèm đang gọi API bỏ khỏi phiên
-  const [removingSellItemId, setRemovingSellItemId] = useState("");
-  const [quoteReloadKey, setQuoteReloadKey] = useState(0);
+  // Dòng hàng chỉ nằm trong bộ nhớ cho tới lúc bấm Thu tiền:
+  // `cart` = hàng mới chọn lúc thu, `qtyOverride` = số lượng sửa trên dòng đã
+  // bán kèm lúc chơi. Không gọi API khi thêm/tăng/giảm.
+  const [cart, setCart] = useState<Record<string, number>>({});
+  const [qtyOverride, setQtyOverride] = useState<Record<string, number>>({});
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickedCount, setPickedCount] = useState(0);
+  // Xếp hàng các lần lưu hàng hoá — hai request về lệch thứ tự thì phiên giữ
+  // danh sách cũ, nên lần sau chỉ chạy khi lần trước đã xong
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  // Hỏi lại trước khi thoát khi hàng hoá vừa sửa chưa ghi vào phiên
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 
   const isMember =
     session?.customer?.type === "MEMBER" || !!session?.membership;
   const sessionPlayerCount = session?.playerCount ?? 1;
 
-  // Session check-in mới (để trống giá) — cần chọn bảng giá khi thu tiền
+  // Nhóm CHƯA chốt giá = chưa có snapshot + rate 0.
+  // Điều kiện phải xét theo TỪNG NHÓM, không phải cả phiên: sau khi một nhóm thu
+  // xong, nhóm còn chơi vẫn chưa có giá và phải chọn được bảng giá riêng. Gộp cả
+  // phiên thành một điều kiện sẽ khoá cứng nhóm còn chơi theo nhóm đã thu.
+  const groupNeedsRule = (group: SessionPricingGroupDTO) =>
+    !group.pricingSnapshot && Number(group.hourlyRate) === 0;
+  // Session check-in mới (MỌI nhóm để trống giá) — chia nhóm + chọn giá tại checkout
   const needsPricing =
     !!session &&
     !isMember &&
     (session.pricingGroups?.length ?? 0) > 0 &&
-    session.pricingGroups!.every(
-      (g) => !g.pricingSnapshot && Number(g.hourlyRate) === 0,
-    );
+    session.pricingGroups!.every(groupNeedsRule);
+  // Còn nhóm nào chưa chốt giá — gồm cả nhóm còn chơi của phiên đã thu một phần
+  const hasUnpricedGroups =
+    !!session && !isMember && (session.pricingGroups ?? []).some(groupNeedsRule);
   // Mọi phiên đều có player rows (kể cả phiên 1 người — check-in luôn tạo row),
   // nên vãng lai luôn thu qua picker.
   const pickerActive = !!session && !isMember;
@@ -332,7 +321,6 @@ export function CheckoutDrawer({
     if (session) {
       /* eslint-disable react-hooks/set-state-in-effect */
       setPaymentMethod("CASH");
-      setCart({});
       setPromotionRuleId("");
       setPromotions([]);
       setPromotionsError("");
@@ -340,8 +328,11 @@ export function CheckoutDrawer({
       setApplicablePricingRules([]);
       setPickerGroups([]);
       nextGroupKey.current = 0;
-      setRemovingSellItemId("");
-
+      setCart({});
+      setQtyOverride({});
+      setPickerOpen(false);
+      setConfirmCloseOpen(false);
+      setPickedCount(0);
       if (!isMember && !needsPricing) {
         // ── Phiên đã gán giá: build nhóm cố định từ pricing groups ──
         // Mỗi nhóm còn người chưa thu = 1 nhóm; mặc định chọn tất cả (thu hết).
@@ -352,10 +343,13 @@ export function CheckoutDrawer({
           .map((g) => {
             const unchecked = (g.players ?? []).filter((p) => !p.checkedOutAt);
             const snapshot = g.pricingSnapshot;
+            // Nhóm đã chốt giá ở lần thu trước → khoá (giá không tính lại).
+            // Nhóm còn chơi chưa có giá → KHÔNG khoá, vẫn chọn được bảng giá riêng.
+            const needsRule = groupNeedsRule(g);
             return {
               key: g.id,
               label: g.label,
-              locked: true,
+              locked: !needsRule,
               pricingRuleId: g.pricingRuleId ?? "",
               pricingRuleName: snapshot?.name,
               remainingCount: g.remainingCount,
@@ -370,9 +364,10 @@ export function CheckoutDrawer({
     }
   }, [session, isMember, needsPricing]);
 
-  // Fetch bảng giá hiệu lực khi mở drawer với session cần gán giá (fresh walk-in)
+  // Fetch bảng giá hiệu lực khi drawer có nhóm CHƯA chốt giá: phiên mới, hoặc
+  // nhóm còn chơi sau khi nhóm khác đã thu xong.
   useEffect(() => {
-    if (!session || !needsPricing || !pickerActive) return;
+    if (!session || !hasUnpricedGroups || !pickerActive) return;
     let cancelled = false;
     const allPlayers = (session.pricingGroups ?? [])
       .flatMap((g) => g.players ?? [])
@@ -386,24 +381,33 @@ export function CheckoutDrawer({
         if (data.success && !cancelled) {
           const rules = data.data ?? [];
           setApplicablePricingRules(rules);
-          // Mặc định 1 nhóm gồm toàn bộ người chơi chưa thu, bảng giá đầu tiên
-          setPickerGroups((current) =>
-            current.length > 0
-              ? current
-              : [
-                  {
-                    key: `new-${nextGroupKey.current++}`,
-                    label: "Nhóm 1",
-                    locked: false,
-                    pricingRuleId: rules[0]?.id ?? "",
-                    members: allPlayers.map((p) => ({
-                      id: p.id,
-                      name: p.name ?? null,
-                    })),
-                    selectedIds: allPlayerIds,
-                  },
-                ],
-          );
+          setPickerGroups((current) => {
+            if (current.length === 0) {
+              // Phiên mới: 1 nhóm gồm toàn bộ người chưa thu, bảng giá đầu tiên
+              return [
+                {
+                  key: `new-${nextGroupKey.current++}`,
+                  label: "Nhóm 1",
+                  locked: false,
+                  pricingRuleId: rules[0]?.id ?? "",
+                  members: allPlayers.map((p) => ({
+                    id: p.id,
+                    name: p.name ?? null,
+                  })),
+                  selectedIds: allPlayerIds,
+                },
+              ];
+            }
+            // Nhóm còn chơi chưa có bảng giá → mặc định bảng giá đầu tiên để ô
+            // chọn không bỏ trống (nhân viên vẫn đổi được)
+            return rules[0]
+              ? current.map((group) =>
+                  !group.locked && !group.pricingRuleId
+                    ? { ...group, pricingRuleId: rules[0].id }
+                    : group,
+                )
+              : current;
+          });
         }
       } catch {
         /* bỏ qua — UI hiển thị trạng thái chưa có bảng giá */
@@ -413,7 +417,7 @@ export function CheckoutDrawer({
     return () => {
       cancelled = true;
     };
-  }, [session, needsPricing, pickerActive]);
+  }, [session, hasUnpricedGroups, pickerActive]);
 
   // ── Build request pricing params (dùng chung cho preview và checkout) ──
   // fresh (mode A): gửi groups; đã gán giá (mode B): full đúng 1 nhóm →
@@ -445,7 +449,17 @@ export function CheckoutDrawer({
     }
     const playerIds = pickerGroups.flatMap((g) => g.selectedIds);
     if (playerIds.length === 0) return null;
-    return { playerIds };
+    // Nhóm còn chơi chưa chốt giá → gửi kèm bảng giá nhân viên chọn cho nhóm đó.
+    // Nhóm đã có snapshot không gửi (giá đã chốt, không tính lại).
+    const groupPricingRuleIds: Record<string, string> = {};
+    for (const group of pickerGroups) {
+      if (!group.locked && group.selectedIds.length > 0 && group.pricingRuleId) {
+        groupPricingRuleIds[group.key] = group.pricingRuleId;
+      }
+    }
+    return Object.keys(groupPricingRuleIds).length > 0
+      ? { playerIds, groupPricingRuleIds }
+      : { playerIds };
   }, [session, pickerActive, needsPricing, pickerGroups]);
 
   // Khoá tham số của lần preview hiện tại — quote server chỉ được coi là "tươi"
@@ -459,9 +473,8 @@ export function CheckoutDrawer({
             promotionRuleId,
             frozenAt ?? "",
             JSON.stringify(buildPricingParams() ?? null),
-            quoteReloadKey,
           ].join("|"),
-    [session, promotionRuleId, frozenAt, buildPricingParams, quoteReloadKey],
+    [session, promotionRuleId, frozenAt, buildPricingParams],
   );
 
   useEffect(() => {
@@ -490,6 +503,15 @@ export function CheckoutDrawer({
             params.set("groups", JSON.stringify(pricingParams.groups));
           } else if ("playerIds" in pricingParams && pricingParams.playerIds) {
             params.set("playerIds", JSON.stringify(pricingParams.playerIds));
+            if (
+              "groupPricingRuleIds" in pricingParams &&
+              pricingParams.groupPricingRuleIds
+            ) {
+              params.set(
+                "groupPricingRuleIds",
+                JSON.stringify(pricingParams.groupPricingRuleIds),
+              );
+            }
           } else if (pricingParams.pricingGroupId) {
             params.set("pricingGroupId", pricingParams.pricingGroupId);
             if (pricingParams.playerCount)
@@ -536,7 +558,6 @@ export function CheckoutDrawer({
     promotionRuleId,
     frozenAt,
     buildPricingParams,
-    quoteReloadKey,
     quoteRequestKey,
   ]);
 
@@ -782,31 +803,52 @@ export function CheckoutDrawer({
       )
     : "00:00:00";
 
-  const cartLines = products
-    .map((product) => ({
-      product,
-      quantity: cart[product.id] ?? 0,
-      total: (cart[product.id] ?? 0) * toNumber(product.price),
-    }))
-    .filter((line) => line.quantity > 0);
-  const cartEditorLines: InvoiceEditorLine[] = cartLines.map((line) => ({
-    productId: line.product.id,
-    name: line.product.name,
-    type: line.product.type,
-    stockQuantity: line.product.stockQuantity,
-    quantity: line.quantity,
-    unitPrice: toNumber(line.product.price),
-  }));
+  /**
+   * Dòng hàng của phiếu — TÍNH TRONG BỘ NHỚ, KHÔNG GỌI API.
+   *
+   * Hai nguồn, dán thành một danh sách:
+   * - `pendingSellItems`: dòng đã bán kèm lúc chơi (đã ghi DB, đã trừ kho). Sửa
+   *   số lượng ở đây chỉ ghi vào `qtyOverride`, chưa động vào server.
+   * - `cart`: hàng mới chọn lúc thu, chỉ tồn tại ở drawer.
+   *
+   * Cả hai được gửi đi ĐÚNG MỘT LẦN trong `POST /checkout` (danh sách cuối),
+   * server tự bù kho cho phần chênh lệch — xem `check-out.ts` và
+   * `session-validations.ts`.
+   */
+  const itemLines = useMemo<PendingSellItem[]>(() => {
+    const sellLines: PendingSellItem[] = (
+      displayQuote?.pendingSellItems ?? []
+    )
+      .map((item) => {
+        const quantity = qtyOverride[item.sessionSellItemId];
+        if (quantity === undefined || quantity === item.quantity) return item;
+        return { ...item, quantity, subtotal: quantity * item.unitPrice };
+      })
+      .filter((item) => item.quantity > 0);
 
-  const productSubtotal = cartLines.reduce((sum, line) => sum + line.total, 0);
-  const pendingSellItems = useMemo(
-    () => displayQuote?.pendingSellItems ?? [],
-    [displayQuote],
-  );
-  // Toàn bộ dòng bán kèm chờ thu sẽ được gộp vào hoá đơn khi checkout
-  const pendingSellTotal = useMemo(
-    () => pendingSellItems.reduce((sum, item) => sum + item.subtotal, 0),
-    [pendingSellItems],
+    const cartLines: PendingSellItem[] = products
+      .filter((product) => (cart[product.id] ?? 0) > 0)
+      .map((product) => {
+        const quantity = cart[product.id];
+        return {
+          // Dòng chưa vào phiên nên chưa có ID dòng bán kèm — đánh dấu bằng
+          // tiền tố để phân biệt khi điều chỉnh số lượng.
+          sessionSellItemId: `cart-${product.id}`,
+          productId: product.id,
+          productName: product.name,
+          type: product.type,
+          quantity,
+          unitPrice: toNumber(product.price),
+          subtotal: quantity * toNumber(product.price),
+        };
+      });
+
+    return [...sellLines, ...cartLines];
+  }, [displayQuote, qtyOverride, cart, products]);
+
+  const itemsTotal = useMemo(
+    () => itemLines.reduce((sum, item) => sum + item.subtotal, 0),
+    [itemLines],
   );
   const parkingFeeUnitPrice = displayQuote?.parkingFeeUnitPrice ?? 0;
   const parkingFeeTotal = parkingVehicleCount * parkingFeeUnitPrice;
@@ -822,13 +864,21 @@ export function CheckoutDrawer({
   );
   const totals = checkoutTotals({
     playGross,
-    itemsTotal: pendingSellTotal + productSubtotal,
+    itemsTotal,
     discount: playDiscount,
     parkingTotal: parkingFeeTotal,
     depositRemaining,
   });
 
-  const pricingBlocked = needsPricing && applicablePricingRules.length === 0;
+  // Chặn thu khi ĐANG CHỌN một nhóm chưa có giá mà không có bảng giá nào hiệu lực.
+  // Không chặn theo cả phiên: nhóm đã chốt giá vẫn thu được dù nhóm còn chơi
+  // chưa chọn được bảng giá.
+  const selectedGroupNeedsRule = pickerGroups.some(
+    (group) => group.selectedIds.length > 0 && !group.locked,
+  );
+  const pricingBlocked =
+    applicablePricingRules.length === 0 &&
+    (needsPricing || selectedGroupNeedsRule);
   // Chọn ít nhất 1 người khi dùng picker
   const hasAssignedPlayers = pickerActive ? selectedCount > 0 : true;
 
@@ -839,49 +889,163 @@ export function CheckoutDrawer({
     pickerGroups.filter((g) => g.selectedIds.length > 0).length > 1 &&
     selectedCount < uncheckedTotal;
 
-  const changeCart = (product: Product, delta: number) => {
-    setCart((current) => {
-      const currentQuantity = current[product.id] ?? 0;
-      const nextQuantity = currentQuantity + delta;
-      if (nextQuantity <= 0) {
-        const next = { ...current };
-        delete next[product.id];
-        return next;
-      }
-      if (product.type === "PRODUCT" && nextQuantity > product.stockQuantity)
-        return current;
-      return { ...current, [product.id]: nextQuantity };
-    });
+  /**
+   * Thêm 1 món vào phiếu — chỉ ghi vào bộ nhớ, KHÔNG gọi API.
+   * Món đã có dòng bán kèm thì tăng ngay dòng đó (không tạo dòng trùng), còn lại
+   * vào `cart`. Toàn bộ được gửi một lần khi bấm Thu tiền.
+   */
+  const addItem = (product: Product) => {
+    const sellLine = (displayQuote?.pendingSellItems ?? []).find(
+      (item) => item.productId === product.id,
+    );
+    if (sellLine) {
+      setQtyOverride((current) => ({
+        ...current,
+        [sellLine.sessionSellItemId]: (qtyOverride[sellLine.sessionSellItemId] ?? sellLine.quantity) + 1,
+      }));
+    } else {
+      setCart((current) => ({
+        ...current,
+        [product.id]: (current[product.id] ?? 0) + 1,
+      }));
+    }
+    setPickedCount((count) => count + 1);
   };
 
-  /** Bỏ 1 dòng bán kèm khỏi phiên (hoàn kho) rồi tính lại preview */
-  const removeSellItem = async (sessionSellItemId: string) => {
-    if (!session) return;
-    setRemovingSellItemId(sessionSellItemId);
-    try {
-      const data = await apiJson(
-        `/api/sessions/${session.id}/sell-items`,
-        {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ itemIds: [sessionSellItemId] }),
-        },
-      );
-      if (!data.success) {
-        notifyError(data.error || "Không bỏ được dòng bán kèm");
-        return;
-      }
-      const refreshed = await onSellItemsChanged();
-      if (!refreshed) {
-        notifyError("Đã bỏ dòng bán kèm nhưng danh sách chưa cập nhật. Không thao tác lại; hãy tải lại màn hình.");
-      }
-      setQuoteReloadKey((k) => k + 1);
-    } catch {
-      notifyError("Lỗi kết nối máy chủ");
-    } finally {
-      setRemovingSellItemId("");
+  /**
+   * Bấm − / + trên dòng hàng. Cũng chỉ ghi bộ nhớ; số lượng về 0 = bỏ dòng khỏi
+   * phiếu (dòng bán kèm thì server hoàn kho lúc checkout).
+   */
+  const changeItemQuantity = (item: PendingSellItem, quantity: number) => {
+    if (item.sessionSellItemId.startsWith(CART_LINE_PREFIX)) {
+      const productId = item.productId;
+      setCart((current) => {
+        const next = { ...current };
+        if (quantity <= 0) delete next[productId];
+        else next[productId] = quantity;
+        return next;
+      });
+      return;
     }
+    setQtyOverride((current) => ({ ...current, [item.sessionSellItemId]: quantity }));
   };
+
+  /** Trần số lượng của 1 dòng: sản phẩm không được vượt tồn */
+  const quantityCeiling = (item: PendingSellItem) => {
+    if (item.type !== "PRODUCT") return 99;
+    const product = products.find((candidate) => candidate.id === item.productId);
+    // Hàng không còn trong danh mục (đã ngừng bán) → để tăng, server mới là chặn
+    if (!product) return item.quantity + 99;
+    // Dòng bán kèm đã trừ kho lúc thêm nên lượng đang giữ vẫn dùng được; dòng
+    // giỏ thì phải nằm trong tồn thật.
+    if (item.sessionSellItemId.startsWith(CART_LINE_PREFIX)) {
+      return Math.max(item.quantity, product.stockQuantity);
+    }
+    return Math.max(item.quantity, product.stockQuantity + item.quantity);
+  };
+
+  /**
+   * Có thay đổi hàng hoá chưa ghi vào phiên hay không. So với dòng bán kèm thật
+   * trên phiên: tăng rồi giảm về đúng số cũ thì KHÔNG tính là thay đổi, nên
+   * đóng drawer trong trường hợp đó không tốn request.
+   */
+  const hasUnsavedItems = useMemo(() => {
+    if (Object.keys(cart).length > 0) return true;
+    return (displayQuote?.pendingSellItems ?? []).some((item) => {
+      const override = qtyOverride[item.sessionSellItemId];
+      return override !== undefined && override !== item.quantity;
+    });
+  }, [cart, qtyOverride, displayQuote]);
+
+  /** Tổng tiền hàng của phiên theo server — mốc để lùi lại nếu lưu thất bại */
+  const serverItemsTotal = useMemo(
+    () =>
+      (displayQuote?.pendingSellItems ?? []).reduce(
+        (sum, item) => sum + item.subtotal,
+        0,
+      ),
+    [displayQuote],
+  );
+
+  /**
+   * Bấm X / overlay / Escape: chưa sửa gì thì thoát luôn, có sửa thì hỏi lại.
+   * Hỏi vì thoát là mất ngữ cảnh đang xem — nhân viên có thể bấm nhầm giữa lúc
+   * đang sửa dở.
+   *
+   * KHÔNG chặn theo trạng thái "đang lưu": lần lưu trước chạy nền, nhân viên vẫn
+   * phải thoát được. Việc xếp thứ tự các lần lưu do `saveQueueRef` lo.
+   */
+  const handleClose = useCallback(() => {
+    if (!hasUnsavedItems) {
+      onClose();
+      return;
+    }
+    setConfirmCloseOpen(true);
+  }, [hasUnsavedItems, onClose]);
+
+  /**
+   * Đã xác nhận thoát: LẠC QUAN — đóng drawer và cập nhật tiền hàng trên card
+   * phiên ngay, không bắt nhân viên đợi 2 vòng mạng. Request chạy nền; lỗi thì
+   * báo và lùi card về số cũ (server là sự thật).
+   *
+   * Các lần lưu được XẾP HÀNG bằng `saveQueueRef`: nhân viên có thể mở lại
+   * drawer rồi thoát tiếp trong lúc request trước còn bay, hai request mà về
+   * lệch thứ tự thì phiên giữ danh sách cũ.
+   */
+  const confirmExit = useCallback(() => {
+    if (!session) return;
+    const sessionId = session.id;
+    const payload = itemLines.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+    }));
+    const optimisticTotal = itemsTotal;
+    const fallbackTotal = serverItemsTotal;
+
+    setConfirmCloseOpen(false);
+    onClose();
+    // Lạc quan: card phiên đổi số NGAY, chỉ ghi cache — không gọi mạng
+    onItemsOptimistic(sessionId, optimisticTotal);
+
+    const request = saveQueueRef.current
+      // Lần lưu trước lỗi thì hàng đợi vẫn phải chạy tiếp
+      .catch(() => undefined)
+      .then(() =>
+        apiJson(`/api/sessions/${sessionId}/sell-items`, {
+          // jsonRequest hardcode method POST — phải đè lại PATCH
+          ...jsonRequest({ items: payload }),
+          method: "PATCH",
+        }),
+      );
+    saveQueueRef.current = request;
+
+    void request
+      .then((data) => {
+        if (!data.success) {
+          notifyError(data.error || "Không lưu được hàng hoá của phiên");
+          // Lùi card về số server trước khi sửa
+          onItemsOptimistic(sessionId, fallbackTotal);
+        }
+      })
+      .catch(() => {
+        notifyError("Lỗi kết nối máy chủ");
+        onItemsOptimistic(sessionId, fallbackTotal);
+      })
+      // Làm mới CHỈ sau khi PATCH xong. Gọi sớm hơn thì GET đọc DB cũ, trả về số
+      // trước khi lưu và ghi đè số lạc quan — card mất "Tạm tính".
+      .finally(() => {
+        void onItemsSaved();
+      });
+  }, [
+    session,
+    itemLines,
+    itemsTotal,
+    serverItemsTotal,
+    onClose,
+    onItemsOptimistic,
+    onItemsSaved,
+    notifyError,
+  ]);
 
   const handleCheckout = async () => {
     if (!session) return;
@@ -904,11 +1068,14 @@ export function CheckoutDrawer({
 
     setSubmitting(true);
     try {
+      // DANH SÁCH HÀNG CUỐI CÙNG của phiếu — gồm cả dòng đã bán kèm lúc chơi
+      // (đã sửa số lượng ở đây) lẫn hàng mới chọn lúc thu. Gửi đúng một lần
+      // này; server tự bù kho cho phần chênh lệch rồi gộp vào hoá đơn.
       const body: Record<string, unknown> = {
         paymentMethod,
         promotionRuleId: promotionRuleId || null,
-        items: cartLines.map((line) => ({
-          productId: line.product.id,
+        items: itemLines.map((line) => ({
+          productId: line.productId,
           quantity: line.quantity,
         })),
       };
@@ -919,6 +1086,12 @@ export function CheckoutDrawer({
           body.groups = pricingParams.groups;
         } else if ("playerIds" in pricingParams && pricingParams.playerIds) {
           body.playerIds = pricingParams.playerIds;
+          if (
+            "groupPricingRuleIds" in pricingParams &&
+            pricingParams.groupPricingRuleIds
+          ) {
+            body.groupPricingRuleIds = pricingParams.groupPricingRuleIds;
+          }
         } else if (pricingParams.pricingGroupId) {
           body.pricingGroupId = pricingParams.pricingGroupId;
           if (pricingParams.playerCount)
@@ -965,9 +1138,10 @@ export function CheckoutDrawer({
   };
 
   return (
+    <>
     <Modal
       open={!!session}
-      onClose={onClose}
+      onClose={handleClose}
       variant="fullscreen"
       title={
         session
@@ -1059,7 +1233,6 @@ export function CheckoutDrawer({
               !shiftReady ||
               quoteLoading ||
               !!quoteError ||
-              (!!productsError && Object.values(cart).some((quantity) => quantity > 0)) ||
               !displayQuote ||
               pricingBlocked ||
               freshMultiGroupPartial ||
@@ -1113,50 +1286,15 @@ export function CheckoutDrawer({
               </div>
             )}
 
-            {/* Hàng hoá / dịch vụ — dòng đã thêm vào phiên */}
-            {pendingSellItems.length > 0 ? (
-              <ul className="mt-2 border-t border-border-default">
-                {pendingSellItems.map((item) => (
-                  <li
-                    key={item.sessionSellItemId}
-                    className="border-b border-border-default"
-                  >
-                    <LedgerRow
-                      label={item.productName}
-                      meta={`Số lượng ${item.quantity} · đã thêm vào phiên`}
-                      amount={billMoney(item.subtotal)}
-                      busy={removingSellItemId === item.sessionSellItemId}
-                      dimmed={quotePending}
-                      onUncheck={() => void removeSellItem(item.sessionSellItemId)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
-            <InlineProductEditor
-              lines={cartEditorLines}
-              products={products.filter(
-                (product) => product.type === "SERVICE" || product.stockQuantity > 0,
-              )}
-              loading={productsLoading}
-              error={productsError}
-              onRetry={onRetryProducts}
-              onAdd={(product) => changeCart(product, 1)}
-              onDecrease={(productId) => {
-                const product = products.find((item) => item.id === productId);
-                if (product) changeCart(product, -1);
-              }}
-              onIncrease={(productId) => {
-                const product = products.find((item) => item.id === productId);
-                if (product) changeCart(product, 1);
-              }}
-              onRemove={(productId) =>
-                setCart((current) => {
-                  const next = { ...current };
-                  delete next[productId];
-                  return next;
-                })
+            {/* Hàng hoá / dịch vụ — một danh sách duy nhất, sửa tại chỗ, thêm
+                bằng một nút. Mọi thao tác chỉ ở bộ nhớ, gửi đi lúc bấm Thu
+                tiền. Xem checkout-item-rows.tsx. */}
+            <CheckoutItemLedger
+              items={itemLines}
+              isAtMax={(item) => item.quantity >= quantityCeiling(item)}
+              onAddClick={() => setPickerOpen(true)}
+              onChangeQuantity={(item, quantity) =>
+                void changeItemQuantity(item, quantity)
               }
             />
 
@@ -1285,6 +1423,29 @@ export function CheckoutDrawer({
         </div>
       )}
     </Modal>
+    {/* Tờ chọn hàng nằm SAU drawer để vẽ đè lên nó (cùng z-[60], thứ sau thắng) */}
+    <ProductPickerSheet
+      open={pickerOpen}
+      products={products}
+      loading={productsLoading}
+      error={productsError}
+      pickedCount={pickedCount}
+      onRetry={onRetryProducts}
+      onPick={addItem}
+      onClose={() => setPickerOpen(false)}
+    />
+    {/* Xác nhận thoát — cũng nằm sau drawer để vẽ đè lên (cùng z-[60]) */}
+    <ConfirmDialog
+      open={confirmCloseOpen}
+      title="Bạn vừa sửa hoá đơn check-out, tiếp tục thoát?"
+      description="Hàng hoá bạn vừa sửa sẽ được ghi vào phiên."
+      confirmLabel="Thoát"
+      cancelLabel="Ở lại"
+      confirmVariant="contrast"
+      onClose={() => setConfirmCloseOpen(false)}
+      onConfirm={confirmExit}
+    />
+    </>
   );
 }
 

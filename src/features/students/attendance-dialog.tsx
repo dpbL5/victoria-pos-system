@@ -3,6 +3,7 @@ import { localTime } from './lesson-editor'
 import { useEffect, useState } from 'react'
 import { CheckCircle2, MessageSquareText, XCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { ActionTile } from '@/components/ui/action-tile'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
@@ -144,24 +145,26 @@ export function AttendanceDialog({
                   {entry?.note && !noteOpen && <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">{entry.note}</p>}
                 </div>
                 <div role="group" aria-label={`Điểm danh ${ls.student.fullName}`} className="flex w-full gap-2 sm:w-auto">
-                  <button
-                    type="button"
+                  <ActionTile
+                    label="Có mặt"
+                    icon={CheckCircle2}
+                    tone="success"
+                    size="sm"
+                    active={completed}
                     disabled={submitting || !canAttend}
-                    aria-pressed={completed}
+                    className="flex-1 sm:min-w-24"
                     onClick={() => setEntries((prev) => ({ ...prev, [ls.studentId]: { ...prev[ls.studentId], status: 'COMPLETED' } }))}
-                    className={`min-h-11 flex-1 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:min-w-24 ${completed ? 'bg-success-bg text-success' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}
-                  >
-                    <CheckCircle2 size={16} className="mr-1 inline" />Có mặt
-                  </button>
-                  <button
-                    type="button"
+                  />
+                  <ActionTile
+                    label="Vắng mặt"
+                    icon={XCircle}
+                    tone="danger"
+                    size="sm"
+                    active={absent}
                     disabled={submitting || !canAttend}
-                    aria-pressed={absent}
+                    className="flex-1 sm:min-w-24"
                     onClick={() => setEntries((prev) => ({ ...prev, [ls.studentId]: { ...prev[ls.studentId], status: 'ABSENT' } }))}
-                    className={`min-h-11 flex-1 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:min-w-24 ${absent ? 'bg-danger-bg text-danger bg-danger-bg text-danger' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}
-                  >
-                    <XCircle size={16} className="mr-1 inline" />Vắng mặt
-                  </button>
+                  />
                 </div>
               </div>
               <div className="mt-1 flex justify-end">

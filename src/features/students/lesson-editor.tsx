@@ -142,7 +142,7 @@ export function LessonEditor({ lesson: initialLesson, start, end, onClose, onSav
           <div><Label htmlFor="lesson-title" required>Tiêu đề</Label><Input autoFocus={Boolean(lesson)} id="lesson-title" maxLength={150} value={title} onChange={e => setTitle(e.target.value)} placeholder="Ví dụ: Lớp cung cơ bản" /></div>
           <div><Label htmlFor="lesson-coach">Huấn luyện viên</Label><Input id="lesson-coach" value={coachName} onChange={e => setCoachName(e.target.value)} maxLength={100} placeholder="Tên huấn luyện viên" /></div>
           {lesson?.series && <div><Label htmlFor="lesson-scope">Phạm vi thay đổi</Label><Select id="lesson-scope" value={scope} onChange={e => { if (e.target.value !== 'SINGLE' && noteChanged) { toast.error('Hãy lưu ghi chú cho buổi này trước khi đổi phạm vi'); return }; setScope(e.target.value) }}><option value="SINGLE">Buổi này</option><option value="FOLLOWING">Buổi này và các buổi sau</option><option value="ALL">Toàn bộ chuỗi (giữ lịch sử)</option></Select></div>}
-          {recurring && lesson && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={changeRule} onChange={e => setChangeRule(e.target.checked)} />Thay đổi quy tắc lặp từ buổi đang chọn</label>}
+          {recurring && lesson && <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-info" checked={changeRule} onChange={e => setChangeRule(e.target.checked)} />Thay đổi quy tắc lặp từ buổi đang chọn</label>}
           <div className={editingRule ? 'space-y-3 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900' : ''}>
             <ScheduleFields
               idPrefix="lesson-schedule"

@@ -140,7 +140,7 @@ export function ReportsInventory() {
                 Bán hàng từ kho
               </h2>
               <div className="mt-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   Doanh thu kỳ
                 </p>
                 <p className="mt-1 text-3xl font-extrabold tabular-nums tracking-tight text-zinc-950 dark:text-white md:text-4xl">
@@ -214,7 +214,7 @@ function PodiumSlot({ item, rank }: { item: TopProductRow; rank: number }) {
           <p className={`font-semibold text-zinc-950 dark:text-white ${rank === 1 ? 'text-base' : 'text-sm'}`}>
             <span className="line-clamp-1">{item.name}</span>
           </p>
-          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
             {item.quantitySold.toLocaleString('vi-VN')} bán
           </p>
         </div>
@@ -243,14 +243,14 @@ function RankedRow({ item, rank }: { item: TopProductRow; rank: number }) {
   return (
     <li>
       <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-zinc-100 text-[11px] font-semibold tabular-nums text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-zinc-100 text-xs font-semibold tabular-nums text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
           {rank}
         </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-zinc-950 dark:text-white">
             {item.name}
           </p>
-          <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
             {item.quantitySold.toLocaleString('vi-VN')} bán
           </p>
         </div>

@@ -408,15 +408,18 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
               {canExport ? 'Tải CSV cho khoảng ngày đã chọn' : 'Chỉ quản trị viên được tải file báo cáo'}
             </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Select
-                value={exportType}
-                onChange={(event) => setExportType(event.target.value)}
-                disabled={!canExport}
-                className="min-w-0 flex-1"
-              >
-                <option value="revenue">Doanh thu</option>
-                <option value="sessions">Phiên chơi</option>
-              </Select>
+              {/* flex-1/min-w-0 ở khung bọc: <Select> tự bọc khung `relative`
+                  giữ mũi tên ở mép phải, nên class layout thuộc về khung đó. */}
+              <div className="min-w-0 flex-1">
+                <Select
+                  value={exportType}
+                  onChange={(event) => setExportType(event.target.value)}
+                  disabled={!canExport}
+                >
+                  <option value="revenue">Doanh thu</option>
+                  <option value="sessions">Phiên chơi</option>
+                </Select>
+              </div>
               {canExport ? (
                 <a
                   href={`/api/reports/export?type=${exportType}&from=${from}&to=${to}`}
@@ -480,7 +483,7 @@ function HeroScoreboard({
     <div className="relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-success-bg0 sm:p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               Doanh thu kỳ
             </p>
             <p className="mt-1 text-3xl font-extrabold tracking-tight text-zinc-950 dark:text-white tabular-nums md:text-4xl">
@@ -573,7 +576,7 @@ function RecentPaymentRow({
           {formatClock(payment.paidAt)}
         </span>
         {payment.invoiceNo && (
-          <span className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
+          <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
             {shortInvoiceNo(payment.invoiceNo)}
           </span>
         )}

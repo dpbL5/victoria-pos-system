@@ -38,10 +38,24 @@ describe('getVisibleMenuGroups', () => {
     expect(groups.every((group) => group.items.length > 0)).toBe(true)
   })
 
-  it('TEACHER chỉ thấy các mục thuộc Đào tạo', () => {
+  it('TEACHER thấy mục Đào tạo và mục Cài đặt (tab Thêm)', () => {
     const groups = getVisibleMenuGroups('TEACHER')
-    expect(groups.map((group) => group.label)).toEqual(['Đào tạo'])
-    expect(groups[0]?.items.map((item) => item.href)).toEqual(['/lessons', '/classes', '/students'])
+    expect(groups.map((group) => group.label)).toEqual(['Đào tạo', 'Hệ thống'])
+    expect(groups.flatMap((group) => group.items.map((item) => item.href))).toEqual([
+      '/lessons',
+      '/classes',
+      '/students',
+      '/settings',
+    ])
+  })
+
+  it('mọi role đều vào được tab Thêm (/settings) từ sidebar', () => {
+    for (const role of ['ADMIN', 'MANAGER', 'STAFF', 'TEACHER']) {
+      const hrefs = getVisibleMenuGroups(role).flatMap((group) =>
+        group.items.map((item) => item.href)
+      )
+      expect(hrefs, role).toContain('/settings')
+    }
   })
 
   it('mọi href trong menu đều duy nhất', () => {

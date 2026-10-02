@@ -50,6 +50,12 @@ describe('getVisibleNavItems', () => {
     ])
   })
 
+  it('mọi role đều có tab Thêm (/settings)', () => {
+    for (const role of ['ADMIN', 'MANAGER', 'STAFF', 'TEACHER']) {
+      expect(getVisibleNavItems(role).map((item) => item.href), role).toContain('/settings')
+    }
+  })
+
   it('không role nào thấy href trùng', () => {
     for (const role of ['ADMIN', 'MANAGER', 'STAFF', 'TEACHER']) {
       const hrefs = getVisibleNavItems(role).map((item) => item.href)

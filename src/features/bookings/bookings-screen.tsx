@@ -27,9 +27,9 @@ import { useToast } from '@/components/ui/toast'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { apiJson, jsonRequest } from '@/lib/api'
-import { formatVND, formatVnDate, formatVnDateTime, getVnHour, getVnWeekRange, toInputDate, today } from '@/lib/shared/utils'
+import { formatVND, formatVnDate, formatVnDateTime, getVnHour, getVnWeekRange, normalizeSearchText, toInputDate, today } from '@/lib/shared/utils'
 import { CustomerSearch } from '@/features/pos/customer-search'
-import { isBookingOverdue, type BookingItem } from '@/features/pos/booking-list'
+import { filterBookingsBySearch, isBookingOverdue, type BookingItem } from '@/features/pos/booking-list'
 
 type BookingRow = BookingItem & {
   notes: string | null
@@ -171,12 +171,10 @@ export function BookingsScreen() {
     return grouped
   }, [weekBookings])
 
-  const normalizedQuery = query.trim().toLocaleLowerCase('vi')
+  const normalizedQuery = normalizeSearchText(query.trim())
   const matches = useMemo(
-    () => normalizedQuery
-      ? weekBookings.filter((booking) => `${bookingName(booking)} ${bookingPhone(booking)}`.toLocaleLowerCase('vi').includes(normalizedQuery))
-      : [],
-    [weekBookings, normalizedQuery],
+    () => (normalizedQuery ? filterBookingsBySearch(weekBookings, query) : []),
+    [weekBookings, normalizedQuery, query],
   )
   const matchIds = useMemo(() => new Set(matches.map((booking) => booking.id)), [matches])
   const matchDays = useMemo(() => new Set(matches.map((booking) => dayKeyOf(booking.scheduledAt))), [matches])
@@ -330,9 +328,8 @@ export function BookingsScreen() {
 
   const onQueryChange = (value: string) => {
     setQuery(value)
-    const needle = value.trim().toLocaleLowerCase('vi')
-    if (!needle) return
-    const first = weekBookings.find((booking) => `${bookingName(booking)} ${bookingPhone(booking)}`.toLocaleLowerCase('vi').includes(needle))
+    if (!value.trim()) return
+    const first = filterBookingsBySearch(weekBookings, value)[0]
     if (first) setSelectedDate(dayKeyOf(first.scheduledAt))
   }
 
@@ -461,7 +458,7 @@ export function BookingsScreen() {
                   const label = `${String(hour).padStart(2, '0')}:00`
                   return (
                     <div key={hour} className={`flex border-t border-zinc-100 first:border-t-0 dark:border-zinc-800/60 ${items.length === 0 ? 'h-9' : 'h-16'}`}>
-                      <div aria-hidden className="flex w-11 shrink-0 items-start justify-end pr-2 pt-2 text-[11px] font-medium tabular-nums text-zinc-500 dark:text-zinc-400 lg:w-16 lg:pr-3 lg:text-xs">
+                      <div aria-hidden className="flex w-11 shrink-0 items-start justify-end pr-2 pt-2 text-xs font-medium tabular-nums text-zinc-500 dark:text-zinc-400 lg:w-16 lg:pr-3">
                         {label}
                       </div>
                       {items.length === 0 ? (
@@ -500,15 +497,15 @@ export function BookingsScreen() {
                                 <span className="flex min-w-0 flex-col justify-center gap-0.5 lg:flex-row lg:items-center lg:gap-4">
                                   <span className="flex min-w-0 items-baseline gap-1.5 lg:shrink-0">
                                     <span className="shrink-0 text-xs font-semibold tabular-nums text-zinc-900 dark:text-white lg:text-sm">{clockOf(booking.scheduledAt)}</span>
-                                  <span className={`shrink-0 text-[11px] font-medium lg:text-xs ${overdue ? 'text-warning' : STATUS[booking.status].text}`}>{overdue ? 'Quá giờ hẹn' : STATUS[booking.status].label}</span>
+                                  <span className={`shrink-0 text-xs font-medium ${overdue ? 'text-warning' : STATUS[booking.status].text}`}>{overdue ? 'Quá giờ hẹn' : STATUS[booking.status].label}</span>
                                     {items.length === 1 && depositLeft > 0 && (
-                                    <span className="ml-auto shrink-0 text-[11px] font-semibold tabular-nums text-success lg:hidden">{formatVND(depositLeft)}</span>
+                                    <span className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-success lg:hidden">{formatVND(depositLeft)}</span>
                                   )}
                                 </span>
                                   <span className="flex min-w-0 items-baseline gap-1.5 lg:flex-1">
                                     <span className="truncate text-sm font-medium text-zinc-900 dark:text-white">{bookingName(booking)}</span>
                                     {items.length === 1 && (
-                                      <span className="ml-auto shrink-0 text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400 lg:hidden">{booking.playerCount} người</span>
+                                      <span className="ml-auto shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400 lg:hidden">{booking.playerCount} người</span>
                                     )}
                                   </span>
                                   <span className="hidden shrink-0 items-center gap-4 text-xs tabular-nums text-zinc-500 dark:text-zinc-400 lg:flex">

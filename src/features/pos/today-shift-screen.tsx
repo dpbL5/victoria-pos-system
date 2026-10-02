@@ -33,10 +33,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSWRConfig } from 'swr'
 import {
+  ChevronDown,
+  Search,
   Timer,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Input } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
@@ -56,7 +59,7 @@ import { ToolCountDialog } from './tool-count-dialog'
 import { SellDialog } from './sell-dialog'
 import { RetailDialog } from './retail-dialog'
 import { CheckInDialog } from './check-in-dialog'
-import { BookingCards, isBookingOnVnDay, type BookingItem } from './booking-list'
+import { BookingCards, filterBookingsBySearch, isBookingOnVnDay, type BookingItem } from './booking-list'
 import { CheckoutDrawer } from './checkout-drawer'
 import type {
   Product,
@@ -95,6 +98,8 @@ export function TodayShiftScreen() {
   const [sellSession, setSellSession] = useState<SessionRow | null>(null)
   const [sellPickOpen, setSellPickOpen] = useState(false)
   const [retailOpen, setRetailOpen] = useState(false)
+  const [bookingsOpen, setBookingsOpen] = useState(true)
+  const [bookingSearch, setBookingSearch] = useState('')
   const [refreshError, setRefreshError] = useState('')
 
   const shiftQuery = useApi<{ myShift: Shift | null; openShift: Shift | null }>(SHIFT_KEY)
@@ -121,6 +126,8 @@ export function TodayShiftScreen() {
         booking.status === 'BOOKED' && isBookingOnVnDay(booking)
       ))
     : []
+  // Tìm nhanh trong khối Lịch đặt: chỉ lọc danh sách đã tải, gõ không dấu vẫn khớp.
+  const visibleBookings = filterBookingsBySearch(bookings, bookingSearch)
   const products = productsQuery.data?.success ? productsQuery.data.data ?? [] : []
   const tools = toolsQuery.data?.success ? toolsQuery.data.data ?? [] : []
   const authUserId = authQuery.data?.success ? authQuery.data.data?.userId ?? null : null
@@ -507,27 +514,78 @@ export function TodayShiftScreen() {
   // có mục Lịch đặt). Ở chế độ A nó chỉ hiện khi thật sự có lịch.
   const bookingsBlock = bookings.length > 0 ? (
     <section className="rounded-xl border border-border-default bg-surface-elevated shadow-sm">
-      <div className="flex items-center justify-between border-b border-border-default px-4 py-3">
-        <h2 className="text-sm font-semibold text-text-primary">
-          Lịch đặt trong ngày
-          <span className="ml-2 text-xs font-normal tabular-nums text-text-tertiary">
-            {bookings.length}
-          </span>
+      {/* Không đặt `border-b` ở đây: khi thu gọn nó chồng lên viền dưới của thẻ
+          thành đường kẻ dày 2-3px. Đường phân cách nằm trong phần nội dung
+          (border-t của ô tìm kiếm) nên tự biến mất khi đóng. */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <h2 className="min-w-0 text-sm font-semibold text-text-primary">
+          {/* Cả tiêu đề là nút đóng/mở; chevron xoay 180° như thẻ phiên nhóm. */}
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            aria-expanded={bookingsOpen}
+            aria-controls="today-bookings"
+            title={bookingsOpen ? 'Thu gọn lịch đặt' : 'Mở rộng lịch đặt'}
+            onClick={() => setBookingsOpen((open) => !open)}
+          >
+            Lịch đặt trong ngày
+            <span className="text-xs font-normal tabular-nums text-text-tertiary">
+              {bookings.length}
+            </span>
+            <ChevronDown
+              size={14}
+              aria-hidden
+              className={`text-text-tertiary transition-transform duration-200 ${bookingsOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
         </h2>
         <Button variant="white" size="sm" onClick={() => router.push('/bookings')}>
           Quản lý
         </Button>
       </div>
-      <BookingCards
-        bookings={bookings}
-        // Chế độ giám sát (chưa vào ca): không truyền handler → BookingCards
-        // render hàng chữ trần, không còn nút xám vô nghĩa.
-        onCheckIn={canOperate ? (booking, startTime) => void handleBookingCheckIn(booking, startTime) : undefined}
-        onCancel={canOperate ? (booking, depositRefunded) => void handleBookingCancel(booking, depositRefunded) : undefined}
-        busyId={busyBookingId}
-        actionDisabled={!canOperate}
-        shiftOpenedAt={shift?.openedAt}
-      />
+      {/* Grid-rows 0fr→1fr để đóng/mở mượt, giữ nội dung trong DOM. `inert` khi
+          đóng để ô tìm kiếm/nút bên trong không nhận focus bằng bàn phím. */}
+      <div
+        id="today-bookings"
+        className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+        style={{ gridTemplateRows: bookingsOpen ? '1fr' : '0fr', opacity: bookingsOpen ? 1 : 0 }}
+        aria-hidden={!bookingsOpen}
+        inert={!bookingsOpen}
+      >
+        <div className="overflow-hidden">
+          <div className="border-y border-border-default px-4 py-2.5">
+            <div className="relative">
+              <Search
+                size={14}
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-tertiary"
+              />
+              <Input
+                type="search"
+                value={bookingSearch}
+                onChange={(event) => setBookingSearch(event.target.value)}
+                placeholder="Tìm khách theo tên hoặc SĐT"
+                aria-label="Tìm lịch đặt trong ngày"
+                className="h-9 border-border-default bg-surface-elevated py-0 pr-3 pl-8"
+              />
+            </div>
+          </div>
+          {visibleBookings.length > 0 ? (
+            <BookingCards
+              bookings={visibleBookings}
+              // Chế độ giám sát (chưa vào ca): không truyền handler → BookingCards
+              // render hàng chữ trần, không còn nút xám vô nghĩa.
+              onCheckIn={canOperate ? (booking, startTime) => void handleBookingCheckIn(booking, startTime) : undefined}
+              onCancel={canOperate ? (booking, depositRefunded) => void handleBookingCancel(booking, depositRefunded) : undefined}
+              busyId={busyBookingId}
+              actionDisabled={!canOperate}
+              shiftOpenedAt={shift?.openedAt}
+            />
+          ) : (
+            <p className="px-4 py-3 text-sm text-text-tertiary">Không tìm thấy lịch phù hợp</p>
+          )}
+        </div>
+      </div>
     </section>
   ) : (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-border-default bg-surface-elevated px-4 py-2.5">
@@ -590,46 +648,60 @@ export function TodayShiftScreen() {
           </>
         ) : (
           <>
-            <ShiftStrip
-              shift={boardShift}
-              readOnly={!canOperate}
-              onOpen={() => setOpenShiftDialog(true)}
-              onClose={() => setCloseShiftDialog(true)}
-              onViewTransactions={() => {
-                if (boardShift) router.push(`/transactions?shiftId=${boardShift.id}`)
-              }}
-              onCountTools={() => setCountToolsDialog(true)}
-              hasCounted={hasCountedTools}
-              canJoin={canJoinBoardShift}
-              onJoin={() => void handleOpenShift()}
-              submitting={submitting}
-            />
+            {/* Desktop: dải ca + 3 hành động chính là MỘT hàng. Dải ca co giãn
+                trong khoảng 26rem trở lên (`flex-1` + `basis`), hành động giữ track
+                cố định và dồn sang phải — tỷ lệ do bề rộng nút của dải quyết định,
+                không phải chia đều 50/50. Hẹp hơn mức đó (tablet, cửa sổ nhỏ) thì
+                `flex-wrap` đẩy hàng nút xuống dưới y như cũ, thay vì bóp dải ca.
+                Điện thoại xếp dọc.
 
-            {/* Chế độ giám sát không có hàng hành động: cả 3 tile đều là thao tác
-                tiền, mà thao tác tiền cần ca của chính mình. */}
-            {canOperate && (
-            <QuickActions
-              shiftReady={canOperate}
-              sellDisabled={sessions.length === 0}
-              retailDisabled={!canOperate}
-              onCheckIn={() => {
-                setCheckInInitialMode('WALK_IN')
-                setCheckInDialog(true)
-              }}
-              onSell={() => {
-                if (sessions.length === 0) {
-                  notifyError('Chưa có phiên đang chơi để bán kèm')
-                  return
-                }
-                if (sessions.length === 1) {
-                  setSellSession(sessions[0])
-                } else {
-                  setSellPickOpen(true)
-                }
-              }}
-              onRetail={() => setRetailOpen(true)}
-            />
-            )}
+                `lg:items-stretch`: ô hành động cao bằng dải ca (grid item tự giãn
+                theo chiều cao của hàng) nên hai khối thành một band, thay vì ô
+                56px lơ lửng giữa card 110px. Chỉ desktop — mobile giữ 56px để
+                ngón tay bấm đúng chỗ. */}
+            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-stretch lg:justify-end lg:gap-3">
+              <ShiftStrip
+                className="lg:min-w-0 lg:flex-1 lg:basis-[26rem]"
+                shift={boardShift}
+                readOnly={!canOperate}
+                onOpen={() => setOpenShiftDialog(true)}
+                onClose={() => setCloseShiftDialog(true)}
+                onViewTransactions={() => {
+                  if (boardShift) router.push(`/transactions?shiftId=${boardShift.id}`)
+                }}
+                onCountTools={() => setCountToolsDialog(true)}
+                hasCounted={hasCountedTools}
+                canJoin={canJoinBoardShift}
+                onJoin={() => void handleOpenShift()}
+                submitting={submitting}
+              />
+
+              {/* Chế độ giám sát không có hàng hành động: cả 3 tile đều là thao tác
+                  tiền, mà thao tác tiền cần ca của chính mình. */}
+              {canOperate && (
+              <QuickActions
+                shiftReady={canOperate}
+                sellDisabled={sessions.length === 0}
+                retailDisabled={!canOperate}
+                onCheckIn={() => {
+                  setCheckInInitialMode('WALK_IN')
+                  setCheckInDialog(true)
+                }}
+                onSell={() => {
+                  if (sessions.length === 0) {
+                    notifyError('Chưa có phiên đang chơi để bán kèm')
+                    return
+                  }
+                  if (sessions.length === 1) {
+                    setSellSession(sessions[0])
+                  } else {
+                    setSellPickOpen(true)
+                  }
+                }}
+                onRetail={() => setRetailOpen(true)}
+              />
+              )}
+            </div>
 
             {bookingsBlock}
 
@@ -733,9 +805,19 @@ export function TodayShiftScreen() {
         productsLoading={productsLoading}
         productsError={productsError}
         onRetryProducts={retryProducts}
-        onSellItemsChanged={() => refreshAfterMutation(
+        onItemsOptimistic={(sessionId, itemsTotal) => {
+          // Chỉ ghi cache SWR — card phiên đổi số ngay theo đúng thứ nhân viên
+          // vừa thấy. KHÔNG refetch ở đây: refetch sớm sẽ đọc DB trước khi PATCH
+          // ghi xong và xoá mất số vừa ghi.
+          updateSessions((current) =>
+            current.map((row) =>
+              row.id === sessionId ? { ...row, pendingSellTotal: itemsTotal } : row
+            )
+          )
+        }}
+        onItemsSaved={() => refreshAfterMutation(
           [SESSIONS_KEY, PRODUCTS_KEY],
-          'Đã bỏ dòng bán kèm nhưng danh sách chưa cập nhật. Hãy tải lại màn hình.'
+          'Đã lưu hàng hoá nhưng danh sách chưa cập nhật. Hãy tải lại màn hình.'
         )}
         shiftReady={canOperate}
         submitting={submitting}

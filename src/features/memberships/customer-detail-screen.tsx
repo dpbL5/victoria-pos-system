@@ -613,7 +613,7 @@ function MembershipStatusBlock({
     >
       <div className="flex items-center gap-2">
         <Calendar size={14} className="text-zinc-400" />
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
           Trạng thái hội viên
         </p>
       </div>
@@ -829,7 +829,7 @@ function InvoiceHistoryRow({ invoice }: { invoice: CustomerHistoryInvoice }) {
           ) : null}
 
           {invoice.shift && invoice.shift.openedAt ? (
-            <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
               Ca {formatDay(invoice.shift.openedAt)}
             </p>
           ) : null}

@@ -65,21 +65,23 @@ async function getCheckoutPreview(
     let pendingIndex = 0
     const resolved: Array<{ playerCount: number; pricingRuleId: string; playerIds: string[]; snapshot: PricingRuleSnapshot }> = []
     let rawGroups: Array<{ playerCount: number; pricingRuleId: string; playerIds: string[] }> | null = null
-    if (needsPricing) {
-      const snapshotOf = (rule: NonNullable<Awaited<ReturnType<typeof repositories.pricing.findByIdWithTiers>>>): PricingRuleSnapshot => ({
-        ruleId: rule.id,
-        name: rule.name,
-        ratePerHour: Number(rule.ratePerHour),
-        tiers: rule.tiers.map((t) => ({ minHours: t.minHours, ratePerHour: Number(t.ratePerHour) })),
-      })
-      const isEffective = (rule: NonNullable<Awaited<ReturnType<typeof repositories.pricing.findByIdWithTiers>>>): boolean => {
-        const currentDay = getVnDay(at)
-        const dayMatches = rule.daysOfWeek.length === 0 || rule.daysOfWeek.includes(currentDay)
-        const effectiveFromOk = rule.effectiveFrom <= at
-        const effectiveToOk = !rule.effectiveTo || rule.effectiveTo >= at
-        return dayMatches && effectiveFromOk && effectiveToOk
-      }
 
+    // Helper dùng chung cho cả nhánh phiên mới lẫn nhánh nhóm còn chơi chưa có giá
+    const snapshotOf = (rule: NonNullable<Awaited<ReturnType<typeof repositories.pricing.findByIdWithTiers>>>): PricingRuleSnapshot => ({
+      ruleId: rule.id,
+      name: rule.name,
+      ratePerHour: Number(rule.ratePerHour),
+      tiers: rule.tiers.map((t) => ({ minHours: t.minHours, ratePerHour: Number(t.ratePerHour) })),
+    })
+    const isEffective = (rule: NonNullable<Awaited<ReturnType<typeof repositories.pricing.findByIdWithTiers>>>): boolean => {
+      const currentDay = getVnDay(at)
+      const dayMatches = rule.daysOfWeek.length === 0 || rule.daysOfWeek.includes(currentDay)
+      const effectiveFromOk = rule.effectiveFrom <= at
+      const effectiveToOk = !rule.effectiveTo || rule.effectiveTo >= at
+      return dayMatches && effectiveFromOk && effectiveToOk
+    }
+
+    if (needsPricing) {
       if (groupsParam) {
         try {
           const parsedGroups = JSON.parse(groupsParam) as Array<{ playerCount: number; pricingRuleId: string; playerIds?: string[] }>
@@ -162,7 +164,89 @@ async function getCheckoutPreview(
       }
     }
 
-    const pricingResult = needsPricing && pendingGroups
+    // ── Thu trước: nhóm CÒN CHƠI chưa có giá vẫn phải chọn được bảng giá riêng ──
+    // Nhóm đã chốt giá ở lần thu trước dùng snapshot của nó; nhóm chưa có thì lấy
+    // bảng giá nhân viên vừa chọn cho đúng nhóm đó (groupPricingRuleIds).
+    // Không có bước này thì preview rơi về bảng giá cấp phiên và hiện sai tiền.
+    if (!needsPricing && playerIdsParam) {
+      let ruleIdsByGroup: Record<string, string> = {}
+      const rawRuleIds = _request.nextUrl.searchParams.get('groupPricingRuleIds')
+      if (rawRuleIds) {
+        try {
+          const parsed = JSON.parse(rawRuleIds) as unknown
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            ruleIdsByGroup = parsed as Record<string, string>
+          }
+        } catch { /* JSON hỏng → coi như không chọn bảng giá */ }
+      }
+
+      let quotedPlayerIds: string[] = []
+      try {
+        const parsed = JSON.parse(playerIdsParam) as unknown
+        if (Array.isArray(parsed)) {
+          quotedPlayerIds = parsed.filter((x): x is string => typeof x === 'string')
+        }
+      } catch { /* playerIds hỏng → không có nhóm nào cần chốt giá */ }
+
+      // Nhóm sở hữu các player được thu mà CHƯA có snapshot
+      const unpricedGroupIds = Array.from(
+        new Set(
+          session.pricingGroups
+            .filter((g) =>
+              !g.pricingSnapshot
+              && Number(g.hourlyRate) === 0
+              && g.players.some((p) => quotedPlayerIds.includes(p.id))
+            )
+            .map((g) => g.id)
+        )
+      )
+
+      if (unpricedGroupIds.length > 0) {
+        const selectedRuleIds = Array.from(
+          new Set(
+            unpricedGroupIds
+              .map((groupId) => ruleIdsByGroup[groupId])
+              .filter((id): id is string => !!id)
+          )
+        )
+        const selectedRules = selectedRuleIds.length > 0
+          ? await repositories.pricing.findManyByIdsWithTiers(selectedRuleIds)
+          : []
+        const selectedRulesById = new Map(selectedRules.map((rule) => [rule.id, rule]))
+
+        // Auto-resolve tối đa 1 lần cho nhóm không chỉ định bảng giá
+        let autoRule: Awaited<ReturnType<typeof repositories.pricing.findApplicableRule>> = null
+        let autoRuleLoaded = false
+
+        const mixedPending: PendingGroupPricing[] = []
+        for (const groupId of unpricedGroupIds) {
+          const ruleId = ruleIdsByGroup[groupId]
+          let rule = ruleId ? selectedRulesById.get(ruleId) ?? null : null
+          if (!rule && !ruleId) {
+            if (!autoRuleLoaded) {
+              autoRule = await repositories.pricing.findApplicableRule(getVnHour(at), getDayType(at), at)
+              autoRuleLoaded = true
+            }
+            rule = autoRule
+          }
+          if (!rule) {
+            return NextResponse.json({ success: false, error: 'Không tìm thấy bảng giá' }, { status: 409 })
+          }
+          if (!isEffective(rule)) {
+            return NextResponse.json(
+              { success: false, error: 'Bảng giá đã chọn không còn hiệu lực. Vui lòng chọn bảng giá khác.' },
+              { status: 409 }
+            )
+          }
+          mixedPending.push({ groupId, playerCount: 0, snapshot: snapshotOf(rule) })
+        }
+        // pendingGroups[0] được engine dùng làm bảng giá của lần xem trước này
+        pendingGroups = mixedPending
+        pendingIndex = 0
+      }
+    }
+
+    const pricingResult = (needsPricing || pendingGroups) && pendingGroups
       ? await calculateSessionPriceFromLoaded(
           repositories,
           session,

@@ -208,6 +208,8 @@ export interface SessionRepository {
     unitPrice: number
     notes?: string | null
   }): Promise<void>
+  /** Đặt lại số lượng của 1 dòng bán kèm (giữ nguyên unitPrice đã chốt) */
+  updateSellItemQuantity(id: string, quantity: number): Promise<void>
   /** Xoá các dòng bán kèm (đã checkout/huỷ) */
   removeSellItems(ids: string[]): Promise<void>
   /** Xoá toàn bộ dòng bán kèm của phiên — phiên huỷ/hoàn tất */

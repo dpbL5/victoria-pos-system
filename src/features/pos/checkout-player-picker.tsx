@@ -50,7 +50,7 @@ export interface PickerGroup {
 * Drawer và picker dùng chung để bảng đọc như một biên lai. */
 export const MONEY_RAIL = 'w-[5.75rem] shrink-0 text-right tabular-nums'
 export const GROUP_LABEL =
-  'text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary'
+  'text-[10px] font-semibold uppercase tracking-[0.08em] text-text-secondary'
 
 /** Ô chọn tròn của phiếu — luôn là ô trang trí bên trong nút của cả hàng */
 const CHECKBOX_CLASS =
@@ -153,20 +153,24 @@ export function CheckoutPlayerPicker({
               </span>
               <div className="flex shrink-0 items-center justify-end gap-3">
                 {!group.locked && rules.length > 0 && (
-                  <Select
-                    aria-label="Chọn bảng giá"
-                    value={group.pricingRuleId}
-                    className="w-[10.5rem] px-2 py-1.5 text-sm"
-                    onChange={(e) =>
-                      setGroup(i, { pricingRuleId: e.target.value })
-                    }
-                  >
-                    {rules.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </Select>
+                  // Bề rộng ở khung bọc; `px-2` cũ đổi thành `pl-2` để chừa chỗ
+                  // cho mũi tên của Select (pr-9 do primitive giữ).
+                  <div className="w-[10.5rem]">
+                    <Select
+                      aria-label="Chọn bảng giá"
+                      value={group.pricingRuleId}
+                      className="py-1.5 pl-2 text-sm"
+                      onChange={(e) =>
+                        setGroup(i, { pricingRuleId: e.target.value })
+                      }
+                    >
+                      {rules.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
                 )}
                 {!group.locked && groups.length > 1 && (
                   <button

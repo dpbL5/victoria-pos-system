@@ -4,6 +4,7 @@ import type { Repositories } from '@/lib/infrastructure/repositories'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { err, ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
+import { parseStartOfDay, toInputDate } from '@/lib/shared/utils'
 import type { CreateBookingInput, UpdateBookingInput } from '../validations'
 
 export async function createBooking(
@@ -101,6 +102,41 @@ export async function setBookingStatus(
         : {},
     })
     return { id: input.bookingId, status: input.status }
+  })
+  return result.ok ? ok(result.value) : result
+}
+
+/**
+ * Tự động huỷ lịch quá ngày (no-show): lịch còn BOOKED với giờ hẹn trước 00:00
+ * hôm nay (giờ VN) chuyển thành CANCELLED. Lịch còn tiền cọc chưa xử lý giữ
+ * nguyên để nhân viên xác nhận hoàn cọc qua luồng huỷ thường.
+ */
+export async function autoCancelStaleBookings(
+  input: { actorId: string; now?: Date },
+  deps: Repositories = repositories
+): Promise<Result<{ cancelled: number }>> {
+  const cutoff = parseStartOfDay(toInputDate(input.now ?? new Date()))
+  const stale = await deps.booking!.findMany({ from: new Date(0), to: cutoff, statuses: ['BOOKED'] })
+  const cancellable = stale.filter((booking) =>
+    Number(booking.depositAmount) - Number(booking.depositAppliedAmount) - Number(booking.depositRefundedAmount) <= 0
+  )
+  if (!cancellable.length) return ok({ cancelled: 0 })
+
+  const result = await runInTransaction(async (tx) => {
+    let cancelled = 0
+    for (const booking of cancellable) {
+      const updated = await tx.booking!.transition(booking.id, 'BOOKED', 'CANCELLED')
+      if (!updated.count) continue
+      cancelled += 1
+      await tx.audit.append({
+        userId: input.actorId,
+        action: 'BOOKING_CANCELLED',
+        entityType: 'Booking',
+        entityId: booking.id,
+        details: { autoCancelled: true, scheduledAt: booking.scheduledAt.toISOString() },
+      })
+    }
+    return { cancelled }
   })
   return result.ok ? ok(result.value) : result
 }

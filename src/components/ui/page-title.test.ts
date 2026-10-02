@@ -16,8 +16,10 @@ import { PAGE_TITLE_CLASS } from './page-title'
 // thuộc dashboard). Cỡ chữ của wordmark do nhận diện quyết định, không theo
 // thang tiêu đề màn.
 const ROOT = process.cwd()
-const SCAN_DIRS = ['src/features', 'src/components/layout']
-const WORDMARK_FILES = ['src/components/layout/sidebar.tsx']
+// `src/app` phải nằm trong phạm vi quét: trang Nhân viên từng có h1 riêng
+// (text-2xl + palette thô) vì thư mục này không nằm trong danh sách cũ.
+const SCAN_DIRS = ['src/features', 'src/components/layout', 'src/app']
+const WORDMARK_FILES = ['src/components/layout/sidebar.tsx', 'src/app/(auth)/login/page.tsx']
 const H1_OPEN_TAG = /<h1\b[^>]*>/g
 const FORBIDDEN_IN_TITLE = /text-2xl|text-lg|text-base|text-zinc-|text-slate-|text-gray-/
 

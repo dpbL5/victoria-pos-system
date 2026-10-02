@@ -397,7 +397,7 @@ function ToolFormModal({
             id="tool-required"
             checked={form.isRequired}
             onChange={(event) => onChange({ ...form, isRequired: event.target.checked })}
-            className="h-4 w-4 rounded border-zinc-300 text-info focus:ring-focus-ring"
+            className="h-4 w-4 rounded accent-info"
           />
           <div>
             <Label htmlFor="tool-required">Bắt buộc kiểm đếm</Label>

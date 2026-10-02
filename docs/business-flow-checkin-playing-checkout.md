@@ -102,13 +102,34 @@
   - `PRODUCT` **trừ kho ngay** khi thêm vào phiên: `decrementStockIfAvailable` (không cho âm → `INSUFFICIENT_STOCK`) + `StockMovement` kiểu `SALE`.
   - DRAFT này sẽ bị hủy (`CANCELLED`, notes `Đã gộp vào hóa đơn {invoiceNo}`) khi checkout toàn bộ phiên.
   - Audit `SESSION_SELL`. UI: `sell-dialog.tsx` (giỏ hàng) + `sell-pick-dialog.tsx` (chọn sản phẩm).
+- **Sửa hàng hoá trong màn thu tiền — KHÔNG gọi API theo từng thao tác**: bấm − / + hoặc thêm món ở `checkout-item-rows.tsx` chỉ ghi vào state của drawer. Phiên chỉ được ghi khi **đóng màn** hoặc khi **bấm Thu tiền** — mỗi lần đúng MỘT request.
+  - Drawer giữ hai nguồn trong bộ nhớ rồi dán thành một danh sách: dòng đã bán kèm lúc chơi (`checkout-preview.pendingSellItems`, sửa qua `qtyOverride`) + hàng mới chọn lúc thu (`cart`).
+  - Thêm một món đã có dòng bán kèm thì tăng ngay dòng đó, không tạo dòng trùng.
+  - Trần tồn ở UI: dòng bán kèm đã trừ kho lúc thêm nên trần là `product.stockQuantity + item.quantity`; dòng giỏ (chưa trừ) thì trần là `product.stockQuantity`.
+  - **Đóng màn (X / overlay / Escape)**: chưa sửa gì → đóng luôn, **không request nào** (tăng rồi giảm về đúng số cũ cũng không tính là thay đổi). Có sửa → hỏi lại `"Bạn vừa sửa hoá đơn check-out, tiếp tục thoát?"` (`ConfirmDialog`, nút `Ở lại` / `Thoát`).
+  - **Đã xác nhận thoát thì LẠC QUAN**: đóng drawer + cập nhật `Tạm tính` trên card phiên NGAY, không đợi mạng. Lưu lỗi → toast + lùi card về số server trước khi sửa.
+  - ⚠️ **Ghi lạc quan và làm mới là HAI việc tách rời, và thứ tự bắt buộc**: `onItemsOptimistic(sessionId, tổng)` chỉ ghi cache SWR (không gọi mạng), `onItemsSaved()` mới refetch — và chỉ được gọi **sau khi PATCH xong** (`.finally`). Gọi refetch ngay lúc bấm Thoát (như bản đầu) thì `GET /api/sessions` đọc DB trước khi PATCH ghi, trả về số cũ và **ghi đè số lạc quan → card mất hẳn "Tạm tính"**. Đây là race thật đã xảy ra, không phải giả định: mạng càng chậm càng lộ rõ.
+  - Các lần lưu **xếp hàng** qua `saveQueueRef` trong `checkout-drawer.tsx`: nhân viên mở lại drawer rồi thoát tiếp trong lúc request trước còn bay, hai request về lệch thứ tự thì phiên giữ danh sách cũ.
+  - Use-case `syncSessionSellItems` (`src/lib/sessions/use-cases/sell-items.ts`): hoà giải cả ba chiều (thêm / sửa số lượng / bỏ dòng), bù kho theo chênh lệch, audit `SESSION_SELL_SYNC`, **không tạo hoá đơn**.
+  - `POST /api/sessions/[id]/sell` **chỉ phục vụ nút Bán kèm ngoài màn Ca hôm nay**.
+  - Phép so "danh sách cuối khác gì danh sách đang có" nằm ở `src/lib/sessions/sell-item-diff.ts` — hàm thuần, **dùng chung cho cả `PATCH /sell-items` và `POST /checkout`** (xem Bước 4). Hai đường ghi mà tính chênh lệch khác nhau thì tồn kho phụ thuộc vào đường nào được gọi sau.
+
+
 - **Phí gửi xe (SURCHARGE)**: không bán kèm — nhập `parkingVehicleCount` tại checkout, giá từ `AppSetting(PARKING_FEE_UNIT_PRICE)` (xem Bước 4).
 
 ## 6. Bước 4: Check-out
 
 - Use-case: `checkOut(input)` — `src/lib/sessions/use-cases/check-out.ts`; thân transaction `runCheckOutTx`; route `POST /api/sessions/[id]/checkout` (preview: `GET /api/sessions/[id]/checkout-preview`).
 - Guard trước transaction: `SESSION_NOT_FOUND`, session phải `ACTIVE`, `END_TIME_BEFORE_START`.
-- **Gán bảng giá khi cần** (`needsPricingAssignment` — vãng lai, group chưa có snapshot): `resolveCheckoutPricing` hỗ trợ 3 kiểu — `groups` (chia nhiều nhóm, mỗi nhóm 1 rule + `playerIds` chọn tay), `pricingRuleId` (1 rule cả phiên), hoặc auto-resolve rule hiệu lực tại giờ checkout; lỗi `PRICING_RULE_NOT_FOUND` / `PRICING_RULE_NOT_EFFECTIVE` / `GROUP_PLAYER_COUNT_MISMATCH`.
+- **Gán bảng giá khi cần — điều kiện theo TỪNG NHÓM, không phải cả phiên** (`isUnpricedGroup(g)` = `!g.pricingSnapshot && hourlyRate === 0`):
+  - **Nhóm đã có snapshot** = giá đã chốt ở lần thu trước → **khoá**, không tính lại, không gửi bảng giá cho nó.
+  - **Nhóm chưa có snapshot** (phiên mới, hoặc **nhóm còn chơi sau khi nhóm khác đã thu xong**) → vẫn phải chọn được bảng giá riêng, chốt ngay tại lần thu đó.
+  - **Thu trước KHÔNG chốt bảng giá cho cả nhóm** (`preserveCounts`): nhóm còn người chưa thu thì tx không `updatePricingGroup` — bảng giá chỉ áp cho người được thu lần này; phần người còn lại chọn lại bảng giá theo giờ thu ở lần sau, không bị khoá theo lần thu trước. Chỉ lần thu hết người của nhóm mới ghi snapshot + counts vào nhóm.
+  - ⚠️ **Không dùng điều kiện session-wide** (`every(...)`) ở đây. Bản cũ dùng `session.pricingGroups.every(...)`: nhóm đầu thu xong là `every` sai → cả phiên rơi vào nhánh "đã gán giá" → nhóm còn chơi bị **khoá cứng** (UI ẩn ô chọn bảng giá) và server trả `PRICING_RULE_NOT_FOUND`. Lỗi này nằm ở cả 3 tầng: `checkout-drawer.tsx` (`needsPricing`/`locked`), `check-out.ts` (`isFreshPricing` vs `hasUnpricedGroups`) và `checkout-preview/route.ts`.
+  - Payload thu trước: `playerIds` (chọn người) + `groupPricingRuleIds` (bảng giá cho từng nhóm CHƯA có giá, key = groupId). Nhóm đã có snapshot không gửi.
+  - `resolveRulesForUnpricedGroups` (check-out.ts): ưu tiên bảng giá riêng của nhóm → `pricingRuleId` của request → auto-resolve rule hiệu lực tại giờ thu. `getVN...` dùng chung `toPricingSnapshot`/`isRuleEffectiveAt` với `resolveCheckoutPricing`.
+  - `resolveCheckoutPricing` (nhánh `groups`, chia nhóm tại checkout) **chỉ chạy cho phiên MỚI hoàn toàn** (`isFreshPricing`), giữ nguyên hành vi cũ.
+  - Lỗi: `PRICING_RULE_NOT_FOUND` / `PRICING_RULE_NOT_EFFECTIVE` / `GROUP_PLAYER_COUNT_MISMATCH`.
 - **Khuyến mãi**: chỉ cho tiền giờ vãng lai — chọn `promotionRuleId`, `findAvailableById`; hội viên chọn KM → `PROMOTION_NOT_APPLICABLE`; hết hạn → `PROMOTION_UNAVAILABLE`.
 - **Pause**: tổng giây paused tính theo từng player được thu (`playerPausedSeconds`, mốc `min(endTime, checkoutAt)`).
 
@@ -123,14 +144,20 @@
    - Thu trước (thu số người < tổng người chưa thu): metadata thêm `earlyCollection.sequence` (số lần thu trước = `countPaidBySession + 1`) + notes `Thu trước lần N — M người`.
    - Hội viên: `subtotal 0`, description `Giờ chơi hội viên × N người`.
 6. Phí gửi xe: `parkingVehicleCount > 0` → dòng `SURCHARGE` (metadata `surchargeType: 'PARKING'`), giá từ `AppSetting(PARKING_FEE_UNIT_PRICE)`, **trừ vào tổng**; `updateInvoiceTotals`.
-7. Dòng sản phẩm: re-fetch `findByIdForSale` (TOCTOU) → `decrementStockIfAvailable` (không âm) + `recordSaleMovement` (SALE, gắn `invoiceItemId`/`shiftId`) — chỉ cho lượng mới thêm tại checkout (`newQuantityByProductId`), phần DRAFT đã trừ kho lúc bán kèm.
+7. Dòng sản phẩm:
+   - **`items` là DANH SÁCH CUỐI CÙNG của phiếu**, gồm cả dòng đã bán kèm lúc chơi lẫn hàng mới chọn lúc thu. Phép hoà giải dùng chung với `PATCH /sell-items`: `diffSellItems()` trong `src/lib/sessions/sell-item-diff.ts`.
+     - dòng bán kèm có trong danh sách → chỉnh về số lượng đó; chênh lệch > 0 thì `decrementStockIfAvailable` (không âm → `INSUFFICIENT_STOCK`) + `StockMovement` SALE, chênh lệch < 0 thì `reverseStock` (`StockMovement` VOID). **Giá giữ nguyên `unitPrice` đã chốt lúc bán kèm.**
+     - dòng bán kèm không có trong danh sách → bỏ khỏi phiếu, hoàn kho đúng số lượng đã bán.
+     - sản phẩm trong danh sách mà chưa từng bán kèm → dòng mới, trừ kho toàn bộ ở giá hiện tại.
+   - Nhiều dòng cùng một sản phẩm (dữ liệu cũ) được **gộp còn một dòng**: `desired` là số lượng cho cả sản phẩm, áp cho từng dòng sẽ nhân tổng lên và trừ thừa kho.
+   - **`items` KHÔNG gửi (`undefined`) = hành vi cũ**: giữ nguyên mọi dòng bán kèm, chỉ cộng thêm hàng mới. Phân biệt `undefined` với `[]` là cố ý trong `session-validations.ts` — `[]` nghĩa là phiếu không còn dòng hàng nào.
 8. `createPayment` (sessionId, invoiceId, shiftId, staffId, `paymentMethod` CASH/TRANSFER/CARD, grandTotal).
 9. Thanh toán theo nhóm: `decrementGroupRemaining(pricingGroupId, checkoutCount)` + `markPlayersCheckedOut(playerIds)` (`checkedOutAt`) — cho checkout từng phần 1 nhóm người (`remainingCount`). Nếu `playerIds` chọn người từ nhiều nhóm, decrement từng nhóm theo số người đã thu (`playersToBillByGroup`).
 10. Checkout hết người (`totalRemaining <= 0`): `Session` → `COMPLETED` (endTime, status, totalHours, subtotal, discountAmount, totalAmount, promotion fields) + `customer.recordPlay(hours, spent)` + hủy các DRAFT còn lại (`cancelDraftInvoices`). Checkout một phần (`thu trước`): session vẫn `ACTIVE`, `playerCount` = số người còn lại.
 11. Audit `SESSION_CHECK_OUT` (kèm invoiceId, paymentId, mergedDraftInvoices, assignedPricingRuleIds...).
 
 - Models: `Invoice`, `InvoiceItem` (PLAY_TIME/PRODUCT/SERVICE/SURCHARGE), `Payment`, `Session`, `SessionPricingGroup`, `SessionPlayer`, `Product`, `StockMovement`, `AppSetting`, `ActivityLog`.
-- Feature: `checkout-drawer.tsx` — gọi `checkout-preview` (groups/pricingGroupId/playerCount hoặc `playerIds`, `promotionRuleId`, `parkingVehicleCount`), hiển thị quote + breakdown giá từng người chơi (`playerPricing`) rồi POST checkout. UI hỗ trợ thu trước: chọn nhóm giá (hiện `remainingCount`/`playerCount`), stepper số người thu, hoặc checkbox chọn từng người chơi (bỏ chọn 1 người → thu trước phần còn lại); `active-session-card.tsx` (nút mở drawer), `invoice-detail-content.tsx` (xem hoá đơn đã tạo). Hoá đơn đã thanh toán chỉ hủy qua `voidInvoice` (`src/lib/invoicing/use-cases/void-invoice.ts`, ADR-004) — không xoá cứng.
+- Feature: `checkout-drawer.tsx` — gọi `checkout-preview` (groups/pricingGroupId/playerCount hoặc `playerIds` + `groupPricingRuleIds`, `promotionRuleId`, `parkingVehicleCount`), hiển thị quote + breakdown giá từng người chơi (`playerPricing`) rồi POST checkout. UI hỗ trợ thu trước: chọn nhóm giá (hiện `remainingCount`/`playerCount`), stepper số người thu, hoặc checkbox chọn từng người chơi (bỏ chọn 1 người → thu trước phần còn lại). **Nhóm đã chốt giá thì khoá (chỉ hiện tên bảng giá); nhóm còn chơi chưa có giá vẫn hiện ô chọn bảng giá** — xem mục "Gán bảng giá khi cần" ở Bước 4; `active-session-card.tsx` (nút mở drawer), `invoice-detail-content.tsx` (xem hoá đơn đã tạo). Hoá đơn đã thanh toán chỉ hủy qua `voidInvoice` (`src/lib/invoicing/use-cases/void-invoice.ts`, ADR-004) — không xoá cứng.
 
 ## 7. Bước 5: Gia hạn hội viên (khi cần)
 

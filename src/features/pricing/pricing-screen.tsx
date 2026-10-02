@@ -274,12 +274,20 @@ export function PricingScreen() {
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
         {filteredRules.length} quy tắc · phủ {stats.coveredDays}/7 ngày trong tuần
       </p>
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-      <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-info' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
-    <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-info' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hiệu lực: {stats.active}</button>
-  <button type="button" aria-pressed={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')} className={statusFilter === 'FUTURE' ? 'font-medium text-info' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Sắp tới: {stats.future}</button>
-<button type="button" aria-pressed={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')} className={statusFilter === 'EXPIRED' ? 'font-medium text-info' : 'text-warning hover:text-warning '}>Hết hạn: {stats.expired}</button>
-    </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <FilterButton active={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')}>
+          Tất cả: {stats.total}
+        </FilterButton>
+        <FilterButton active={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')}>
+          Hiệu lực: {stats.active}
+        </FilterButton>
+        <FilterButton active={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')}>
+          Sắp tới: {stats.future}
+        </FilterButton>
+        <FilterButton active={statusFilter === 'EXPIRED'} onClick={() => setStatusFilter('EXPIRED')}>
+          Hết hạn: {stats.expired}
+        </FilterButton>
+      </div>
       <div role="group" aria-label="Lọc ngày áp dụng" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
         <FilterButton active={dayFilter === 'ALL'} onClick={() => setDayFilter('ALL')}>Tất cả ngày</FilterButton>
         {weekDays.map((day) => (
@@ -423,7 +431,7 @@ function TierPricing({ rule }: { rule: PricingRule }) {
   ]
 
   return (
-    <span className="flex flex-col gap-0.5 text-[11px] tabular-nums text-zinc-700 dark:text-zinc-300">
+    <span className="flex flex-col gap-0.5 text-xs tabular-nums text-zinc-700 dark:text-zinc-300">
       {lines.map((line) => (
         <span key={line} className="whitespace-nowrap">{line}</span>
       ))}

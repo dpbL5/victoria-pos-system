@@ -15,6 +15,11 @@ interface ConfirmDialogProps {
   onConfirm: () => void
   submitting?: boolean
   size?: "sm" | "md" | "lg"
+  /**
+   * Màu nút xác nhận. Mặc định `red` cho hành động phá huỷ (xoá/huỷ); dùng
+   * `contrast` khi xác nhận không phá huỷ gì (vd thoát và lưu lại).
+   */
+  confirmVariant?: "red" | "contrast" | "white"
 }
 
 export function ConfirmDialog({
@@ -28,6 +33,7 @@ export function ConfirmDialog({
   onConfirm,
   submitting = false,
   size = "md",
+  confirmVariant = "red",
 }: ConfirmDialogProps) {
   return (
     <Modal
@@ -47,7 +53,7 @@ export function ConfirmDialog({
             {cancelLabel}
           </Button>
           <Button
-            variant="red"
+            variant={confirmVariant}
             size="lg"
             fullWidth
             loading={submitting}

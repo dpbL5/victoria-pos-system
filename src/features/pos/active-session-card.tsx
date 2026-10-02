@@ -199,10 +199,10 @@ export function ActiveSessionCard({
                   size="sm"
                   onClick={onResume}
                   title="Tiếp tục chơi"
-                  className="flex flex-row px-2.5 md:px-3"
+                  className="flex flex-row px-3"
                 >
                   <Play size={14} />
-                  <span className="hidden sm:inline">Chơi</span>
+                  Chơi
                 </Button>
               ) : (
                 <Button
@@ -210,10 +210,10 @@ export function ActiveSessionCard({
                   size="sm"
                   onClick={onPause}
                   title="Tạm dừng"
-                  className="px-1.5 sm:px-2.5 md:px-3"
+                  className="px-3"
                 >
                   <Pause size={14} className="shrink-0" />
-                  <span className="hidden sm:inline">Dừng</span>
+                  Dừng
                 </Button>
               ))}
               <Button

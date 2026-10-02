@@ -282,12 +282,20 @@ export function PromotionScreen() {
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
         Mỗi thời điểm chỉ áp dụng một quy tắc, không cộng dồn.
       </p>
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-      <button type="button" aria-pressed={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} className={statusFilter === 'ALL' ? 'font-medium text-info' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Tất cả: {stats.total}</button>
-    <button type="button" aria-pressed={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')} className={statusFilter === 'ACTIVE' ? 'font-medium text-info' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Hiệu lực: {stats.active}</button>
-  <button type="button" aria-pressed={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')} className={statusFilter === 'FUTURE' ? 'font-medium text-info' : 'text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white'}>Sắp tới: {stats.future}</button>
-<button type="button" aria-pressed={statusFilter === 'INACTIVE'} onClick={() => setStatusFilter('INACTIVE')} className={statusFilter === 'INACTIVE' ? 'font-medium text-info' : 'text-warning hover:text-warning '}>Tạm dừng / hết: {stats.inactive}</button>
-    </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <FilterButton active={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')}>
+          Tất cả: {stats.total}
+        </FilterButton>
+        <FilterButton active={statusFilter === 'ACTIVE'} onClick={() => setStatusFilter('ACTIVE')}>
+          Hiệu lực: {stats.active}
+        </FilterButton>
+        <FilterButton active={statusFilter === 'FUTURE'} onClick={() => setStatusFilter('FUTURE')}>
+          Sắp tới: {stats.future}
+        </FilterButton>
+        <FilterButton active={statusFilter === 'INACTIVE'} onClick={() => setStatusFilter('INACTIVE')}>
+          Tạm dừng / hết: {stats.inactive}
+        </FilterButton>
+      </div>
       <div role="group" aria-label="Lọc loại khuyến mại" className="mt-2 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
         <FilterButton active={typeFilter === 'ALL'} onClick={() => setTypeFilter('ALL')}>Tất cả loại giảm</FilterButton>
         <FilterButton active={typeFilter === 'FIXED_AMOUNT'} onClick={() => setTypeFilter('FIXED_AMOUNT')}>Giảm tiền cố định</FilterButton>

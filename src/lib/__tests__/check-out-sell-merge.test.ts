@@ -118,13 +118,14 @@ function resetMocks() {
 describe('checkOut — gộp bán kèm không lặp hàng hoá', () => {
   beforeEach(resetMocks)
 
-  it('hàng bán kèm chỉ tạo 1 InvoiceItem (không bị lặp với items request)', async () => {
+  it('dòng bán kèm có trong danh sách cuối: chỉ 1 InvoiceItem, không lặp, không trừ kho', async () => {
     const result = await checkOut(
       {
         sessionId: 'sess-1',
         staffId: 'staff-1',
         paymentMethod: 'CASH',
-        items: [],
+        // Danh sách cuối của phiếu — kèm chính dòng bán kèm, số lượng giữ nguyên
+        items: [{ productId: 'prod-1', quantity: 2 }],
       },
       repos
     )
@@ -145,13 +146,34 @@ describe('checkOut — gộp bán kèm không lặp hàng hoá', () => {
       total: 20000,
     })
 
-    // Kho KHÔNG bị trừ lại (đã trừ lúc bán kèm)
+    // Kho KHÔNG bị trừ lại (đã trừ lúc bán kèm) và không có chênh lệch để bù
     expect(fakeStore.product.updateMany).not.toHaveBeenCalled()
+    expect(fakeStore.stockMovement.create).not.toHaveBeenCalled()
 
     // Dòng bán kèm bị xoá sau khi gộp
     expect(fakeStore.sessionSellItem.deleteMany).toHaveBeenCalledWith({
       where: { id: { in: ['ssi-1'] } },
     })
+  })
+
+  it('client không gửi items: giữ nguyên dòng bán kèm (không hoà giải)', async () => {
+    const result = await checkOut(
+      {
+        sessionId: 'sess-1',
+        staffId: 'staff-1',
+        paymentMethod: 'CASH',
+      },
+      repos
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const productItems = fakeStore.invoiceItem.create.mock.calls.filter(
+      (c) => c[0].data?.productId === 'prod-1'
+    )
+    expect(productItems).toHaveLength(1)
+    expect(productItems[0][0].data).toMatchObject({ quantity: 2, unitPrice: 10000 })
   })
 
   it('hàng mới gửi kèm request checkout vẫn trừ kho + tạo InvoiceItem riêng', async () => {
@@ -178,5 +200,82 @@ describe('checkOut — gộp bán kèm không lặp hàng hoá', () => {
     // Hàng mới → trừ kho + ghi stock movement
     expect(fakeStore.product.updateMany).toHaveBeenCalled()
     expect(fakeStore.stockMovement.create).toHaveBeenCalled()
+  })
+})
+
+// ── Sửa số lượng ngay tại chân phiếu: danh sách cuối quyết định tồn kho ──────
+describe('checkOut — hoà giải số lượng dòng bán kèm theo danh sách cuối', () => {
+  beforeEach(resetMocks)
+
+  const checkoutWith = (items?: Array<{ productId: string; quantity: number }>) =>
+    checkOut(
+      { sessionId: 'sess-1', staffId: 'staff-1', paymentMethod: 'CASH', items },
+      repos
+    )
+
+  it('tăng số lượng: trừ kho đúng phần chênh lệch, giữ giá đã chốt lúc bán kèm', async () => {
+    const result = await checkoutWith([{ productId: 'prod-1', quantity: 5 }])
+    expect(result.ok).toBe(true)
+
+    // Dòng bán kèm đã trừ 2 lúc thêm; giờ phiếu có 5 → trừ thêm 3, không trừ lại từ đầu
+    expect(fakeStore.product.updateMany).toHaveBeenCalledWith({
+      where: { id: 'prod-1', stockQuantity: { gte: 3 } },
+      data: { stockQuantity: { decrement: 3 } },
+    })
+    expect(fakeStore.stockMovement.create.mock.calls[0][0].data).toMatchObject({
+      type: 'SALE',
+      quantity: -3,
+    })
+
+    // InvoiceItem theo số lượng cuối, giá vẫn là giá chốt lúc bán kèm
+    const productItem = fakeStore.invoiceItem.create.mock.calls
+      .map((c) => c[0].data)
+      .find((d) => d.productId === 'prod-1')
+    expect(productItem).toMatchObject({ quantity: 5, unitPrice: 10000, total: 50000 })
+  })
+
+  it('giảm số lượng: hoàn kho phần chênh lệch, dòng vẫn còn trên hoá đơn', async () => {
+    const result = await checkoutWith([{ productId: 'prod-1', quantity: 1 }])
+    expect(result.ok).toBe(true)
+
+    // Hoàn kho 1 (2 → 1), KHÔNG hoàn kho phần đã bán trước đó
+    expect(fakeStore.stockMovement.create.mock.calls[0][0].data).toMatchObject({
+      type: 'VOID',
+      quantity: 1,
+    })
+
+    const productItem = fakeStore.invoiceItem.create.mock.calls
+      .map((c) => c[0].data)
+      .find((d) => d.productId === 'prod-1')
+    expect(productItem).toMatchObject({ quantity: 1, unitPrice: 10000 })
+  })
+
+  it('bỏ hẳn dòng khỏi phiếu: hoàn kho toàn bộ số lượng đã bán kèm, không tạo dòng hoá đơn', async () => {
+    const result = await checkoutWith([])
+    expect(result.ok).toBe(true)
+
+    expect(fakeStore.stockMovement.create.mock.calls[0][0].data).toMatchObject({
+      type: 'VOID',
+      quantity: 2,
+    })
+    const productItems = fakeStore.invoiceItem.create.mock.calls
+      .map((c) => c[0].data)
+      .filter((d) => d.productId === 'prod-1')
+    expect(productItems).toHaveLength(0)
+
+    // Dòng bán kèm vẫn bị xoá khỏi phiên
+    expect(fakeStore.sessionSellItem.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['ssi-1'] } },
+    })
+  })
+
+  it('tăng vượt tồn thì chặn cả hoá đơn, không âm kho', async () => {
+    fakeStore.product.updateMany.mockResolvedValue({ count: 0 }) // trừ kho thất bại
+    const result = await checkoutWith([{ productId: 'prod-1', quantity: 5 }])
+
+    // Hoá đơn đã được tạo trước bước trừ kho nhưng cùng transaction nên bị
+    // rollback — điều runInTransaction đảm bảo, fake store không mô phỏng rollback.
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('INSUFFICIENT_STOCK')
   })
 })

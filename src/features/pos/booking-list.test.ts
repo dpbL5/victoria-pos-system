@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isBookingOnVnDay, isBookingOverdue, type BookingItem } from './booking-list'
+import { filterBookingsBySearch, isBookingOnVnDay, isBookingOverdue, type BookingItem } from './booking-list'
 
 const booking = (overrides: Partial<BookingItem> = {}): BookingItem => ({
  id: 'booking-1',
@@ -42,5 +42,35 @@ describe('isBookingOnVnDay', () => {
  it('loại lịch của ngày mai và hôm qua', () => {
   expect(isBookingOnVnDay(booking({ scheduledAt: '2026-10-02T03:00:00.000Z' }), now)).toBe(false)
   expect(isBookingOnVnDay(booking({ scheduledAt: '2026-09-30T03:00:00.000Z' }), now)).toBe(false)
+ })
+})
+
+// Tìm nhanh trong khối Lịch đặt: gõ không dấu vẫn phải ra tên có dấu.
+describe('filterBookingsBySearch', () => {
+ const list = [
+  booking({ id: 'booking-1', customerName: 'Nguyễn An', customerPhone: '0912345678' }),
+  booking({ id: 'booking-2', customerName: 'Trần Bình', customerPhone: null }),
+  booking({
+   id: 'booking-3',
+   customerName: null,
+   customerPhone: null,
+   customer: { id: 'customer-1', fullName: 'Lê Văn Cường', phone: '0900000000', type: 'MEMBER' },
+  }),
+ ]
+
+ it('khớp tên có dấu khi gõ không dấu (và ngược lại)', () => {
+  expect(filterBookingsBySearch(list, 'nguyen').map((b) => b.id)).toEqual(['booking-1'])
+  expect(filterBookingsBySearch(list, 'Nguyễn An').map((b) => b.id)).toEqual(['booking-1'])
+  expect(filterBookingsBySearch(list, 'cuong').map((b) => b.id)).toEqual(['booking-3'])
+ })
+
+ it('khớp SĐT, ưu tiên thông tin từ customer khi có', () => {
+  expect(filterBookingsBySearch(list, '0900').map((b) => b.id)).toEqual(['booking-3'])
+  expect(filterBookingsBySearch(list, '0912').map((b) => b.id)).toEqual(['booking-1'])
+ })
+
+ it('từ khoá rỗng trả về nguyên danh sách', () => {
+  expect(filterBookingsBySearch(list, '')).toBe(list)
+  expect(filterBookingsBySearch(list, '   ')).toBe(list)
  })
 })

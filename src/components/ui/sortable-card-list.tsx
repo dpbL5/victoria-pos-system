@@ -153,7 +153,7 @@ export function SortableCardList<T>({
           aria-label="Sắp xếp danh sách"
           className="flex items-center gap-1.5 overflow-x-auto border-b border-zinc-100 px-3 py-2 dark:border-zinc-800"
         >
-          <span className="mr-1 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400">Sắp xếp:</span>
+          <span className="mr-1 shrink-0 text-xs text-zinc-500 dark:text-zinc-400">Sắp xếp:</span>
           {sortableKeys.map((key) => {
             const col = columns.find((c) => c.key === key)
             const label = sortLabels?.[key] || col?.label

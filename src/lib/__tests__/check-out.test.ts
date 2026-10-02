@@ -123,6 +123,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findSellItemTotals: vi.fn(async () => ({})),
       findSellItems: vi.fn(async () => []),
       addSellItem: vi.fn(async () => {}),
+      updateSellItemQuantity: vi.fn(async () => {}),
       removeSellItems: vi.fn(async () => {}),
       clearSellItems: vi.fn(async () => {}),
       countCreatedBetween: vi.fn(async () => 0),
@@ -215,6 +216,7 @@ function makeCtx(): CheckoutContext {
     productSubtotal: 30000,
     mergedSellItemIds: [],
     sellItemLines: [],
+    sellStockDeltas: [],
     newQuantityByProductId: new Map([['prod-1', 2]]),
     parkingVehicleCount: 0,
     checkoutAt: new Date('2026-08-07T12:00:00Z'),
@@ -1029,7 +1031,7 @@ describe('runCheckOutTx', () => {
     expect(repos.session.update).toHaveBeenCalledWith('session-1', expect.objectContaining({ status: 'COMPLETED' }))
   })
 
-  it('thu trước trên session mới (chưa gán giá): preserveCounts giữ playerCount/remainingCount', async () => {
+  it('thu trước trên session mới (chưa gán giá): không chốt bảng giá vào nhóm', async () => {
     const repos = makeRepositories({
       billing: {
         ...makeRepositories().billing,
@@ -1088,11 +1090,9 @@ describe('runCheckOutTx', () => {
 
     await runCheckOutTx(repos, ctx, state)
 
-    // updatePricingGroup KHÔNG kèm playerCount/remainingCount (preserveCounts)
-    expect(repos.session.updatePricingGroup).toHaveBeenCalledWith('group-1', expect.not.objectContaining({
-      playerCount: expect.anything(),
-      remainingCount: expect.anything(),
-    }))
+    // Nhóm còn người chưa thu → KHÔNG ghi bảng giá (nhóm vẫn chưa có giá để lần
+    // thu sau chọn lại theo giờ thu) và không đè counts
+    expect(repos.session.updatePricingGroup).not.toHaveBeenCalled()
     // Không move players (preserveCounts)
     expect(repos.session.movePlayersToGroup).not.toHaveBeenCalled()
     // Decrement theo earlyCollectionGroupIds
@@ -1103,6 +1103,10 @@ describe('runCheckOutTx', () => {
     )
     if (!playItemCall) throw new Error('PLAY_TIME item không được tạo')
     expect(playItemCall[0].metadata.earlyCollection).toEqual({ sequence: 1 })
+    // Audit không đánh dấu "chốt giá tại checkout" — bảng giá không ghi vào nhóm
+    const auditCall = (repos.audit.append as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(auditCall.details.pricingAssignedAtCheckout).toBe(false)
+    expect(auditCall.details.assignedPricingRuleIds).toEqual([])
   })
 
   it('thu trước multi-group: chọn người từ group 2 → tính theo rule của group 2 (subset index khớp)', async () => {

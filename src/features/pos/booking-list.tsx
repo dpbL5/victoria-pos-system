@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input, Label } from '@/components/ui/input'
-import { formatVND, toInputDate } from '@/lib/shared/utils'
+import { formatVND, normalizeSearchText, toInputDate } from '@/lib/shared/utils'
 import { formatClock } from './format'
 
 export interface BookingItem {
@@ -37,6 +37,20 @@ export function isBookingOverdue(booking: BookingItem, now = Date.now()) {
  */
 export function isBookingOnVnDay(booking: BookingItem, now = Date.now()): boolean {
   return toInputDate(new Date(booking.scheduledAt)) === toInputDate(new Date(now))
+}
+
+/**
+ * Tìm nhanh theo tên hoặc SĐT khách, gõ không dấu vẫn khớp ("nguyen" → "Nguyễn").
+ * Từ khoá rỗng trả về nguyên danh sách.
+ */
+export function filterBookingsBySearch(bookings: BookingItem[], keyword: string): BookingItem[] {
+  const query = normalizeSearchText(keyword.trim())
+  if (!query) return bookings
+  return bookings.filter((booking) => {
+    const name = booking.customer?.fullName ?? booking.customerName ?? 'Khách lẻ'
+    const phone = booking.customer?.phone ?? booking.customerPhone ?? ''
+    return normalizeSearchText(`${name} ${phone}`).includes(query)
+  })
 }
 
 function depositLeftOf(booking: BookingItem) {
@@ -152,13 +166,13 @@ export function BookingCards({
                     <Button
                       variant="red-soft"
                       size="sm"
-                      className="px-1.5 sm:px-2.5"
+                      className="px-3"
                       aria-label="Hủy lịch"
                       disabled={busyId === booking.id}
                       onClick={() => setCancellingBooking(booking)}
                     >
                       <CircleX size={14} aria-hidden />
-                      <span className="hidden sm:inline">Hủy</span>
+                      Hủy
                     </Button>
                   )}
                   {onCheckIn && booking.status === 'BOOKED' && (

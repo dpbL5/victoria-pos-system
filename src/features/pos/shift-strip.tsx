@@ -32,6 +32,7 @@ export function ShiftStrip({
   canJoin,
   onJoin,
   submitting,
+  className = '',
 }: {
   shift: Shift | null
   readOnly?: boolean
@@ -43,10 +44,12 @@ export function ShiftStrip({
   canJoin: boolean
   onJoin: () => void
   submitting: boolean
+  /** Bề rộng/trạng thái co giãn khi nằm chung hàng với hành động chính trên desktop */
+  className?: string
 }) {
   if (!shift) {
     return (
-      <section className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-warning-border bg-warning-bg px-4 py-2.5">
+      <section className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border border-warning-border bg-warning-bg px-4 py-2.5 ${className}`}>
         <p className="flex min-w-0 items-center gap-2 text-sm text-text-primary">
           <span className="size-2 shrink-0 rounded-full bg-warning" aria-hidden />
           <span className="min-w-0">
@@ -68,7 +71,7 @@ export function ShiftStrip({
     : shift.staff?.fullName ?? ''
 
   return (
-    <section className="rounded-xl border border-border-default bg-surface-elevated px-4 py-3 shadow-sm">
+    <section className={`rounded-xl border border-border-default bg-surface-elevated px-4 py-3 shadow-sm ${className}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2">
           <span className="mt-1.5 size-2 shrink-0 rounded-full bg-success" aria-hidden />

@@ -1,17 +1,23 @@
 import { NextRequest } from 'next/server'
 import { apiError, apiSuccess, ERR_CSRF, ERR_UNAUTHORIZED, resultToResponse } from '@/lib/infrastructure/api-helpers'
 import { repositories } from '@/lib/infrastructure/repositories'
-import { createBooking, createBookingSchema, mapBookingError } from '@/lib/bookings'
+import { autoCancelStaleBookings, createBooking, createBookingSchema, mapBookingError } from '@/lib/bookings'
 import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
 import { getVnWeekRange, parseStartOfDay, today } from '@/lib/shared/utils'
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth()
+    const auth = await requireAuth()
     const weekStart = request.nextUrl.searchParams.get('weekStart') || getVnWeekRange(today()).from
     const parsedDate = new Date(`${weekStart}T00:00:00.000Z`)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== weekStart || getVnWeekRange(weekStart).from !== weekStart) {
       return apiError({ code: 'VALIDATION', message: 'Tuần phải bắt đầu từ thứ Hai', status: 400 })
+    }
+    // Tự huỷ lịch quá ngày trước khi trả danh sách; lỗi dọn dẹp không chặn màn lịch.
+    try {
+      await autoCancelStaleBookings({ actorId: auth.userId })
+    } catch (error) {
+      console.error('GET /api/bookings auto-cancel error:', error)
     }
     const range = getVnWeekRange(weekStart)
     const rows = await repositories.booking!.findMany({

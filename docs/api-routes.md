@@ -12,7 +12,7 @@
 | `/api/customers` | GET, POST | Danh sách + tạo khách hàng |
 | `/api/customers/[id]` | GET, PUT | Chi tiết + cập nhật khách hàng |
 | `/api/customers/[id]/history` | GET | Lịch sử đóng phí + giao dịch của hội viên (cho màn chi tiết hội viên) |
-| `/api/bookings` | GET, POST | Xem lịch theo tuần + tạo lịch đặt dạng nháp, không cần ca mở |
+| `/api/bookings` | GET, POST | Xem lịch theo tuần (tự huỷ lịch `BOOKED` quá ngày không còn cọc trước khi trả) + tạo lịch đặt dạng nháp, không cần ca mở |
 | `/api/bookings/[id]` | GET, PATCH | Chi tiết, sửa, hủy hoặc xác nhận lịch để bắt đầu phiên |
 | `/api/sessions` | GET, POST | Danh sách + tạo phiên bắn |
 | `/api/sessions/[id]` | GET, PUT | Chi tiết + cập nhật phiên |
@@ -80,7 +80,7 @@
 ## API nghiệp vụ đã triển khai
 
 - `POST /api/sessions`: check-in 1 khách; hội viên phải có membership còn hạn; vãng lai **không** snapshot giá lúc check-in (tạo group giá trống `hourlyRate: 0`, resolve lúc checkout); hỗ trợ `playerCount` và `groups` (nhiều nhóm giá trong 1 session — mỗi nhóm tạo `SessionPricingGroup`).
-- `GET/POST /api/bookings`: quản lý lịch đặt dạng nháp, không tạo phiên hay thuộc ca; khi khách đến, xác nhận lịch tạo session trong ca đang mở và bắt đầu giờ chơi từ thời điểm xác nhận.
+- `GET/POST /api/bookings`: quản lý lịch đặt dạng nháp, không tạo phiên hay thuộc ca; khi khách đến, xác nhận lịch tạo session trong ca đang mở và bắt đầu giờ chơi từ thời điểm xác nhận. `GET` tự huỷ lịch no-show (`autoCancelStaleBookings`): lịch `BOOKED` có giờ hẹn trước 00:00 hôm nay theo giờ VN chuyển `CANCELLED` kèm audit `BOOKING_CANCELLED` (`details.autoCancelled`); lịch còn cọc chưa xử lý không tự huỷ.
 - `POST /api/sessions/[id]/checkout`: checkout tạo `Invoice`, `InvoiceItem(PLAY_TIME)`, `Payment`, cập nhật session/customer; hỗ trợ checkout theo `pricingGroupId` (1 nhóm), `playerIds` (thu trước từng người), `groups` (nhiều nhóm), khuyến mãi (snapshot), phí gửi xe (`SURCHARGE`). Thu trước từng phần → session giữ `ACTIVE`, chỉ `COMPLETED` khi thu hết người.
 - `POST /api/sessions/[id]/sell`: bán kèm sản phẩm/dịch vụ giữa phiên qua `sellItems()` — tạo invoice DRAFT, trừ kho, gắn ca.
 - `POST /api/invoices/[id]/void`: huỷ hoá đơn qua `voidInvoice()` — đánh dấu CANCELLED, hoàn kho `StockMovement(VOID)` (cả DRAFT đã gộp), ghi `ActivityLog(INVOICE_VOID)`. **Không tạo payment hoàn trả** — payment gốc giữ nguyên, báo cáo lọc qua `invoice.status`. Áp dụng cho cả ca đã đóng (điều chỉnh bản ghi admin).

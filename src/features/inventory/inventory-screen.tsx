@@ -406,7 +406,7 @@ function InventoryStat({
           : 'border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800'
       }`}
     >
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
       <p className={`mt-1 text-xl font-bold tabular-nums ${
         warning ? 'text-warning' : 'text-zinc-950 dark:text-white'
       }`}

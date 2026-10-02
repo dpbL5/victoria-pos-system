@@ -323,7 +323,7 @@ function ClassFormModal({ lessonClass, submitting, onClose, onSubmit }: {
       <div><Label htmlFor="class-note">Ghi chú</Label><Textarea id="class-note" rows={3} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} placeholder="Trình độ, địa điểm, lưu ý của lớp" /></div>
 
       {!lessonClass && <>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={withSlot} onChange={event => setWithSlot(event.target.checked)} />Đặt lịch lặp ngay</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-info" checked={withSlot} onChange={event => setWithSlot(event.target.checked)} />Đặt lịch lặp ngay</label>
         {withSlot && <div className="space-y-4 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
           <ScheduleFields idPrefix="class-slot" form={slot} onChange={setSlot} />
             {slotError && <p className="text-sm text-danger">{slotError}</p>}
