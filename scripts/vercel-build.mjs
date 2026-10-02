@@ -13,7 +13,7 @@ if (process.env.VERCEL_ENV === 'production') {
     )
     process.exit(1)
   }
-  run('npx prisma db push --skip-generate')
+  run('npx prisma db push')
 }
 
 run('npm run build')
