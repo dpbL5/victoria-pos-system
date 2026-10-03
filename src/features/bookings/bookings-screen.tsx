@@ -7,7 +7,8 @@
  * STORY: Nhân viên quầy thấy ngày nào dồn qua dải 7 ngày, chạm một ngày để đọc lưới giờ của ngày
  * đó, chạm vào khe trống để mở form đã điền sẵn ngày + giờ.
  * FIRST VIEWPORT: ô tìm kiếm toàn tuần → dải 7 ngày ghim → lưới giờ của ngày đang chọn; mỗi
- * khe một giờ, khe có lịch cao gấp đôi khe trống. Một cấu trúc duy nhất cho mọi bề rộng —
+ * khe một giờ, lịch trong cùng giờ xếp chồng dọc (mỗi lịch một hàng riêng) nên khe cao dần
+ * theo số lịch thay vì nhồi ngang. Một cấu trúc duy nhất cho mọi bề rộng —
  * desktop giãn khối lịch đặt thành một hàng ngang (giờ · tên · SĐT · số người · cọc), không
  * còn bảng riêng.
  * FORM: lưới giờ trong ngày — cấu trúc #2 trong danh sách grounded; seed surface 15661a67.
@@ -115,7 +116,8 @@ export function BookingsScreen() {
   const [editing, setEditing] = useState<BookingRow | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [confirmDepositCancel, setConfirmDepositCancel] = useState(false)
-  const [scheduledAt, setScheduledAt] = useState(defaultDateTime)
+  const [scheduledDate, setScheduledDate] = useState(() => defaultDateTime().slice(0, 10))
+  const [scheduledTime, setScheduledTime] = useState(() => defaultDateTime().slice(11, 16))
   const [playerCount, setPlayerCount] = useState('1')
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
@@ -205,7 +207,9 @@ export function BookingsScreen() {
 
   const resetForm = () => {
     setEditing(null)
-    setScheduledAt(defaultDateTime())
+    const defaultSchedule = defaultDateTime()
+    setScheduledDate(defaultSchedule.slice(0, 10))
+    setScheduledTime(defaultSchedule.slice(11, 16))
     setPlayerCount('1')
     setCustomer(null)
     setCustomerSearch('')
@@ -218,7 +222,9 @@ export function BookingsScreen() {
 
   const openEdit = (booking: BookingRow) => {
     setEditing(booking)
-    setScheduledAt(localDateTime(booking.scheduledAt))
+    const local = localDateTime(booking.scheduledAt)
+    setScheduledDate(local.slice(0, 10))
+    setScheduledTime(local.slice(11, 16))
     setPlayerCount(String(booking.playerCount))
     setWalkInName(bookingName(booking))
     setWalkInPhone(bookingPhone(booking))
@@ -230,7 +236,11 @@ export function BookingsScreen() {
   }
 
   const submit = async () => {
-    if (!scheduledAt || (!customer && !walkInName.trim())) {
+    if (!scheduledDate || !scheduledTime) {
+      error('Nhập ngày hẹn và giờ hẹn')
+      return
+    }
+    if (!customer && !walkInName.trim()) {
       error('Nhập tên khách và giờ hẹn')
       return
     }
@@ -245,7 +255,7 @@ export function BookingsScreen() {
         customerId: customer?.id ?? null,
         customerName: customer ? null : walkInName.trim(),
         customerPhone: customer ? null : walkInPhone.trim() || null,
-        scheduledAt: parseVnDateTime(scheduledAt).toISOString(),
+        scheduledAt: parseVnDateTime(`${scheduledDate}T${scheduledTime}`).toISOString(),
         playerCount: Number(playerCount),
         notes: notes.trim() || null,
         ...(!editing ? {
@@ -312,7 +322,8 @@ export function BookingsScreen() {
 
   const startCreateAt = (dateKey: string, hour: number) => {
     resetForm()
-    setScheduledAt(`${dateKey}T${String(hour).padStart(2, '0')}:00`)
+    setScheduledDate(dateKey)
+    setScheduledTime(`${String(hour).padStart(2, '0')}:00`)
     setFormOpen(true)
   }
 
@@ -457,7 +468,7 @@ export function BookingsScreen() {
                   const items = bookingsByHour.get(hour) ?? []
                   const label = `${String(hour).padStart(2, '0')}:00`
                   return (
-                    <div key={hour} className={`flex border-t border-zinc-100 first:border-t-0 dark:border-zinc-800/60 ${items.length === 0 ? 'h-9' : 'h-16'}`}>
+                    <div key={hour} className={`flex border-t border-zinc-100 first:border-t-0 dark:border-zinc-800/60 ${items.length === 0 ? 'h-9' : 'min-h-16'}`}>
                       <div aria-hidden className="flex w-11 shrink-0 items-start justify-end pr-2 pt-2 text-xs font-medium tabular-nums text-zinc-500 dark:text-zinc-400 lg:w-16 lg:pr-3">
                         {label}
                       </div>
@@ -476,10 +487,7 @@ export function BookingsScreen() {
                           </span>
                         </button>
                       ) : (
-                        <div
-                          className="grid min-w-0 flex-1 gap-1.5 p-1.5"
-                          style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
-                        >
+                        <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-1.5">
                           {items.map((booking, index) => {
                             const depositLeft = depositLeftOf(booking)
                             const matched = matchIds.has(booking.id)
@@ -498,18 +506,16 @@ export function BookingsScreen() {
                                   <span className="flex min-w-0 items-baseline gap-1.5 lg:shrink-0">
                                     <span className="shrink-0 text-xs font-semibold tabular-nums text-zinc-900 dark:text-white lg:text-sm">{clockOf(booking.scheduledAt)}</span>
                                   <span className={`shrink-0 text-xs font-medium ${overdue ? 'text-warning' : STATUS[booking.status].text}`}>{overdue ? 'Quá giờ hẹn' : STATUS[booking.status].label}</span>
-                                    {items.length === 1 && depositLeft > 0 && (
+                                    {depositLeft > 0 && (
                                     <span className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-success lg:hidden">{formatVND(depositLeft)}</span>
                                   )}
                                 </span>
                                   <span className="flex min-w-0 items-baseline gap-1.5 lg:flex-1">
                                     <span className="truncate text-sm font-medium text-zinc-900 dark:text-white">{bookingName(booking)}</span>
-                                    {items.length === 1 && (
-                                      <span className="ml-auto shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400 lg:hidden">{booking.playerCount} người</span>
-                                    )}
+                                    <span className="ml-auto shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400 lg:hidden">{booking.playerCount} người</span>
                                   </span>
                                   <span className="hidden shrink-0 items-center gap-4 text-xs tabular-nums text-zinc-500 dark:text-zinc-400 lg:flex">
-                                    {items.length === 1 && phone && <span>{phone}</span>}
+                                    {phone && <span>{phone}</span>}
                                     <span>{booking.playerCount} người</span>
                                   </span>
                                   {depositLeft > 0 && (
@@ -578,9 +584,10 @@ export function BookingsScreen() {
             <div><Label htmlFor="booking-phone">Số điện thoại</Label><Input id="booking-phone" inputMode="numeric" value={walkInPhone} onChange={(event) => setWalkInPhone(event.target.value)} /></div>
           </>}
           <div className="grid grid-cols-2 gap-3">
-            <div><Label htmlFor="booking-time" required>Ngày và giờ hẹn</Label><Input id="booking-time" type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /></div>
-            <div><Label htmlFor="booking-players">Số người</Label><Input id="booking-players" type="number" min={1} max={50} value={playerCount} onChange={(event) => setPlayerCount(event.target.value)} /></div>
+            <div><Label htmlFor="booking-date" required>Ngày hẹn</Label><Input id="booking-date" type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} /></div>
+            <div><Label htmlFor="booking-time" required>Giờ hẹn</Label><Input id="booking-time" type="time" value={scheduledTime} onChange={(event) => setScheduledTime(event.target.value)} /></div>
           </div>
+          <div><Label htmlFor="booking-players">Số người</Label><Input id="booking-players" type="number" min={1} max={50} value={playerCount} onChange={(event) => setPlayerCount(event.target.value)} /></div>
           {!editing && <div className="grid grid-cols-2 gap-3">
             <div><Label htmlFor="booking-deposit">Tiền đặt cọc</Label><Input id="booking-deposit" type="number" min={0} step={1000} inputMode="numeric" value={depositAmount} onChange={(event) => setDepositAmount(event.target.value)} /></div>
             <div><Label htmlFor="booking-deposit-method">Phương thức nhận cọc</Label><Select id="booking-deposit-method" value={depositPaymentMethod} onChange={(event) => setDepositPaymentMethod(event.target.value as typeof depositPaymentMethod)}><option value="CASH">Tiền mặt</option><option value="TRANSFER">Chuyển khoản</option><option value="CARD">Thẻ</option></Select></div>
