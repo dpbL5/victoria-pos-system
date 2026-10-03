@@ -9,6 +9,7 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
+  Clock,
   GraduationCap,
   Package,
   School,
@@ -50,7 +51,7 @@ export const menuGroups: MenuGroup[] = [
       {
         href: "/shifts",
         label: "Ca làm",
-        Icon: CalendarClock,
+        Icon: Clock,
         staffHidden: true,
       },
       {

@@ -85,3 +85,24 @@ it('TEACHER vẫn đổi giao diện và đăng xuất được', () => {
   expect(html).toContain('Đăng xuất')
   expect(html).toContain('Giao diện')
 })
+
+// ── Thứ tự lối tắt theo mức dùng (activity_logs 07–10/2026) ─────
+
+const shortcutOrder = (html: string, hrefs: string[]) => {
+  const positions = hrefs.map((href) => html.indexOf(`href="${href}"`))
+  return positions.every((position, index) => position >= 0 && (index === 0 || position > positions[index - 1]))
+}
+
+it('ADMIN: lối tắt xếp từ dùng nhiều tới ít, đủ mọi màn của sidebar', () => {
+  const html = renderFor('ADMIN')
+
+  expect(shortcutOrder(html, [
+    '/shifts', '/bookings', '/staff', '/customers', '/lessons', '/pricing', '/classes',
+    '/students', '/promotions', '/cashflow', '/inventory', '/tools', '/membership-plans', '/reports',
+  ])).toBe(true)
+})
+
+it('MANAGER có lối tắt Kho (Kho quầy), STAFF thì không', () => {
+  expect(renderFor('MANAGER')).toContain('href="/inventory"')
+  expect(renderFor('STAFF')).not.toContain('href="/inventory"')
+})

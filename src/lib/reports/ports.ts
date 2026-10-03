@@ -184,7 +184,15 @@ export interface ShiftDayShift {
   cashDifference: unknown
   status: string
   _count: { sessions: number; payments: number }
+  /** Người cùng ca, kể cả đã rời — màn Ca làm đối chiếu ai đã trực ca đó */
+  participants: Array<{
+    id: string
+    leftAt: Date | null
+    staff: { id: string; fullName: string }
+  }>
   toolCounts: Array<{ openCount: number; closeCount: number | null }>
+  /** Dụng cụ khớp/lệch của ca — cùng helper `calcToolStats` với màn báo cáo ca */
+  toolStats?: { total: number; matched: number; mismatched: number }
   revenue: ShiftRevenueData
 }
 

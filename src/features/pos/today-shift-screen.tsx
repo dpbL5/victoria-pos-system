@@ -186,12 +186,12 @@ export function TodayShiftScreen() {
       : current, { revalidate: false })
   }, [sessionsQuery.mutate])
 
-  const handleBookingCheckIn = async (booking: BookingItem, startTime: string) => {
+  const handleBookingCheckIn = async (booking: BookingItem, startTime: string, playerCount: number) => {
     setBusyBookingId(booking.id)
     setSubmitting(true)
     try {
       const response = await apiJson(`/api/bookings/${booking.id}`, {
-        ...jsonRequest({ action: 'check-in', startTime }),
+        ...jsonRequest({ action: 'check-in', startTime, playerCount }),
         method: 'PATCH',
       })
       if (!response.success) {
@@ -575,7 +575,7 @@ export function TodayShiftScreen() {
               bookings={visibleBookings}
               // Chế độ giám sát (chưa vào ca): không truyền handler → BookingCards
               // render hàng chữ trần, không còn nút xám vô nghĩa.
-              onCheckIn={canOperate ? (booking, startTime) => void handleBookingCheckIn(booking, startTime) : undefined}
+              onCheckIn={canOperate ? (booking, startTime, playerCount) => void handleBookingCheckIn(booking, startTime, playerCount) : undefined}
               onCancel={canOperate ? (booking, depositRefunded) => void handleBookingCancel(booking, depositRefunded) : undefined}
               busyId={busyBookingId}
               actionDisabled={!canOperate}

@@ -1,6 +1,6 @@
 // ── Reporting adapter — read-side queries cho báo cáo ─────
 import type { Prisma } from '@/generated/prisma/client'
-import { getShiftRevenueData, type ShiftRevenueData } from '@/lib/shifts'
+import { calcToolStats, getShiftRevenueData, type ShiftRevenueData } from '@/lib/shifts'
 import { toInputDate } from '@/lib/shared/utils'
 import { getVnDay } from '@/lib/shared/utils'
 import type {
@@ -341,6 +341,10 @@ async function getShiftDayGroups(store: ReportingStore, input: ShiftDayGroupInpu
     include: {
       staff: { select: { id: true, fullName: true } },
       _count: { select: { sessions: true, payments: true } },
+      participants: {
+        include: { staff: { select: { id: true, fullName: true } } },
+        orderBy: { joinedAt: 'asc' },
+      },
       toolCounts: {
         include: { tool: { select: { id: true, name: true, quantity: true, isRequired: true } } },
       },
@@ -403,7 +407,13 @@ async function getShiftDayGroups(store: ReportingStore, input: ShiftDayGroupInpu
       cashDifference: shift.cashDifference,
       status: shift.status,
       _count: shift._count,
+      participants: shift.participants.map((p) => ({
+        id: p.id,
+        leftAt: p.leftAt,
+        staff: p.staff,
+      })),
       toolCounts: shift.toolCounts.map((tc) => ({ openCount: tc.openCount, closeCount: tc.closeCount })),
+      toolStats: calcToolStats(shift.toolCounts),
       revenue,
     })
   }

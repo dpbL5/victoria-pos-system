@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   BarChart3,
-  CalendarClock,
+  Clock,
   GraduationCap,
   MoreHorizontal,
   School,
@@ -27,7 +27,7 @@ interface NavItem {
 // /reports (ADMIN), /lessons (ADMIN/TEACHER).
 const navItems: NavItem[] = [
   { href: '/sessions', label: 'Ca hôm nay', Icon: Timer },
-  { href: '/shifts', label: 'Ca làm', Icon: CalendarClock, canAccess: isManagerOrAdmin },
+  { href: '/shifts', label: 'Ca làm', Icon: Clock, canAccess: isManagerOrAdmin },
   { href: '/reports', label: 'Báo cáo', Icon: BarChart3, canAccess: isAdminOnly },
   { href: '/lessons', label: 'Lịch học', Icon: GraduationCap, canAccess: canAccessTraining },
   { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
