@@ -32,6 +32,10 @@ export const shiftWithAllParticipantsInclude = {
     include: { staff: { select: { id: true, fullName: true, username: true, role: true, isActive: true } } },
     orderBy: { joinedAt: 'asc' },
   },
+  toolCounts: {
+    include: { tool: { select: { id: true, name: true, quantity: true, isRequired: true } } },
+    orderBy: { createdAt: 'asc' },
+  },
   _count: {
     select: {
       sessions: true,

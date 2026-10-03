@@ -22,6 +22,14 @@ import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { apiJson } from '@/lib/api'
 import { shortInvoiceNo, toInputDate, today, formatVnDateTime } from '@/lib/shared/utils'
 import { formatClock, money, paymentMethodLabel } from '@/features/pos/format'
+import { BALANCE_LABEL_CLASS, BalanceGrid, ToolMark } from '@/features/shifts/balance-grid'
+import {
+  formatShiftDuration,
+  participantNote,
+  shiftLedger,
+  shiftTimeRange,
+  toolVerdict,
+} from '@/features/shifts/shift-ledger'
 import type { Shift } from '@/features/pos/types'
 import type { TransactionItem } from '@/types'
 
@@ -76,7 +84,9 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
     try {
       const [currentRes, listRes] = await Promise.all([
         apiJson<Shift | null>('/api/shifts?current=true'),
-        apiJson<Shift[]>('/api/shifts?limit=100'),
+        // `includeParticipants=all` để khối chi tiết ca thấy cả người đã rời ca;
+        // include này cũng mang toolCounts (xem shiftWithAllParticipantsInclude).
+        apiJson<Shift[]>('/api/shifts?limit=100&includeParticipants=all'),
       ])
       if (!currentRes.success || !listRes.success) {
         setShiftsError(currentRes.error || listRes.error || 'Không tải được ca làm')
@@ -141,6 +151,11 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
   const shiftsByDate = useMemo(() => groupShiftsByDate(shifts), [shifts])
 
   const dayShifts = useMemo(() => shiftsByDate.get(selectedDate) ?? [], [shiftsByDate, selectedDate])
+
+  const selectedShift = useMemo(
+    () => shifts.find((shift) => shift.id === selectedShiftId) ?? null,
+    [shifts, selectedShiftId],
+  )
 
   const selectShift = (id: string) => {
     setSelectedShiftId(id)
@@ -238,6 +253,8 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
           onDateChange={handleDateChange}
           onShiftChange={selectShift}
         />
+
+        {selectedShift && <ShiftSheet shift={selectedShift} />}
 
         {selectedShiftId ? (
           <TransactionLedger
@@ -350,6 +367,75 @@ function ShiftPicker({
           </Select>
         </div>
       </div>
+    </Card>
+  )
+}
+
+// ─── Chi tiết ca: hai vế đối soát tiền mặt + dụng cụ + người trực ────────────
+// Hai vế DỰ KIẾN / THỰC ĐẾM sống ở đây chứ không nằm ở danh sách ca: danh sách
+// chỉ in kết luận, còn chỗ này đọc được vì sao ra kết luận đó.
+function ShiftSheet({ shift }: { shift: Shift }) {
+  const ledger = shiftLedger(shift)
+  const tools = shift.toolCounts ?? []
+  const participants = participantNote(shift.participants ?? [], shift.staff?.id)
+  const duration = shift.closedAt
+    ? formatShiftDuration(shift.openedAt, shift.closedAt)
+    : null
+
+  return (
+    <Card padding="none">
+      <div className="px-4 py-3">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Badge variant={shift.status === 'OPEN' ? 'success' : 'default'} size="sm">
+            {shift.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}
+          </Badge>
+          <span className="text-sm font-semibold tabular-nums text-text-primary">
+            {shiftTimeRange(shift.openedAt, shift.closedAt)}
+          </span>
+          {duration && <span className="text-xs text-text-tertiary">· {duration}</span>}
+        </div>
+        <p className="mt-1 text-xs text-text-tertiary">
+          Mở bởi{' '}
+          <span className="font-medium text-text-secondary">
+            {shift.staff?.fullName ?? 'Không rõ'}
+          </span>
+        </p>
+        {participants && (
+          <p className="mt-0.5 truncate text-xs text-text-tertiary">{participants}</p>
+        )}
+
+        <div className="mt-3 lg:max-w-sm">
+          <BalanceGrid
+            expected={ledger.expected}
+            counted={ledger.counted}
+            difference={ledger.difference}
+            verdict={ledger.verdict}
+          />
+        </div>
+        <p className="mt-2 text-xs tabular-nums text-text-tertiary">
+          Tiền đầu ca {money(shift.openingCash)}
+          {shift.status === 'OPEN' && ' · ca đang mở, chưa đối soát'}
+        </p>
+      </div>
+
+      {tools.length > 0 && (
+        <div className="border-t border-border-default px-4 py-3">
+          <p className={BALANCE_LABEL_CLASS}>Đối soát dụng cụ</p>
+          <ul className="mt-1.5 space-y-1.5">
+            {tools.map((tc) => (
+              <li key={tc.id} className="flex items-center justify-between gap-3 text-xs">
+                <span className="min-w-0 truncate text-text-secondary">{tc.tool.name}</span>
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="tabular-nums text-text-tertiary">
+                    đầu ca {tc.openCount} · cuối ca {tc.closeCount ?? '—'}
+                  </span>
+                  <ToolMark verdict={toolVerdict(tc.openCount, tc.closeCount)} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </Card>
   )
 }
