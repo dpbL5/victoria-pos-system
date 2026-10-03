@@ -26,6 +26,7 @@ const TITLES: Record<string, string> = {
   '/settings': 'Thêm',
   '/cashflow': 'Thu chi',
   '/membership-plans': 'Gói hội viên',
+  '/transactions': 'Giao dịch trong ca',
   '/lessons': 'Đào tạo',
   '/students': 'Đào tạo',
 }

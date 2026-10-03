@@ -18,9 +18,10 @@ import { Input, Label, Select } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { AppSkeleton } from '@/components/ui/skeleton'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
+import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { apiJson } from '@/lib/api'
-import { shortInvoiceNo } from '@/lib/shared/utils'
-import { formatClock, formatDay, money, paymentMethodLabel } from '@/features/pos/format'
+import { shortInvoiceNo, toInputDate, today, formatVnDateTime } from '@/lib/shared/utils'
+import { formatClock, money, paymentMethodLabel } from '@/features/pos/format'
 import type { Shift } from '@/features/pos/types'
 import type { TransactionItem } from '@/types'
 
@@ -34,10 +35,32 @@ interface ShiftTransactionsScreenProps {
   initialShiftId?: string
 }
 
+/** Ca gom theo NGÀY giờ VN để bộ chọn ngày khớp đúng ca của ngày đó. */
+export function groupShiftsByDate(shifts: Shift[]): Map<string, Shift[]> {
+  const grouped = new Map<string, Shift[]>()
+  for (const shift of shifts) {
+    const key = toInputDate(new Date(shift.openedAt))
+    const list = grouped.get(key)
+    if (list) list.push(shift)
+    else grouped.set(key, [shift])
+  }
+  for (const list of grouped.values()) {
+    list.sort((a, b) => Date.parse(a.openedAt) - Date.parse(b.openedAt))
+  }
+  return grouped
+}
+
+/** Nhãn ca trong select: giờ mở (giờ VN) · người mở ca. */
+export function shiftOptionLabel(shift: Shift): string {
+  const clock = formatVnDateTime(shift.openedAt).split(' ')[1]
+  return [clock, shift.staff?.fullName].filter(Boolean).join(' · ')
+}
+
 export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScreenProps) {
   const router = useRouter()
   const [shifts, setShifts] = useState<Shift[]>([])
   const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState(() => today())
   const [transactions, setTransactions] = useState<TransactionItem[]>([])
   const [shiftsLoading, setShiftsLoading] = useState(true)
   const [transactionsLoading, setTransactionsLoading] = useState(false)
@@ -63,11 +86,15 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
       setShifts(shiftList)
 
       const hasInitial = !!initialShiftId && shiftList.some((s) => s.id === initialShiftId)
-      const resolved = hasInitial
+      const requested = hasInitial
         ? initialShiftId!
         : currentRes.data?.id ?? shiftList[0]?.id ?? null
+      // Ca đang mở có thể nằm ngoài 100 ca gần nhất — rơi về ca gần nhất để
+      // select và dữ liệu đang xem luôn khớp nhau.
+      const resolved = shiftList.find((s) => s.id === requested) ?? shiftList[0] ?? null
       if (initialShiftId && !hasInitial) router.replace('/transactions')
-      setSelectedShiftId(resolved)
+      if (resolved) setSelectedDate(toInputDate(new Date(resolved.openedAt)))
+      setSelectedShiftId(resolved?.id ?? null)
     } catch {
       setShiftsError('Lỗi kết nối máy chủ')
     } finally {
@@ -102,10 +129,34 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (selectedShiftId) void loadTransactions(selectedShiftId) }, [selectedShiftId, loadTransactions])
 
-  const handlePickerChange = (id: string) => {
-    if (!id) return
+  const refresh = useCallback(() => {
+    void loadShifts()
+    if (selectedShiftId) void loadTransactions(selectedShiftId)
+  }, [loadShifts, loadTransactions, selectedShiftId])
+
+  const { registerRefresh } = usePageRefresh()
+  useEffect(() => registerRefresh(refresh), [registerRefresh, refresh])
+
+  // Ca gom theo NGÀY giờ VN để bộ chọn ngày khớp đúng ca của ngày đó.
+  const shiftsByDate = useMemo(() => groupShiftsByDate(shifts), [shifts])
+
+  const dayShifts = useMemo(() => shiftsByDate.get(selectedDate) ?? [], [shiftsByDate, selectedDate])
+
+  const selectShift = (id: string) => {
     setSelectedShiftId(id)
     router.replace('/transactions?shiftId=' + id, { scroll: false })
+  }
+
+  const handleDateChange = (date: string) => {
+    if (!date) return
+    setSelectedDate(date)
+    const first = shiftsByDate.get(date)?.[0]
+    if (first) {
+      selectShift(first.id)
+      return
+    }
+    setSelectedShiftId(null)
+    router.replace('/transactions', { scroll: false })
   }
 
   const filteredTransactions = useMemo(() => {
@@ -132,28 +183,28 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
   // ── Lỗi khi tải danh sách ca ──
   if (shiftsError) {
     return (
-    <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-      <div className="mx-auto max-w-content space-y-4">
+      <div className="min-h-full bg-surface-secondary px-4 py-4 md:px-6 md:py-6">
+        <div className="mx-auto max-w-content space-y-4">
           <PageHeader onBack={() => router.back()} title="Giao dịch trong ca" />
           <NoticeCard
             tone="danger"
             title="Không tải được dữ liệu"
             description={shiftsError}
             action={
-            <Button variant="white" size="sm" onClick={() => void loadShifts()}>
+              <Button variant="white" size="sm" onClick={() => void loadShifts()}>
                 Thử lại
-        </Button>
-  }
-        />
+              </Button>
+            }
+          />
+        </div>
       </div>
-    </div>
-  )
-}
+    )
+  }
 
   // ── Chưa có ca nào ──
   if (shifts.length === 0) {
     return (
-      <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
+      <div className="min-h-full bg-surface-secondary px-4 py-4 md:px-6 md:py-6">
         <div className="mx-auto max-w-content space-y-4">
           <PageHeader onBack={() => router.back()} title="Giao dịch trong ca" />
           <EmptyState
@@ -161,7 +212,7 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
             message="Chưa có ca làm"
             description="Mở ca hoặc tham gia ca ở màn Ca hôm nay để xem giao dịch."
             action={
-            <Button variant="white" size="sm" onClick={() => router.push('/sessions')}>
+              <Button variant="white" size="sm" onClick={() => router.push('/sessions')}>
                 Đi tới Ca hôm nay
               </Button>
             }
@@ -172,38 +223,47 @@ export function ShiftTransactionsScreen({ initialShiftId }: ShiftTransactionsScr
   }
 
   return (
-      <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-        <div className="mx-auto max-w-content space-y-4">
+    <div className="min-h-full bg-surface-secondary px-4 py-4 md:px-6 md:py-6">
+      <div className="mx-auto max-w-content space-y-4">
         <PageHeader
           onBack={() => router.back()}
           title="Giao dịch trong ca"
-          onRefresh={() => {
-            void loadShifts()
-            if (selectedShiftId) void loadTransactions(selectedShiftId)
-          }}
+          onRefresh={refresh}
         />
 
-        {/* ── Shift selector — inline, no left rail ── */}
-        <ShiftPickerBar
-          shifts={shifts}
+        <ShiftPicker
+          dayShifts={dayShifts}
+          selectedDate={selectedDate}
           selectedShiftId={selectedShiftId}
-          onChange={handlePickerChange}
+          onDateChange={handleDateChange}
+          onShiftChange={selectShift}
         />
 
-        <TransactionLedger
-          loading={transactionsLoading}
-          error={transactionsError}
-          filter={typeFilter}
-          onFilterChange={setTypeFilter}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          filteredCount={filteredTransactions.length}
-          transactions={filteredTransactions}
-          onRetry={() => {
-            if (selectedShiftId) void loadTransactions(selectedShiftId)
-          }}
-          onOpenInvoice={(invoiceId) => router.push(`/invoices/${invoiceId}`)}
-        />
+        {selectedShiftId ? (
+          <TransactionLedger
+            loading={transactionsLoading}
+            error={transactionsError}
+            filter={typeFilter}
+            onFilterChange={setTypeFilter}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            filteredCount={filteredTransactions.length}
+            transactions={filteredTransactions}
+            onRetry={() => void loadTransactions(selectedShiftId)}
+            onOpenInvoice={(invoiceId) => router.push(`/invoices/${invoiceId}`)}
+          />
+        ) : (
+          <EmptyState
+            icon={CalendarClock}
+            message="Ngày này không có ca"
+            description="Chọn ngày khác, hoặc mở ca ở màn Ca hôm nay rồi quay lại."
+            action={
+              <Button variant="white" size="sm" onClick={() => router.push('/sessions')}>
+                Đi tới Ca hôm nay
+              </Button>
+            }
+          />
+        )}
       </div>
     </div>
   )
@@ -224,8 +284,9 @@ function PageHeader({
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={onBack}>
           Quay lại
-              </Button>
-        <h1 className={PAGE_TITLE_CLASS}>
+        </Button>
+        {/* Mobile đã có tiêu đề ở header dán trên cùng — h1 chỉ hiện từ md. */}
+        <h1 className={`hidden md:block ${PAGE_TITLE_CLASS}`}>
           {title}
         </h1>
       </div>
@@ -235,47 +296,57 @@ function PageHeader({
           size="sm"
           icon={RefreshCw}
           aria-label="Làm mới"
+          className="hidden md:inline-flex"
           onClick={onRefresh}
-          />
-        )}
-      </div>
-    )
-  }
+        />
+      )}
+    </div>
+  )
+}
 
-// ─── Shift picker bar (inline toolbar, not a side rail) ─────────────────────
-function ShiftPickerBar({
-  shifts,
+// ─── Bộ chọn ngày + ca (nhãn ca theo giờ mở) ────────────────────────────────
+function ShiftPicker({
+  dayShifts,
+  selectedDate,
   selectedShiftId,
-  onChange,
+  onDateChange,
+  onShiftChange,
 }: {
-  shifts: Shift[]
+  dayShifts: Shift[]
+  selectedDate: string
   selectedShiftId: string | null
-  onChange: (id: string) => void
+  onDateChange: (date: string) => void
+  onShiftChange: (id: string) => void
 }) {
   return (
     <Card padding="sm">
-    <div className="flex items-center gap-3">
-        <Label
-          htmlFor="shift-picker"
-          className="mb-0 shrink-0 text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
-        >
-          Ca làm
-        </Label>
-        {/* flex-1/min-w-0 đặt ở khung bọc: <Select> tự bọc một khung `relative`
-            để giữ mũi tên ở mép phải, nên class layout phải nằm trên khung đó. */}
-        <div className="min-w-0 flex-1">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="shift-date">Chọn ngày</Label>
+          <Input
+            id="shift-date"
+            type="date"
+            value={selectedDate}
+            onChange={(event) => onDateChange(event.target.value)}
+          />
+        </div>
+        <div>
+          <Label htmlFor="shift-picker">Ca làm</Label>
           <Select
             id="shift-picker"
-              value={selectedShiftId ?? ''}
-            onChange={(event) => onChange(event.target.value)}
-            className="text-sm"
+            value={selectedShiftId ?? ''}
+            disabled={dayShifts.length === 0}
+            onChange={(event) => onShiftChange(event.target.value)}
           >
-          {shifts.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'} · {formatDay(s.openedAt)} ·{' '}
-              {formatClock(s.openedAt)} · {s.staff?.fullName ?? '—'}
-            </option>
-          ))}
+            {dayShifts.length === 0 ? (
+              <option value="">Không có ca</option>
+            ) : (
+              dayShifts.map((shift) => (
+                <option key={shift.id} value={shift.id}>
+                  {shiftOptionLabel(shift)}
+                </option>
+              ))
+            )}
           </Select>
         </div>
       </div>
@@ -310,32 +381,32 @@ function TransactionLedger({
   const hasFilter = filter !== 'ALL' || searchQuery.trim() !== ''
   return (
     <Card padding="none">
-      <div className="flex flex-col gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <FilterButton active={filter === 'ALL'} onClick={() => onFilterChange('ALL')}>
-              Tất cả
-            </FilterButton>
-            <FilterButton
-              active={filter === 'payment'}
-              onClick={() => onFilterChange('payment')}
-            >
-              Thanh toán
-            </FilterButton>
-            <FilterButton
-              active={filter === 'membership'}
-              onClick={() => onFilterChange('membership')}
-            >
-              Hội viên
-            </FilterButton>
-            <FilterButton active={filter === 'deposit'} onClick={() => onFilterChange('deposit')}>
-              Tiền cọc
-            </FilterButton>
-          </div>
+      <div className="flex flex-col gap-2 border-b border-border-default px-4 py-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <FilterButton active={filter === 'ALL'} onClick={() => onFilterChange('ALL')}>
+            Tất cả
+          </FilterButton>
+          <FilterButton
+            active={filter === 'payment'}
+            onClick={() => onFilterChange('payment')}
+          >
+            Thanh toán
+          </FilterButton>
+          <FilterButton
+            active={filter === 'membership'}
+            onClick={() => onFilterChange('membership')}
+          >
+            Hội viên
+          </FilterButton>
+          <FilterButton active={filter === 'deposit'} onClick={() => onFilterChange('deposit')}>
+            Tiền cọc
+          </FilterButton>
+        </div>
         <div className="relative">
           <Search
             size={14}
             aria-hidden
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary"
           />
           <Input
             type="search"
@@ -349,9 +420,7 @@ function TransactionLedger({
       </div>
 
       {loading && transactions.length === 0 ? (
-        <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-          Đang tải giao dịch...
-        </div>
+        <AppSkeleton />
       ) : error ? (
         <div className="p-4">
           <NoticeCard
@@ -359,7 +428,7 @@ function TransactionLedger({
             title="Không tải được giao dịch"
             description={error}
             action={
-            <Button variant="white" size="sm" onClick={onRetry}>
+              <Button variant="white" size="sm" onClick={onRetry}>
                 Thử lại
               </Button>
             }
@@ -396,7 +465,7 @@ function TransactionLedger({
           />
         </div>
       ) : (
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        <ul className="divide-y divide-border-default">
           {transactions.map((tx) => (
             <TransactionRow
               key={`${tx.type}-${tx.id}`}
@@ -408,7 +477,7 @@ function TransactionLedger({
       )}
 
       {loading && transactions.length > 0 && (
-        <div className="border-t border-zinc-200 px-4 py-2 text-center text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+        <div className="border-t border-border-default px-4 py-2 text-center text-xs text-text-tertiary">
           Đang cập nhật...
         </div>
       )}
@@ -442,8 +511,8 @@ function TransactionRow({
       : ''
 
   const amountClass = isCancelled
-    ? 'text-zinc-400 line-through dark:text-zinc-500'
-    : 'text-zinc-950 dark:text-white'
+    ? 'text-text-tertiary line-through'
+    : 'text-text-primary'
 
   return (
     <li>
@@ -453,17 +522,17 @@ function TransactionRow({
         onClick={() => {
           if (canOpen) onOpen(tx.invoiceId!)
         }}
-        className="grid w-full grid-cols-[3.5rem_minmax(0,1fr)_auto_auto] items-center gap-x-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 disabled:cursor-default disabled:hover:bg-transparent sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto] sm:gap-x-4 dark:hover:bg-zinc-800/50"
+        className="grid w-full grid-cols-[3.5rem_minmax(0,1fr)_auto_auto] items-center gap-x-3 px-4 py-3 text-left transition-colors hover:bg-surface-tertiary disabled:cursor-default disabled:hover:bg-transparent sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto] sm:gap-x-4"
       >
         {/* Time — fixed, scannable, primary sort key */}
-        <span className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
+        <span className="text-sm font-semibold tabular-nums text-text-primary">
           {formatClock(tx.paidAt)}
         </span>
 
         {/* Customer + meta */}
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
-            <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">
+            <p className="truncate text-sm font-semibold text-text-primary">
               {tx.customerName}
             </p>
             {isCancelled && (
@@ -472,7 +541,7 @@ function TransactionRow({
               </Badge>
             )}
           </div>
-          <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-0.5 truncate text-xs text-text-tertiary">
             {tx.invoiceNo && (
               <span className="font-mono">{shortInvoiceNo(tx.invoiceNo)}</span>
             )}
