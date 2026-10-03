@@ -8,13 +8,16 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowRightLeft,
   Banknote,
+  BarChart3,
   BowArrow,
   CalendarClock,
   Car,
+  Clock,
   GraduationCap,
   LogOut,
   Monitor,
   Moon,
+  Package,
   School,
   Settings,
   ShieldCheck,
@@ -109,43 +112,51 @@ export function MoreScreen() {
   }, [parkingFeeData, parkingFeeValue]);
 
   const canViewShifts = isManagerOrAdmin(user?.role);
+  // Thứ tự lối tắt = mức dùng thật, đếm từ activity_logs (07–10/2026):
+  // Ca làm 132 · Đặt Lịch 37 · Nhân viên 36 · Hội viên 28 · Lịch học 28 ·
+  // Bảng giá 23 · Lớp học 14 · Học viên 11 · Khuyến mại 7 · Thu chi 7 · Kho 5 ·
+  // còn lại là màn chỉ đọc / không ghi audit nên xếp cuối.
   const coreLinks = [
-    {
-      href: "/bookings",
-      label: "Đặt Lịch",
-      Icon: CalendarClock,
-    },
     ...(canViewShifts
       ? [
         {
             href: "/shifts",
             label: "Ca làm",
-            Icon: CalendarClock,
+            Icon: Clock,
           },
         ]
       : []),
+    {
+      href: "/bookings",
+      label: "Đặt Lịch",
+      Icon: CalendarClock,
+    },
     {
       href: "/customers",
       label: "Hội viên",
       Icon: ShieldCheck,
     },
+    ...(canViewShifts
+      ? [
+        {
+            href: "/inventory",
+            label: "Kho",
+            Icon: Package,
+          },
+        ]
+      : []),
   ] as const;
 
   const adminLinks = [
     {
-      href: "/pricing",
-      label: "Bảng giá",
-      Icon: Banknote,
+      href: "/shifts",
+      label: "Ca làm",
+      Icon: Clock,
     },
     {
-      href: "/promotions",
-      label: "Khuyến mại",
-      Icon: Tag,
-    },
-    {
-      href: "/tools",
-      label: "Dụng cụ",
-      Icon: BowArrow,
+      href: "/bookings",
+      label: "Đặt Lịch",
+      Icon: CalendarClock,
     },
     {
       href: "/staff",
@@ -153,34 +164,19 @@ export function MoreScreen() {
       Icon: UserCog,
     },
     {
-      href: "/membership-plans",
-      label: "Gói hội viên",
-      Icon: Ticket,
-    },
-    {
-      href: "/bookings",
-      label: "Đặt Lịch",
-      Icon: CalendarClock,
-    },
-    {
       href: "/customers",
       label: "Hội viên",
       Icon: ShieldCheck,
     },
     {
-      href: "/shifts",
-      label: "Ca làm",
-      Icon: CalendarClock,
-    },
-    {
-      href: "/cashflow",
-      label: "Thu chi",
-      Icon: ArrowRightLeft,
-    },
-    {
       href: "/lessons",
       label: "Lịch học",
       Icon: GraduationCap,
+    },
+    {
+      href: "/pricing",
+      label: "Bảng giá",
+      Icon: Banknote,
     },
     {
       href: "/classes",
@@ -191,6 +187,36 @@ export function MoreScreen() {
       href: "/students",
       label: "Học viên",
       Icon: Users,
+    },
+    {
+      href: "/promotions",
+      label: "Khuyến mại",
+      Icon: Tag,
+    },
+    {
+      href: "/cashflow",
+      label: "Thu chi",
+      Icon: ArrowRightLeft,
+    },
+    {
+      href: "/inventory",
+      label: "Kho",
+      Icon: Package,
+    },
+    {
+      href: "/tools",
+      label: "Dụng cụ",
+      Icon: BowArrow,
+    },
+    {
+      href: "/membership-plans",
+      label: "Gói hội viên",
+      Icon: Ticket,
+    },
+    {
+      href: "/reports",
+      label: "Báo cáo",
+      Icon: BarChart3,
     },
   ] as const;
 
