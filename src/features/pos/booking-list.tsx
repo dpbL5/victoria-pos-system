@@ -81,7 +81,7 @@ export function BookingCards({
   shiftOpenedAt,
 }: {
   bookings: BookingItem[]
-  onCheckIn?: (booking: BookingItem, startTime: string) => void
+  onCheckIn?: (booking: BookingItem, startTime: string, playerCount: number) => void
   onCancel?: (booking: BookingItem, depositRefunded: boolean) => void
   busyId?: string | null
   actionDisabled?: boolean
@@ -90,6 +90,7 @@ export function BookingCards({
   const [confirmingBooking, setConfirmingBooking] = useState<BookingItem | null>(null)
   const [cancellingBooking, setCancellingBooking] = useState<BookingItem | null>(null)
   const [checkInAt, setCheckInAt] = useState('')
+  const [playerCountInput, setPlayerCountInput] = useState('1')
   const [timeError, setTimeError] = useState('')
   const [now, setNow] = useState(() => Date.now())
 
@@ -101,8 +102,12 @@ export function BookingCards({
   const openConfirmation = (booking: BookingItem) => {
     setConfirmingBooking(booking)
     setCheckInAt(toTimeInput(new Date()))
+    setPlayerCountInput(String(booking.playerCount))
     setTimeError('')
   }
+
+  // Số người thực tế có thể khác lúc đặt lịch — kẹp về 1..50 như dialog Check-in.
+  const parsedPlayerCount = Math.min(50, Math.max(1, Number.parseInt(playerCountInput, 10) || 1))
 
   const closeConfirmation = () => {
     setConfirmingBooking(null)
@@ -209,13 +214,13 @@ export function BookingCards({
           setTimeError('Thời điểm check-in phải nằm từ lúc mở ca đến hiện tại.')
           return
         }
-        onCheckIn?.(confirmingBooking, selectedAt.toISOString())
+        onCheckIn?.(confirmingBooking, selectedAt.toISOString(), parsedPlayerCount)
         closeConfirmation()
       }}
       body={(
         <div className="space-y-4">
           <p className="text-sm leading-relaxed text-text-secondary">
-            Bắt đầu phiên cho {confirmingBooking?.customer?.fullName ?? confirmingBooking?.customerName ?? 'Khách lẻ'} ({confirmingBooking?.playerCount} người).
+            Bắt đầu phiên cho {confirmingBooking?.customer?.fullName ?? confirmingBooking?.customerName ?? 'Khách lẻ'}.
           </p>
           <div>
             <Label htmlFor="booking-check-in-time">Giờ check-in</Label>
@@ -230,6 +235,21 @@ export function BookingCards({
             />
               {timeError && <p className="mt-1 text-xs text-danger">{timeError}</p>}
         </div>
+          <div>
+            <Label htmlFor="booking-player-count">Số người chơi</Label>
+            <Input
+              id="booking-player-count"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={2}
+              value={playerCountInput}
+              onChange={(event) => {
+                const value = event.target.value
+                if (value === '' || /^\d+$/.test(value)) setPlayerCountInput(value)
+              }}
+            />
+          </div>
               </div>
       )}
     />

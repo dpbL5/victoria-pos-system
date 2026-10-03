@@ -25,12 +25,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params
     const body = await request.json()
     if (body.action === 'check-in') {
-      const parsed = z.object({ action: z.literal('check-in'), startTime: z.string().datetime().optional() }).safeParse(body)
-      if (!parsed.success) return apiError({ code: 'VALIDATION', message: 'Thời điểm check-in không hợp lệ', status: 400 })
+      const parsed = z.object({
+        action: z.literal('check-in'),
+        startTime: z.string().datetime('Thời điểm check-in không hợp lệ').optional(),
+        playerCount: z.number().int().min(1, 'Số người chơi tối thiểu là 1').max(50, 'Số người chơi tối đa là 50').optional(),
+      }).safeParse(body)
+      if (!parsed.success) return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
       return resultToResponse(await checkInBooking({
         bookingId: id,
         staffId: auth.userId,
         startTime: parsed.data.startTime ? new Date(parsed.data.startTime) : undefined,
+        playerCount: parsed.data.playerCount,
       }), mapBookingError)
     }
     const status = bookingStatusSchema.safeParse(body)

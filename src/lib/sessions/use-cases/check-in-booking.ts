@@ -5,7 +5,7 @@ import { err } from '@/lib/shared/result'
 import { runCheckInTx } from './check-in'
 
 export async function checkInBooking(
-  input: { bookingId: string; staffId: string; startTime?: Date },
+  input: { bookingId: string; staffId: string; startTime?: Date; playerCount?: number },
   deps: Repositories = repositories
 ) {
   const checkInAt = input.startTime ?? new Date()
@@ -14,6 +14,8 @@ export async function checkInBooking(
   const booking = await deps.booking!.findById(input.bookingId)
   if (!booking) return err('BOOKING_NOT_FOUND')
   if (booking.status !== 'BOOKED') return err('BOOKING_NOT_EDITABLE')
+  // Số người thực tế có thể khác lúc đặt lịch — nhân viên nhập khi xác nhận.
+  const playerCount = input.playerCount ?? booking.playerCount
 
   let membershipId: string | undefined
   if (booking.customerId) {
@@ -45,11 +47,15 @@ export async function checkInBooking(
         customerId: booking.customerId,
         customerName: booking.customerId ? null : booking.customerName,
         customerPhone: booking.customerId ? null : booking.customerPhone,
-        playerCount: booking.playerCount,
+        playerCount,
         now: checkInAt,
         membershipId,
-        totalPlayers: booking.playerCount,
+        totalPlayers: playerCount,
       })
+      if (playerCount !== booking.playerCount) {
+        const updated = await tx.booking!.updateBooked(booking.id, { playerCount })
+        if (!updated.count) fail('BOOKING_NOT_EDITABLE')
+      }
       const changed = await tx.booking!.markCheckedIn(booking.id, session.id)
       if (!changed.count) fail('BOOKING_NOT_EDITABLE')
       await tx.audit.append({
@@ -57,7 +63,7 @@ export async function checkInBooking(
         action: 'BOOKING_CHECK_IN',
         entityType: 'Booking',
         entityId: booking.id,
-        details: { sessionId: session.id, startTime: checkInAt.toISOString() },
+        details: { sessionId: session.id, startTime: checkInAt.toISOString(), playerCount },
       })
       return session
     }, { isolationLevel: 'Serializable' })
