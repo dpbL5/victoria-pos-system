@@ -1,5 +1,12 @@
 // ── Validations — Zod schema cho cashflow ─────
 import { z } from 'zod'
+import { parseStartOfDay } from '@/lib/shared/utils'
+
+/** Ngày phát sinh (YYYY-MM-DD) → Date 00:00 giờ VN. */
+const occurredAtField = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày phát sinh không hợp lệ')
+  .transform((value) => parseStartOfDay(value))
 
 export const createCashflowSchema = z.object({
   type: z.enum(['INCOME', 'EXPENSE'], {
@@ -16,6 +23,7 @@ export const createCashflowSchema = z.object({
     .trim()
     .min(1, 'Nhập lý do')
     .max(500, 'Lý do tối đa 500 ký tự'),
+  occurredAt: occurredAtField,
 })
 
 export type CreateCashflowInput = z.infer<typeof createCashflowSchema>

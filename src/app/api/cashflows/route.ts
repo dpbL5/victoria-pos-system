@@ -5,7 +5,17 @@ import { validateCSRF } from '@/lib/shared/csrf'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { createCashflowSchema } from '@/lib/cashflow/validations'
 import { createCashflow, mapCreateCashflowError } from '@/lib/cashflow'
-import { apiError, apiSuccess, resultToResponse, ERR_UNAUTHORIZED, ERR_FORBIDDEN, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
+import { currentMonth, monthBounds, monthKey, type Month } from '@/lib/shared/month'
+import { parseStartOfDay } from '@/lib/shared/utils'
+import { apiError, resultToResponse, ERR_UNAUTHORIZED, ERR_FORBIDDEN, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
+
+/** Đọc `?month=YYYY-MM`, sai/thiếu thì lấy tháng hiện tại. */
+function parseMonth(value: string | null): Month {
+  if (value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value)) {
+    return { year: Number(value.slice(0, 4)), month: Number(value.slice(5, 7)) }
+  }
+  return currentMonth()
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,9 +28,14 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, Number(searchParams.get('page')) || 1)
     const pageSize = 10
 
+    const month = parseMonth(searchParams.get('month'))
+    const bounds = monthBounds(month)
+    const from = parseStartOfDay(bounds.from)
+    const to = parseStartOfDay(bounds.to)
+
     const [result, summary] = await Promise.all([
-      repositories.cashflow.list({ type, page, pageSize }),
-      repositories.cashflow.summarize(type ? { type } : undefined),
+      repositories.cashflow.list({ type, from, to, page, pageSize }),
+      repositories.cashflow.summarize({ type, from, to }),
     ])
 
     const data = result.entries.map((e) => ({
@@ -29,6 +44,7 @@ export async function GET(request: NextRequest) {
       personName: e.personName,
       amount: Number(e.amount),
       reason: e.reason,
+      occurredAt: e.occurredAt.toISOString(),
       staff: e.staff,
       createdAt: e.createdAt.toISOString(),
     }))
@@ -36,6 +52,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
+        month: monthKey(month),
         entries: data,
         summary: {
           income: summary.income,

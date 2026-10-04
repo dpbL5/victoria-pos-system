@@ -18,9 +18,10 @@ import { AppSkeleton } from '@/components/ui/skeleton'
 import { apiJson } from '@/lib/api'
 import { formatClock, money, paymentMethodLabel } from '@/features/pos/format'
 import type { PaymentMethod, UserSession } from '@/features/pos/types'
-import { getVnCalendarRange, shortInvoiceNo, toInputDate } from '@/lib/shared/utils'
+import { shortInvoiceNo } from '@/lib/shared/utils'
 import { AreaChart, DonutChart, HourlyBarChart, DailyVolumeChart } from './reports-charts'
-import { ReportsPeriodFilter, type ReportsPeriod } from './reports-period-filter'
+import { ReportsMonthFilter, monthWeeks } from './reports-month-filter'
+import { currentMonth, isCurrentMonth, monthRange, shiftMonth } from '@/lib/shared/month'
 import { isAdminOnly } from '@/lib/shared/roles'
 
 type ItemType = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT' | 'SURCHARGE' | 'DEPOSIT' | 'DEPOSIT_APPLIED'
@@ -127,18 +128,35 @@ export interface ReportsOverviewHandle {
 export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverviewProps>(
   function ReportsOverview({ user }, ref) {
   const [dashboard, setDashboard] = useState<ReportDashboard | null>(null)
-  const [range, setRange] = useState<ReportsPeriod | null>('today')
+  const [month, setMonth] = useState(currentMonth)
+  const [day, setDay] = useState<string | null>(null)
+  const [weekStart, setWeekStart] = useState<string | null>(null)
   const [revenue, setRevenue] = useState<RevenueData[]>([])
   const [revenueSummary, setRevenueSummary] = useState<RevenueSummary | null>(null)
   const [recentPayments, setRecentPayments] = useState<RevenuePayment[]>([])
   const [trends, setTrends] = useState<TrendData | null>(null)
   const [trendsLoading, setTrendsLoading] = useState(false)
-  const [from, setFrom] = useState(() => toInputDate(new Date()))
-  const [to, setTo] = useState(() => toInputDate(new Date()))
   const [exportType, setExportType] = useState('revenue')
   const [loading, setLoading] = useState(true)
   const [revenueLoading, setRevenueLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Tháng đang chọn + phạm vi hẹp hơn: ngày lẻ hoặc tuần. Ưu tiên ngày > tuần > tháng.
+  const { from: monthFrom, to: monthTo } = monthRange(month)
+  const weeks = monthWeeks(month)
+  const week = weekStart ? weeks.find((item) => item.from === weekStart) ?? null : null
+  const from = day ?? week?.from ?? monthFrom
+  const to = day ?? week?.to ?? monthTo
+
+  // Chọn ngày và chọn tuần loại trừ nhau.
+  const selectDay = (next: string | null) => {
+    setDay(next)
+    if (next) setWeekStart(null)
+  }
+  const selectWeek = (next: string | null) => {
+    setWeekStart(next)
+    if (next) setDay(null)
+  }
 
   const loadDashboard = useCallback(async () => {
     setLoading(true)
@@ -215,15 +233,6 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
 
   const canExport = isAdminOnly(user?.role)
   const today = dashboard?.today
-  // Khoảng 1 ngày lịch → hero chart chuyển sang granularity giờ (HourlyBarChart).
-  const singleDay = isSingleDay(from, to)
-
-  const applyRange = (nextRange: ReportsPeriod) => {
-    setRange(nextRange)
-    const { from, to } = getVnCalendarRange(nextRange === 'today' ? 'day' : nextRange)
-    setFrom(from)
-    setTo(to)
-  }
 
   if (loading) {
     return <AppSkeleton />
@@ -239,21 +248,20 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
         />
       )}
 
-      <ReportsPeriodFilter
-        from={from}
-        to={to}
-        period={range}
+      <ReportsMonthFilter
+        year={month.year}
+        month={month.month}
+        minDay={monthFrom}
+        maxDay={monthTo}
+        day={day}
+        weeks={weeks}
+        weekStart={weekStart}
         loading={revenueLoading}
-        onPeriodChange={applyRange}
-        onFromChange={(value) => {
-          setRange(null)
-          setFrom(value)
-        }}
-        onToChange={(value) => {
-          setRange(null)
-          setTo(value)
-        }}
-        onApply={() => void loadRevenue(from, to)}
+        onPrev={() => { setDay(null); setWeekStart(null); setMonth((current) => shiftMonth(current, -1)) }}
+        onNext={() => { setDay(null); setWeekStart(null); setMonth((current) => shiftMonth(current, 1)) }}
+        canGoNext={!isCurrentMonth(month)}
+        onDayChange={selectDay}
+        onWeekChange={selectWeek}
       />
 
       {/* Layout 2/3 + 1/3 — main: monitor focal (scoreboard + chart + lưu lượng);
@@ -270,13 +278,13 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
             />
           )}
 
-          {/* Hero chart: 1 ngày → doanh thu theo giờ; nhiều ngày → doanh thu theo ngày */}
+          {/* Hero chart: 1 ngày → doanh thu theo giờ; cả tháng → doanh thu theo ngày */}
           <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-start justify-between gap-3 p-4 pb-3">
               <div>
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-white">
                 <TrendingUp size={17} className="text-success" />
-                  {singleDay ? 'Doanh thu theo giờ' : 'Doanh thu theo ngày'}
+                  {day ? 'Doanh thu theo giờ' : 'Doanh thu theo ngày'}
                 </h2>
               <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                   {dashboard?.scope === 'STAFF' ? 'Số liệu của ca và tài khoản của bạn' : 'Số liệu toàn bộ hệ thống'}
@@ -290,8 +298,8 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
             <div className="px-4 pb-5">
               {revenueLoading ? (
                 <AppSkeleton />
-              ) : singleDay ? (
-                // 1 ngày: lấy từ trends.byHour (granularity giờ). Fallback rỗng khi chưa có trends.
+              ) : day ? (
+                // 1 ngày: lấy từ trends.byHour (granularity giờ).
                 trends && trends.byHour.length > 0 ? (
                 <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
                     <HourlyBarChart data={trends.byHour} height={220} />
@@ -300,14 +308,14 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
                 <EmptyState
                   icon={BarChart3}
                     message="Chưa có doanh thu trong ngày"
-                    description="Chưa có giao dịch nào được ghi nhận hôm nay."
+                    description="Chưa có giao dịch nào được ghi nhận trong ngày đã chọn."
                   />
                 )
               ) : revenue.length === 0 ? (
                   <EmptyState
                     icon={BarChart3}
                   message="Chưa có doanh thu"
-                  description="Thử đổi khoảng ngày hoặc kiểm tra các giao dịch đã thu."
+                  description="Thử đổi tháng hoặc kiểm tra các giao dịch đã thu."
                 />
               ) : (
                   <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
@@ -405,7 +413,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
               <span className="text-sm font-semibold text-zinc-950 dark:text-white">Xuất báo cáo</span>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {canExport ? 'Tải CSV cho khoảng ngày đã chọn' : 'Chỉ quản trị viên được tải file báo cáo'}
+              {canExport ? (day ? 'Tải CSV cho ngày đã chọn' : weekStart ? 'Tải CSV cho tuần đã chọn' : 'Tải CSV cho tháng đã chọn') : 'Chỉ quản trị viên được tải file báo cáo'}
             </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               {/* flex-1/min-w-0 ở khung bọc: <Select> tự bọc khung `relative`
@@ -651,9 +659,4 @@ function buildItemSlices(items: ItemBreakdown): Array<{ label: string; value: nu
 function formatReportDate(value: string): string {
   const [, month, day] = value.split('-')
   return `${day}/${month}`
-}
-
-/** Khoảng chỉ chứa 1 ngày lịch — dùng để đổi granularity của hero chart sang giờ. */
-function isSingleDay(from: string, to: string): boolean {
-  return from === to
 }

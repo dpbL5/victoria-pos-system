@@ -10,6 +10,8 @@ export interface CreateCashflowData {
   personName: string
   amount: number
   reason: string
+  /** Ngày phát sinh (nghiệp vụ) */
+  occurredAt: Date
   staffId: string
 }
 
@@ -18,10 +20,15 @@ export interface UpdateCashflowData {
   personName: string
   amount: number
   reason: string
+  /** Ngày phát sinh (nghiệp vụ) */
+  occurredAt: Date
 }
 
 export interface CashflowListFilter {
   type?: 'INCOME' | 'EXPENSE'
+  /** Lọc theo ngày phát sinh [from, to) */
+  from?: Date
+  to?: Date
   page?: number
   pageSize?: number
 }

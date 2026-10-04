@@ -43,12 +43,14 @@ export async function updateCashflow(
           personName: existing.personName,
           amount: Number(existing.amount),
           reason: existing.reason,
+          occurredAt: existing.occurredAt.toISOString(),
         },
         after: {
           type: input.data.type,
           personName: input.data.personName,
           amount: input.data.amount,
           reason: input.data.reason,
+          occurredAt: input.data.occurredAt.toISOString(),
         },
       },
     })

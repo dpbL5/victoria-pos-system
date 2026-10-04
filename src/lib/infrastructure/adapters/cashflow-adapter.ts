@@ -27,6 +27,7 @@ export function createCashflowRepository(store: CashflowStore): CashflowReposito
           personName: data.personName,
           amount: data.amount,
           reason: data.reason,
+          occurredAt: data.occurredAt,
         },
         include: cashflowWithStaffInclude,
       })

@@ -8,8 +8,6 @@ import {
   Trash2,
   TrendingDown,
   TrendingUp,
-  Wallet,
-  type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,8 +33,11 @@ import {
   normalizeCashInput,
 } from "@/lib/shared/cash-input";
 import { usePageRefresh } from "@/components/layout/page-refresh-context";
-import { formatDay, formatClock, money } from "@/features/pos/format";
+import { formatDay, money } from "@/features/pos/format";
 import type { UserSession } from "@/features/pos/types";
+import { MonthNav } from '@/components/ui/month-nav'
+import { currentMonth, formatMonthLabel, isCurrentMonth, monthKey, monthRange, shiftMonth } from '@/lib/shared/month'
+import { toInputDate } from '@/lib/shared/utils'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 
 // ── Types ──
@@ -49,6 +50,7 @@ interface CashflowRow {
   personName: string;
   amount: number;
   reason: string;
+  occurredAt: string;
   staff: { id: string; fullName: string } | null;
   createdAt: string;
 }
@@ -66,6 +68,15 @@ interface Pagination {
   totalPages: number;
 }
 
+interface CashflowFormPayload {
+  type: "INCOME" | "EXPENSE";
+  personName: string;
+  amount: number;
+  reason: string;
+  /** YYYY-MM-DD */
+  occurredAt: string;
+}
+
 // ── Screen ──
 
 export function CashflowScreen() {
@@ -76,17 +87,22 @@ export function CashflowScreen() {
   const [deleteTarget, setDeleteTarget] = useState<CashflowRow | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [page, setPage] = useState(1);
+  const [month, setMonth] = useState(currentMonth);
 
   const url = useMemo(() => {
     const params = new URLSearchParams();
+    params.set("month", monthKey(month));
     if (typeFilter !== "ALL") params.set("type", typeFilter);
     params.set("page", String(page));
     return `/api/cashflows?${params}`;
-  }, [typeFilter, page]);
+  }, [month, typeFilter, page]);
+
+  const { from: monthFrom, to: monthTo } = monthRange(month);
 
   const {
     data: apiData,
     isLoading,
+    isValidating,
     mutate,
   } = useApi<{
     entries: CashflowRow[];
@@ -127,7 +143,13 @@ export function CashflowScreen() {
     setPage(p);
   };
 
+  const goMonth = (delta: number) => {
+    setPage(1);
+    setMonth((current) => shiftMonth(current, delta));
+  };
+
   const filterByType = (f: TypeFilter) => {
+    setPage(1);
     setTypeFilter(f);
   };
 
@@ -135,16 +157,13 @@ export function CashflowScreen() {
   const columns: Column<CashflowRow>[] = useMemo(
     () => [
       {
-        key: "createdAt",
-        label: "Ngày giờ",
-        headerClassName: "w-[140px] pl-4 pr-3",
+        key: "occurredAt",
+        label: "Ngày phát sinh",
+        headerClassName: "w-[130px] pl-4 pr-3",
         cellClassName:
           "whitespace-nowrap py-3 pl-4 pr-3 text-xs text-zinc-500 dark:text-zinc-400",
         render: (e) => (
-          <>
-            <span className="tabular-nums">{formatDay(e.createdAt)}</span>{" "}
-            <span className="tabular-nums">{formatClock(e.createdAt)}</span>
-          </>
+          <span className="tabular-nums">{formatDay(e.occurredAt)}</span>
         ),
       },
       {
@@ -256,11 +275,11 @@ export function CashflowScreen() {
         ),
       },
       {
-        key: "createdAt",
-        label: "Ngày giờ",
+        key: "occurredAt",
+        label: "Ngày phát sinh",
         render: (e) => (
           <span className="tabular-nums text-zinc-500 dark:text-zinc-400">
-            {formatDay(e.createdAt)} {formatClock(e.createdAt)}
+            {formatDay(e.occurredAt)}
           </span>
         ),
       },
@@ -296,12 +315,7 @@ export function CashflowScreen() {
 
   // ── Mutations ──
 
-  const handleCreate = async (payload: {
-    type: "INCOME" | "EXPENSE";
-    personName: string;
-    amount: number;
-    reason: string;
-  }) => {
+  const handleCreate = async (payload: CashflowFormPayload) => {
     setSubmitting(true);
     try {
       const data = await apiJson<{ id: string }>(
@@ -324,12 +338,7 @@ export function CashflowScreen() {
     }
   };
 
-  const handleEdit = async (payload: {
-    type: "INCOME" | "EXPENSE";
-    personName: string;
-    amount: number;
-    reason: string;
-  }) => {
+  const handleEdit = async (payload: CashflowFormPayload) => {
     if (!editingEntry) return false;
     setSubmitting(true);
     try {
@@ -437,27 +446,27 @@ export function CashflowScreen() {
           <AccessDenied />
         ) : (
           <>
-            {/* Stat cards */}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <StatCard
-                label="Tổng thu"
-                amount={summary.income}
-                icon={TrendingUp}
-                tone="income"
+            {/* Chuyển tháng */}
+            <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <MonthNav
+                label={formatMonthLabel(month)}
+                loading={isValidating}
+                onPrev={() => goMonth(-1)}
+                onNext={() => goMonth(1)}
+                canGoNext={!isCurrentMonth(month)}
               />
-              <StatCard
-                label="Tổng chi"
-                amount={summary.expense}
-                icon={TrendingDown}
-                tone="expense"
-              />
+            </section>
+
+            {/* Tổng thu / chi / số dư — gộp 1 dải gọn */}
+            <section className="flex items-stretch divide-x divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
+              <StatCard label="Tổng thu" amount={summary.income} tone="income" />
+              <StatCard label="Tổng chi" amount={summary.expense} tone="expense" />
               <StatCard
                 label="Số dư"
                 amount={summary.balance}
-                icon={Wallet}
                 tone={summary.balance >= 0 ? "balance" : "danger"}
               />
-            </div>
+            </section>
 
             {/* <div className="flex justify-end"> */}
             <Button
@@ -478,8 +487,8 @@ export function CashflowScreen() {
                 columns={cardColumns}
                 data={entries}
                 keyExtractor={(e) => e.id}
-                sortableKeys={["personName", "amount", "createdAt", "reason"]}
-                defaultSortKey="createdAt"
+                sortableKeys={["personName", "amount", "occurredAt", "reason"]}
+                defaultSortKey="occurredAt"
                 emptyIcon={ArrowRightLeft}
                 emptyMessage="Chưa có khoản thu chi nào"
                 emptyDescription='Nhấn "Thêm khoản thu chi" để ghi nhận khoản thu hoặc chi.'
@@ -494,13 +503,13 @@ export function CashflowScreen() {
                 data={entries}
                 keyExtractor={(e) => e.id}
                 sortableKeys={[
-                  "createdAt",
+                  "occurredAt",
                   "type",
                   "personName",
                   "amount",
                   "reason",
                 ]}
-                defaultSortKey="createdAt"
+                defaultSortKey="occurredAt"
                 emptyIcon={ArrowRightLeft}
                 emptyMessage="Chưa có khoản thu chi nào"
                 emptyDescription='Nhấn "Thêm khoản thu chi" để ghi nhận khoản thu hoặc chi.'
@@ -519,6 +528,9 @@ export function CashflowScreen() {
         {dialogOpen && (
           <CashflowFormDialog
             adminName={user?.fullName ?? ""}
+            minDate={monthFrom}
+            maxDate={monthTo}
+            defaultDate={monthTo}
             submitting={submitting}
             onSubmit={handleCreate}
             onClose={() => setDialogOpen(false)}
@@ -530,6 +542,8 @@ export function CashflowScreen() {
           <CashflowFormDialog
             adminName={user?.fullName ?? ""}
             initial={editingEntry}
+            minDate={monthFrom}
+            maxDate={monthTo}
             submitting={submitting}
             onSubmit={handleEdit}
             onClose={() => setEditingEntry(null)}
@@ -575,41 +589,29 @@ function AccessDenied() {
 function StatCard({
   label,
   amount,
-  icon: Icon,
   tone,
 }: {
   label: string;
   amount: number;
-  icon: LucideIcon;
   tone: "income" | "expense" | "balance" | "danger";
 }) {
-  const colorMap = {
-    income:
-      "text-success bg-success-bg text-success bg-success-bg",
-    expense: "text-danger bg-danger-bg text-danger bg-danger-bg",
-    balance: "text-info bg-info-bg text-info bg-info-bg",
-    danger: "text-danger bg-danger-bg text-danger bg-danger-bg",
-  };
+  const valueTone =
+    tone === "income"
+      ? "text-success"
+      : tone === "expense" || tone === "danger"
+        ? "text-danger"
+        : "text-zinc-950 dark:text-white";
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${colorMap[tone]}`}
+    <div className="min-w-0 flex-1 px-3 py-2.5 text-center">
+      <p className="truncate text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        {label}
+      </p>
+      <p
+        className={`mt-0.5 text-sm font-bold tabular-nums sm:text-base ${valueTone}`}
       >
-        <Icon size={20} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
-        <p
-          className={`mt-1 text-lg font-bold tabular-nums ${
-            tone === "danger"
-            ? "text-danger"
-              : "text-zinc-950 dark:text-white"
-          }`}
-        >
-          {money(amount, false)}
-        </p>
-      </div>
+        {money(amount, false)}
+      </p>
     </div>
   );
 }
@@ -621,22 +623,24 @@ function StatCard({
 function CashflowFormDialog({
   adminName,
   initial,
+  minDate,
+  maxDate,
+  defaultDate,
   submitting,
   onSubmit,
   onClose,
 }: {
   adminName: string;
   initial?: CashflowRow;
+  minDate: string;
+  maxDate: string;
+  defaultDate?: string;
   submitting: boolean;
-  onSubmit: (payload: {
-    type: "INCOME" | "EXPENSE";
-    personName: string;
-    amount: number;
-    reason: string;
-  }) => Promise<boolean>;
+  onSubmit: (payload: CashflowFormPayload) => Promise<boolean>;
   onClose: () => void;
 }) {
   const isEdit = !!initial;
+  const fallbackDate = defaultDate ?? toInputDate(new Date());
   const [type, setType] = useState<"INCOME" | "EXPENSE">(
     initial?.type ?? "INCOME",
   );
@@ -644,10 +648,16 @@ function CashflowFormDialog({
     initial ? formatCashInput(initial.amount) : "",
   );
   const [reason, setReason] = useState(initial?.reason ?? "");
+  const [occurredAt, setOccurredAt] = useState(
+    initial ? toInputDate(new Date(initial.occurredAt)) : fallbackDate,
+  );
   const amountRef = useRef<HTMLInputElement>(null);
 
   const canSubmit =
-    cashInputToNumber(amount) > 0 && reason.trim().length > 0 && !submitting;
+    cashInputToNumber(amount) > 0 &&
+    reason.trim().length > 0 &&
+    occurredAt.length > 0 &&
+    !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -656,11 +666,13 @@ function CashflowFormDialog({
       personName: adminName,
       amount: cashInputToNumber(amount),
       reason: reason.trim(),
+      occurredAt,
     });
     if (ok) {
       setType("INCOME");
       setAmount("");
       setReason("");
+      setOccurredAt(fallbackDate);
     }
   };
 
@@ -702,6 +714,22 @@ function CashflowFormDialog({
               Chi
             </button>
           </div>
+        </div>
+
+        {/* Ngày phát sinh */}
+        <div>
+          <Label htmlFor="cf-occurred" required>
+            Ngày phát sinh
+          </Label>
+          <Input
+            id="cf-occurred"
+            type="date"
+            min={minDate}
+            max={maxDate}
+            value={occurredAt}
+            onChange={(e) => setOccurredAt(e.target.value)}
+            className="mt-1.5"
+          />
         </div>
 
         {/* Amount */}
