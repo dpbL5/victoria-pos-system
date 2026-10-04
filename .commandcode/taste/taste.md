@@ -20,12 +20,7 @@ See [api/taste.md](api/taste.md)
 # pricing
 See [pricing/taste.md](pricing/taste.md)
 # finance
-- Money refunded OFF-system (cash handed back to the customer by hand, outside the POS) must NOT generate invoice/payment records: the entity transitions straight to its terminal state (e.g. booking → CANCELLED with no DEP invoice, no negative payment), and the off-book refund is traced ONLY in the audit log with the refunded amount + original payment method (e.g. `details: { depositRefundedExternally: 100000, depositPaymentMethod: 'CASH' }`). The financial ledger records only money that actually flows through the POS; inventing corrective financial documents for hand-handled cash pollutes shift reconciliation and revenue reports. The user's spec: "if yes [refunded], the booking continues to cancel and won't create a dep invoice". Confidence: 0.7
-- Charges that reduce payment (e.g., parking fees, deductions) should be modeled as negative invoice line items — subtract from `subtotal` and `grandTotal` rather than accumulating into the total; guard totals with `Math.max(0, ...)` to prevent negative balances; invoice item `subtotal` and `total` fields should be negative for such deductions. Confidence: 0.75
-- Corrections to records whose originating reporting period (e.g., a closed shift) is already closed must be append-only: create corrective entries (e.g., negative payments, return stock movements) attached to that closed period's existing records and flag them in the audit log (e.g., `closedShiftCorrection`), rather than mutating the closed period's aggregated totals (e.g., `expectedCash`/`actualCash`) or blocking the correction entirely. Confidence: 0.82
-- Negative financial values in UI displays should be shown in red (e.g., `text-red-600`/`text-red-500`) with an explicit '-' prefix (e.g., `-{money(amount)}`) to make the deduction visually clear. Confidence: 0.70
-- When a pending/transient financial record (e.g., a DRAFT invoice for hàng bán kèm) is merged into a settled document, cancel/consume it immediately within the same transaction — deferring cancellation to a later lifecycle event (e.g., full session completion) makes the same amount get re-billed on every partial settlement, causing double-billing (user's example: 3 nước lọc → 3 invoices each charging all 3). Confidence: 0.75
-
+See [finance/taste.md](finance/taste.md)
 # architecture
 See [architecture/taste.md](architecture/taste.md)
 
