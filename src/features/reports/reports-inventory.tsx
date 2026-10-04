@@ -10,7 +10,8 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { AppSkeleton } from '@/components/ui/skeleton'
 import { money } from '@/features/pos/format'
-import { ReportsMonthFilter, currentMonth, isCurrentMonth, monthRange, monthWeeks, shiftMonth } from './reports-month-filter'
+import { ReportsMonthFilter, monthWeeks } from './reports-month-filter'
+import { currentMonth, isCurrentMonth, monthRange, shiftMonth } from '@/lib/shared/month'
 
 interface TopProductRow {
   productId: string

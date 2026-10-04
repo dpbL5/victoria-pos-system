@@ -1,15 +1,10 @@
 'use client'
 
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
+import { MonthNav } from '@/components/ui/month-nav'
 import { toInputDate } from '@/lib/shared/utils'
-
-export interface ReportsMonth {
-  year: number
-  /** 1–12 */
-  month: number
-}
+import type { Month } from '@/lib/shared/month'
 
 /** Một tuần T2–CN giao với tháng đang chọn. */
 export interface ReportsWeek {
@@ -21,37 +16,11 @@ export interface ReportsWeek {
   label: string
 }
 
-/** Tháng hiện tại theo giờ Việt Nam. */
-export function currentMonth(now = new Date()): ReportsMonth {
-  const [year, month] = toInputDate(now).split('-').map(Number)
-  return { year, month }
-}
-
-/** Dịch chuyển tháng (delta âm = lùi, dương = tiến), tự cuộn qua năm. */
-export function shiftMonth({ year, month }: ReportsMonth, delta: number): ReportsMonth {
-  const shifted = new Date(Date.UTC(year, month - 1 + delta, 1))
-  return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() + 1 }
-}
-
-/** Khoảng ngày của tháng, chặn trên ở hôm nay để không kéo dữ liệu tương lai. */
-export function monthRange({ year, month }: ReportsMonth, now = new Date()): { from: string; to: string } {
-  const from = `${year}-${String(month).padStart(2, '0')}-01`
-  const lastDay = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10)
-  const today = toInputDate(now)
-  return { from, to: lastDay > today ? today : lastDay }
-}
-
-/** Tháng đang chọn có phải tháng hiện tại — dùng để chặn nút "tháng sau". */
-export function isCurrentMonth(month: ReportsMonth, now = new Date()): boolean {
-  const current = currentMonth(now)
-  return current.year === month.year && current.month === month.month
-}
-
 /**
  * Các tuần (Thứ Hai → Chủ nhật) giao với tháng đang chọn. Tuần đầu/cuối có thể
  * lấn sang tháng kề. `to` chặn ở hôm nay; tuần hoàn toàn ở tương lai bị bỏ.
  */
-export function monthWeeks({ year, month }: ReportsMonth, now = new Date()): ReportsWeek[] {
+export function monthWeeks({ year, month }: Month, now = new Date()): ReportsWeek[] {
   const today = toInputDate(now)
   const first = new Date(Date.UTC(year, month - 1, 1))
   const last = new Date(Date.UTC(year, month, 0))
@@ -96,9 +65,6 @@ interface ReportsMonthFilterProps {
   onWeekChange: (weekStart: string | null) => void
 }
 
-const NAV_BUTTON_CLASS =
-  'inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white text-zinc-600 ring-1 ring-zinc-200 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:bg-zinc-800'
-
 function chipClass(active: boolean): string {
   return `rounded-lg px-2.5 py-1.5 text-xs font-medium tabular-nums transition-colors ${
     active
@@ -131,25 +97,13 @@ export function ReportsMonthFilter({
 
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            Khoảng thời gian
-          </p>
-          <p className="mt-0.5 text-sm font-semibold text-zinc-950 dark:text-white">
-            {activeLabel}
-            {loading && <span className="ml-2 text-xs font-normal text-zinc-400">Đang tải…</span>}
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button type="button" aria-label="Tháng trước" onClick={onPrev} className={NAV_BUTTON_CLASS}>
-            <ChevronLeft size={18} />
-          </button>
-          <button type="button" aria-label="Tháng sau" onClick={onNext} disabled={!canGoNext} className={NAV_BUTTON_CLASS}>
-            <ChevronRight size={18} />
-          </button>
-        </div>
-      </div>
+      <MonthNav
+        label={activeLabel}
+        loading={loading}
+        onPrev={onPrev}
+        onNext={onNext}
+        canGoNext={canGoNext}
+      />
 
       {weeks.length > 1 && (
         <div className="mt-3 flex flex-wrap items-center gap-1.5">

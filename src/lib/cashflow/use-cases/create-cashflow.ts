@@ -1,5 +1,5 @@
 // ── Use-case: createCashflow — thêm khoản thu/chi ─────
-import { err, ok } from '@/lib/shared/result'
+import { ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
 import { runInTransaction } from '@/lib/infrastructure/db-helpers'
 import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
@@ -27,6 +27,7 @@ export async function createCashflow(
         personName: input.personName,
         amount: Number(cashflow.amount),
         reason: input.reason,
+        occurredAt: input.occurredAt.toISOString(),
         createdAt: cashflow.createdAt.toISOString(),
       },
     })

@@ -8,6 +8,19 @@ export const cashflowWithStaffInclude = {
   staff: { select: { id: true, fullName: true } },
 } satisfies Prisma.CashflowEntryInclude
 
+/** Điều kiện lọc dùng chung cho list + summarize (theo loại và ngày phát sinh). */
+export function buildCashflowWhere(filter?: CashflowListFilter): Prisma.CashflowEntryWhereInput {
+  const where: Prisma.CashflowEntryWhereInput = {}
+  if (filter?.type) where.type = filter.type
+  if (filter?.from || filter?.to) {
+    where.occurredAt = {
+      ...(filter.from ? { gte: filter.from } : {}),
+      ...(filter.to ? { lt: filter.to } : {}),
+    }
+  }
+  return where
+}
+
 export async function listCashflows(
   db: CashflowStore,
   filter: CashflowListFilter
@@ -15,13 +28,13 @@ export async function listCashflows(
   const page = filter.page ?? 1
   const pageSize = filter.pageSize ?? 10
 
-  const where = { type: filter.type }
+  const where = buildCashflowWhere(filter)
 
   const [entries, total] = await Promise.all([
     db.cashflowEntry.findMany({
       where,
       include: cashflowWithStaffInclude,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { occurredAt: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -37,9 +50,7 @@ export async function summarizeCashflows(
 ): Promise<CashflowSummary> {
   const rows = await db.cashflowEntry.groupBy({
     by: ['type'],
-    where: {
-      type: filter?.type,
-    },
+    where: buildCashflowWhere(filter),
     _sum: { amount: true },
   })
 

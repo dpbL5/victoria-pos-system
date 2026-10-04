@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { currentMonth, isCurrentMonth, monthRange, monthWeeks, shiftMonth } from './reports-month-filter'
+import { monthWeeks } from './reports-month-filter'
+import { currentMonth, isCurrentMonth, monthRange, shiftMonth } from '@/lib/shared/month'
 
 // 10:00 ngày 15/03/2026 giờ VN (UTC+7) — mốc test tất định cho mọi hàm theo tháng.
 const NOW = new Date('2026-03-15T03:00:00.000Z')
