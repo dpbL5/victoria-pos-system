@@ -10,8 +10,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { AppSkeleton } from '@/components/ui/skeleton'
 import { money } from '@/features/pos/format'
-import { getVnCalendarRange, toInputDate } from '@/lib/shared/utils'
-import { ReportsPeriodFilter, type ReportsPeriod } from './reports-period-filter'
+import { ReportsMonthFilter, currentMonth, isCurrentMonth, monthRange, monthWeeks, shiftMonth } from './reports-month-filter'
 
 interface TopProductRow {
   productId: string
@@ -28,13 +27,29 @@ interface TopProductsResponse {
 }
 
 export function ReportsInventory() {
-  const [initialDate] = useState(() => toInputDate(new Date()))
-  const [from, setFrom] = useState(initialDate)
-  const [to, setTo] = useState(initialDate)
-  const [period, setPeriod] = useState<ReportsPeriod | null>('today')
+  const [month, setMonth] = useState(currentMonth)
+  const [day, setDay] = useState<string | null>(null)
+  const [weekStart, setWeekStart] = useState<string | null>(null)
   const [items, setItems] = useState<TopProductRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  // Tháng đang chọn + phạm vi hẹp hơn: ngày lẻ hoặc tuần. Ưu tiên ngày > tuần > tháng.
+  const { from: monthFrom, to: monthTo } = monthRange(month)
+  const weeks = monthWeeks(month)
+  const week = weekStart ? weeks.find((item) => item.from === weekStart) ?? null : null
+  const from = day ?? week?.from ?? monthFrom
+  const to = day ?? week?.to ?? monthTo
+
+  // Chọn ngày và chọn tuần loại trừ nhau.
+  const selectDay = (next: string | null) => {
+    setDay(next)
+    if (next) setWeekStart(null)
+  }
+  const selectWeek = (next: string | null) => {
+    setWeekStart(next)
+    if (next) setDay(null)
+  }
 
   const load = useCallback(async (nextFrom: string, nextTo: string) => {
     setLoading(true)
@@ -57,20 +72,8 @@ export function ReportsInventory() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load(initialDate, initialDate)
-  }, [initialDate, load])
-
-  const applyQuickRange = (nextPeriod: ReportsPeriod) => {
-    setPeriod(nextPeriod)
-    const { from: nextFrom, to: nextTo } = getVnCalendarRange(nextPeriod === 'today' ? 'day' : nextPeriod)
-    setFrom(nextFrom)
-    setTo(nextTo)
-    void load(nextFrom, nextTo)
-  }
-
-  const handleView = () => {
     void load(from, to)
-  }
+  }, [from, to, load])
 
   const totalRevenue = items.reduce((sum, item) => sum + item.revenue, 0)
   const totalQuantity = items.reduce((sum, item) => sum + item.quantitySold, 0)
@@ -87,21 +90,20 @@ export function ReportsInventory() {
 
   return (
     <div className="space-y-4">
-      <ReportsPeriodFilter
-        from={from}
-        to={to}
-        period={period}
+      <ReportsMonthFilter
+        year={month.year}
+        month={month.month}
+        minDay={monthFrom}
+        maxDay={monthTo}
+        day={day}
+        weeks={weeks}
+        weekStart={weekStart}
         loading={loading}
-        onPeriodChange={applyQuickRange}
-        onFromChange={(value) => {
-          setPeriod(null)
-          setFrom(value)
-        }}
-        onToChange={(value) => {
-          setPeriod(null)
-          setTo(value)
-        }}
-        onApply={handleView}
+        onPrev={() => { setDay(null); setWeekStart(null); setMonth((current) => shiftMonth(current, -1)) }}
+        onNext={() => { setDay(null); setWeekStart(null); setMonth((current) => shiftMonth(current, 1)) }}
+        canGoNext={!isCurrentMonth(month)}
+        onDayChange={selectDay}
+        onWeekChange={selectWeek}
       />
 
       {error && (
@@ -114,7 +116,7 @@ export function ReportsInventory() {
               variant="white"
               size="sm"
               icon={RefreshCw}
-              onClick={handleView}
+              onClick={() => void load(from, to)}
             >
               Thử lại
             </Button>
@@ -126,8 +128,8 @@ export function ReportsInventory() {
         <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <EmptyState
             icon={PackageOpen}
-            message="Chưa có bán hàng trong khoảng ngày"
-            description="Chọn khoảng ngày khác hoặc kiểm tra các hoá đơn đã thanh toán."
+            message={day ? 'Chưa có bán hàng trong ngày' : weekStart ? 'Chưa có bán hàng trong tuần' : 'Chưa có bán hàng trong tháng'}
+            description={`Chọn ${day ? 'ngày' : weekStart ? 'tuần' : 'tháng'} khác hoặc kiểm tra các hoá đơn đã thanh toán.`}
           />
         </section>
       ) : (
