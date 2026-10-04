@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { requireAuth } from '@/lib/shared/auth'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { isManagerOrAdmin } from '@/lib/shared/roles'
 import { ReportsScreen } from '@/features/reports/reports-screen'
 
 export default async function ReportsPage() {
@@ -11,7 +11,7 @@ export default async function ReportsPage() {
     redirect('/login')
   }
 
-  if (!isAdminOnly(user?.role)) {
+  if (!isManagerOrAdmin(user?.role)) {
     redirect('/sessions')
   }
 

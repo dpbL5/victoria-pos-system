@@ -2,16 +2,16 @@ import { describe, it, expect } from 'vitest'
 import { getVisibleNavItems } from '@/components/layout/bottom-nav'
 
 // ── getVisibleNavItems ────────────────────────────────────
-// Thứ tự khoá theo đúng thứ tự trái → phải đang chạy; bộ tab khoá theo guard
-// thật của từng route (/shifts, /reports, /lessons có guard ở page.tsx).
+// MANAGER/ADMIN: Ca hôm nay · Lịch đặt · Báo cáo · Kho · Thêm.
+// STAFF: Ca hôm nay · Thêm. TEACHER: nav đào tạo riêng.
 
 describe('getVisibleNavItems', () => {
-  it('ADMIN thấy đủ 5 tab, đúng thứ tự trái → phải', () => {
+  it('ADMIN thấy 5 tab, đúng thứ tự trái → phải', () => {
     expect(getVisibleNavItems('ADMIN').map((item) => item.href)).toEqual([
       '/sessions',
-      '/shifts',
+      '/bookings',
       '/reports',
-      '/lessons',
+      '/inventory',
       '/settings',
     ])
   })
@@ -19,17 +19,19 @@ describe('getVisibleNavItems', () => {
   it('ADMIN thấy đúng nhãn của 5 tab', () => {
     expect(getVisibleNavItems('ADMIN').map((item) => item.label)).toEqual([
       'Ca hôm nay',
-      'Ca làm',
+      'Lịch đặt',
       'Báo cáo',
-      'Lịch học',
+      'Kho',
       'Thêm',
     ])
   })
 
-  it('MANAGER không thấy /reports (ADMIN) và /lessons (ADMIN/TEACHER)', () => {
+  it('MANAGER dùng chung bộ tab với ADMIN', () => {
     expect(getVisibleNavItems('MANAGER').map((item) => item.href)).toEqual([
       '/sessions',
-      '/shifts',
+      '/bookings',
+      '/reports',
+      '/inventory',
       '/settings',
     ])
   })

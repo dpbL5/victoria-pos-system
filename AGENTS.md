@@ -59,7 +59,7 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
 - Void invoice must reverse stock for both the PAID invoice's own items AND any merged DRAFT invoices (status CANCELLED, notes `Đã gộp vào hóa đơn {invoiceNo}`). See `docs/architecture.md` ADR-004.
 - A staff shift is required for real POS operations. A shift is a shared counter shift: one open `Shift` can have multiple staff members through `ShiftParticipant`; each money-taking action must still record the acting `staffId`.
 - Do not implement split payment or group bill unless explicitly requested. Current requirement does not need it.
-- Booking no-show expiry: a `BOOKED` booking whose `scheduledAt` is before 00:00 today (VN time) is automatically switched to `CANCELLED` the next time bookings are read — `autoCancelStaleBookings` runs at the start of `GET /api/bookings`, writing audit `BOOKING_CANCELLED` with `details.autoCancelled = true`. Bookings with an unhandled deposit (`depositAmount > depositAppliedAmount + depositRefundedAmount`) are never auto-cancelled; staff must confirm the refund through the normal cancel flow.
+- Booking no-show expiry: a `BOOKED` booking whose `scheduledAt` is before 00:00 today (VN time) is automatically switched to `CANCELLED` the next time bookings are read — `autoCancelStaleBookings` runs at the start of `GET /api/bookings`, writing audit `BOOKING_CANCELLED` with `details.autoCancelled = true`. Bookings with an unhandled deposit (`depositAmount > depositAppliedAmount + depositRefundedAmount`) are never auto-cancelled; staff cancel them manually through the normal cancel flow, which keeps the deposit and records it as revenue via a `DEP` invoice (`setBookingStatus` requires an open shift of the acting staff).
 
 ## Target Domain Model
 
@@ -89,7 +89,7 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
 - Mobile-first staff UI:
   1. The first operational screen is `/sessions` as `Ca hôm nay`.
   2. Keep POS UI in `src/features/pos/`; route pages should stay thin.
-  3. Bottom mobile navigation is role-filtered, ordered left → right: `Ca hôm nay`, `Ca làm` (MANAGER/ADMIN), `Báo cáo` (ADMIN), `Lịch học` (ADMIN/TEACHER), `Thêm`. TEACHER gets its own set (`Lịch học`, `Lớp học`, `Học viên`, `Thêm`). Never show a tab to a role whose route guard rejects it.
+  3. Bottom mobile navigation is role-filtered, ordered left → right: `Ca hôm nay`, `Lịch đặt` (MANAGER/ADMIN), `Báo cáo` (MANAGER/ADMIN), `Kho` (MANAGER/ADMIN), `Thêm`. STAFF sees `Ca hôm nay`, `Thêm`. TEACHER gets its own set (`Lịch học`, `Lớp học`, `Học viên`, `Thêm`). Never show a tab to a role whose route guard rejects it.
   4. Disable check-in/checkout when there is no open shift. The UI flag is `canOperate` (`getBoardAccess` in `src/features/pos/board-access.ts`) and it must mean exactly "the acting staff has their own open shift" — the same condition the backend enforces with `SHIFT_REQUIRED` (`findOpenIdForStaff`). Never render a money control enabled in a state the API rejects.
   5. ADMIN/MANAGER may open `/sessions` without participating in a shift and see the live board (active sessions + today's bookings) in **read-only monitor mode**: the shift strip carries a `Chỉ xem` badge, the money-action row is not rendered, session cards render without pause/checkout buttons (no disabled buttons), and booking rows render without confirm/cancel actions. `Tham gia ca` stays available while a shared shift is open. STAFF without a shift still sees only the open-shift gate.
   6. Member check-in must show membership status and require renewal before session creation when expired.
@@ -151,7 +151,7 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
   4. Show item type breakdown for `PLAY_TIME`, `MEMBERSHIP_FEE`, `PRODUCT`, and `SERVICE`.
   5. Use the UI label `giao dịch` for payment counts because membership fees can be payments without a play session.
   6. CSV export is admin-only.
-  7. The `/reports` screen has two tabs: `Tổng quan` (dashboard overview + revenue trends) and `Kho` (top products sold — `getTopProducts`, quantity sold + revenue + profit from `InvoiceItem.unitCost`). Both are visible to STAFF and ADMIN; STAFF scope filters via `invoice.staffId`.
+  7. The `/reports` screen has two tabs: `Tổng quan` (dashboard overview + revenue trends) and `Kho` (top products sold — `getTopProducts`, quantity sold + revenue + profit from `InvoiceItem.unitCost`). Both are visible to MANAGER and ADMIN; report APIs scope STAFF accounts via `invoice.staffId`; CSV export is admin-only.
 
 - More/settings:
   1. `/settings` should render `MoreScreen`; do not put large client state directly in the route page.

@@ -40,7 +40,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     const status = bookingStatusSchema.safeParse(body)
     if (status.success) {
-      return resultToResponse(await setBookingStatus({ bookingId: id, staffId: auth.userId, status: status.data.status, depositRefunded: status.data.depositRefunded }), mapBookingError)
+      return resultToResponse(await setBookingStatus({ bookingId: id, staffId: auth.userId, status: status.data.status }), mapBookingError)
     }
     const parsed = updateBookingSchema.safeParse(body)
     if (!parsed.success) return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })

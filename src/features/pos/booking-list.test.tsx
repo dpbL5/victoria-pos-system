@@ -7,7 +7,7 @@ import { BookingCards, type BookingItem } from './booking-list'
  *
  * Dữ liệu thật chỉ cho xem một trạng thái (quá giờ + còn cọc), nên ba nhánh còn
  * lại — chưa tới giờ, quá giờ mà hết cọc, và danh sách rỗng — chỉ khoá được ở đây.
- * Quá giờ thì luôn có nút Huỷ; còn cọc thì dialog hỏi "đã hoàn cọc chưa" trước khi huỷ.
+ * Quá giờ thì luôn có nút Huỷ; còn cọc thì dialog xác nhận "giữ cọc & ghi doanh thu" trước khi huỷ.
  *
  * Khuôn hàng bám theo thẻ người đang chơi: cột trái danh tính + meta, cột phải
  * con số (ở thẻ phiên là đồng hồ, ở lịch đặt là tiền cọc) rồi hai nút nhỏ cạnh
@@ -66,12 +66,12 @@ describe('BookingCards — hàng lịch đặt', () => {
     expect(html).not.toContain(CANCEL_BUTTON)
   })
 
-  it('quá giờ mà còn cọc: có nhãn + vẫn render nút Huỷ (dialog hỏi hoàn cọc)', () => {
+  it('quá giờ mà còn cọc: có nhãn + vẫn render nút Huỷ (dialog giữ cọc & ghi doanh thu)', () => {
     const html = render({ scheduledAt: PAST, depositAmount: 100000 })
     expect(html).toContain('Quá giờ hẹn')
     expect(html).toContain('Đã cọc')
     expect(html).toContain('Xác nhận')
-    // Cọc không chặn huỷ nữa — dialog xác nhận "đã hoàn cọc chưa" lo phần đó.
+    // Cọc không chặn huỷ — dialog xác nhận "giữ cọc & ghi doanh thu" lo phần đó.
     expect(html).toContain(CANCEL_BUTTON)
   })
 

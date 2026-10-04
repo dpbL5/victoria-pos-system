@@ -286,7 +286,7 @@ export type CreateThingInput = z.infer<typeof createThingSchema>;
 - **Bảng giá không chọn lúc check-in**: check-in tạo session với `hourlyRate: 0`, `pricingRuleId/snapshot: null`; bảng giá (rule + tiers, từng pricing group) được resolve tại checkout qua `resolveCheckoutPricing` (xem `docs/business-flow-checkin-playing-checkout.md`).
 - Checkout dùng drawer hoá đơn: `PLAY_TIME` + sản phẩm/dịch vụ + phương thức thanh toán. `PRODUCT` tôn trọng tồn kho, không cho chọn vượt tồn.
 - Khối `Lịch đặt trong ngày` chỉ chứa lịch ĐÚNG hôm nay theo giờ VN (`isBookingOnVnDay` trong `booking-list.tsx`) — `GET /api/bookings` trả cả tuần, cả tuần nằm ở `/bookings`. Đừng bỏ bộ lọc này mà không sửa tiêu đề khối.
-- Lịch `BOOKED` quá ngày tự chuyển `CANCELLED` khi `GET /api/bookings` chạy (`autoCancelStaleBookings`, giờ hẹn trước 00:00 hôm nay theo giờ VN, audit `BOOKING_CANCELLED` + `details.autoCancelled`); lịch còn cọc chưa xử lý giữ nguyên cho nhân viên xác nhận hoàn cọc qua luồng huỷ thường.
+- Lịch `BOOKED` quá ngày tự chuyển `CANCELLED` khi `GET /api/bookings` chạy (`autoCancelStaleBookings`, giờ hẹn trước 00:00 hôm nay theo giờ VN, audit `BOOKING_CANCELLED` + `details.autoCancelled`); lịch còn cọc chưa xử lý giữ nguyên để nhân viên tự huỷ: giữ cọc + ghi doanh thu qua hoá đơn `DEP` (cần ca mở của chính nhân viên).
 - Phiên `ACTIVE` sót từ ngày trước phải hiện nhãn ngày trên thẻ (`sessionDayLabel` → `Hôm qua` / `dd/MM/yyyy`, màu `warning`): thẻ chỉ in `HH:mm` thì phiên chưa thu từ hôm kia trông y hệt phiên vừa mở.
 - Đồng hồ realtime dùng chung một interval qua `useNow()` (`src/hooks/use-now.ts`), gọi trong từng thẻ phiên/người chơi. KHÔNG tick ở component màn (`TodayShiftScreen`) — tick ở đó làm cả màn + mọi dialog re-render mỗi giây.
 

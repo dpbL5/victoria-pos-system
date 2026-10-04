@@ -2,6 +2,7 @@ import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
 import { fail, runInTransaction } from '@/lib/infrastructure/db-helpers'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import { repositories } from '@/lib/infrastructure/repositories'
+import { generateInvoiceNo } from '@/lib/invoicing'
 import { err, ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
 import { parseStartOfDay, toInputDate } from '@/lib/shared/utils'
@@ -77,29 +78,72 @@ export async function updateBooking(
 }
 
 export async function setBookingStatus(
-  input: { bookingId: string; staffId: string; status: 'CANCELLED'; depositRefunded?: boolean },
+  input: { bookingId: string; staffId: string; status: 'CANCELLED' },
   deps: Repositories = repositories
 ): Promise<Result<{ id: string; status: 'CANCELLED' }>> {
   const booking = await deps.booking!.findById(input.bookingId)
   if (!booking) return err('BOOKING_NOT_FOUND')
   const depositRemaining = Number(booking.depositAmount) - Number(booking.depositAppliedAmount) - Number(booking.depositRefundedAmount)
-  // Cọc chỉ bỏ qua được khi lịch đã quá giờ hẹn VÀ nhân viên xác nhận đã hoàn
-  // tiền mặt cho khách ngoài hệ thống — không tạo hoá đơn cọc/hoàn cọc.
-  const externalRefund = depositRemaining > 0
-    && new Date(booking.scheduledAt).getTime() < Date.now()
-    && input.depositRefunded === true
-  if (depositRemaining > 0 && !externalRefund) return err('BOOKING_HAS_DEPOSIT')
+  // Lịch còn cọc chỉ huỷ được khi đã quá giờ hẹn: khách không tới thì giữ cọc
+  // và ghi doanh thu qua hoá đơn DEP. Chưa tới giờ vẫn chặn như cũ.
+  if (depositRemaining > 0 && booking.scheduledAt.getTime() >= Date.now()) return err('BOOKING_HAS_DEPOSIT')
   const result = await runInTransaction(async (tx) => {
-    const updated = await tx.booking!.transition(input.bookingId, 'BOOKED', input.status, externalRefund)
+    if (depositRemaining > 0) {
+      const openShift = await tx.shift.findOpenIdForStaff(input.staffId)
+      if (!openShift) fail('SHIFT_REQUIRED')
+      const paidAt = new Date()
+      const depositInvoice = await tx.billing.createPaidInvoice({
+        invoiceNo: generateInvoiceNo('DEP', paidAt),
+        customerId: booking.customerId ?? null,
+        shiftId: openShift.id,
+        staffId: input.staffId,
+        paidAt,
+        notes: `Giữ cọc lịch ${booking.id} — khách không tới`,
+        subtotal: depositRemaining,
+        discountTotal: 0,
+        grandTotal: depositRemaining,
+        lines: [{
+          type: 'DEPOSIT',
+          description: 'Giữ tiền cọc do khách không tới',
+          quantity: 1,
+          unitPrice: depositRemaining,
+          subtotal: depositRemaining,
+          discountAmount: 0,
+          total: depositRemaining,
+          metadata: { bookingId: booking.id, forfeited: true },
+        }],
+      })
+      await tx.billing.createPayment({
+        kind: 'DEPOSIT',
+        invoiceId: depositInvoice.id,
+        sessionId: null,
+        shiftId: openShift.id,
+        staffId: input.staffId,
+        totalHours: 0,
+        subtotal: depositRemaining,
+        discountTotal: 0,
+        grandTotal: depositRemaining,
+        paymentMethod: booking.depositPaymentMethod ?? 'CASH',
+        paidAt,
+        notes: `Giữ cọc lịch ${booking.id} do khách không tới`,
+      })
+      await tx.booking!.setDepositInvoice(booking.id, depositInvoice.id)
+      await tx.audit.append({
+        userId: input.staffId,
+        action: 'BOOKING_DEPOSIT_FORFEIT',
+        entityType: 'Booking',
+        entityId: booking.id,
+        details: { invoiceId: depositInvoice.id, amount: depositRemaining, paymentMethod: booking.depositPaymentMethod },
+      })
+    }
+    const updated = await tx.booking!.transition(input.bookingId, 'BOOKED', input.status, depositRemaining > 0)
     if (!updated.count) fail('BOOKING_NOT_EDITABLE')
     await tx.audit.append({
       userId: input.staffId,
       action: `BOOKING_${input.status}`,
       entityType: 'Booking',
       entityId: input.bookingId,
-      details: externalRefund
-        ? { depositRefundedExternally: depositRemaining, depositPaymentMethod: booking.depositPaymentMethod }
-        : {},
+      details: {},
     })
     return { id: input.bookingId, status: input.status }
   })
@@ -109,7 +153,7 @@ export async function setBookingStatus(
 /**
  * Tự động huỷ lịch quá ngày (no-show): lịch còn BOOKED với giờ hẹn trước 00:00
  * hôm nay (giờ VN) chuyển thành CANCELLED. Lịch còn tiền cọc chưa xử lý giữ
- * nguyên để nhân viên xác nhận hoàn cọc qua luồng huỷ thường.
+ * nguyên để nhân viên tự huỷ (giữ cọc → hoá đơn DEP) qua luồng huỷ thường.
  */
 export async function autoCancelStaleBookings(
   input: { actorId: string; now?: Date },
@@ -150,7 +194,7 @@ export function mapBookingError(error: DomainError): HttpErrorInfo {
     case 'CUSTOMER_NOT_FOUND': return { code: error.code, message: 'Không tìm thấy khách hàng', status: 404 }
     case 'ACTIVE_SESSION_EXISTS': return { code: error.code, message: 'Khách đang có phiên chơi chưa kết thúc', status: 409 }
     case 'MEMBERSHIP_REQUIRED': return { code: error.code, message: 'Hội viên chưa có gói còn hiệu lực. Vui lòng gia hạn trước khi check-in.', status: 409 }
-    case 'SHIFT_REQUIRED': return { code: error.code, message: 'Mở ca trước khi xác nhận khách bắt đầu phiên', status: 409 }
+    case 'SHIFT_REQUIRED': return { code: error.code, message: 'Cần mở ca trước khi thực hiện thao tác', status: 409 }
     case 'CHECK_IN_TIME_INVALID': return { code: error.code, message: 'Thời điểm check-in phải nằm từ lúc mở ca đến hiện tại', status: 400 }
     default: return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
   }
