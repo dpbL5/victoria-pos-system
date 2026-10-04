@@ -37,7 +37,6 @@ export const updateBookingSchema = z.object({
 
 export const bookingStatusSchema = z.object({
   status: z.literal('CANCELLED'),
-  depositRefunded: z.boolean().optional(),
 })
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>

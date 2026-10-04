@@ -4,32 +4,35 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   BarChart3,
-  Clock,
+  CalendarClock,
   GraduationCap,
   MoreHorizontal,
+  Package,
   School,
   Timer,
   Users,
   type LucideIcon,
 } from 'lucide-react'
-import { canAccessTraining, isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
+import { isManagerOrAdmin } from '@/lib/shared/roles'
 
 interface NavItem {
   href: string
   label: string
   Icon: LucideIcon
-  /** Guard thật của route (đọc ở page.tsx tương ứng); thiếu = mọi role mở được */
-  canAccess?: (role: string | undefined) => boolean
 }
 
-// Thứ tự trái → phải: Ca hôm nay · Ca làm · Báo cáo · Lịch học · Thêm.
-// Tab chỉ hiện với role mà guard của route cho mở — /shifts (MANAGER/ADMIN),
-// /reports (ADMIN), /lessons (ADMIN/TEACHER).
-const navItems: NavItem[] = [
+// MANAGER/ADMIN trực quầy: Ca hôm nay · Lịch đặt · Báo cáo · Kho · Thêm.
+const managerNavItems: NavItem[] = [
   { href: '/sessions', label: 'Ca hôm nay', Icon: Timer },
-  { href: '/shifts', label: 'Ca làm', Icon: Clock, canAccess: isManagerOrAdmin },
-  { href: '/reports', label: 'Báo cáo', Icon: BarChart3, canAccess: isAdminOnly },
-  { href: '/lessons', label: 'Lịch học', Icon: GraduationCap, canAccess: canAccessTraining },
+  { href: '/bookings', label: 'Lịch đặt', Icon: CalendarClock },
+  { href: '/reports', label: 'Báo cáo', Icon: BarChart3 },
+  { href: '/inventory', label: 'Kho', Icon: Package },
+  { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
+]
+
+// STAFF chỉ cần bảng ca và tab Thêm.
+const staffNavItems: NavItem[] = [
+  { href: '/sessions', label: 'Ca hôm nay', Icon: Timer },
   { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
 ]
 
@@ -41,10 +44,10 @@ const teacherNavItems: NavItem[] = [
   { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
 ]
 
-/** Tab hiện với một role — chỉ những route mà guard thật sự cho mở */
+/** Tab hiện với một role — mỗi role có bộ route mà guard thật sự cho mở */
 export function getVisibleNavItems(userRole?: string): NavItem[] {
-  const source = userRole === 'TEACHER' ? teacherNavItems : navItems
-  return source.filter((item) => !item.canAccess || item.canAccess(userRole))
+  if (userRole === 'TEACHER') return teacherNavItems
+  return isManagerOrAdmin(userRole) ? managerNavItems : staffNavItems
 }
 
 interface BottomNavProps {

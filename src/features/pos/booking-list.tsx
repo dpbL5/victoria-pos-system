@@ -82,7 +82,7 @@ export function BookingCards({
 }: {
   bookings: BookingItem[]
   onCheckIn?: (booking: BookingItem, startTime: string, playerCount: number) => void
-  onCancel?: (booking: BookingItem, depositRefunded: boolean) => void
+  onCancel?: (booking: BookingItem) => void
   busyId?: string | null
   actionDisabled?: boolean
   shiftOpenedAt?: string | null
@@ -262,15 +262,15 @@ export function BookingCards({
           const name = cancellingBooking.customer?.fullName ?? cancellingBooking.customerName ?? 'khách'
           const left = depositLeftOf(cancellingBooking)
           return left > 0
-            ? `Lịch của ${name} còn ${formatVND(left)} tiền cọc. Đã hoàn cọc cho khách chưa?`
+            ? `Lịch của ${name} còn ${formatVND(left)} tiền cọc. Khách không tới — giữ cọc và ghi doanh thu?`
             : `Lịch của ${name} sẽ được đánh dấu đã hủy.`
         })()}
-      confirmLabel={cancellingBooking && depositLeftOf(cancellingBooking) > 0 ? 'Đã hoàn, hủy lịch' : 'Hủy lịch'}
-        cancelLabel={cancellingBooking && depositLeftOf(cancellingBooking) > 0 ? 'Chưa hoàn' : 'Hủy'}
+      confirmLabel={cancellingBooking && depositLeftOf(cancellingBooking) > 0 ? 'Giữ cọc & hủy' : 'Hủy lịch'}
+        cancelLabel="Đóng"
         submitting={busyId === cancellingBooking?.id}
       onConfirm={() => {
         if (!cancellingBooking || !onCancel) return
-        onCancel(cancellingBooking, depositLeftOf(cancellingBooking) > 0)
+        onCancel(cancellingBooking)
         setCancellingBooking(null)
               }}
     />

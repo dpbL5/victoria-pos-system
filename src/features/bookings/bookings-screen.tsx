@@ -27,6 +27,7 @@ import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
+import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { formatVND, formatVnDate, formatVnDateTime, getVnHour, getVnWeekRange, normalizeSearchText, toInputDate, today } from '@/lib/shared/utils'
 import { CustomerSearch } from '@/features/pos/customer-search'
@@ -126,6 +127,11 @@ export function BookingsScreen() {
   const [depositAmount, setDepositAmount] = useState('0')
   const [depositPaymentMethod, setDepositPaymentMethod] = useState<'CASH' | 'TRANSFER' | 'CARD'>('CASH')
   const [notes, setNotes] = useState('')
+
+  // Huỷ lịch quá giờ còn cọc = giữ cọc + ghi hoá đơn DEP, cần ca mở của chính
+  // nhân viên (backend trả SHIFT_REQUIRED). Không có ca thì khoá nút huỷ cọc lại.
+  const shiftQuery = useApi<{ myShift: { id: string } | null; openShift: unknown }>('/api/shifts?current=true&openOperational=true')
+  const hasOwnShift = !!shiftQuery.data?.success && !!shiftQuery.data.data?.myShift
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -278,10 +284,10 @@ export function BookingsScreen() {
     }
   }
 
-  const cancelBooking = async (booking: BookingRow, depositRefunded = false) => {
+  const cancelBooking = async (booking: BookingRow) => {
     setBusyId(booking.id)
     try {
-      const response = await apiJson(`/api/bookings/${booking.id}`, { ...jsonRequest({ status: 'CANCELLED', ...(depositRefunded ? { depositRefunded: true } : {}) }), method: 'PATCH' })
+      const response = await apiJson(`/api/bookings/${booking.id}`, { ...jsonRequest({ status: 'CANCELLED' }), method: 'PATCH' })
       if (!response.success) throw new Error(response.error || 'Không cập nhật được lịch')
       success('Đã hủy lịch')
       await load()
@@ -294,25 +300,22 @@ export function BookingsScreen() {
     }
   }
 
+  const doCancel = async () => {
+    if (!editing) return
+    if (await cancelBooking(editing)) {
+      setConfirmDepositCancel(false)
+      setFormOpen(false)
+      resetForm()
+    }
+  }
+
   const cancelEditing = async () => {
     if (!editing) return
     if (depositLeftOf(editing) > 0 && isBookingOverdue(editing, now)) {
       setConfirmDepositCancel(true)
       return
     }
-    if (await cancelBooking(editing)) {
-      setFormOpen(false)
-      resetForm()
-    }
-  }
-
-  const confirmCancelWithDeposit = async () => {
-    if (!editing) return
-    if (await cancelBooking(editing, true)) {
-      setConfirmDepositCancel(false)
-      setFormOpen(false)
-      resetForm()
-    }
+    await doCancel()
   }
 
   const startCreate = () => {
@@ -547,7 +550,7 @@ export function BookingsScreen() {
               <Button
                 variant="red"
                 size="lg"
-                disabled={saving || busyId === editing.id || (depositLeftOf(editing) > 0 && !isBookingOverdue(editing, now))}
+                disabled={saving || busyId === editing.id || (depositLeftOf(editing) > 0 && (!isBookingOverdue(editing, now) || !hasOwnShift))}
                 onClick={() => void cancelEditing()}
               >
                 <CircleX size={14} />Hủy lịch
@@ -564,7 +567,7 @@ export function BookingsScreen() {
           <p role="status" className="flex items-start gap-2 rounded-lg border border-warning-border bg-warning-bg px-3 py-2 text-sm leading-relaxed text-warning border-warning-border bg-warning-bg ">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
             {depositLeftOf(editing) > 0
-          ? `Lịch đã quá giờ hẹn và còn ${formatVND(depositLeftOf(editing))} tiền cọc — hủy lịch sẽ cần xác nhận đã hoàn cọc cho khách.`
+          ? `Lịch đã quá giờ hẹn và còn ${formatVND(depositLeftOf(editing))} tiền cọc — hủy lịch sẽ giữ cọc và ghi vào doanh thu.${hasOwnShift ? '' : ' Cần mở ca để giữ cọc.'}`
           : 'Lịch đã quá giờ hẹn và có thể hủy.'}
               </p>
             )}
@@ -600,11 +603,11 @@ export function BookingsScreen() {
         open={confirmDepositCancel && !!editing}
         onClose={() => setConfirmDepositCancel(false)}
         title="Hủy lịch quá giờ hẹn?"
-        description={editing ? `Lịch của ${bookingName(editing)} còn ${formatVND(depositLeftOf(editing))} tiền cọc. Đã hoàn cọc cho khách chưa?` : undefined}
-        confirmLabel="Đã hoàn, hủy lịch"
-        cancelLabel="Chưa hoàn"
+        description={editing ? `Lịch của ${bookingName(editing)} còn ${formatVND(depositLeftOf(editing))} tiền cọc. Khách không tới — giữ cọc và ghi doanh thu?` : undefined}
+        confirmLabel="Giữ cọc & hủy"
+        cancelLabel="Đóng"
         submitting={!!editing && busyId === editing.id}
-        onConfirm={() => void confirmCancelWithDeposit()}
+        onConfirm={() => void doCancel()}
       />
     </div>
   )
