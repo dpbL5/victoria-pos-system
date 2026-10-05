@@ -121,7 +121,7 @@ src/
 │   ├── inventory/              # Mobile-first kho quầy: InventoryScreen, create/stock movement dialogs
 │   ├── memberships/            # Mobile-first hội viên: MemberScreen, register/renew dialogs, CustomerDetailScreen
 │   ├── reports/                # Mobile-first báo cáo: ReportsScreen (2 tab), ReportsOverview, ReportsInventory,
-│   │                           #   ReportsCharts (SVG charts), (ReportsShifts/ReportsShiftDetail — orphaned)
+│   │                           #   ReportsCharts
 │   ├── more/                   # Mobile-first tab Thêm: MoreScreen, shortcuts, preferences, logout
 │   ├── pricing/                # Mobile-first quản trị bảng giá: PricingScreen, rule guards
 │   ├── promotions/             # Mobile-first quản trị khuyến mãi: PromotionScreen

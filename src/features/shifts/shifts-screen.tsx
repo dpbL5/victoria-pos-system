@@ -30,7 +30,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterButton } from '@/components/ui/filter-button'
-import { Input } from '@/components/ui/input'
+import { Input, Label } from '@/components/ui/input'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { AppSkeleton } from '@/components/ui/skeleton'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
@@ -110,6 +110,7 @@ export function ShiftsScreen() {
   })
   const [statusFilter, setStatusFilter] = useState<ShiftStatusFilter>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedDate, setSelectedDate] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -126,10 +127,13 @@ export function ShiftsScreen() {
           page: String(page),
         })
         if (statusFilter !== 'ALL') params.set('status', statusFilter)
+        if (selectedDate) {
+          params.set('from', selectedDate)
+          params.set('to', selectedDate)
+        }
 
-        const shiftData = (await fetch(`/api/shifts?${params.toString()}`).then(
-          (r) => r.json(),
-        )) as DayGroupsResponse
+        const response = await fetch(`/api/shifts?${params.toString()}`)
+        const shiftData = (await response.json()) as DayGroupsResponse
 
         if (!shiftData.success)
           throw new Error(shiftData.error || 'Không tải được ca làm')
@@ -142,7 +146,7 @@ export function ShiftsScreen() {
         setLoading(false)
       }
     },
-    [statusFilter],
+    [statusFilter, selectedDate],
   )
 
   useEffect(() => {
@@ -177,10 +181,11 @@ export function ShiftsScreen() {
       .filter((group) => group.shifts.length > 0)
   }, [searchQuery, dayGroups])
 
-  const hasFilter = statusFilter !== 'ALL' || searchQuery.trim() !== ''
+  const hasFilter = statusFilter !== 'ALL' || searchQuery.trim() !== '' || selectedDate !== ''
   const clearFilters = () => {
     setStatusFilter('ALL')
     setSearchQuery('')
+    setSelectedDate('')
   }
 
   if (loading) return <AppSkeleton />
@@ -251,6 +256,24 @@ export function ShiftsScreen() {
               Đã đóng
             </FilterButton>
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-0 flex-1 sm:max-w-xs">
+            <Label htmlFor="shift-date">Ngày mở ca</Label>
+            <Input
+              id="shift-date"
+              type="date"
+              value={selectedDate}
+              max={todayStr}
+              onChange={(event) => setSelectedDate(event.target.value)}
+            />
+          </div>
+          {selectedDate && (
+            <Button variant="white" size="lg" onClick={() => setSelectedDate('')}>
+              Xoá lọc ngày
+            </Button>
+          )}
         </div>
 
         {visibleGroups.length === 0 ? (

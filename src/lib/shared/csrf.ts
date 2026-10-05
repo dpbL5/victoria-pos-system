@@ -31,7 +31,7 @@ export async function setCSRFCookie(token: string): Promise<void> {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 60 * 8,  // 8 giờ — khớp session
+    maxAge: 60 * 60 * 24 * 7,  // 1 tuần — khớp session
   })
 }
 

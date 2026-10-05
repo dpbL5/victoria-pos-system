@@ -255,7 +255,7 @@ export type CreateThingInput = z.infer<typeof createThingSchema>;
 
 - Client mutation phải dùng `apiJson()` từ `@/lib/api` — tự đọc cookie CSRF và đính `X-CSRF-Token` cho mutation. Với SWR dùng `swrFetcher()` từ `@/lib/swr-fetcher`.
 - Các lỗi DB tạm thời (pool exhausted, connection reset...) được retry tự động qua `src/lib/infrastructure/db-retry.ts`.
-- Session: stateless JWT (HS256) trong httpOnly cookie `qltrungcung_session`; client check auth: `GET /api/auth/me` → nếu `!d.success` thì `router.push("/login")`.
+- Session: stateless JWT (HS256) trong httpOnly cookie `qltrungcung_session`, hết hạn sau 7 ngày kể từ đăng nhập; cookie CSRF có cùng thời hạn. Client check auth: `GET /api/auth/me` → nếu `!d.success` thì `router.push("/login")`.
 
 ### 13. Error Handling
 
@@ -294,6 +294,7 @@ export type CreateThingInput = z.infer<typeof createThingSchema>;
 - `/shifts` là quản lý ca + lịch sử (không thay thế `/sessions`); page chỉ render `ShiftManagementScreen` (trong `src/features/shifts/`).
 - `STAFF` chỉ thấy ca mình mở/tham gia; `ADMIN` xem toàn bộ, lọc theo nhân viên, status `OPEN`/`CLOSED`, ngày mở ca.
 - Danh sách ca hiển thị: nhân viên, mở/đóng, trạng thái, tiền đầu ca, tiền mặt dự kiến, thực đếm, chênh lệch, tổng doanh thu, số `giao dịch`.
+- Tra cứu theo `Ngày mở ca`: chọn một ngày → lọc server bằng `from=to` theo giờ VN, về trang 1; kết hợp với trạng thái và tên/mã ca. Xoá lọc ngày → trở về danh sách mặc định.
 - Chi tiết ca có tab `Đơn hàng` (lấy từ `Invoice.shiftId`): mã hoá đơn, thời điểm thanh toán, khách/phiên, nhân viên, tổng tiền, trạng thái, phương thức, tóm tắt dòng hàng `PLAY_TIME`/`MEMBERSHIP_FEE`/`PRODUCT`/`SERVICE`. UI gọi là `đơn hàng` nhưng KHÔNG tạo thêm `Order` model.
 - Ca đã đóng chỉ xem lịch sử + đối soát — không sửa hoá đơn/thanh toán ca đã đóng.
 
@@ -317,7 +318,7 @@ export type CreateThingInput = z.infer<typeof createThingSchema>;
 - `STAFF` xem số liệu của mình/ca mình; `ADMIN` xem toàn hệ thống + export CSV.
 - Doanh thu lấy từ `Payment`/`InvoiceItem`, không cộng trực tiếp từ `Session.totalAmount`. Hiển thị ca hiện tại nếu có: tiền đầu ca, tiền mặt thu, dự kiến, số giao dịch, đang chơi, đã checkout.
 - Breakdown tách item `PLAY_TIME`/`MEMBERSHIP_FEE`/`PRODUCT`/`SERVICE` và payment `CASH`/`TRANSFER`/`CARD`. Nhãn UI dùng `giao dịch` cho payment count.
-- File `reports-shifts.tsx`/`reports-shift-detail.tsx` còn trên đĩa nhưng **không còn dùng** (orphaned sau khi bỏ tab `Theo ca`) — dữ lại chờ xoá hoặc phục hồi.
+- Các component cũ của tab `Theo ca` đã xoá; quản lý ca nằm ở `/shifts`, giao dịch ca nằm ở `/transactions?shiftId=…`.
 
 **Mobile-first more/settings screen:**
 - `/settings` là tab `Thêm`; page chỉ render `MoreScreen` (trong `src/features/more/`).
