@@ -25,12 +25,7 @@ See [finance/taste.md](finance/taste.md)
 See [architecture/taste.md](architecture/taste.md)
 
 # prisma
-- When spreading parsed Zod schema data into a Prisma `update` or `create` call, explicitly delete nested relation fields (e.g., `delete data.tiers`) that don't exist as columns on the target table — Prisma will reject unknown fields at runtime. Confidence: 0.75
-- When syncing a related collection (e.g., tiers) in a PUT route, only perform delete+recreate when the client explicitly sends the field in the request body (`parsed.data.tiers !== undefined`), not with `?? []` which conflates "not sent" with "sent empty" and silently deletes existing data on unrelated updates. Confidence: 0.75
-- Use Prisma `createMany` for batch inserts of related records (e.g., ShiftTool) instead of individual create calls within a transaction. Confidence: 0.65
-- Apply Prisma schema changes with `npx prisma db push` + `npx prisma generate` — this project does not use Prisma migration files; a stale Prisma client (errors like "Unknown field X" on fields already present in the schema) is fixed by re-running `npx prisma generate`, and `db push` is used to sync schema to the DB. Confidence: 0.78
-- Raw SQL (Prisma `$queryRaw`/`$queryRawUnsafe`) must schema-qualify enum types and tables with the `app.` prefix (e.g., `NULL::app."PromotionDiscountType"`): this project's Postgres (Supabase via PgBouncer transaction pooler, port 6543) resets session state, so `search_path` stays `"$user", public, extensions` and raw queries cannot see the `app` schema — whereas generated Prisma queries work because DATABASE_URL carries `?schema=app`. Confidence: 0.85
-
+See [prisma/taste.md](prisma/taste.md)
 # refactoring
 See [refactoring/taste.md](refactoring/taste.md)
 # workflow

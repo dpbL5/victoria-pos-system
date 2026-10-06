@@ -49,10 +49,14 @@ export async function GET(request: NextRequest) {
 
     const data = customers.map((customer) => {
       const customerMemberships = membershipsByCustomer.get(customer.id) ?? []
-      const currentMembership = customerMemberships.find((membership) =>
+      // Kỳ đã huỷ không còn hiệu lực (void hoá đơn phí hội viên) — loại khỏi mọi tính toán
+      const activeMemberships = customerMemberships.filter(
+        (membership) => membership.status === 'ACTIVE'
+      )
+      const currentMembership = activeMemberships.find((membership) =>
         membership.startsAt <= now && membership.expiresAt > now
       ) ?? null
-      const latestMembership = customerMemberships[0] ?? null
+      const latestMembership = activeMemberships[0] ?? null
 
       return {
         ...customer,

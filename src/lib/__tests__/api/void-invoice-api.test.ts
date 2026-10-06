@@ -9,7 +9,7 @@ const fakeStore = vi.hoisted(() => {
     shiftParticipant: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn(), upsert: vi.fn() },
     membershipPlan: { findUnique: vi.fn(), findMany: vi.fn() },
     customer: { create: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn(), findMany: vi.fn() },
-    membership: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
+    membership: { create: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
     session: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
     sessionPricingGroup: { findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
     invoice: { create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn(), delete: vi.fn() },
@@ -58,6 +58,8 @@ const paidInvoice = {
   notes: null,
   shiftId: 'shift-1',
   sessionId: null,
+  customerId: null,
+  payments: [],
   items: [],
   staff: { fullName: 'Nhân viên A' },
 }

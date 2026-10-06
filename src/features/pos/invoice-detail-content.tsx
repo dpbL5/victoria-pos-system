@@ -136,6 +136,7 @@ export function InvoiceDetailContent({
   onSaved?: () => void
 }) {
   const isCancelled = invoice.status === 'CANCELED' || invoice.status === 'CANCELLED'
+  const hasMembershipFee = invoice.items.some((item) => item.type === 'MEMBERSHIP_FEE')
 
   const parkingFeeTotal = invoice.items
     .filter((item) => item.type === 'SURCHARGE')
@@ -172,7 +173,9 @@ export function InvoiceDetailContent({
         {/* Cancelled banner — replaces the old rotated watermark */}
         {isCancelled && (
         <div className="border-b border-danger-border bg-danger-bg px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-danger border-danger-border bg-danger-bg text-danger">
-            Hoá đơn đã huỷ — tiền và tồn kho đã được hoàn trả
+            {hasMembershipFee
+              ? 'Hoá đơn đã huỷ — kỳ hội viên đã bị loại bỏ hiệu lực'
+              : 'Hoá đơn đã huỷ — tiền và tồn kho đã được hoàn trả'}
           </div>
         )}
 

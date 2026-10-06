@@ -15,8 +15,10 @@
     "seed:admin": "tsx prisma/seed-admin.ts",
     "seed:expired": "tsx prisma/seed-expired-customer.ts",
     "migrate:walkin-customer-name": "tsx prisma/migrate-walkin-customer-name.ts",
+    "migrate:voided-membership-invoices": "tsx prisma/migrate-voided-membership-invoices.ts",
     "migrate:session-players": "tsx prisma/migrate-session-players.ts",
     "migrate:lesson-classes": "tsx prisma/migrate-lesson-classes.ts",
+    "migrate:cashflow-occurred-at": "tsx prisma/migrate-cashflow-occurred-at.ts",
     "check:db": "tsx scripts/check-db.ts"
   },
   "dependencies": {

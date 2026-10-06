@@ -30,6 +30,8 @@ export interface MembershipRepository {
     expiresAt: Date
     status: 'ACTIVE'
   }): Promise<MembershipWithPlan>
+  /** Huỷ hiệu lực kỳ hội viên đang ACTIVE — dùng khi void hoá đơn phí hội viên */
+  cancel(id: string): Promise<{ count: number }>
   /** Lịch sử membership (include customer + plan, orderBy startsAt desc) — GET /api/memberships */
   findManyByCustomer(customerId?: string): Promise<MembershipWithPlan[]>
 }

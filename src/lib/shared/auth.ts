@@ -31,7 +31,7 @@ if (!rawSessionSecret || rawSessionSecret.length < 32) {
 
 const SESSION_SECRET = new TextEncoder().encode(rawSessionSecret);
 const SESSION_NAME = "qltrungcung_session";
-const SESSION_MAX_AGE = 60 * 60 * 8; // 8 giờ
+const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 1 tuần
 
 // ── Create session ─────────────────────────────────────
 export async function createSession(payload: SessionPayload): Promise<string> {
