@@ -350,7 +350,7 @@ export function CustomerDetailScreen({ id }: Props) {
           />
 
           {/* ── Main: lịch sử thanh toán ── */}
-          <div className="lg:col-span-3">
+          <div className="min-w-0 lg:col-span-3">
             <HistorySection history={history} />
           </div>
         </div>
@@ -441,7 +441,7 @@ function ProfileRail({
   membership?: ReactNode
 }) {
   return (
-    <aside className="lg:col-span-2">
+    <aside className="min-w-0 lg:col-span-2">
       <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 md:p-5">
         <div className="flex items-start gap-3">
           <div
