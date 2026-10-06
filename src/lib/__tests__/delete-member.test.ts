@@ -30,7 +30,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       countPaidBySession: vi.fn(async () => 0),
     },
     audit: { append: vi.fn(async () => {}), findMany: vi.fn() },
-    membership: { findLatest: vi.fn(), findActive: vi.fn(), create: vi.fn(), findManyByCustomer: vi.fn() },
+    membership: { findLatest: vi.fn(), findActive: vi.fn(), create: vi.fn(), cancel: vi.fn(), findManyByCustomer: vi.fn() },
     membershipPlan: { findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), countUsage: vi.fn(), delete: vi.fn() },
     customer: {
       findById: vi.fn(),

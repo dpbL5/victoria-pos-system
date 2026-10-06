@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   ArrowLeft,
   Calendar,
@@ -239,11 +240,13 @@ export function CustomerDetailScreen({ id }: Props) {
   }, [customer])
 
   // Trạng thái hội viên từ memberships đã tải (server trả orderBy startsAt desc)
+  // Kỳ CANCELLED (hoá đơn phí bị huỷ) không còn hiệu lực — không tính là còn hạn
   const membershipInfo = useMemo(() => {
     if (!customer || customer.type !== 'MEMBER') return null
     const now = new Date()
-    const current = memberships.find((m) => new Date(m.startsAt) <= now && new Date(m.expiresAt) > now) ?? null
-    const latest = memberships[0] ?? null
+    const activeMemberships = memberships.filter((m) => m.status === 'ACTIVE')
+    const current = activeMemberships.find((m) => new Date(m.startsAt) <= now && new Date(m.expiresAt) > now) ?? null
+    const latest = activeMemberships[0] ?? null
     const status: MemberStatus = current
       ? 'ACTIVE'
       : latest
@@ -684,8 +687,15 @@ function MembershipHistorySection({ memberships }: { memberships: Membership[] }
                 <p className="text-sm font-medium text-zinc-950 dark:text-white">
                   {membership.plan?.name ?? 'Gói hội viên'}
                 </p>
-                <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">
-                  {formatDay(membership.startsAt)}
+                <span className="flex shrink-0 items-center gap-2">
+                  {membership.status === 'CANCELLED' && (
+                    <Badge variant="danger" size="sm">
+                      Đã huỷ
+                    </Badge>
+                  )}
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {formatDay(membership.startsAt)}
+                  </span>
                 </span>
               </div>
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
@@ -833,6 +843,14 @@ function InvoiceHistoryRow({ invoice }: { invoice: CustomerHistoryInvoice }) {
               Ca {formatDay(invoice.shift.openedAt)}
             </p>
           ) : null}
+
+          <Link
+            href={`/invoices/${invoice.id}`}
+            className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-info hover:underline"
+          >
+            Xem chi tiết hoá đơn
+            <ChevronRight size={12} aria-hidden />
+          </Link>
                 </div>
       </details>
     </li>

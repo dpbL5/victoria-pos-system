@@ -18,6 +18,8 @@ function makeInvoice(overrides: Partial<VoidInvoiceTarget> = {}): VoidInvoiceTar
     notes: null,
     shiftId: 'shift-1',
     sessionId: 'session-1',
+    customerId: 'cust-1',
+    membershipIds: [],
     items: [
       {
         id: 'item-1',
@@ -66,6 +68,7 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
       findLatest: vi.fn(async () => null),
       findActive: vi.fn(async () => null),
       create: vi.fn(),
+      cancel: vi.fn(async () => ({ count: 1 })),
       findManyByCustomer: vi.fn(),
     },
     membershipPlan: { findById: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), countUsage: vi.fn(), delete: vi.fn() },
@@ -237,6 +240,7 @@ describe('runVoidInvoice', () => {
       invoiceNo: 'INV-20260807-0001',
       status: 'CANCELLED',
       reversedStockItems: 2,
+      cancelledMemberships: 0,
     })
 
     // reverseStock: 1 lần cho item của hoá đơn PAID
@@ -306,5 +310,57 @@ describe('runVoidInvoice', () => {
     const result = await runVoidInvoice(repos, input)
     expect(result.reversedStockItems).toBe(0)
     expect(repos.billing.reverseStock).not.toHaveBeenCalled()
+  })
+
+  it('huỷ hoá đơn phí hội viên: loại bỏ hiệu lực kỳ + trừ tổng chi + audit', async () => {
+    const repos = makeRepositories({
+      findVoidTarget: vi.fn(async () =>
+        makeInvoice({
+          sessionId: null,
+          grandTotal: 500000,
+          membershipIds: ['mem-1'],
+          items: [
+            { id: 'item-mem', type: 'MEMBERSHIP_FEE', productId: null, stockMovements: [] },
+          ],
+        })
+      ),
+    })
+    const result = await runVoidInvoice(repos, input)
+
+    expect(result.cancelledMemberships).toBe(1)
+    expect(repos.membership.cancel).toHaveBeenCalledWith('mem-1')
+    expect(repos.customer.addSpend).toHaveBeenCalledWith('cust-1', -500000)
+
+    const auditCall = (repos.audit.append as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(auditCall.details).toMatchObject({
+      cancelledMemberships: 1,
+      membershipIds: ['mem-1'],
+    })
+  })
+
+  it('hoá đơn thường không đụng tới kỳ hội viên', async () => {
+    const repos = makeRepositories()
+    await runVoidInvoice(repos, input)
+
+    expect(repos.membership.cancel).not.toHaveBeenCalled()
+    expect(repos.customer.addSpend).not.toHaveBeenCalled()
+  })
+
+  it('rollback khi kỳ hội viên đã bị huỷ trước đó', async () => {
+    const repos = makeRepositories({
+      findVoidTarget: vi.fn(async () =>
+        makeInvoice({
+          membershipIds: ['mem-1'],
+          items: [
+            { id: 'item-mem', type: 'MEMBERSHIP_FEE', productId: null, stockMovements: [] },
+          ],
+        })
+      ),
+    })
+    repos.membership.cancel = vi.fn(async () => ({ count: 0 }))
+
+    await expectVoidError(repos, input, 'MEMBERSHIP_NOT_CANCELLABLE')
+    expect(repos.billing.markInvoiceCancelled).not.toHaveBeenCalled()
+    expect(repos.customer.addSpend).not.toHaveBeenCalled()
   })
 })

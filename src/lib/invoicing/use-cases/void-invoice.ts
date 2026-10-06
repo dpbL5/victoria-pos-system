@@ -15,6 +15,7 @@ export interface VoidInvoiceResult {
   invoiceNo: string
   status: 'CANCELLED'
   reversedStockItems: number
+  cancelledMemberships: number
 }
 
 /**
@@ -22,10 +23,12 @@ export interface VoidInvoiceResult {
  *
  * 1. Hoàn trả tồn kho — tạo StockMovement VOID để đảo ngược các lần SALE
  *    (cả items của hoá đơn PAID lẫn các DRAFT invoice đã merge).
- * 2. Đánh dấu hoá đơn thành CANCELLED.
- * 3. Ghi nhật ký kiểm toán.
+ * 2. Hoá đơn phí hội viên: loại bỏ hiệu lực kỳ hội viên (Membership → CANCELLED)
+ *    và trừ lại phần tổng chi đã cộng khi đăng ký/gia hạn.
+ * 3. Đánh dấu hoá đơn thành CANCELLED.
+ * 4. Ghi nhật ký kiểm toán.
  *
- * Không tạo payment hoàn trả, không hoàn số dư khách hàng.
+ * Không tạo payment hoàn trả, không hoàn tiền mặt.
  * Báo cáo doanh thu tự lọc các payment từ hoá đơn CANCELLED.
  */
 // Không nhận deps: Repositories vì toàn bộ logic nằm trong transaction —
@@ -115,13 +118,25 @@ export async function runVoidInvoice(
     }
   }
 
-  // 2. Đánh dấu hoá đơn là CANCELLED
+  // 2. Hoá đơn phí hội viên: loại bỏ hiệu lực kỳ hội viên + trừ lại tổng chi đã cộng
+  let cancelledMemberships = 0
+  for (const membershipId of invoice.membershipIds) {
+    const cancelled = await tx.membership.cancel(membershipId)
+    if (!cancelled.count) fail('MEMBERSHIP_NOT_CANCELLABLE')
+    cancelledMemberships += 1
+  }
+  if (cancelledMemberships > 0 && invoice.customerId) {
+    // Bù trừ phần đã cộng ở registerMember/renewMembership (addSpend nhận số âm)
+    await tx.customer.addSpend(invoice.customerId, -invoice.grandTotal)
+  }
+
+  // 3. Đánh dấu hoá đơn là CANCELLED
   const notes = invoice.notes
     ? `${invoice.notes}\n\n${note} (${timestamp})`
     : `${note} (${timestamp})`
   await tx.billing.markInvoiceCancelled(invoiceId, notes)
 
-  // 3. Ghi nhật ký hoạt động
+  // 4. Ghi nhật ký hoạt động
   await tx.audit.append({
     userId: staffId,
     action: 'INVOICE_VOID',
@@ -134,13 +149,21 @@ export async function runVoidInvoice(
       grandTotal: invoice.grandTotal,
       reversedStockItems,
       reversedDeposit,
+      cancelledMemberships,
+      membershipIds: invoice.membershipIds,
       reason: reason ?? null,
       shiftId: correctionShiftId,
       actorName,
     },
   })
 
-  return { invoiceId, invoiceNo: invoice.invoiceNo, status: 'CANCELLED', reversedStockItems }
+  return {
+    invoiceId,
+    invoiceNo: invoice.invoiceNo,
+    status: 'CANCELLED',
+    reversedStockItems,
+    cancelledMemberships,
+  }
 }
 
 export function mapVoidInvoiceError(error: DomainError): HttpErrorInfo {
@@ -155,6 +178,8 @@ export function mapVoidInvoiceError(error: DomainError): HttpErrorInfo {
       return { code: 'BOOKING_DEPOSIT_STALE', message: 'Số dư cọc đã thay đổi. Tải lại hóa đơn rồi thử lại.', status: 409 }
     case 'BOOKING_DEPOSIT_REFUND_VOID_UNSUPPORTED':
       return { code: 'BOOKING_DEPOSIT_REFUND_VOID_UNSUPPORTED', message: 'Không thể huỷ hoá đơn sau khi phần cọc dư đã được hoàn', status: 409 }
+    case 'MEMBERSHIP_NOT_CANCELLABLE':
+      return { code: 'MEMBERSHIP_NOT_CANCELLABLE', message: 'Kỳ hội viên không còn hiệu lực hoặc đã bị huỷ trước đó', status: 409 }
     case 'SHIFT_CLOSED':
       return { code: 'SHIFT_CLOSED', message: 'Hoá đơn chưa gán ca thanh toán, không thể ghi nhận hoàn trả.', status: 409 }
     default:

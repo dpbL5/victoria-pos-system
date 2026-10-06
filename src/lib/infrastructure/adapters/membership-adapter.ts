@@ -14,6 +14,12 @@ export function createMembershipRepository(store: MembershipStore): MembershipRe
     async create(data) {
       return store.membership.create({ data, include: { plan: true } })
     },
+    async cancel(id) {
+      return store.membership.updateMany({
+        where: { id, status: 'ACTIVE' },
+        data: { status: 'CANCELLED' },
+      })
+    },
     async findManyByCustomer(customerId) {
       return store.membership.findMany({
         where: customerId ? { customerId } : {},

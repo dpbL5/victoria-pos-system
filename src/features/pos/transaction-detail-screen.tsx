@@ -124,6 +124,8 @@ export function TransactionDetailScreen({ id }: Props) {
     )
   }
 
+  const isMembershipInvoice = invoice.membershipPayments.length > 0
+
   return (
       <div className="min-h-full bg-[var(--color-surface-secondary)] px-4 py-6 dark:bg-black md:px-8 md:py-10">
         <div className="mx-auto max-w-content space-y-6">
@@ -212,9 +214,21 @@ export function TransactionDetailScreen({ id }: Props) {
           setVoidReason('')
         }}
         title="Huỷ hoá đơn"
-        description={invoice ? `Xác nhận huỷ hoá đơn "${invoice.invoiceNo}"? Tiền và tồn kho sẽ được hoàn trả.` : undefined}
+        description={
+          invoice
+            ? isMembershipInvoice
+              ? `Xác nhận huỷ hoá đơn "${invoice.invoiceNo}"? Kỳ hội viên của khách sẽ mất hiệu lực.`
+              : `Xác nhận huỷ hoá đơn "${invoice.invoiceNo}"? Tiền và tồn kho sẽ được hoàn trả.`
+            : undefined
+        }
         body={
           <div className="space-y-2">
+            {isMembershipInvoice && (
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                Hoá đơn phí hội viên: kỳ hội viên tương ứng sẽ bị loại bỏ hiệu lực và tổng chi của
+                khách được trừ lại. Tiền đã thu không được hoàn tự động.
+              </p>
+            )}
             <Label htmlFor="void-reason">Lý do (tùy chọn)</Label>
             <Textarea
               id="void-reason"

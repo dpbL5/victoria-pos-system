@@ -21,6 +21,11 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
           notes: true,
           shiftId: true,
           sessionId: true,
+          customerId: true,
+          payments: {
+            where: { kind: 'MEMBERSHIP' },
+            select: { membershipId: true },
+          },
           items: {
             select: {
               id: true,
@@ -42,9 +47,13 @@ export function createBillingRepository(store: BillingAdapterStore): BillingRepo
         },
       })
       if (!invoice) return null
+      const { payments, ...rest } = invoice
       return {
-        ...invoice,
+        ...rest,
         grandTotal: Number(invoice.grandTotal),
+        membershipIds: payments
+          .map((payment) => payment.membershipId)
+          .filter((id): id is string => id !== null),
         items: invoice.items.map((item) => ({
           ...item,
           total: Number(item.total),

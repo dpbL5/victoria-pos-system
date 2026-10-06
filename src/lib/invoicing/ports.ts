@@ -139,6 +139,9 @@ export interface VoidInvoiceTarget {
   notes: string | null
   shiftId: string | null
   sessionId: string | null
+  customerId: string | null
+  /** Payment kind=MEMBERSHIP gắn hoá đơn — để loại bỏ hiệu lực kỳ hội viên khi void */
+  membershipIds: string[]
   items: VoidInvoiceItemRef[]
   staff: { fullName: string } | null
 }
