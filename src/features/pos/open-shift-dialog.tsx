@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input, Label, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
+import { cashInputToNumber, normalizeCashInput } from '@/lib/shared/cash-input'
 import { formatClock, money } from './format'
 import type { Shift } from './types'
 
@@ -23,6 +24,7 @@ export function OpenShiftDialog({
 }) {
   const [openingCash, setOpeningCash] = useState('0')
   const [notes, setNotes] = useState('')
+  const openingCashRef = useRef<HTMLInputElement>(null)
   const isJoiningExistingShift = !!existingShift
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export function OpenShiftDialog({
       return
     }
 
-    onSubmit(Number(openingCash || 0), notes.trim() || undefined)
+    onSubmit(cashInputToNumber(openingCash), notes.trim() || undefined)
   }
 
   return (
@@ -89,10 +91,20 @@ export function OpenShiftDialog({
               <Label htmlFor="opening-cash">Tiền mặt đầu ca</Label>
               <Input
                 id="opening-cash"
-                type="number"
-                min={0}
+                ref={openingCashRef}
+                type="text"
+                inputMode="numeric"
                 value={openingCash}
-                onChange={(event) => setOpeningCash(event.target.value)}
+                onChange={(event) => {
+                  const next = normalizeCashInput(
+                    event.target.value,
+                    event.target.selectionStart ?? event.target.value.length,
+                  )
+                  setOpeningCash(next.value)
+                  requestAnimationFrame(() =>
+                    openingCashRef.current?.setSelectionRange(next.caret, next.caret),
+                  )
+                }}
               />
             </div>
               <div>
