@@ -239,6 +239,12 @@ export function ToolsScreen() {
       </div>
         </header>
 
+        <div className="md:hidden">
+          <Button variant="contrast" size="md" icon={Plus} fullWidth onClick={openCreate}>
+            Thêm dụng cụ
+          </Button>
+        </div>
+
         {error && (
           <NoticeCard
             tone="danger"
