@@ -29,6 +29,7 @@ const TITLES: Record<string, string> = {
   '/transactions': 'Giao dịch trong ca',
   '/lessons': 'Đào tạo',
   '/students': 'Đào tạo',
+  '/classes': 'Lớp học',
 }
 
 function getTitle(pathname: string): string {
