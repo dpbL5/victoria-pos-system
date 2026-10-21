@@ -87,7 +87,12 @@ export async function openOrJoinShift(
         })
 
         return { shift: newShift, created: true, joined: false }
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+      }, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        // Supabase đi qua mạng; mặc định 5s dễ hết hạn khi DB chậm.
+        timeout: 20_000,
+        maxWait: 10_000,
+      })
 
       if (!result.ok) return result
       const value = result.value
@@ -105,10 +110,12 @@ export async function openOrJoinShift(
     } catch (error) {
       const isRetryable =
         error instanceof Prisma.PrismaClientKnownRequestError
-        && (error.code === 'P2002' || error.code === 'P2034')
+        && (error.code === 'P2002' || error.code === 'P2034' || error.code === 'P2028')
 
       if (!isRetryable || attempt === 1) {
-        return err('SHIFT_OPEN_FAILED', error instanceof Error ? error.message : 'Lỗi không xác định')
+        // Không trả raw message Prisma ra response; stack vẫn vào server log.
+        console.error('openOrJoinShift failed:', error)
+        return err('SHIFT_OPEN_FAILED')
       }
     }
   }
@@ -117,5 +124,5 @@ export async function openOrJoinShift(
 }
 
 export function mapOpenOrJoinShiftError(error: DomainError): HttpErrorInfo {
-  return { code: 'SHIFT_OPEN_FAILED', message: error.detail || 'Không mở được ca', status: 500 }
+  return { code: error.code, message: 'Không mở được ca. Vui lòng thử lại.', status: 500 }
 }

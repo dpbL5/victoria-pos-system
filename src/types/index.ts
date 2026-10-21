@@ -17,6 +17,25 @@ export type StockMovementType = "RESTOCK" | "SALE" | "ADJUSTMENT" | "VOID"
 export type ShiftStatus = "OPEN" | "CLOSED"
 export type ShiftParticipantRole = "LEAD" | "STAFF"
 
+/** Kênh bán: bán lẻ tại quầy vs bán kèm phiên chơi */
+export type StockSaleChannel = "RETAIL" | "SESSION"
+
+export interface StockMovementRow {
+  id: string
+  type: StockMovementType
+  /** Dương = tăng tồn, âm = giảm tồn */
+  quantity: number
+  reason: string | null
+  createdAt: string
+  productId: string
+  productName: string
+  productSku: string | null
+  staffName: string | null
+  invoiceNo: string | null
+  /** Chỉ có với type = SALE */
+  channel: StockSaleChannel | null
+}
+
 export interface PromotionRule {
   id: string
   name: string
@@ -67,6 +86,20 @@ export interface PlayTimeQuote {
     total: number
     pricingRuleName?: string
   }>
+  /** Chuỗi số của phiếu thu — do checkout-quote tính, xem calculateReceipt */
+  charges?: number
+  total?: number
+  depositApplied?: number
+  payable?: number
+  /** Dòng hàng không đủ tồn — preview dùng để cảnh báo trước khi thu */
+  stockIssues?: PlayTimeStockIssue[]
+}
+
+export interface PlayTimeStockIssue {
+  productId: string
+  productName: string
+  requested: number
+  available: number
 }
 
 export interface PendingSellItem {

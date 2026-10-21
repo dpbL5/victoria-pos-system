@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Clock,
   GraduationCap,
+  History,
   Package,
   School,
   Settings,
@@ -70,6 +71,12 @@ export const menuGroups: MenuGroup[] = [
     label: "Kho",
     items: [
       { href: "/inventory", label: "Kho", Icon: Package, staffHidden: true },
+      {
+        href: "/inventory/movements",
+        label: "Lịch sử kho",
+        Icon: History,
+        staffHidden: true,
+      },
       { href: "/tools", label: "Dụng cụ", Icon: BowArrow, adminOnly: true },
     ],
   },
@@ -128,11 +135,22 @@ export function Sidebar({ collapsed, onToggle, userRole }: SidebarProps) {
   const groups = getVisibleMenuGroups(userRole);
 
   const isActive = useCallback(
-    (href: string) =>
-      href === "/sessions"
-        ? pathname === "/sessions" || pathname === "/"
-        : pathname.startsWith(href),
-    [pathname],
+    (href: string) => {
+      if (href === "/sessions")
+        return pathname === "/sessions" || pathname === "/";
+      if (!pathname.startsWith(href)) return false;
+      // Mục cha không sáng khi đang ở trang con — /inventory/movements sáng
+      // "Lịch sử kho", không sáng đồng thời "Kho".
+      return !groups.some((group) =>
+        group.items.some(
+          (item) =>
+            item.href !== href &&
+            item.href.length > href.length &&
+            pathname.startsWith(item.href),
+        ),
+      );
+    },
+    [pathname, groups],
   );
 
   return (

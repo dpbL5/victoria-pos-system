@@ -11,15 +11,29 @@ export { pausePlayer, resumePlayer, mapPausePlayerError, mapResumePlayerError } 
 export { renamePlayer, mapRenamePlayerError } from './use-cases/rename-player'
 export { createProduct, mapCreateProductError, applyStockMovement, mapApplyStockMovementError, deleteProduct, mapDeleteProductError } from './use-cases/product-crud'
 export {
-  calculateSessionPrice,
-  calculateSessionPriceFromLoaded,
   calculatePlayerPrice,
-  type PricingResult,
-  type PricingEngineDeps,
-  type PendingGroupPricing,
   type PlayerPricingParams,
   type PlayerPricingResult,
 } from './pricing-engine'
+export { quoteCheckout } from './checkout-quote'
+export type {
+  CheckoutQuoteDeps,
+  CheckoutQuoteResult,
+  CheckoutQuotePersistence,
+} from './checkout-quote'
+export {
+  calculateReceipt,
+  pricePlayers,
+  type CheckoutSelection,
+  type CheckoutQuoteOptions,
+  type PricedPlayerRow,
+  type PricedPlayersResult,
+  type QuoteSession,
+  type QuoteGroup,
+  type QuotePlayer,
+  type Receipt,
+  type ReceiptInput,
+} from './checkout-quote-core'
 export type {
   CheckInInput,
   CheckInResult,
@@ -76,7 +90,6 @@ export type {
   SessionWithCustomer,
   SessionRefs,
   SessionListRow,
-  SessionPreviewRow,
   SessionListFilter,
   SessionSellItemRecord,
   CreateSessionData,

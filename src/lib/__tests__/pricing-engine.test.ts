@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { calculatePlayerPrice, calculateSessionPriceFromLoaded } from '@/lib/sessions'
-import type { SessionWithDetails } from '@/lib/sessions'
+import { calculatePlayerPrice } from '@/lib/sessions'
+import { quoteCheckout } from '@/lib/sessions/checkout-quote'
+import type { CheckoutQuoteDeps } from '@/lib/sessions/checkout-quote'
+import type { QuoteSession } from '@/lib/sessions/checkout-quote-core'
 
 // ── calculatePlayerPrice — tiền giờ chơi per-player (played time = elapsed − pause) ──
 
@@ -115,76 +117,93 @@ describe('calculatePlayerPrice', () => {
   })
 })
 
-// ── calculateSessionPriceFromLoaded — snapshot-first, member = 0đ, không fallback giá ──
+// ── quoteCheckout — base pricing: snapshot-first, member = 0đ, không fallback giá ──
 
-describe('calculateSessionPriceFromLoaded', () => {
+describe('quoteCheckout — base pricing', () => {
   const endTime = new Date('2026-08-07T12:00:00Z')
+  const startTime = new Date('2026-08-07T10:00:00Z')
 
-  function makeDeps(overrides: Partial<Parameters<typeof calculateSessionPriceFromLoaded>[0]> = {}) {
+  function makeDeps(): CheckoutQuoteDeps {
     return {
-      session: { findByIdForCheckout: vi.fn() },
+      session: { findSellItems: vi.fn(async () => []) },
+      pricing: {
+        findManyByIdsWithTiers: vi.fn(async () => []),
+        findApplicableRule: vi.fn(async () => null),
+      },
+      promotions: { findAvailableById: vi.fn(async () => null) },
       membership: { findActive: vi.fn(async () => null) },
-      pricing: { findApplicableRule: vi.fn(async () => null) },
+      settings: { getNumeric: vi.fn(async () => 0) },
+      product: { findManyByIds: vi.fn(async () => []) },
+    } as CheckoutQuoteDeps
+  }
+
+  function makeSession(overrides: Partial<QuoteSession> = {}): QuoteSession {
+    return {
+      id: 'session-1',
+      customerId: null,
+      startTime,
+      playerCount: 1,
+      pausedAt: null,
+      totalPausedSeconds: 0,
+      hourlyRate: 50_000,
+      pricingRuleSnapshot: null,
+      customer: { type: 'WALK_IN' },
+      membership: null,
+      booking: null,
+      pricingGroups: [],
       ...overrides,
     }
   }
 
-  function makeSession(overrides: Record<string, unknown> = {}): SessionWithDetails {
-    return {
-      id: 'session-1',
-      customerId: null,
-      customerName: null,
-      customer: { id: 'cust-1', fullName: 'Khách A', type: 'WALK_IN' },
-      membership: null,
-      startTime: new Date('2026-08-07T10:00:00Z'),
-      hourlyRate: 50000,
-      pricingGroups: [],
-      ...overrides,
-    } as unknown as SessionWithDetails
+  function run(session: QuoteSession) {
+    return quoteCheckout(makeDeps(), session, { mode: 'all' }, { endTime, quoteAt: endTime })
   }
 
   it('hội viên còn hạn → isMemberSession true, tiền giờ 0đ', async () => {
-    const session = makeSession({
-      customer: { id: 'cust-1', fullName: 'Khách A', type: 'MEMBER' },
-      membership: { id: 'mem-1', expiresAt: new Date('2026-08-20T00:00:00Z') },
-    })
-    const result = await calculateSessionPriceFromLoaded(makeDeps(), session, endTime)
+    const result = await run(
+      makeSession({
+        customer: { type: 'MEMBER' },
+        membership: { expiresAt: new Date('2026-08-20T00:00:00Z') },
+      })
+    )
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.value.isMemberSession).toBe(true)
-    expect(result.value.grandTotal).toBe(0)
-    expect(result.value.subtotal).toBe(0)
+    expect(result.value.quote.isMemberSession).toBe(true)
+    expect(result.value.quote.grandTotal).toBe(0)
+    expect(result.value.quote.subtotal).toBe(0)
   })
 
-  it('hội viên hết hạn tại thời điểm thu tiền → membershipExpired true', async () => {
-    const session = makeSession({
-      customer: { id: 'cust-1', fullName: 'Khách A', type: 'MEMBER' },
-      membership: { id: 'mem-1', expiresAt: new Date('2026-08-01T00:00:00Z') },
-    })
-    const result = await calculateSessionPriceFromLoaded(makeDeps(), session, endTime)
+  it('hội viên hết hạn tại thời điểm thu tiền → MEMBERSHIP_EXPIRED_DURING_CHECKOUT', async () => {
+    const result = await run(
+      makeSession({
+        customer: { type: 'MEMBER' },
+        membership: { expiresAt: new Date('2026-08-01T00:00:00Z') },
+      })
+    )
 
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.value.membershipExpired).toBe(true)
-    expect(result.value.isMemberSession).toBe(false)
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.code).toBe('MEMBERSHIP_EXPIRED_DURING_CHECKOUT')
+    }
   })
 
-  it('khách vãng lai, session chưa snapshot + không có rule → PRICING_RULE_NOT_FOUND (không fallback giá mặc định)', async () => {
-    const session = makeSession({ hourlyRate: 0 })
-    const result = await calculateSessionPriceFromLoaded(makeDeps(), session, endTime)
+  it('khách vãng lai, session chưa snapshot + không có rule → PRICING_RULE_NOT_FOUND', async () => {
+    const result = await run(makeSession({ hourlyRate: 0 }))
 
-    expect(result).toEqual({ ok: false, error: { code: 'PRICING_RULE_NOT_FOUND' } })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.code).toBe('PRICING_RULE_NOT_FOUND')
+    }
   })
 
   it('khách vãng lai, session có hourlyRate > 0 (legacy) → tính theo rate đó', async () => {
-    const session = makeSession({ hourlyRate: 100000 })
-    const result = await calculateSessionPriceFromLoaded(makeDeps(), session, endTime)
+    const result = await run(makeSession({ hourlyRate: 100_000 }))
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
     // 2h × 100k = 200k
-    expect(result.value.totalHours).toBe(2)
-    expect(result.value.grandTotal).toBe(200000)
+    expect(result.value.quote.totalHours).toBe(2)
+    expect(result.value.quote.grandTotal).toBe(200_000)
   })
 })

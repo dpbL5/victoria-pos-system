@@ -38,6 +38,7 @@ interface MemberCustomer extends Customer {
   currentMembership?: Membership | null
   latestMembership?: Membership | null
   membershipStatus: MemberStatus
+  expiresAt?: string
 }
 
 export function MemberScreen() {
@@ -61,7 +62,15 @@ export function MemberScreen() {
     return registerRefresh(() => void mutate())
   }, [registerRefresh, mutate])
 
-  const members: MemberCustomer[] = memberData?.data ?? []
+  const members: MemberCustomer[] = useMemo(
+    () => (memberData?.data ?? []).map((member) => ({
+      ...member,
+      expiresAt: member.currentMembership?.expiresAt
+        ?? member.latestMembership?.expiresAt
+        ?? '9999-12-31',
+    })),
+    [memberData]
+  )
   const plans: MembershipPlan[] = (planData?.data ?? []).filter((plan: MembershipPlan) => plan.isActive)
   const shift = shiftData?.data ?? null
   const error = !memberData?.success ? (memberData?.error as string ?? '') : ''
@@ -114,12 +123,10 @@ export function MemberScreen() {
       label: 'Tên hội viên',
       cellClassName: 'px-4 py-3 font-medium',
       render: (item) => (
-      <Link href={`/customers/${item.id}`} className="text-left hover:text-info">
-          <div className="flex items-center gap-2">
-            <span className={memberNameColor(item.membershipStatus)}>{item.fullName}</span>
+        <div className="flex items-center gap-2">
+          <span className={memberNameColor(item.membershipStatus)}>{item.fullName}</span>
           <StatusBadge status={item.membershipStatus} />
         </div>
-        </Link>
       ),
     },
     {
@@ -129,7 +136,7 @@ export function MemberScreen() {
       render: (item) => item.phone || '—',
     },
     {
-      key: 'membershipStatus',
+      key: 'expiresAt',
       label: 'Hạn',
       cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
       render: (item) => renderMembershipStatus(item),
@@ -146,10 +153,10 @@ export function MemberScreen() {
       key: 'fullName',
       label: 'Tên hội viên',
       render: (item) => (
-        <Link href={`/customers/${item.id}`} className={`flex items-center gap-2 text-base font-semibold ${memberNameColor(item.membershipStatus)}`}>
+        <div className={`flex items-center gap-2 text-base font-semibold ${memberNameColor(item.membershipStatus)}`}>
           {item.fullName}
-            <StatusBadge status={item.membershipStatus} />
-        </Link>
+          <StatusBadge status={item.membershipStatus} />
+        </div>
       ),
     },
     {
@@ -158,7 +165,7 @@ export function MemberScreen() {
       render: (item) => item.phone || '—',
     },
     {
-      key: 'membershipStatus',
+      key: 'expiresAt',
       label: 'Hạn',
       render: (item) => renderMembershipStatus(item),
     },
@@ -271,8 +278,9 @@ export function MemberScreen() {
               placeholder: 'Tìm tên hoặc số điện thoại',
               getText: (m) => `${m.fullName} ${m.phone ?? ''}`,
             }}
-            sortableKeys={['fullName', 'phone', 'membershipStatus']}
-            defaultSortKey="fullName"
+            sortableKeys={['fullName', 'phone', 'expiresAt']}
+            defaultSortKey="expiresAt"
+            defaultSortDir="asc"
             emptyIcon={Users}
             emptyMessage="Không có hội viên"
             emptyDescription="Thử đổi bộ lọc hoặc đăng ký hội viên mới."
@@ -290,8 +298,9 @@ export function MemberScreen() {
               placeholder: 'Tìm tên hoặc số điện thoại',
               getText: (m) => `${m.fullName} ${m.phone ?? ''}`,
             }}
-            sortableKeys={['fullName', 'phone', 'membershipStatus']}
-            defaultSortKey="fullName"
+            sortableKeys={['fullName', 'phone', 'expiresAt']}
+            defaultSortKey="expiresAt"
+            defaultSortDir="asc"
             emptyIcon={Users}
             emptyMessage="Không có hội viên"
             emptyDescription="Thử đổi bộ lọc hoặc đăng ký hội viên mới."

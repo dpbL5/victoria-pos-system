@@ -81,7 +81,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
     promotions: { findAvailable: vi.fn(), findAvailableById: vi.fn(), findOverlapping: vi.fn(), findMany: vi.fn(), findById: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     settings: { get: vi.fn(), getNumeric: vi.fn(), upsert: vi.fn(), getWithLabel: vi.fn(), findAll: vi.fn() },
     session: {
-      findByIdForCheckout: vi.fn(), findByIdWithCustomer: vi.fn(), findActiveByCustomer: vi.fn(), findMany: vi.fn(), findByIdForPreview: vi.fn(), findSellItemTotals: vi.fn(async () => ({})), findSellItems: vi.fn(async () => []), addSellItem: vi.fn(async () => {}), updateSellItemQuantity: vi.fn(async () => {}), removeSellItems: vi.fn(async () => {}), clearSellItems: vi.fn(async () => {}),
+      findByIdForCheckout: vi.fn(), findByIdWithCustomer: vi.fn(), findActiveByCustomer: vi.fn(), findMany: vi.fn(), findPlayDaysByCustomer: vi.fn(async () => []), findSellItemTotals: vi.fn(async () => ({})), findSellItems: vi.fn(async () => []), addSellItem: vi.fn(async () => {}), updateSellItemQuantity: vi.fn(async () => {}), removeSellItems: vi.fn(async () => {}), clearSellItems: vi.fn(async () => {}),
       countCreatedBetween: vi.fn(), createWithRefs: vi.fn(), createPricingGroup: vi.fn(), createPlayersForGroup: vi.fn(), updatePricingGroup: vi.fn(), update: vi.fn(),
       decrementGroupRemaining: vi.fn(), sumRemainingPlayers: vi.fn(), findByIdWithPlayers: vi.fn(), findPlayersForPause: vi.fn(), pausePlayer: vi.fn(), resumePlayer: vi.fn(), pausePlayersForSession: vi.fn(), resumePlayersForSession: vi.fn(),
       renamePlayer: vi.fn(), movePlayersToGroup: vi.fn(), markPlayersCheckedOut: vi.fn(),
@@ -93,7 +93,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findByIdForSale: vi.fn(async (): Promise<ProductRecord | null> => ({ id: 'prod-2', name: 'Trà sữa', type: 'PRODUCT', price: 25000, stockQuantity: 10, isActive: true })),
       decrementStockIfAvailable: vi.fn(async () => ({ count: 1 })),
       recordSaleMovement: vi.fn(async () => {}),
-      findManyForAdmin: vi.fn(), findByIdAdmin: vi.fn(), createWithInitialStock: vi.fn(), applyStockMovement: vi.fn(),
+      findManyForAdmin: vi.fn(), findByIdAdmin: vi.fn(), createWithInitialStock: vi.fn(), applyStockMovement: vi.fn(), findStockMovements: vi.fn(async () => []),
       deactivate: vi.fn(),
       delete: vi.fn(),
       countUsage: vi.fn(),

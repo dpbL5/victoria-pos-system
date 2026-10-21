@@ -19,12 +19,16 @@ export async function GET(
       )
     }
 
-    const invoices = await repositories.billing.findInvoicesByCustomer(id)
+    const [invoices, playDays] = await Promise.all([
+      repositories.billing.findInvoicesByCustomer(id),
+      repositories.session.findPlayDaysByCustomer(id),
+    ])
 
     return NextResponse.json({
       success: true,
       data: {
         invoices,
+        playDays,
         totalSpent: customer.totalSpent,
         totalHoursPlayed: customer.totalHoursPlayed,
       },

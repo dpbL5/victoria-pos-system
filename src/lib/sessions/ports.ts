@@ -1,6 +1,6 @@
 // ── Ports — repository interfaces cho domain sessions ─────
 import type { Prisma } from '@/generated/prisma/client'
-import type { PricingRuleSnapshot } from '@/types'
+import type { PricingRuleSnapshot, StockMovementRow, StockMovementType } from '@/types'
 
 export type SessionWithDetails = Prisma.SessionGetPayload<{
   include: {
@@ -116,30 +116,11 @@ export interface SessionListFilter {
   take: number
 }
 
-/** Preview checkout — session + pricingGroups (cho tính giá) */
-export type SessionPreviewRow = Prisma.SessionGetPayload<{
-  select: {
-    id: true
-    status: true
-    playerCount: true
-    pricingGroups: {
-      select: {
-        id: true
-        label: true
-        playerCount: true
-        remainingCount: true
-        hourlyRate: true
-        pricingRuleId: true
-        pricingSnapshot: true
-        players: {
-          select: { id: true, name: true, pausedAt: true, totalPausedSeconds: true, checkedOutAt: true }
-          orderBy: { createdAt: 'asc' }
-        }
-      }
-      orderBy: { createdAt: 'asc' }
-    }
-  }
-}>
+export interface CustomerPlayDay {
+  /** Ngày theo giờ Việt Nam, dạng YYYY-MM-DD */
+  day: string
+  hours: number
+}
 
 /** Dòng bán kèm tạm trên phiên — chưa phải hóa đơn; checkout gộp vào invoice INV */
 export type SessionSellItemRecord = {
@@ -161,8 +142,8 @@ export interface SessionRepository {
   findActiveByCustomer(customerId: string): Promise<{ id: string } | null>
   /** Danh sách phiên (filter + phân trang) — GET /api/sessions */
   findMany(input: SessionListFilter): Promise<{ rows: SessionListRow[]; total: number }>
-  /** Session + pricingGroups — cho checkout-preview */
-  findByIdForPreview(id: string): Promise<SessionPreviewRow | null>
+  /** Toàn bộ giờ chơi gộp theo ngày Việt Nam — lịch hoạt động theo năm ở trang chi tiết hội viên */
+  findPlayDaysByCustomer(customerId: string): Promise<CustomerPlayDay[]>
   /** Tổng grandTotal của các dòng bán kèm chờ thu theo từng session — enrich pendingSellTotal */
   findSellItemTotals(sessionIds: string[]): Promise<Record<string, number>>
   /** Đếm session tạo trong khoảng thời gian (đặt tên khách vãng lai `Khách #NNN`) */
@@ -216,37 +197,12 @@ export interface SessionRepository {
   clearSellItems(sessionId: string): Promise<void>
 }
 
-/** Pause giây đã tích lũy của 1 player tại thời điểm now (gồm cả đang tạm dừng) */
-export function playerPausedSeconds(
-  player: { pausedAt: Date | string | null; totalPausedSeconds: number },
-  now: Date
-): number {
-  let seconds = player.totalPausedSeconds
-  if (player.pausedAt) {
-    seconds += Math.round(Math.max(0, (now.getTime() - new Date(player.pausedAt).getTime()) / 1000))
-  }
-  return seconds
-}
-
-/** Pause giây của 1 group = tổng các player + phần đang tạm dừng */
-export function groupPausedSeconds(
-  group: { players: Array<{ pausedAt: Date | string | null; totalPausedSeconds: number }> },
-  now: Date
-): number {
-  return group.players.reduce((sum, player) => sum + playerPausedSeconds(player, now), 0)
-}
-
-/** Pause giây session-level tại thời điểm now (fallback cho phiên cũ pause toàn phiên) */
-export function sessionPauseSeconds(
-  session: { pausedAt: Date | string | null; totalPausedSeconds: number },
-  now: Date
-): number {
-  let seconds = session.totalPausedSeconds
-  if (session.pausedAt) {
-    seconds += Math.round(Math.max(0, (now.getTime() - new Date(session.pausedAt).getTime()) / 1000))
-  }
-  return seconds
-}
+// Pause helpers sống ở leaf module client-safe; re-export để import cũ không đổi.
+export {
+  playerPausedSeconds,
+  groupPausedSeconds,
+  sessionPauseSeconds,
+} from './session-pause'
 
 export interface CreateSessionData {
   customerId: string | null
@@ -354,6 +310,8 @@ export interface ProductRepository {
     reason: string | null
     shiftId: string | null
    }): Promise<{ movementId: string; before: number; after: number; shiftId: string | null; type: string; quantity: number }>
+  /** Lịch sử biến động kho (mới nhất trước) — GET /api/stock-movements */
+  findStockMovements(input: { type?: StockMovementType; productId?: string; take?: number }): Promise<StockMovementRow[]>
   /** Đánh dấu ngưng bán: set isActive=false — dùng khi hàng đã có giao dịch liên quan */
   deactivate(id: string): Promise<void>
   /** Xoá cứng product — chỉ dùng khi chưa có giao dịch liên quan */
