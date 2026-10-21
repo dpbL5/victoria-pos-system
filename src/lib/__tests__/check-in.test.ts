@@ -77,7 +77,6 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findByIdWithCustomer: vi.fn(),
       findActiveByCustomer: vi.fn(),
       findMany: vi.fn(),
-      findByIdForPreview: vi.fn(),
       findSellItemTotals: vi.fn(async () => ({})),
       findSellItems: vi.fn(async () => []),
       addSellItem: vi.fn(async () => {}),

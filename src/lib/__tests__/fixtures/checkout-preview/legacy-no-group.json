@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "data": {
+    "sessionId": "session-1",
+    "totalHours": 4,
+    "hourlyRate": 100000,
+    "subtotal": 400000,
+    "discountAmount": 0,
+    "grandTotal": 400000,
+    "isMemberSession": false,
+    "promotion": null,
+    "pendingSellTotal": 0,
+    "pendingSellItems": [],
+    "playerCount": 2,
+    "pausedSeconds": 0,
+    "pricingGroups": [],
+    "parkingFeeUnitPrice": 5000
+  }
+}

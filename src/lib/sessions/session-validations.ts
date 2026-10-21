@@ -1,5 +1,6 @@
 // ── Session validation schemas ─────────────────────────
 import { z } from "zod";
+import type { CheckoutSelection } from './checkout-quote-core';
 
 export const createSessionSchema = z.object({
   customerId: z.string().uuid("ID khách hàng không hợp lệ").optional(),
@@ -62,6 +63,53 @@ export const checkoutSessionSchema = z.object({
     })
   }
 });
+
+/**
+ * Chỉ phần "thu ai / thu nhóm nào" của checkout — dùng chung cho preview (GET)
+ * và checkout (POST). Một chỗ quyết định mode, không để hai route tự suy lại.
+ */
+export const checkoutSelectionSchema = z.object({
+  groups: z.array(checkoutPricingGroupSchema).min(1).optional(),
+  playerIds: z.array(z.string().uuid("ID người chơi không hợp lệ")).min(1, "Chọn ít nhất 1 người chơi").optional(),
+  groupPricingRuleIds: z
+    .record(z.string(), z.string().uuid("ID bảng giá không hợp lệ"))
+    .optional(),
+  pricingGroupId: z.string().uuid("ID nhóm giá không hợp lệ").optional(),
+  playerCount: z.number().int().min(1, "Số người checkout tối thiểu là 1").optional(),
+}).superRefine((data, ctx) => {
+  const chosen = [data.playerIds, data.groups, data.pricingGroupId].filter(v => v !== undefined).length
+  if (chosen > 1) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['playerIds'],
+      message: 'Chỉ chọn 1 cách thu: theo người chơi, theo nhóm giá, hoặc theo số lượng',
+    })
+  }
+});
+
+export type CheckoutSelectionInput = z.infer<typeof checkoutSelectionSchema>;
+
+export function toCheckoutSelection(input: CheckoutSelectionInput): CheckoutSelection {
+  if (input.groups) return { mode: 'freshGroups', groups: input.groups };
+  if (input.playerIds) {
+    return {
+      mode: 'playerSlice',
+      playerIds: input.playerIds,
+      groupPricingRuleIds: input.groupPricingRuleIds,
+    };
+  }
+  if (input.pricingGroupId) {
+    return {
+      mode: 'groupSlice',
+      pricingGroupId: input.pricingGroupId,
+      playerCount: input.playerCount,
+    };
+  }
+  if (input.playerCount !== undefined) {
+    return { mode: 'legacy', playerCount: input.playerCount };
+  }
+  return { mode: 'all' };
+}
 
 export const updateSessionSchema = z.object({
   status: z.enum(["ACTIVE", "CANCELLED"]).optional(),

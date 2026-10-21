@@ -18,6 +18,8 @@
 - **AppSetting (Cài đặt)**: key-value toàn hệ thống, ví dụ `PARKING_FEE_UNIT_PRICE` (phí gửi xe — tính là SURCHARGE âm).
 - **ActivityLog (Nhật ký)**: audit trail cho hành động nhạy cảm (check-in/out, void, stock, pricing change...).
 - **Cashflow (Dòng tiền)**: quản lý thu/chi ngoài luồng hóa đơn (admin).
+- **Checkout quote (Báo giá thu tiền)**: bản tính đầy đủ cho một lựa chọn thu — tiền giờ chơi per-player, hàng bán kèm, phí gửi xe, cọc được khấu trừ, và chuỗi `Tạm tính → Tổng → Cần thu`. Do một module duy nhất tạo ra; preview trả quote, checkout persist quote.
+- **Selection (Lựa chọn thu)**: cách nói "thu ai/nhóm nào" — `freshGroups` (chia nhóm + chọn bảng giá), `groupSlice` (một nhóm + số người), `playerSlice` (chọn người cụ thể), `legacy` (session cũ), `all` (mặc định).
 
 ## Architecture terms
 
@@ -29,6 +31,7 @@
 - **Composition root**: `src/lib/infrastructure/repositories.ts` — singleton `repositories` + `createRepositories(tx)`.
 - **Leakage**: business logic hoặc `as never` cast rò rỉ ra ngoài seam (đã dồn về reporting-adapter).
 - **Overlap**: logic dùng chung giữa pricing + promotions (day normalization, shared day) nằm ở `src/lib/shared/overlap.ts`.
+- **Checkout quote module**: `src/lib/sessions/checkout-quote-core.ts` (thuần, client-safe: selection, per-player pricing, `calculateReceipt`) + `src/lib/sessions/checkout-quote.ts` (resolver server: nạp rule/promotion/product, trả `PlayTimeQuote` + `assignments`). Preview và checkout cùng gọi một interface.
 
 ## ADRs
 
@@ -40,3 +43,4 @@
 - **ADR-006**: Split large POS components (today-shift-screen 2442 → 409 dòng).
 - **ADR-007**: Port/Adapter cho use-cases (`deps: Repositories`, `Result<T>`, `err()`/`fail()`, `import { prisma }` chỉ trong infrastructure).
 - **ADR-008**: Gộp `MembershipPayment` vào `Payment(kind=MEMBERSHIP)` — single-table inheritance, một bảng payment duy nhất.
+- **ADR-009**: Một checkout quote duy nhất — quote tính trước transaction, transaction chỉ tái kiểm invariant; preview và checkout dùng chung module.

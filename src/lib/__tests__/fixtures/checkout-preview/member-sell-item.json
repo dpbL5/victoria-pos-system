@@ -1,0 +1,51 @@
+{
+  "success": true,
+  "data": {
+    "sessionId": "session-1",
+    "totalHours": 2,
+    "hourlyRate": 0,
+    "subtotal": 0,
+    "discountAmount": 0,
+    "grandTotal": 0,
+    "isMemberSession": true,
+    "promotion": null,
+    "pendingSellTotal": 30000,
+    "pendingSellItems": [
+      {
+        "productId": "prod-1",
+        "productName": "Nước suối",
+        "type": "PRODUCT",
+        "quantity": 1,
+        "unitPrice": 30000,
+        "subtotal": 30000,
+        "sessionSellItemId": "si-1"
+      }
+    ],
+    "playerCount": 1,
+    "pausedSeconds": 0,
+    "pricingGroups": [
+      {
+        "id": "group-1",
+        "sessionId": "session-1",
+        "label": "Nhóm 1",
+        "playerCount": 1,
+        "remainingCount": 1,
+        "hourlyRate": 0,
+        "pricingRuleId": null,
+        "pricingSnapshot": null,
+        "pausedSeconds": 0,
+        "players": [
+          {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": null,
+            "pausedAt": null,
+            "totalPausedSeconds": 0,
+            "checkedOutAt": null,
+            "position": 0
+          }
+        ]
+      }
+    ],
+    "parkingFeeUnitPrice": 5000
+  }
+}

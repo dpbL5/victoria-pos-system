@@ -112,40 +112,6 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
       return { rows, total }
     },
 
-    async findByIdForPreview(id) {
-      return store.session.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          status: true,
-          playerCount: true,
-          pricingGroups: {
-            select: {
-              id: true,
-              label: true,
-              playerCount: true,
-              remainingCount: true,
-              hourlyRate: true,
-              pricingRuleId: true,
-              pricingSnapshot: true,
-              players: {
-                select: {
-                  id: true,
-                  name: true,
-                  pausedAt: true,
-                  totalPausedSeconds: true,
-                  checkedOutAt: true,
-                  position: true,
-                },
-                orderBy: { position: 'asc' },
-              },
-            },
-            orderBy: { createdAt: 'asc' },
-          },
-        },
-      })
-    },
-
     async findSellItemTotals(sessionIds) {
       if (sessionIds.length === 0) return {}
       const rows = await store.sessionSellItem.findMany({

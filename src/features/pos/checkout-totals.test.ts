@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkoutTotals } from './checkout-totals'
+import { calculateReceipt as checkoutTotals } from '@/lib/sessions/checkout-quote-core'
 
 const base = {
   playGross: 0,

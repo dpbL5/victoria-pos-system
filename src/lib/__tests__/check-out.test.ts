@@ -8,6 +8,8 @@ import { runCheckOutTx, mapCheckoutError, type CheckoutContext, type CheckoutTxS
 import { RollbackSignal } from '@/lib/infrastructure/db-helpers'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import type { SessionWithPlayers } from '@/lib/sessions/ports'
+import { aggregatePlayerPricing, calculateReceipt, type QuoteSession } from '@/lib/sessions/checkout-quote-core'
+import { playerPauseWithSessionFallback } from '@/lib/sessions/session-pause'
 
 function makeSession(): SessionWithPlayers {
   return {
@@ -119,7 +121,6 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       findByIdWithCustomer: vi.fn(),
       findActiveByCustomer: vi.fn(),
       findMany: vi.fn(),
-      findByIdForPreview: vi.fn(),
       findSellItemTotals: vi.fn(async () => ({})),
       findSellItems: vi.fn(async () => []),
       addSellItem: vi.fn(async () => {}),
@@ -224,6 +225,18 @@ function makeCtx(): CheckoutContext {
     customerId: 'cust-1',
     customerName: null,
     playersToBill: [],
+    receipt: {
+      charges: pricing.subtotal + 30_000,
+      total: pricing.grandTotal + 30_000,
+      depositApplied: 0,
+      payable: pricing.grandTotal + 30_000,
+    },
+    playerPauses: [],
+    playPausedSeconds: 0,
+    groupLabel: '',
+    parkingFeeUnitPrice: 0,
+    parkingTotal: 0,
+    playerPricing: [],
   }
 }
 
@@ -238,10 +251,80 @@ function makeState(): CheckoutTxState {
   }
 }
 
+function applyQuoteToCtx(ctx: CheckoutContext) {
+  const playerGroupIndex = new Map<string, number>()
+  ctx.playersToBillByGroup?.forEach((ids, index) => {
+    for (const id of ids) playerGroupIndex.set(id, index)
+  })
+  const plan = {
+    isMemberSession: ctx.pricing.isMemberSession,
+    isFreshPricing: false,
+    hasUnpricedGroups: false,
+    checkoutCount: ctx.checkoutCount,
+    targetGroupId: ctx.targetGroupId,
+    playersToBill: ctx.playersToBill,
+    playersToBillByGroup: ctx.playersToBillByGroup,
+    earlyCollectionGroupIds: ctx.earlyCollectionGroupIds,
+    groupRuleMap: ctx.groupRuleMap,
+    playerGroupIndex,
+    pendingAssignments: [],
+    pendingGroups: [],
+    pausedSeconds: ctx.playPausedSeconds,
+  }
+  const aggregated = aggregatePlayerPricing(
+    ctx.session as unknown as QuoteSession,
+    plan as never,
+    { endTime: ctx.endTime },
+    ctx.pricing.promotion ?? null,
+    { ...ctx.pricing, ruleName: ctx.pricing.ruleName ?? '' },
+    ctx.pauseRef
+  )
+  ctx.pricing = aggregated
+  ctx.playerPauses = ctx.playersToBill.map((player) => ({
+    id: player.id,
+    name: player.name ?? '',
+    pausedSeconds: playerPauseWithSessionFallback(
+      player,
+      ctx.session as never,
+      ctx.pauseRef,
+      ctx.checkoutCount
+    ),
+  }))
+  ctx.playPausedSeconds =
+    ctx.playerPauses.length > 0
+      ? ctx.playerPauses.reduce((sum, entry) => sum + entry.pausedSeconds, 0)
+      : (ctx.session.totalPausedSeconds ?? 0)
+  ctx.playerPricing = aggregated.playerPricing ?? []
+  ctx.groupLabel = ctx.targetGroupId
+    ? (ctx.session.pricingGroups.find((group) => group.id === ctx.targetGroupId)?.label ?? '')
+    : ''
+  ctx.receipt = calculateReceipt({
+    playGross: aggregated.subtotal,
+    itemsTotal: ctx.productSubtotal,
+    discount: aggregated.promotionDiscount,
+    parkingTotal: ctx.parkingTotal,
+    depositRemaining: ctx.bookingDeposit?.remaining ?? 0,
+  })
+}
+
+async function runTx(
+  repos: Parameters<typeof runCheckOutTx>[0],
+  ctx: CheckoutContext,
+  state: CheckoutTxState
+) {
+  applyQuoteToCtx(ctx)
+  state.finalPricing = ctx.pricing
+  state.playDiscountTotal = ctx.pricing.promotionDiscount
+  state.playTotal = ctx.pricing.grandTotal
+  state.invoiceSubtotal = ctx.receipt.charges
+  state.invoiceGrandTotal = ctx.receipt.total + ctx.parkingTotal
+  return runCheckOutTx(repos, ctx, state)
+}
+
 async function expectTxError(repos: Repositories, code: string) {
   let caught: RollbackSignal | null = null
   try {
-    await runCheckOutTx(repos, makeCtx(), makeState())
+    await runTx(repos, makeCtx(), makeState())
   } catch (error) {
     if (error instanceof RollbackSignal) caught = error
     else throw error
@@ -271,7 +354,7 @@ describe('runCheckOutTx', () => {
     })
     let caught: RollbackSignal | null = null
     try {
-      await runCheckOutTx(repos, makeCtx(), makeState())
+      await runTx(repos, makeCtx(), makeState())
     } catch (error) {
       if (error instanceof RollbackSignal) caught = error
       else throw error
@@ -291,7 +374,7 @@ describe('runCheckOutTx', () => {
     state.promotionRuleId = 'promo-1'
     let caught: RollbackSignal | null = null
     try {
-      await runCheckOutTx(repos, makeCtx(), state)
+      await runTx(repos, makeCtx(), state)
     } catch (error) {
       if (error instanceof RollbackSignal) caught = error
       else throw error
@@ -301,7 +384,7 @@ describe('runCheckOutTx', () => {
 
   it('checkout thành công: invoice + PLAY_TIME + payment + đóng phiên + audit', async () => {
     const repos = makeRepositories()
-    const result = await runCheckOutTx(repos, makeCtx(), makeState())
+    const result = await runTx(repos, makeCtx(), makeState())
 
     // Invoice PAID với tổng = playTotal (1 người) + sản phẩm
     expect(repos.billing.createPaidInvoice).toHaveBeenCalledWith(
@@ -364,7 +447,7 @@ describe('runCheckOutTx', () => {
     ctx.session = session
     ctx.customerId = null
     ctx.customerName = 'Nguyễn Văn A'
-    const result = await runCheckOutTx(repos, ctx, makeState())
+    const result = await runTx(repos, ctx, makeState())
 
     expect(repos.billing.createPaidInvoice).toHaveBeenCalledWith(
       // sessionId phải được ghi để UI hoá đơn đọc được tên/SĐT khách vãng lai từ phiên
@@ -386,7 +469,7 @@ describe('runCheckOutTx', () => {
         sumRemainingPlayers: vi.fn(async () => 1),
       },
     })
-    const result = await runCheckOutTx(repos, makeCtx(), makeState())
+    const result = await runTx(repos, makeCtx(), makeState())
     expect(result.remainingPlayers).toBe(1)
     expect(repos.session.update).not.toHaveBeenCalled()
   })
@@ -400,7 +483,9 @@ describe('runCheckOutTx', () => {
     })
     const ctx = makeCtx()
     ctx.parkingVehicleCount = 2
-    const result = await runCheckOutTx(repos, ctx, makeState())
+    ctx.parkingFeeUnitPrice = 5_000
+    ctx.parkingTotal = 10_000
+    const result = await runTx(repos, ctx, makeState())
 
     // SURCHARGE item + grandTotal bị trừ 10.000
     const items = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls
@@ -409,6 +494,48 @@ describe('runCheckOutTx', () => {
     expect(surchargeCall![0]).toMatchObject({ quantity: 2, total: -10000 })
     expect(repos.billing.updateInvoiceTotals).toHaveBeenCalledWith('inv-1', 120000, 120000)
     expect(result.parkingFeeTotal).toBe(10000)
+  })
+
+  it('trả CHECKOUT_STALE khi player đã được thu giữa quote và transaction', async () => {
+    const player = {
+      id: 'player-1',
+      name: null,
+      pausedAt: null,
+      totalPausedSeconds: 0,
+      checkedOutAt: null,
+      position: 0,
+    } as unknown as CheckoutContext['playersToBill'][number]
+    const session = {
+      ...makeSession(),
+      pricingGroups: [{ ...makeSession().pricingGroups[0], players: [player] }],
+    } as unknown as SessionWithPlayers
+    const staleSession = {
+      ...session,
+      pricingGroups: [{
+        ...session.pricingGroups[0],
+        players: [{ ...player, checkedOutAt: new Date('2026-08-07T11:59:00Z') }],
+      }],
+    } as unknown as SessionWithPlayers
+
+    const repos = makeRepositories({
+      session: {
+        ...makeRepositories().session,
+        findByIdWithPlayers: vi.fn(async () => staleSession),
+      },
+    })
+    const ctx = makeCtx()
+    ctx.session = session
+    ctx.playersToBill = [player]
+    ctx.checkoutCount = 1
+
+    let caught: RollbackSignal | null = null
+    try {
+      await runTx(repos, ctx, makeState())
+    } catch (error) {
+      if (error instanceof RollbackSignal) caught = error
+      else throw error
+    }
+    expect(caught?.error.code).toBe('CHECKOUT_STALE')
   })
 
   it('trả PRICING_GROUP_UNDERFLOW khi decrement nhóm xuống dưới 0', async () => {
@@ -450,7 +577,7 @@ describe('runCheckOutTx', () => {
     state.playTotal = 250000
     state.invoiceSubtotal = 280000 // 250000 + 30000 product
     state.invoiceGrandTotal = 280000
-    const result = await runCheckOutTx(repos, ctx, state)
+    const result = await runTx(repos, ctx, state)
 
     // PLAY_TIME quantity = totalHours 5 × checkoutCount 1, unitPrice = rate
     const items = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls
@@ -502,7 +629,7 @@ describe('runCheckOutTx', () => {
     state.playTotal = 0
     state.invoiceSubtotal = 30000 // chỉ product
     state.invoiceGrandTotal = 30000
-    const result = await runCheckOutTx(repos, ctx, state)
+    const result = await runTx(repos, ctx, state)
 
     const items = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls
     const playTimeCall = items.find((c) => c[0].type === 'PLAY_TIME')
@@ -524,7 +651,7 @@ describe('runCheckOutTx', () => {
       { id: 'ssi-1', productId: 'prod-1', quantity: 1, unitPrice: 15000 },
       { id: 'ssi-2', productId: 'prod-1', quantity: 1, unitPrice: 15000 },
     ]
-    const result = await runCheckOutTx(repos, ctx, makeState())
+    const result = await runTx(repos, ctx, makeState())
 
     // Full checkout → xoá các dòng bán kèm đã gộp
     expect(repos.session.removeSellItems).toHaveBeenCalledWith(['ssi-1', 'ssi-2'])
@@ -544,7 +671,7 @@ describe('runCheckOutTx', () => {
     ctx.sellItemLines = [
       { id: 'ssi-1', productId: 'prod-1', quantity: 1, unitPrice: 15000 },
     ]
-    const result = await runCheckOutTx(repos, ctx, makeState())
+    const result = await runTx(repos, ctx, makeState())
 
     expect(result.remainingPlayers).toBe(1)
     expect(repos.session.removeSellItems).toHaveBeenCalledWith(['ssi-1'])
@@ -578,7 +705,7 @@ describe('runCheckOutTx', () => {
     ctx.pricing = { ...pricing, hourlyRate: 50000 }
     const state = makeState()
     state.finalPricing = { ...pricing, hourlyRate: 50000 }
-    const result = await runCheckOutTx(repos, ctx, state)
+    const result = await runTx(repos, ctx, state)
 
     expect(repos.session.updatePricingGroup).toHaveBeenCalledWith('group-1', expect.objectContaining({
       label: 'Nhóm 1',
@@ -620,7 +747,7 @@ describe('runCheckOutTx', () => {
     ]
     const state = makeState()
     state.finalPricing = { ...pricing, hourlyRate: 50000 }
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     expect(repos.session.updatePricingGroup).toHaveBeenCalledTimes(1)
     expect(repos.session.updatePricingGroup).toHaveBeenCalledWith('group-1', expect.objectContaining({
@@ -643,7 +770,7 @@ describe('runCheckOutTx', () => {
     const repos = makeRepositories()
     const ctx = makeCtx()
     ctx.pendingAssignments = undefined
-    const result = await runCheckOutTx(repos, ctx, makeState())
+    const result = await runTx(repos, ctx, makeState())
 
     expect(repos.session.updatePricingGroup).not.toHaveBeenCalled()
     expect(repos.session.createPricingGroup).not.toHaveBeenCalled()
@@ -684,7 +811,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, totalHours: 1.5 }
 
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
       (call) => call[0].type === 'PLAY_TIME'
@@ -727,7 +854,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, tiers: [], hourlyRate: 50000, totalHours: 1, subtotal: 50000, grandTotal: 50000 }
 
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
       (call) => call[0].type === 'PLAY_TIME'
@@ -764,7 +891,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, tiers: [], hourlyRate: 50000, totalHours: 2, subtotal: 100000, grandTotal: 100000 }
 
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
       (call) => call[0].type === 'PLAY_TIME'
@@ -786,7 +913,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, totalHours: 1.5 }
 
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
       (call) => call[0].type === 'PLAY_TIME'
@@ -817,7 +944,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, hourlyRate: 50000, tiers: [], totalHours: 0.5, subtotal: 25000, promotionDiscount: 0, grandTotal: 25000 }
 
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
       (call) => call[0].type === 'PLAY_TIME'
@@ -858,7 +985,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, tiers: [], totalHours: 1, subtotal: 50000, grandTotal: 50000 }
 
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     // Chỉ 2 player đầu được đánh dấu
     expect(repos.session.markPlayersCheckedOut).toHaveBeenCalledWith(
@@ -919,7 +1046,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, tiers: [], totalHours: 2, subtotal: 100000, grandTotal: 100000 }
 
-    const result = await runCheckOutTx(repos, ctx, state)
+    const result = await runTx(repos, ctx, state)
 
     // Chỉ 2 người được mark checked out
     expect(repos.session.markPlayersCheckedOut).toHaveBeenCalledWith(['player-1', 'player-2'], ctx.checkoutAt)
@@ -980,7 +1107,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, tiers: [], totalHours: 1, subtotal: 50000, grandTotal: 50000 }
 
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
       (call) => call[0].type === 'PLAY_TIME'
@@ -1020,7 +1147,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, tiers: [], totalHours: 2, subtotal: 100000, grandTotal: 100000 }
 
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
       (call) => call[0].type === 'PLAY_TIME'
@@ -1088,7 +1215,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, tiers: [], hourlyRate: 50000, totalHours: 2, subtotal: 100000, grandTotal: 100000 }
 
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     // Nhóm còn người chưa thu → KHÔNG ghi bảng giá (nhóm vẫn chưa có giá để lần
     // thu sau chọn lại theo giờ thu) và không đè counts
@@ -1168,7 +1295,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, tiers: [], hourlyRate: 50000, totalHours: 1, subtotal: 50000, grandTotal: 50000 }
 
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
       (call) => call[0].type === 'PLAY_TIME'
@@ -1197,7 +1324,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, tiers: [], totalHours: 1, subtotal: 50000, grandTotal: 50000 }
 
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     expect(repos.session.markPlayersCheckedOut).not.toHaveBeenCalled()
   })
@@ -1235,7 +1362,7 @@ describe('runCheckOutTx', () => {
     const state = makeState()
     state.finalPricing = { ...pricing, tiers: [], totalHours: 1, subtotal: 50000, grandTotal: 50000 }
 
-    await runCheckOutTx(repos, ctx, state)
+    await runTx(repos, ctx, state)
 
     const playItemCall = (repos.billing.createInvoiceItem as ReturnType<typeof vi.fn>).mock.calls.find(
       (call) => call[0].type === 'PLAY_TIME'

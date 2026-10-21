@@ -67,6 +67,20 @@ export interface PlayTimeQuote {
     total: number
     pricingRuleName?: string
   }>
+  /** Chuỗi số của phiếu thu — do checkout-quote tính, xem calculateReceipt */
+  charges?: number
+  total?: number
+  depositApplied?: number
+  payable?: number
+  /** Dòng hàng không đủ tồn — preview dùng để cảnh báo trước khi thu */
+  stockIssues?: PlayTimeStockIssue[]
+}
+
+export interface PlayTimeStockIssue {
+  productId: string
+  productName: string
+  requested: number
+  available: number
 }
 
 export interface PendingSellItem {

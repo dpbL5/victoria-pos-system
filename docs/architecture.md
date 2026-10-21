@@ -168,3 +168,28 @@ Bỏ model `MembershipPayment`, gộp vào `Payment` với trường `kind` (`Pa
 - ✅ API contract của use-case không đổi (`createMembershipPayment` giữ tên)
 - ❌ Phải migrate dữ liệu `membership_payments` cũ sang `payments` (thủ công / script)
 - ❌ `Payment` giờ mang thêm field nullable dành riêng cho membership (`customerId`, `membershipId`, `planId`)
+
+---
+
+## ADR-009: Một checkout quote duy nhất
+
+**Status:** Accepted (2026-10)
+
+**Context:**
+Checkout có ba đường tính song song: `checkout-preview` (route handler 517 dòng), `checkOut` (use-case 1604 dòng), và `checkout-precalc` (client). Chúng chỉ dùng chung công thức lá (`calculatePlayerPrice`); phần chọn người, resolve bảng giá, pause fallback và cộng tổng được viết lại ở từng nơi. Chuỗi `Tạm tính → Tổng → Cần thu` thậm chí chỉ tồn tại ở client (`checkoutTotals`), nên số hiển thị và số trên hoá đơn có thể lệch.
+
+**Decision:**
+1. Một module `checkout-quote` trong domain sessions:
+   - `checkout-quote-core.ts` — thuần, client-safe: `CheckoutSelection` union, chọn người/nhóm, per-player pricing, `calculateReceipt`.
+   - `checkout-quote.ts` — resolver server: nạp rule/promotion/product/sell items, trả `PlayTimeQuote` + `assignments`.
+2. Preview route và `checkOut` cùng gọi `quoteCheckout(deps, session, selection, options)`. Route chỉ parse + delegate.
+3. Quote tính một lần **trước** transaction. Transaction chỉ tái kiểm invariant (player chưa checkout, `remainingCount`, membership/promotion, cọc, tồn kho) rồi persist số của quote; drift → `CHECKOUT_STALE`.
+4. `checkout-precalc.ts` giữ vai trò hiển thị lạc quan nhưng gọi cùng core; `checkoutTotals` chuyển vào core thành `calculateReceipt`.
+5. Preview không nhận giỏ chưa lưu/parking count — client cộng chúng bằng đúng `calculateReceipt`; preview chỉ kiểm tồn cho dòng bán kèm đã persist (`stockIssues`).
+
+**Consequences:**
+- ✅ Preview và hoá đơn dùng cùng một công thức; không còn hai hệ mode.
+- ✅ Test được selection matrix và receipt chain mà không cần route/DB.
+- ✅ Preview route từ ~517 dòng còn parse + delegate; `checkOut` bỏ lượt tính giá thứ hai.
+- ❌ Quote là snapshot tại thời điểm tính — transaction phải tái kiểm invariant thay vì tin tuyệt đối.
+- ❌ Preview chỉ thấy phần dữ liệu nó được gửi (không thấy giỏ chưa lưu), nên `stockIssues` ở preview là cảnh báo một phần.

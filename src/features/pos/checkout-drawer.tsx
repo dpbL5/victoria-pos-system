@@ -47,7 +47,7 @@ import { formatPromotionOption } from "./promotion-option";
 import { PaymentMethodPicker } from "./payment-method-picker";
 import { groupPausedSeconds } from "@/lib/sessions/ports";
 import { precalcPlayTime, type PrecalcPlayer, type PrecalcRule } from "./checkout-precalc";
-import { checkoutTotals } from "./checkout-totals";
+import { calculateReceipt } from "@/lib/sessions/checkout-quote-core";
 import {
   CheckoutPlayerPicker,
   GROUP_LABEL,
@@ -862,13 +862,15 @@ export function CheckoutDrawer({
       Number(session?.booking?.depositAppliedAmount ?? 0) -
       Number(session?.booking?.depositRefundedAmount ?? 0),
   );
-  const totals = checkoutTotals({
+  const totals = calculateReceipt({
     playGross,
     itemsTotal,
     discount: playDiscount,
     parkingTotal: parkingFeeTotal,
     depositRemaining,
   });
+  const stockIssues = displayQuote?.stockIssues ?? [];
+  const stockBlocked = stockIssues.length > 0;
 
   // Chặn thu khi ĐANG CHỌN một nhóm chưa có giá mà không có bảng giá nào hiệu lực.
   // Không chặn theo cả phiên: nhóm đã chốt giá vẫn thu được dù nhóm còn chơi
@@ -1057,6 +1059,10 @@ export function CheckoutDrawer({
       notifyError("Chưa có bảng giá hiệu lực — không thể thu tiền giờ chơi");
       return;
     }
+    if (stockBlocked) {
+      notifyError("Có dòng hàng không đủ tồn kho — giảm số lượng trước khi thu tiền");
+      return;
+    }
     if (freshMultiGroupPartial) {
       notifyError("Thu trước chỉ hỗ trợ 1 nhóm — gộp về 1 nhóm hoặc thu hết");
       return;
@@ -1195,6 +1201,16 @@ export function CheckoutDrawer({
             <p className="rounded-lg border border-danger-border bg-danger-bg px-4 py-2 text-xs text-danger">
               {quoteError}
             </p>
+          ) : stockBlocked ? (
+            <p className="rounded-lg border border-danger-border bg-danger-bg px-4 py-2 text-xs text-danger">
+              Thiếu tồn:{" "}
+              {stockIssues
+                .map(
+                  (issue) =>
+                    `${issue.productName} (cần ${issue.requested}, còn ${issue.available})`,
+                )
+                .join(", ")}
+            </p>
           ) : pricingBlocked ? (
             <p className="rounded-lg border border-danger-border bg-danger-bg px-4 py-2 text-xs text-danger">
               Chưa có bảng giá hiệu lực — chưa thể thu tiền.
@@ -1234,6 +1250,7 @@ export function CheckoutDrawer({
               quoteLoading ||
               !!quoteError ||
               !displayQuote ||
+              stockBlocked ||
               pricingBlocked ||
               freshMultiGroupPartial ||
               (pickerActive && !hasAssignedPlayers)

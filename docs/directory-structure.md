@@ -87,7 +87,8 @@ src/
 │   │   └── adapters/           # 13 file: session, invoice, membership, shift, product, pricing, promotion,
 │   │                           #   audit, reporting, cashflow, settings, tool, user
 │   ├── sessions/               # Domain: Session + SessionPlayer + SessionPricingGroup (ports, use-cases,
-│   │   │                       #   pricing-engine.ts, session-validations.ts, product-validations.ts)
+│   │   │                       #   pricing-engine.ts, checkout-quote-core.ts, checkout-quote.ts,
+│   │   │                       #   session-pause.ts, session-validations.ts, product-validations.ts)
 │   │   └── use-cases/          # check-in, check-out (gồm thu trước), sell-items, pause-session, rename-player,
 │   │                           #   update-session, product-crud
 │   ├── invoicing/              # Domain: Invoice + InvoiceItem + Payment (kind) — void-invoice, edit-invoice
