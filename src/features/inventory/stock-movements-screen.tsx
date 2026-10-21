@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Package } from 'lucide-react'
-import { Badge, type BadgeVariant } from '@/components/ui/badge'
 import { FilterButton } from '@/components/ui/filter-button'
 import { NoticeCard } from '@/components/ui/notice-card'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
@@ -12,7 +11,7 @@ import { SortableCardList, type Column as CardColumn } from '@/components/ui/sor
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { useApi } from '@/hooks/use-api'
-import { formatVnDateTime } from '@/lib/shared/utils'
+import { formatVnDateTime, shortInvoiceNo } from '@/lib/shared/utils'
 import type { StockMovementRow, StockMovementType, StockSaleChannel } from '@/types'
 
 type MovementFilter = 'ALL' | StockMovementType
@@ -24,16 +23,17 @@ const TYPE_LABELS: Record<StockMovementType, string> = {
   VOID: 'Hoàn kho',
 }
 
-const TYPE_VARIANTS: Record<StockMovementType, BadgeVariant> = {
-  RESTOCK: 'success',
-  ADJUSTMENT: 'warning',
-  SALE: 'blue',
-  VOID: 'default',
-}
-
 const CHANNEL_LABELS: Record<StockSaleChannel, string> = {
   RETAIL: 'Bán lẻ',
   SESSION: 'Bán kèm',
+}
+
+/** Loại giao dịch kèm kênh bán khi là phiếu bán ra. */
+function movementTypeLabel(item: StockMovementRow): string {
+  if (item.type === 'SALE' && item.channel) {
+    return `${TYPE_LABELS.SALE} · ${CHANNEL_LABELS[item.channel]}`
+  }
+  return TYPE_LABELS[item.type]
 }
 
 export function StockMovementsScreen() {
@@ -60,12 +60,13 @@ export function StockMovementsScreen() {
       key: 'productName',
       label: 'Mặt hàng',
       cellClassName: 'px-4 py-3 font-medium text-zinc-950 dark:text-white',
-      render: (item) => (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="whitespace-nowrap">{item.productName}</span>
-          <MovementBadges item={item} />
-        </div>
-      ),
+      render: (item) => <span className="whitespace-nowrap">{item.productName}</span>,
+    },
+    {
+      key: 'type',
+      label: 'Loại giao dịch',
+      cellClassName: 'whitespace-nowrap px-4 py-3 text-sm',
+      render: (item) => movementTypeLabel(item),
     },
     {
       key: 'quantity',
@@ -88,8 +89,8 @@ export function StockMovementsScreen() {
     {
       key: 'invoiceNo',
       label: 'Hoá đơn',
-      cellClassName: 'px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400',
-      render: (item) => item.invoiceNo ?? '—',
+      cellClassName: 'px-4 py-3 text-xs',
+      render: (item) => <InvoiceCode invoiceNo={item.invoiceNo} />,
     },
     {
       key: 'reason',
@@ -104,11 +105,15 @@ export function StockMovementsScreen() {
       key: 'productName',
       label: 'Mặt hàng',
       render: (item) => (
-        <span className="flex flex-wrap items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
-          <span className="whitespace-nowrap">{item.productName}</span>
-          <MovementBadges item={item} />
+        <span className="whitespace-nowrap text-base font-semibold text-zinc-950 dark:text-white">
+          {item.productName}
         </span>
       ),
+    },
+    {
+      key: 'type',
+      label: 'Loại',
+      render: (item) => movementTypeLabel(item),
     },
     {
       key: 'quantity',
@@ -128,7 +133,7 @@ export function StockMovementsScreen() {
     {
       key: 'invoiceNo',
       label: 'Hoá đơn',
-      render: (item) => item.invoiceNo ?? '—',
+      render: (item) => <InvoiceCode invoiceNo={item.invoiceNo} />,
     },
     {
       key: 'reason',
@@ -231,13 +236,14 @@ export function StockMovementsScreen() {
   )
 }
 
-function MovementBadges({ item }: { item: StockMovementRow }) {
+function InvoiceCode({ invoiceNo }: { invoiceNo: string | null }) {
+  if (!invoiceNo) return <span className="text-zinc-400">—</span>
   return (
-    <span className="flex items-center gap-1.5 whitespace-nowrap">
-      <Badge variant={TYPE_VARIANTS[item.type]} size="sm">{TYPE_LABELS[item.type]}</Badge>
-      {item.channel && (
-        <Badge variant="outline" size="sm">{CHANNEL_LABELS[item.channel]}</Badge>
-      )}
+    <span
+      className="font-mono text-zinc-500 dark:text-zinc-400"
+      title={invoiceNo}
+    >
+      {shortInvoiceNo(invoiceNo)}
     </span>
   )
 }
