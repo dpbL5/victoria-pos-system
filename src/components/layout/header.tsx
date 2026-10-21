@@ -17,6 +17,7 @@ const TITLES: Record<string, string> = {
   '/bookings': 'Đặt lịch',
   '/shifts': 'Ca làm',
   '/customers': 'Hội viên',
+  '/inventory/movements': 'Lịch sử kho',
   '/inventory': 'Kho quầy',
   '/reports': 'Báo cáo',
   '/pricing': 'Bảng giá',

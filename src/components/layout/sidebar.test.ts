@@ -27,7 +27,7 @@ describe('getVisibleMenuGroups', () => {
     const hrefs = groups.flatMap((group) => group.items.map((item) => item.href))
     expect(hrefs).not.toContain('/pricing')
     expect(hrefs).not.toContain('/cashflow')
-    expect(hrefs).toEqual(['/sessions', '/bookings', '/shifts', '/customers', '/inventory', '/settings'])
+    expect(hrefs).toEqual(['/sessions', '/bookings', '/shifts', '/customers', '/inventory', '/inventory/movements', '/settings'])
     expect(groups.map((group) => group.label)).toEqual(['Vận hành', 'Khách hàng', 'Kho', 'Hệ thống'])
   })
 

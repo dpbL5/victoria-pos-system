@@ -1,13 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import Link from 'next/link'
 import {
+  History,
   Package,
   PackagePlus,
   Trash2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonClass } from '@/components/ui/button'
 import { FilterButton } from '@/components/ui/filter-button'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
@@ -238,9 +240,18 @@ export function InventoryScreen() {
             {filteredProducts.length} mục · {stats.stockUnits} đơn vị tồn
           </p>
         </div>
-        <Badge variant={stats.lowStock > 0 ? 'warning' : 'success'}>
-          {stats.lowStock > 0 ? `${stats.lowStock} sắp hết` : 'Ổn định'}
-        </Badge>
+        <div className="flex shrink-0 items-center gap-2">
+          <Badge variant={stats.lowStock > 0 ? 'warning' : 'success'}>
+            {stats.lowStock > 0 ? `${stats.lowStock} sắp hết` : 'Ổn định'}
+          </Badge>
+          <Link
+            href="/inventory/movements"
+            className={buttonClass({ variant: 'white', size: 'sm' })}
+          >
+            <History size={16} />
+            <span>Lịch sử kho</span>
+          </Link>
+        </div>
       </div>
       <div role="group" aria-label="Lọc kho" className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
         <FilterButton active={filter === 'ALL'} onClick={() => setFilter('ALL')}>Tất cả</FilterButton>
