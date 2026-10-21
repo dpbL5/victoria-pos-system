@@ -1,6 +1,6 @@
 // ── Ports — repository interfaces cho domain sessions ─────
 import type { Prisma } from '@/generated/prisma/client'
-import type { PricingRuleSnapshot } from '@/types'
+import type { PricingRuleSnapshot, StockMovementRow, StockMovementType } from '@/types'
 
 export type SessionWithDetails = Prisma.SessionGetPayload<{
   include: {
@@ -310,6 +310,8 @@ export interface ProductRepository {
     reason: string | null
     shiftId: string | null
    }): Promise<{ movementId: string; before: number; after: number; shiftId: string | null; type: string; quantity: number }>
+  /** Lịch sử biến động kho (mới nhất trước) — GET /api/stock-movements */
+  findStockMovements(input: { type?: StockMovementType; productId?: string; take?: number }): Promise<StockMovementRow[]>
   /** Đánh dấu ngưng bán: set isActive=false — dùng khi hàng đã có giao dịch liên quan */
   deactivate(id: string): Promise<void>
   /** Xoá cứng product — chỉ dùng khi chưa có giao dịch liên quan */

@@ -161,6 +161,7 @@ function makeRepositories(overrides: Partial<Repositories> = {}): Repositories {
       })),
       decrementStockIfAvailable: vi.fn(async () => ({ count: 1 })),
       recordSaleMovement: vi.fn(async () => {}),
+      findStockMovements: vi.fn(async () => []),
       findManyForAdmin: vi.fn(),
       findByIdAdmin: vi.fn(),
       createWithInitialStock: vi.fn(),

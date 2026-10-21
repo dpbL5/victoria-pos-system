@@ -154,6 +154,7 @@ function makeRepositories(overrides: Partial<Repositories['billing']> = {}): Rep
       findByIdForSale: vi.fn(),
       decrementStockIfAvailable: vi.fn(),
       recordSaleMovement: vi.fn(),
+      findStockMovements: vi.fn(async () => []),
       findManyForAdmin: vi.fn(),
       findByIdAdmin: vi.fn(),
       createWithInitialStock: vi.fn(),

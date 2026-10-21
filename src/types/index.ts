@@ -17,6 +17,25 @@ export type StockMovementType = "RESTOCK" | "SALE" | "ADJUSTMENT" | "VOID"
 export type ShiftStatus = "OPEN" | "CLOSED"
 export type ShiftParticipantRole = "LEAD" | "STAFF"
 
+/** Kênh bán: bán lẻ tại quầy vs bán kèm phiên chơi */
+export type StockSaleChannel = "RETAIL" | "SESSION"
+
+export interface StockMovementRow {
+  id: string
+  type: StockMovementType
+  /** Dương = tăng tồn, âm = giảm tồn */
+  quantity: number
+  reason: string | null
+  createdAt: string
+  productId: string
+  productName: string
+  productSku: string | null
+  staffName: string | null
+  invoiceNo: string | null
+  /** Chỉ có với type = SALE */
+  channel: StockSaleChannel | null
+}
+
 export interface PromotionRule {
   id: string
   name: string

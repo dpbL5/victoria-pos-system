@@ -1,6 +1,7 @@
 // ── Adapter: implement ProductRepository bằng Prisma ─────
 import type { ProductStore } from '../store-types'
 import type { ProductRecord, ProductRepository } from '@/lib/sessions/ports'
+import type { StockMovementRow, StockMovementType } from '@/types'
 
 const PRODUCT_SELECT = {
   id: true,
@@ -26,6 +27,38 @@ function toProductRecord(p: {
     price: Number(p.price),
     stockQuantity: Number(p.stockQuantity),
     isActive: p.isActive,
+  }
+}
+
+type StockMovementRaw = {
+  id: string
+  type: StockMovementType
+  quantity: number
+  reason: string | null
+  createdAt: Date
+  product: { id: string; name: string; sku: string | null }
+  staff: { fullName: string } | null
+  invoiceItem: { invoice: { invoiceNo: string; sessionId: string | null } | null } | null
+}
+
+/**
+ * Hoá đơn không gắn phiên = bán lẻ tại quầy; còn lại (bán kèm ghi tạm trong phiên,
+ * hoặc gắn vào hoá đơn của phiên) = bán kèm.
+ */
+function toStockMovementRow(m: StockMovementRaw): StockMovementRow {
+  const invoice = m.invoiceItem?.invoice ?? null
+  return {
+    id: m.id,
+    type: m.type,
+    quantity: m.quantity,
+    reason: m.reason,
+    createdAt: m.createdAt.toISOString(),
+    productId: m.product.id,
+    productName: m.product.name,
+    productSku: m.product.sku,
+    staffName: m.staff?.fullName ?? null,
+    invoiceNo: invoice?.invoiceNo ?? null,
+    channel: m.type === 'SALE' ? (invoice && !invoice.sessionId ? 'RETAIL' : 'SESSION') : null,
   }
 }
 
@@ -162,6 +195,29 @@ export function createProductRepository(store: ProductStore): ProductRepository 
         type: movement.type,
         quantity: movement.quantity,
       }
+    },
+
+    async findStockMovements(input) {
+      const rows = await store.stockMovement.findMany({
+        where: {
+          ...(input.type ? { type: input.type } : {}),
+          ...(input.productId ? { productId: input.productId } : {}),
+        },
+        select: {
+          id: true,
+          type: true,
+          quantity: true,
+          reason: true,
+          createdAt: true,
+          product: { select: { id: true, name: true, sku: true } },
+          staff: { select: { fullName: true } },
+          invoiceItem: { select: { invoice: { select: { invoiceNo: true, sessionId: true } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: input.take ?? 200,
+      })
+
+      return rows.map(toStockMovementRow)
     },
 
     async deactivate(id) {
