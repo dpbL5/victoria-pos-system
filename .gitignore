@@ -12,6 +12,13 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/.next-e2e/
+/.npm-cache/
+/.playwright-browsers/
+/.e2e-auth.json
+/.e2e-state.json
 
 # next.js
 /.next/

@@ -87,6 +87,7 @@ export function ActiveSessionCard({
 
   return (
     <div
+      data-session-id={session.id}
       className="animate-card-enter px-4 py-3 transition-colors hover:bg-surface-tertiary"
       style={{ animationDelay: `${Math.min(index, 8) * 30}ms` }}
     >
