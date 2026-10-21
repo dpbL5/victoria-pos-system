@@ -1,5 +1,6 @@
 // ── Adapter: implement SessionRepository bằng Prisma ─────
 import { Prisma } from '@/generated/prisma/client'
+import { calcHours, toInputDate } from '@/lib/shared/utils'
 import type { SessionStore } from '../store-types'
 import type { SessionRepository } from '@/lib/sessions/ports'
 
@@ -110,6 +111,30 @@ export function createSessionRepository(store: SessionStore): SessionRepository 
         store.session.count({ where }),
       ])
       return { rows, total }
+    },
+
+    async findPlayDaysByCustomer(customerId) {
+      const rows = await store.session.findMany({
+        where: { customerId, status: { not: 'CANCELLED' } },
+        select: { startTime: true, endTime: true, totalHours: true, totalPausedSeconds: true },
+        orderBy: { startTime: 'asc' },
+      })
+
+      const now = new Date()
+      const byDay = new Map<string, number>()
+      for (const row of rows) {
+        const hours = row.totalHours !== null
+          ? Number(row.totalHours)
+          : calcHours(row.startTime, row.endTime ?? now, row.totalPausedSeconds)
+        if (hours <= 0) continue
+        const day = toInputDate(row.startTime)
+        byDay.set(day, (byDay.get(day) ?? 0) + hours)
+      }
+
+      return Array.from(byDay, ([day, hours]) => ({
+        day,
+        hours: Math.round(hours * 100) / 100,
+      }))
     },
 
     async findSellItemTotals(sessionIds) {

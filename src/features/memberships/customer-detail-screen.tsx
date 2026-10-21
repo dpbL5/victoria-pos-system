@@ -32,6 +32,8 @@ import { apiJson, jsonRequest } from '@/lib/api'
 import { shortInvoiceNo } from '@/lib/shared/utils'
 import { money, formatDay } from '@/features/pos/format'
 import { RenewMemberDialog, type RenewMemberInput, type MemberStatus } from './renew-member-dialog'
+import { PlayCalendar } from './play-calendar'
+import type { PlayDay } from './play-calendar-data'
 import type { Membership, MembershipPlan, Shift, UserSession } from '@/features/pos/types'
 
 interface Props {
@@ -82,6 +84,7 @@ interface CustomerDetail {
 
 interface HistoryResponse {
   invoices: CustomerHistoryInvoice[]
+  playDays: PlayDay[]
   totalSpent: number | string
   totalHoursPlayed: number | string
 }
@@ -108,6 +111,7 @@ export function CustomerDetailScreen({ id }: Props) {
 
   const [customer, setCustomer] = useState<CustomerDetail | null>(null)
   const [history, setHistory] = useState<CustomerHistoryInvoice[]>([])
+  const [playDays, setPlayDays] = useState<PlayDay[]>([])
   const [user, setUser] = useState<UserSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -140,7 +144,10 @@ export function CustomerDetailScreen({ id }: Props) {
         return
       }
       setCustomer(customerRes.data)
-      if (historyRes.success) setHistory(historyRes.data?.invoices ?? [])
+      if (historyRes.success) {
+        setHistory(historyRes.data?.invoices ?? [])
+        setPlayDays(historyRes.data?.playDays ?? [])
+      }
       if (userRes.success) setUser(userRes.data ?? null)
 
       // MEMBER mới cần dữ liệu gia hạn — tách song song nhưng không chặn màn hình
@@ -349,8 +356,9 @@ export function CustomerDetailScreen({ id }: Props) {
             ) : null}
           />
 
-          {/* ── Main: lịch sử thanh toán ── */}
-          <div className="min-w-0 lg:col-span-3">
+          {/* ── Main: hoạt động chơi + lịch sử thanh toán ── */}
+          <div className="min-w-0 space-y-4 lg:col-span-3">
+            <PlayCalendar playDays={playDays} />
             <HistorySection history={history} />
           </div>
         </div>

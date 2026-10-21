@@ -116,6 +116,12 @@ export interface SessionListFilter {
   take: number
 }
 
+export interface CustomerPlayDay {
+  /** Ngày theo giờ Việt Nam, dạng YYYY-MM-DD */
+  day: string
+  hours: number
+}
+
 /** Dòng bán kèm tạm trên phiên — chưa phải hóa đơn; checkout gộp vào invoice INV */
 export type SessionSellItemRecord = {
   id: string
@@ -136,6 +142,8 @@ export interface SessionRepository {
   findActiveByCustomer(customerId: string): Promise<{ id: string } | null>
   /** Danh sách phiên (filter + phân trang) — GET /api/sessions */
   findMany(input: SessionListFilter): Promise<{ rows: SessionListRow[]; total: number }>
+  /** Toàn bộ giờ chơi gộp theo ngày Việt Nam — lịch hoạt động theo năm ở trang chi tiết hội viên */
+  findPlayDaysByCustomer(customerId: string): Promise<CustomerPlayDay[]>
   /** Tổng grandTotal của các dòng bán kèm chờ thu theo từng session — enrich pendingSellTotal */
   findSellItemTotals(sessionIds: string[]): Promise<Record<string, number>>
   /** Đếm session tạo trong khoảng thời gian (đặt tên khách vãng lai `Khách #NNN`) */
