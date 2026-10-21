@@ -32,15 +32,23 @@ export function fail(code: string, detail?: string): never {
  */
 export async function runInTransaction<T>(
   work: (repos: Repositories) => Promise<T>,
-  options?: { isolationLevel?: Prisma.TransactionIsolationLevel; timeout?: number }
+  options?: {
+    isolationLevel?: Prisma.TransactionIsolationLevel
+    timeout?: number
+    maxWait?: number
+  }
 ): Promise<Result<T>> {
   const timing = startApiTransaction()
   try {
     const callback = (tx: Prisma.TransactionClient) =>
       timing.measureCallback(() => work(createRepositories(tx)))
-    const value = options
-      ? await prisma.$transaction(callback, options)
-      : await prisma.$transaction(callback)
+    // Supabase đi qua mạng; mặc định 5s của Prisma dễ P2028 khi DB chậm.
+    const transactionOptions = {
+      timeout: 20_000,
+      maxWait: 10_000,
+      ...options,
+    }
+    const value = await prisma.$transaction(callback, transactionOptions)
     return ok(value)
   } catch (error) {
     if (error instanceof RollbackSignal) return err(error.error.code, error.error.detail)
