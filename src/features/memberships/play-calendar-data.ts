@@ -8,63 +8,62 @@ export interface PlayDay {
 export interface PlayCalendarCell {
   day: string
   hours: number
-  /** Ngày nằm ngoài năm đang xem — giữ chỗ để lưới thẳng hàng. */
-  outside: boolean
   future: boolean
 }
 
-export interface PlayCalendarWeek {
-  cells: PlayCalendarCell[]
+export interface PlayCalendarColumn {
+  /** 14 ô: tuần thứ nhất (T2→CN) rồi tuần thứ hai (T2→CN); ngày ngoài năm là `null`. */
+  cells: (PlayCalendarCell | null)[]
   monthLabel: string | null
 }
 
 const DAY_MS = 86_400_000
+const DAYS_PER_COLUMN = 14
 
-const dayMs = (day: string) => new Date(`${day}T00:00:00Z`).getTime()
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10)
 
 /**
- * Dựng lưới tuần (thứ Hai → Chủ Nhật) cho một năm dương lịch.
- * Cột là tuần, hàng là thứ — giống contribution graph của GitHub.
+ * Mỗi cột là 2 tuần xếp dọc (T2→CN lặp lại), cả năm nằm trong một khung.
+ * Cột cuối có thể chỉ có 1 tuần nếu năm lẻ tuần — phần thiếu là `null`.
  */
 export function buildPlayCalendar(
   playDays: PlayDay[],
   year: number,
   today: string = toInputDate(new Date()),
-): PlayCalendarWeek[] {
+): PlayCalendarColumn[] {
   const hoursByDay = new Map(playDays.map((entry) => [entry.day, entry.hours]))
-  const todayMs = dayMs(today)
+  const todayMs = new Date(`${today}T00:00:00Z`).getTime()
   const yearStart = Date.UTC(year, 0, 1)
   const yearEnd = Date.UTC(year, 11, 31)
   const firstMonday = yearStart - ((new Date(yearStart).getUTCDay() + 6) % 7) * DAY_MS
   const lastSunday = yearEnd + (6 - ((new Date(yearEnd).getUTCDay() + 6) % 7)) * DAY_MS
   const weekCount = Math.round((lastSunday - firstMonday + DAY_MS) / (7 * DAY_MS))
+  const columnCount = Math.ceil(weekCount / 2)
 
-  const weeks: PlayCalendarWeek[] = []
-  for (let weekIndex = 0; weekIndex < weekCount; weekIndex++) {
-    const cells: PlayCalendarCell[] = []
+  return Array.from({ length: columnCount }, (_, columnIndex) => {
     let monthLabel: string | null = null
 
-    for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+    const cells = Array.from({ length: DAYS_PER_COLUMN }, (_, rowIndex) => {
+      const weekIndex = columnIndex * 2 + (rowIndex < 7 ? 0 : 1)
+      const dayIndex = rowIndex % 7
       const ms = firstMonday + (weekIndex * 7 + dayIndex) * DAY_MS
-      const date = new Date(ms)
+
+      if (weekIndex >= weekCount || ms < yearStart || ms > yearEnd) return null
+
       const day = isoDay(ms)
-      cells.push({
+      if (new Date(ms).getUTCDate() === 1) {
+        monthLabel = `Th${new Date(ms).getUTCMonth() + 1}`
+      }
+
+      return {
         day,
         hours: hoursByDay.get(day) ?? 0,
-        outside: ms < yearStart || ms > yearEnd,
         future: ms > todayMs,
-      })
-      // Nhãn tháng đặt ở tuần chứa ngày mùng 1.
-      if (date.getUTCDate() === 1 && date.getUTCFullYear() === year) {
-        monthLabel = `Th${date.getUTCMonth() + 1}`
       }
-    }
+    })
 
-    weeks.push({ cells, monthLabel })
-  }
-
-  return weeks
+    return { cells, monthLabel }
+  })
 }
 
 export function playHoursLabel(hours: number): string {

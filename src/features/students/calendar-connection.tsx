@@ -76,7 +76,7 @@ export function CalendarConnection({ menuItem = false, onOpen, compact = false }
     ) : compact ? (
       <span className="relative inline-flex">
         <Button variant="ghost" icon={TriggerIcon} size="sm" aria-label="Liên kết tài khoản Google" title={triggerText} onClick={() => setOpen(true)} />
-          {needsAttention && <span className="pointer-events-none absolute right-0.5 top-0.5 size-2 rounded-full bg-warning-bg0 ring-2 ring-surface-secondary" aria-hidden />}
+          {needsAttention && <span className="pointer-events-none absolute right-0.5 top-0.5 size-2 rounded-full bg-warning ring-2 ring-surface-secondary" aria-hidden />}
       </span>
     ) : (
     <Button variant="white" size="sm" icon={TriggerIcon} aria-label="Google Calendar" title="Google Calendar" onClick={() => setOpen(true)}>
