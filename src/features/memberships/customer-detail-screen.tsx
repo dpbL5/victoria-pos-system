@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input, Label, Textarea } from '@/components/ui/input'
@@ -31,6 +32,7 @@ import { isManagerOrAdmin } from '@/lib/shared/roles'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { shortInvoiceNo } from '@/lib/shared/utils'
 import { money, formatDay } from '@/features/pos/format'
+import { shiftTimeRange } from '@/features/shifts/shift-ledger'
 import { RenewMemberDialog, type RenewMemberInput, type MemberStatus } from './renew-member-dialog'
 import { PlayCalendar } from './play-calendar'
 import type { PlayDay } from './play-calendar-data'
@@ -38,6 +40,7 @@ import type { Membership, MembershipPlan, Shift, UserSession } from '@/features/
 
 interface Props {
   id: string
+  today: string
 }
 
 interface CustomerHistoryInvoice {
@@ -105,7 +108,7 @@ const ITEM_LABELS: Record<string, string> = {
   SURCHARGE: 'Phí gửi xe',
 }
 
-export function CustomerDetailScreen({ id }: Props) {
+export function CustomerDetailScreen({ id, today }: Props) {
   const router = useRouter()
   const { success: notifySuccess, error: notifyError } = useToast()
 
@@ -114,7 +117,9 @@ export function CustomerDetailScreen({ id }: Props) {
   const [playDays, setPlayDays] = useState<PlayDay[]>([])
   const [user, setUser] = useState<UserSession | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
+  const [historyError, setHistoryError] = useState('')
   const [editing, setEditing] = useState(false)
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
@@ -129,9 +134,11 @@ export function CustomerDetailScreen({ id }: Props) {
   const [renewOpen, setRenewOpen] = useState(false)
   const [renewSubmitting, setRenewSubmitting] = useState(false)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
+    if (opts?.silent) setRefreshing(true)
+    else setLoading(true)
     setError('')
+    setHistoryError('')
     try {
       const [customerRes, historyRes, userRes] = await Promise.all([
         apiJson<CustomerDetail>(`/api/customers/${id}`),
@@ -147,6 +154,8 @@ export function CustomerDetailScreen({ id }: Props) {
       if (historyRes.success) {
         setHistory(historyRes.data?.invoices ?? [])
         setPlayDays(historyRes.data?.playDays ?? [])
+      } else {
+        setHistoryError(historyRes.error || 'Không tải được lịch sử thanh toán')
       }
       if (userRes.success) setUser(userRes.data ?? null)
 
@@ -168,6 +177,7 @@ export function CustomerDetailScreen({ id }: Props) {
     } catch {
       setError('Lỗi kết nối máy chủ')
     } finally {
+      setRefreshing(false)
       setLoading(false)
     }
   }, [id])
@@ -212,7 +222,7 @@ export function CustomerDetailScreen({ id }: Props) {
       }
       notifySuccess('Đã cập nhật thông tin hội viên')
       setEditing(false)
-      void loadData()
+      void loadData({ silent: true })
     } catch {
       notifyError('Lỗi kết nối máy chủ')
     } finally {
@@ -285,7 +295,7 @@ export function CustomerDetailScreen({ id }: Props) {
   const handleRenewed = async () => {
     notifySuccess('Đã gia hạn hội viên')
     setRenewOpen(false)
-    await loadData()
+    await loadData({ silent: true })
   }
 
   if (loading) {
@@ -294,7 +304,7 @@ export function CustomerDetailScreen({ id }: Props) {
 
   if (!customer) {
     return (
-    <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
+    <div className="min-h-full bg-surface-secondary px-4 py-4 md:px-6 md:py-6">
       <div className="mx-auto max-w-content space-y-4">
         <BackButton />
           <EmptyState
@@ -311,7 +321,7 @@ export function CustomerDetailScreen({ id }: Props) {
   const monogram = getMonogram(customer.fullName)
 
   return (
-      <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
+      <div className="min-h-full bg-surface-secondary px-4 py-4 md:px-6 md:py-6">
         <div className="mx-auto max-w-content space-y-4">
           <BackButton />
 
@@ -343,23 +353,35 @@ export function CustomerDetailScreen({ id }: Props) {
             onSave={handleSave}
             onDelete={() => setDeleteOpen(true)}
             membership={isMember && membershipInfo ? (
-              <div className="space-y-3">
-                <MembershipStatusBlock
-                  status={membershipInfo.status}
-                  current={membershipInfo.current}
-                  daysToExpiry={daysToExpiry}
-                  shiftReady={!!shift}
-                  onRenew={() => setRenewOpen(true)}
-                />
-                <MembershipHistorySection memberships={memberships} />
-              </div>
+              <MembershipStatusBlock
+                status={membershipInfo.status}
+                current={membershipInfo.current}
+                latest={membershipInfo.latest}
+                daysToExpiry={daysToExpiry}
+                shiftReady={!!shift}
+                onRenew={() => setRenewOpen(true)}
+              />
+            ) : null}
+            membershipHistory={isMember && membershipInfo ? (
+              <MembershipHistorySection memberships={memberships} />
             ) : null}
           />
 
           {/* ── Main: hoạt động chơi + lịch sử thanh toán ── */}
           <div className="min-w-0 space-y-4 lg:col-span-3">
-            <PlayCalendar playDays={playDays} />
-            <HistorySection history={history} />
+            {historyError ? null : (
+              <>
+                <PlayCalendar playDays={playDays} today={today} />
+                <MonthlyPlayStats playDays={playDays} />
+              </>
+            )}
+            <HistorySection
+              history={history}
+              totalSpent={stats.spent}
+              error={historyError}
+              refreshing={refreshing}
+              onRetry={() => void loadData({ silent: true })}
+            />
           </div>
         </div>
 
@@ -402,7 +424,7 @@ function BackButton() {
     <button
       type="button"
       onClick={() => router.back()}
-      className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+      className="-ml-1 inline-flex items-center gap-1.5 py-2 pr-2 text-sm font-medium text-text-tertiary transition-colors hover:text-text-primary"
     >
       <ArrowLeft size={16} />
       Quay lại
@@ -429,6 +451,7 @@ function ProfileRail({
   onSave,
   onDelete,
   membership,
+  membershipHistory,
 }: {
   customer: CustomerDetail
   monogram: string
@@ -447,63 +470,68 @@ function ProfileRail({
   onSave: () => void
   onDelete: () => void
   membership?: ReactNode
+  membershipHistory?: ReactNode
 }) {
   return (
     <aside className="min-w-0 lg:col-span-2">
-      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 md:p-5">
+      <Card padding="none" className="p-4 md:p-5">
         <div className="flex items-start gap-3">
           <div
             aria-hidden
-            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-zinc-200 to-zinc-100 text-base font-bold text-zinc-700 ring-1 ring-zinc-200 dark:from-zinc-700 dark:to-zinc-800 dark:text-zinc-200 dark:ring-zinc-700"
+            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-surface-tertiary text-base font-bold text-text-secondary ring-1 ring-border-default"
           >
             {monogram}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <h1 className={`truncate ${PAGE_TITLE_CLASS}`}>
-                  {customer.fullName}
-                </h1>
-              <Badge variant={customer.type === 'MEMBER' ? 'yellow' : 'blue'} size="sm" className="mt-1">
-                  {customer.type === 'MEMBER' ? 'Hội viên' : 'Vãng lai'}
-                </Badge>
-              </div>
+              <h1 className={`min-w-0 break-words ${PAGE_TITLE_CLASS}`}>
+                {customer.fullName}
+              </h1>
               {!editing && (
                 <div className="flex shrink-0 items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                  icon={Pencil}
+                  <Button
+                    variant="white"
+                    size="lg"
+                    className="size-11"
+                    icon={Pencil}
                     onClick={onStartEdit}
                     title="Chỉnh sửa hồ sơ"
                     aria-label="Chỉnh sửa hồ sơ"
-              />
+                  />
                   {isAdmin && (
-        <Button
-          variant="red-soft"
-                size="sm"
-            icon={Trash2}
+                    <Button
+                      variant="red-soft"
+                      size="lg"
+                      className="size-11"
+                      icon={Trash2}
                       onClick={onDelete}
                       title="Xoá hội viên"
                       aria-label="Xoá hội viên"
-              />
+                    />
+                  )}
+                </div>
               )}
             </div>
-      )}
-    </div>
 
-            <a
-              href={customer.phone ? `tel:${customer.phone}` : undefined}
-              className="mt-2 inline-flex items-center gap-1.5 text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
-            >
-              <Phone size={13} />
-              {customer.phone || 'Chưa có SĐT'}
-            </a>
+            {customer.phone ? (
+              <a
+                href={`tel:${customer.phone}`}
+                className="mt-2 inline-flex items-center gap-1.5 text-sm text-text-secondary transition-colors hover:text-text-primary"
+              >
+                <Phone size={13} />
+                {customer.phone}
+              </a>
+            ) : (
+              <span className="mt-2 inline-flex items-center gap-1.5 text-sm text-text-tertiary">
+                <Phone size={13} />
+                Chưa có SĐT
+              </span>
+            )}
           </div>
         </div>
 
         {editing ? (
-          <div className="mt-4 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+          <div className="mt-4 space-y-3 border-t border-border-default pt-4">
             <div>
               <Label htmlFor="customer-full-name" required>Họ tên</Label>
               <Input
@@ -551,20 +579,26 @@ function ProfileRail({
             </div>
           </div>
         ) : customer.notes ? (
-          <p className="mt-4 border-t border-zinc-200 pt-3 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
+          <p className="mt-4 border-t border-border-default pt-3 text-sm text-text-secondary">
             {customer.notes}
           </p>
         ) : null}
-      </div>
+      </Card>
 
-      {/* Thống kê — dải số liệu dưới hồ sơ, dùng chung rhythm rail */}
-      <div className="mt-3 grid grid-cols-3 divide-x divide-zinc-200 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
-        <RailStat label="Lần chơi" value={String(stats.sessions)} />
-        <RailStat label="Tổng chi" value={money(stats.spent)} />
-        <RailStat label="Giờ chơi" value={`${stats.hours}h`} />
-      </div>
+      {/* Thống kê + trạng thái hội viên — một khối duy nhất trong rail */}
+      <Card padding="none" className="mt-3 overflow-hidden">
+        <div className="grid grid-cols-3 divide-x divide-border-default">
+          <RailStat label="Lần chơi" value={String(stats.sessions)} />
+          <RailStat label="Tổng chi" value={money(stats.spent, false)} />
+          <RailStat
+            label="Giờ chơi"
+            value={`${stats.hours.toLocaleString('vi-VN', { maximumFractionDigits: 2 })}h`}
+          />
+        </div>
+        {membership ? <div className="border-t border-border-default">{membership}</div> : null}
+      </Card>
 
-      {membership ? <div className="mt-3">{membership}</div> : null}
+      {membership ? <div className="mt-3">{membershipHistory}</div> : null}
     </aside>
   )
 }
@@ -572,10 +606,10 @@ function ProfileRail({
 function RailStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="px-2 py-3 text-center">
-      <p className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+      <p className="text-[10px] uppercase tracking-wide text-text-tertiary">
         {label}
       </p>
-      <p className="mt-0.5 truncate text-sm font-bold tabular-nums text-zinc-950 dark:text-white xl:text-base">
+      <p className="mt-0.5 truncate text-sm font-bold tabular-nums text-text-primary xl:text-base">
         {value}
       </p>
       </div>
@@ -587,64 +621,62 @@ function RailStat({ label, value }: { label: string; value: string }) {
 function MembershipStatusBlock({
   status,
   current,
+  latest,
   daysToExpiry,
   shiftReady,
   onRenew,
 }: {
   status: MemberStatus
   current: Membership | null
+  latest: Membership | null
   daysToExpiry: number | null
   shiftReady: boolean
   onRenew: () => void
 }) {
   const isActive = status === 'ACTIVE'
   const isExpired = status === 'EXPIRED'
-  const isNone = status === 'NONE'
 
   // Tông màu theo trạng thái — bề mặt giữ trung tính, điểm nhấn là viền + status dot
   const accent = isActive
-  ? 'before:bg-success-bg0'
+  ? 'before:bg-success'
     : isExpired
-    ? 'before:bg-warning-bg0'
-      : 'before:bg-zinc-400'
+    ? 'before:bg-warning'
+      : 'before:bg-text-tertiary'
 
   const statusLabel = isActive ? 'Còn hạn' : isExpired ? 'Hết hạn' : 'Chưa có kỳ'
 
   const ctaLabel = isActive ? 'Đóng tiếp kỳ mới' : isExpired ? 'Gia hạn để chơi' : 'Đăng ký kỳ đầu'
-  const ctaDisabled = isNone || !shiftReady
-  const ctaHint = isNone
-    ? 'Hội viên chưa có kỳ nào'
-    : !shiftReady
-      ? 'Cần mở ca trước khi thu phí'
-    : null
+  const ctaDisabled = !shiftReady
+  const ctaHint = !shiftReady ? 'Cần mở ca trước khi thu phí' : null
+  const displayMembership = current ?? latest
 
   return (
-    <section
-      className={`relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 before:absolute before:left-0 before:top-0 before:h-full before:w-1 ${accent}`}
+    <div
+      className={`relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 ${accent}`}
     >
       <div className="flex items-center gap-2">
-        <Calendar size={14} className="text-zinc-400" />
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+        <Calendar size={14} className="text-text-tertiary" />
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
           Trạng thái hội viên
         </p>
       </div>
 
-      <p className="mt-3 text-3xl font-extrabold tracking-tight text-zinc-950 dark:text-white">
+      <p className="mt-3 text-2xl font-bold tracking-tight text-text-primary">
         {isActive && daysToExpiry !== null
           ? `Còn ${daysToExpiry} ngày`
           : statusLabel}
         </p>
 
-      {current ? (
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+      {displayMembership ? (
+        <p className="mt-1 text-sm text-text-tertiary">
           {isActive ? 'Hết hạn' : 'Đã hết hạn'} vào{' '}
-          <span className="font-medium text-zinc-950 dark:text-white">
-            {formatDay(current.expiresAt)}
+          <span className="font-medium text-text-primary">
+            {formatDay(displayMembership.expiresAt)}
           </span>
-          {current.plan ? ` · ${current.plan.name}` : ''}
+          {displayMembership.plan ? ` · ${displayMembership.plan.name}` : ''}
         </p>
       ) : (
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mt-1 text-sm text-text-tertiary">
           Chưa có kỳ hội viên nào được ghi nhận.
         </p>
       )}
@@ -661,91 +693,127 @@ function MembershipStatusBlock({
           {ctaLabel}
         </Button>
         {ctaHint ? (
-          <p className="mt-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-2 text-center text-xs text-text-tertiary">
             {ctaHint}
           </p>
         ) : null}
         </div>
-    </section>
+    </div>
   )
 }
 
 function MembershipHistorySection({ memberships }: { memberships: Membership[] }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <header className="flex items-center gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <History size={15} className="text-zinc-400" />
-        <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
+    <Card padding="none" className="overflow-hidden">
+      <header className="flex items-center gap-2 border-b border-border-default px-4 py-3">
+        <History size={15} className="text-text-tertiary" />
+        <h2 className="text-sm font-semibold text-text-primary">
           Lịch sử đóng phí
         </h2>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+        <span className="text-xs text-text-tertiary">
           · {memberships.length} kỳ
         </span>
       </header>
 
       {memberships.length === 0 ? (
-        <p className="p-4 text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="p-4 text-sm text-text-tertiary">
           Chưa có lịch sử hội viên.
       </p>
       ) : (
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
-          {memberships.map((membership) => (
-            <li key={membership.id} className="px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-zinc-950 dark:text-white">
-                  {membership.plan?.name ?? 'Gói hội viên'}
-                </p>
-                <span className="flex shrink-0 items-center gap-2">
-                  {membership.status === 'CANCELLED' && (
-                    <Badge variant="danger" size="sm">
-                      Đã huỷ
-                    </Badge>
-                  )}
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {formatDay(membership.startsAt)}
+        <ul className="divide-y divide-border-default">
+          {memberships.map((membership) => {
+            const cancelled = membership.status === 'CANCELLED'
+            // eslint-disable-next-line react-hooks/purity
+            const expired = new Date(membership.expiresAt).getTime() <= Date.now()
+            const statusLabel = cancelled ? 'Đã huỷ' : expired ? 'Hết hạn' : 'Còn hạn'
+            const statusTone = cancelled
+              ? 'text-danger'
+              : expired
+                ? 'text-warning'
+                : 'text-success'
+
+            return (
+              <li key={membership.id} className="px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="min-w-0 text-sm font-medium text-text-primary">
+                    {membership.plan?.name ?? 'Gói hội viên'}
+                  </p>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums text-text-primary">
+                    {money(membership.plan?.price ?? 0, false)}
                   </span>
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                {formatDay(membership.startsAt)} - {formatDay(membership.expiresAt)}
-              </p>
-            </li>
-          ))}
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-3 text-xs">
+                  <span className="min-w-0 text-text-tertiary">
+                    {formatDay(membership.startsAt)} – {formatDay(membership.expiresAt)}
+                  </span>
+                  <span className={`shrink-0 font-medium ${statusTone}`}>
+                    {statusLabel}
+                  </span>
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
-    </section>
+    </Card>
   )
 }
 
 // ── HistorySection: lịch sử thanh toán dạng compact row ──
-function HistorySection({ history }: { history: CustomerHistoryInvoice[] }) {
-  const totalSpent = useMemo(
-    () => history
-      .filter((invoice) => invoice.status === 'PAID')
-      .reduce((sum, invoice) => sum + Number(invoice.grandTotal), 0),
-    [history],
-  )
+function HistorySection({
+  history,
+  totalSpent,
+  error,
+  refreshing,
+  onRetry,
+}: {
+  history: CustomerHistoryInvoice[]
+  totalSpent: number
+  error: string
+  refreshing: boolean
+  onRetry: () => void
+}) {
+  const invoiceCount = history.filter((invoice) => invoice.status !== 'CANCELLED').length
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <div className="flex items-center gap-2">
-          <History size={15} className="text-zinc-400" />
-          <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">
+    <Card padding="none" className="overflow-hidden">
+      <header className="flex items-center justify-between gap-3 border-b border-border-default px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <History size={15} className="shrink-0 text-text-tertiary" />
+          <h2 className="text-sm font-semibold text-text-primary">
             Lịch sử thanh toán
           </h2>
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            · {history.length} hoá đơn
+          <span className="text-xs text-text-tertiary">
+            · {invoiceCount} hoá đơn
           </span>
         </div>
-        {history.length > 0 ? (
-          <span className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
-            Tổng {money(totalSpent)}
+        {invoiceCount > 0 ? (
+          <span className="shrink-0 text-xs tabular-nums text-text-tertiary">
+            Tổng đã thu {money(totalSpent, false)}
           </span>
         ) : null}
       </header>
 
-      {history.length === 0 ? (
+      {error ? (
+        <div className="p-4">
+          <NoticeCard
+            tone="warning"
+            title="Không tải được lịch sử thanh toán"
+            description={error}
+            action={(
+              <Button
+                variant="white"
+                size="sm"
+                loading={refreshing}
+                disabled={refreshing}
+                onClick={onRetry}
+              >
+                Thử lại
+              </Button>
+            )}
+          />
+        </div>
+      ) : history.length === 0 ? (
         <div className="p-8">
           <EmptyState
             icon={ReceiptText}
@@ -754,13 +822,13 @@ function HistorySection({ history }: { history: CustomerHistoryInvoice[] }) {
           />
           </div>
       ) : (
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+        <ul className="divide-y divide-border-default">
           {history.map((invoice) => (
             <InvoiceHistoryRow key={invoice.id} invoice={invoice} />
           ))}
         </ul>
                   )}
-    </section>
+    </Card>
   )
 }
 
@@ -780,20 +848,20 @@ function InvoiceHistoryRow({ invoice }: { invoice: CustomerHistoryInvoice }) {
   return (
     <li>
       <details className="group">
-        <summary className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40 [&::-webkit-details-marker]:hidden">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+        <summary className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-tertiary [&::-webkit-details-marker]:hidden">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-tertiary text-text-tertiary">
             <ReceiptText size={14} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-sm font-semibold text-zinc-950 dark:text-white">
+              <span className="font-mono text-sm font-semibold text-text-primary">
                 {shortInvoiceNo(invoice.invoiceNo)}
               </span>
               <Badge variant={statusVariant as 'success' | 'danger' | 'default'} size="sm">
                 {statusLabel}
               </Badge>
             </div>
-            <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="mt-0.5 truncate text-xs text-text-tertiary">
               {invoice.paidAt
                 ? formatDay(invoice.paidAt)
                 : invoice.createdAt ? formatDay(invoice.createdAt) : ''}
@@ -801,17 +869,17 @@ function InvoiceHistoryRow({ invoice }: { invoice: CustomerHistoryInvoice }) {
             </p>
             </div>
           <div className="flex shrink-0 items-center gap-2">
-            <span className="text-sm font-bold tabular-nums text-zinc-950 dark:text-white">
-              {money(invoice.grandTotal)}
+            <span className="text-sm font-bold tabular-nums text-text-primary">
+              {money(invoice.grandTotal, false)}
             </span>
             <ChevronRight
               size={14}
-              className="text-zinc-400 transition-transform group-open:rotate-90"
+              className="text-text-tertiary transition-transform group-open:rotate-90"
           />
             </div>
         </summary>
 
-        <div className="border-t border-zinc-100 bg-zinc-50/60 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+        <div className="border-t border-border-default bg-surface-secondary px-4 py-3">
           {invoice.items.length > 0 ? (
             <ul className="space-y-1.5">
               {invoice.items.map((item) => (
@@ -819,7 +887,7 @@ function InvoiceHistoryRow({ invoice }: { invoice: CustomerHistoryInvoice }) {
                   key={item.id}
                   className="flex items-center justify-between gap-3 text-xs"
                 >
-                  <span className="min-w-0 truncate text-zinc-700 dark:text-zinc-300">
+                  <span className="min-w-0 truncate text-text-secondary">
                     {ITEM_LABELS[item.type] ?? item.description}
                     {item.type === 'PRODUCT' && item.product
                       ? ` · ${item.product.name}`
@@ -828,8 +896,8 @@ function InvoiceHistoryRow({ invoice }: { invoice: CustomerHistoryInvoice }) {
                       ? ` · ${item.description}`
                       : ''}
                   </span>
-                  <span className="shrink-0 tabular-nums text-zinc-500 dark:text-zinc-400">
-                    {money(item.total)}
+                  <span className="shrink-0 tabular-nums text-text-tertiary">
+                    {money(item.total, false)}
                   </span>
                 </li>
               ))}
@@ -847,8 +915,8 @@ function InvoiceHistoryRow({ invoice }: { invoice: CustomerHistoryInvoice }) {
           ) : null}
 
           {invoice.shift && invoice.shift.openedAt ? (
-            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-              Ca {formatDay(invoice.shift.openedAt)}
+            <p className="mt-2 text-xs text-text-tertiary">
+              {shiftTimeRange(invoice.shift.openedAt, null)}
             </p>
           ) : null}
 
@@ -859,8 +927,75 @@ function InvoiceHistoryRow({ invoice }: { invoice: CustomerHistoryInvoice }) {
             Xem chi tiết hoá đơn
             <ChevronRight size={12} aria-hidden />
           </Link>
-                </div>
+        </div>
       </details>
     </li>
   )
 }
+
+function MonthlyPlayStats({ playDays }: { playDays: PlayDay[] }) {
+  const rows = useMemo(() => {
+    const map = new Map<string, number>()
+
+    for (const day of playDays) {
+      const month = day.day.slice(0, 7)
+      map.set(month, Math.round(((map.get(month) ?? 0) + day.hours) * 100) / 100)
+    }
+
+    return [...map.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([month, hours]) => {
+        const [year, monthNumber] = month.split('-')
+        return { month, label: `Th${Number(monthNumber)}/${year}`, hours }
+      })
+  }, [playDays])
+
+  if (rows.length === 0) return null
+
+  const total = rows.reduce((sum, row) => sum + row.hours, 0)
+
+  return (
+    <Card padding="none" className="overflow-hidden">
+      <header className="flex flex-col items-start gap-1 border-b border-border-default px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+        <h2 className="w-full min-w-0 truncate text-sm font-semibold text-text-primary sm:w-auto">
+          Thống kê giờ chơi theo tháng
+        </h2>
+        <p className="shrink-0 whitespace-nowrap text-xs tabular-nums text-text-tertiary">
+          Tổng {total.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} giờ
+        </p>
+      </header>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border-default">
+              <th
+                scope="col"
+                className="px-4 py-2 text-left text-xs font-medium text-text-tertiary"
+              >
+                Tháng
+              </th>
+              <th
+                scope="col"
+                className="px-4 py-2 text-right text-xs font-medium text-text-tertiary"
+              >
+                Số giờ
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-default">
+            {rows.map((row) => (
+              <tr key={row.month}>
+                <td className="px-4 py-2 text-text-primary">{row.label}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-text-primary">
+                  {row.hours.toLocaleString('vi-VN', { maximumFractionDigits: 2 })}h
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
