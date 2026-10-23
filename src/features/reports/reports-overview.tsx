@@ -488,7 +488,7 @@ function HeroScoreboard({
   return (
     <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       {/* Focal: doanh thu — số to, growth badge, dải emerald */}
-    <div className="relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-success-bg0 sm:p-5">
+    <div className="relative overflow-hidden p-4 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-success sm:p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
