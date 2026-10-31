@@ -56,7 +56,12 @@ export async function GET(request: NextRequest) {
       const currentMembership = activeMemberships.find((membership) =>
         membership.startsAt <= now && membership.expiresAt > now
       ) ?? null
-      const latestMembership = activeMemberships[0] ?? null
+      // Kỳ xa nhất = ngày hết hạn thực tế sau khi cộng dồn các lần gia hạn sớm
+      const latestMembership = activeMemberships.reduce<(typeof activeMemberships)[number] | null>(
+        (furthest, membership) =>
+          !furthest || membership.expiresAt > furthest.expiresAt ? membership : furthest,
+        null
+      )
 
       return {
         ...customer,

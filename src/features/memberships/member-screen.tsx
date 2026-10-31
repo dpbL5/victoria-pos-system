@@ -67,8 +67,8 @@ export function MemberScreen() {
   const members: MemberCustomer[] = useMemo(
     () => (memberData?.data ?? []).map((member) => ({
       ...member,
-      expiresAt: member.currentMembership?.expiresAt
-        ?? member.latestMembership?.expiresAt
+      expiresAt: member.latestMembership?.expiresAt
+        ?? member.currentMembership?.expiresAt
         ?? '9999-12-31',
       sortName: vnNameSortKey(member.fullName),
     })),
@@ -111,8 +111,10 @@ export function MemberScreen() {
   ), [isAdmin])
 
   const renderMembershipStatus = useCallback((item: MemberCustomer) => {
-    if (item.membershipStatus === 'ACTIVE' && item.currentMembership) {
-      return formatDay(item.currentMembership.expiresAt)
+    // Hiển thị ngày hết hạn xa nhất (đã cộng dồn), không phải kỳ đang chạy
+    if (item.membershipStatus === 'ACTIVE') {
+      const expiry = item.latestMembership?.expiresAt ?? item.currentMembership?.expiresAt
+      if (expiry) return formatDay(expiry)
     }
     if (item.membershipStatus === 'EXPIRED' && item.latestMembership) {
       return formatDay(item.latestMembership.expiresAt)
