@@ -81,6 +81,21 @@ it('gắn stack vào phần tử bọc thực tế của FullCalendar 7 và cậ
   expect(wrapper.classList.add).not.toHaveBeenCalled()
 })
 
+it('view Danh sách mở rộng ±6 tháng quanh ngày chọn thay vì khoá một tuần', () => {
+  vi.stubGlobal('React', React)
+  vi.stubGlobal('window', { location: { search: '?view=listAll&date=2026-10-21' }, innerWidth: 1200 })
+  renderToStaticMarkup(<LessonsCalendar />)
+  expect(calendarProps.current.views).toEqual({ listAll: { type: 'list' } })
+  expect(calendarProps.current.visibleRange).toEqual({ start: '2026-04-22', end: '2027-04-21' })
+})
+
+it('các view khác không dùng visibleRange mở rộng', () => {
+  vi.stubGlobal('React', React)
+  vi.stubGlobal('window', { location: { search: '?view=timeGridWeek&date=2026-10-21' }, innerWidth: 1200 })
+  renderToStaticMarkup(<LessonsCalendar />)
+  expect(calendarProps.current.visibleRange).toBeUndefined()
+})
+
 it('FullCalendar 7 nhận class nhận diện thẻ từ dữ liệu lịch', () => {
   vi.stubGlobal('React', React)
   vi.stubGlobal('window', { location: { search: '' }, innerWidth: 390 })

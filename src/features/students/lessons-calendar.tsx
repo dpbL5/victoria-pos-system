@@ -1,5 +1,5 @@
 'use client'
-import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import FullCalendar, { type CalendarRef, type EventDropInfo, type EventResizeDoneInfo } from '@fullcalendar/react'
 import dayGrid from '@fullcalendar/react/daygrid'
@@ -25,7 +25,13 @@ import { LessonEditor, localTime, lockedLesson } from './lesson-editor'
 import type { Lesson, Student } from './types'
 import type { LessonClass } from '@/features/classes/types'
 
-const VIEWS = { timeGridDay: 'Ngày', timeGridWeek: 'Tuần', dayGridMonth: 'Tháng', listWeek: 'Danh sách' }
+const VIEWS = { timeGridDay: 'Ngày', timeGridWeek: 'Tuần', dayGridMonth: 'Tháng', listAll: 'Danh sách' }
+// View Danh sách hiển thị toàn bộ lịch trong ±6 tháng quanh ngày đang chọn —
+// trần của API /api/lessons là 366 ngày nên đây là cửa sổ lớn nhất khả dĩ.
+const LIST_WINDOW_DAYS = 182
+function shiftDate(isoDate: string, days: number): string {
+  return new Date(Date.parse(`${isoDate}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+}
 function formatSlotLabel(text: string, hour12: boolean) {
   return hour12 ? text.replace(':00', '') : text.replace(/^0(?=\d)/, '').replace(':00', 'h')
 }
@@ -43,7 +49,10 @@ export function getOverlapStackIndex(lesson: Lesson, lessons: Lesson[]) {
 export default function LessonsCalendar() {
   const hour12 = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 ?? false
   const [initial] = useState(() => new URLSearchParams(window.location.search))
-  const [view, setView] = useState(() => initial.get('view') ?? (window.innerWidth < 768 ? 'timeGridDay' : 'timeGridWeek'))
+  const [view, setView] = useState(() => {
+    const saved = initial.get('view')
+    return (saved === 'listWeek' ? 'listAll' : saved) ?? (window.innerWidth < 768 ? 'timeGridDay' : 'timeGridWeek')
+  })
   const [date, setDate] = useState(() => initial.get('date') ?? localTime(new Date().toISOString()).slice(0, 10))
   const [title, setTitle] = useState('Lịch học')
   const [range, setRange] = useState<{ from: string; to: string } | null>(null)
@@ -108,6 +117,22 @@ export default function LessonsCalendar() {
     for (const [key, value] of Object.entries(values)) { if (value) query.set(key, value); else query.delete(key) }
     window.history.replaceState(null, '', `/lessons?${query}`)
   }, [])
+  const isListView = view.startsWith('list')
+  const listWindow = useMemo(() => ({ start: shiftDate(date, -LIST_WINDOW_DAYS), end: shiftDate(date, LIST_WINDOW_DAYS) }), [date])
+  // Ở view Danh sách, mũi tên/ngày chọn dịch toàn bộ cửa sổ ±6 tháng thay vì gọi API điều hướng của FullCalendar.
+  const navigate = (direction: -1 | 1) => {
+    if (isListView) { const next = shiftDate(date, direction * (LIST_WINDOW_DAYS * 2)); setDate(next); persist({ date: next }); return }
+    if (direction === -1) ref.current?.getApi().prev()
+    else ref.current?.getApi().next()
+  }
+  const goToday = () => {
+    if (isListView) { const next = localTime(new Date().toISOString()).slice(0, 10); setDate(next); persist({ date: next }); return }
+    ref.current?.getApi().today()
+  }
+  const pickDate = (value: string) => {
+    if (isListView) { setDate(value); persist({ date: value }); return }
+    ref.current?.getApi().gotoDate(value)
+  }
   const openNew = (start: string, end?: string) => {
     const actual = start.length === 10 ? `${start}T18:00:00+07:00` : start
     startTransition(() => setEditor({ start: actual, end: end ?? new Date(Date.parse(actual) + 3600000).toISOString() }))
@@ -132,9 +157,9 @@ export default function LessonsCalendar() {
         chọn cách xem / lọc → lối tắt màn khác (gọn trong ⋯) → tạo buổi học. */}
     <div className="calendar-toolbar z-20 mb-3 flex min-w-0 items-center gap-2 rounded-xl bg-surface-secondary p-1.5 ring-1 ring-border-default">
       <div className="flex shrink-0 items-center gap-0.5">
-        <Button variant="ghost" size="sm" icon={ChevronLeft} aria-label="Khoảng trước" onClick={() => ref.current?.getApi().prev()} />
-        <Button variant="ghost" size="sm" icon={ChevronRight} aria-label="Khoảng sau" onClick={() => ref.current?.getApi().next()} />
-        <Button variant="ghost" size="sm" icon={CalendarDays} aria-label="Về hôm nay" title="Hôm nay" onClick={() => ref.current?.getApi().today()}>
+        <Button variant="ghost" size="sm" icon={ChevronLeft} aria-label="Khoảng trước" onClick={() => navigate(-1)} />
+        <Button variant="ghost" size="sm" icon={ChevronRight} aria-label="Khoảng sau" onClick={() => navigate(1)} />
+        <Button variant="ghost" size="sm" icon={CalendarDays} aria-label="Về hôm nay" title="Hôm nay" onClick={goToday}>
           <span className="hidden lg:inline">Hôm nay</span>
         </Button>
       </div>
@@ -145,7 +170,7 @@ export default function LessonsCalendar() {
             nút đứng cạnh — cùng lý do đã ghi ở button.tsx. `pr-[1.75rem]` +
             `text-sm` vì khung chỉ rộng 80px: để `pr-9`/16px thì "Tháng" bị cắt. */}
         <div className="w-20 lg:w-24">
-          <Select aria-label="Chế độ xem lịch" className="border-transparent bg-transparent pl-1.5 pr-[1.75rem] text-sm" value={view} onChange={e => { setView(e.target.value); ref.current?.getApi().changeView(e.target.value) }}>{Object.entries(VIEWS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select>
+          <Select aria-label="Chế độ xem lịch" className="border-transparent bg-transparent pl-1.5 pr-[1.75rem] text-sm" value={view} onChange={e => { const next = e.target.value; if (!next.startsWith('list') && isListView) ref.current?.getApi().gotoDate(date); setView(next); ref.current?.getApi().changeView(next) }}>{Object.entries(VIEWS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select>
         </div>
         <Button variant="ghost" icon={SlidersHorizontal} size="sm" aria-label={activeFilterCount ? `Bộ lọc lịch, đang áp dụng ${activeFilterCount}` : 'Bộ lọc lịch'} aria-expanded={filtersOpen} className="md:hidden" onClick={() => setFiltersOpen(v => !v)}>{activeFilterCount ? <span className="text-[10px]">{activeFilterCount}</span> : null}</Button>
         <Button variant="ghost" icon={MoreHorizontal} size="sm" aria-label="Lối tắt khác" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)} />
@@ -161,7 +186,7 @@ export default function LessonsCalendar() {
     <Button variant="contrast" className="add-lesson-button" size="sm" icon={Plus} onClick={() => openNew(date)}>Thêm buổi</Button>
   </div>
     <div className="calendar-body flex min-h-0 flex-1 flex-col gap-4 md:flex-row"><aside className={`${filtersOpen ? 'filter-panel-open' : 'hidden'} space-y-4 md:block md:w-48 md:shrink-0`}><div className="flex items-center justify-between md:hidden"><h2 className="font-semibold">Bộ lọc lịch</h2><Button variant="ghost" size="sm" icon={X} aria-label="Đóng bộ lọc" onClick={() => setFiltersOpen(false)} /></div>
-      <div><Label htmlFor="calendar-date">Đến ngày</Label><Input id="calendar-date" type="date" value={date} onChange={e => { if (e.target.value) ref.current?.getApi().gotoDate(e.target.value) }} /></div>
+      <div><Label htmlFor="calendar-date">Đến ngày</Label><Input id="calendar-date" type="date" value={date} onChange={e => { if (e.target.value) pickDate(e.target.value) }} /></div>
       <div><Label htmlFor="calendar-class">Lớp</Label><Select id="calendar-class" value={classFilter} onChange={e => { setClassFilter(e.target.value); persist({ classId: e.target.value }) }}><option value="">Tất cả lớp</option>{classes?.data?.classes?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></div>
       <div><Label htmlFor="calendar-student">Học viên</Label><Select id="calendar-student" value={studentId} onChange={e => { setStudentId(e.target.value); persist({ studentId: e.target.value }) }}><option value="">Tất cả học viên</option>{studentId && !students?.data?.some(s => s.id === studentId) && <option value={studentId}>Học viên đang chọn</option>}{students?.data?.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}</Select></div>
       <div><Label htmlFor="calendar-status">Trạng thái</Label><Select id="calendar-status" value={status} onChange={e => { setStatus(e.target.value); persist({ status: e.target.value }) }}><option value="">Các buổi chưa huỷ</option><option value="SCHEDULED">Đã xếp lịch</option><option value="COMPLETED">Hoàn thành</option><option value="CANCELLED">Đã huỷ</option></Select></div>
@@ -172,9 +197,9 @@ export default function LessonsCalendar() {
       <div className="mb-2 flex min-h-5 items-center gap-2 text-xs text-text-secondary" aria-live="polite"><span className="min-w-0 flex-1 truncate">{isLoading ? 'Đang tải lịch...' : `${lessons.length} buổi trong khoảng đang xem`}</span>{busy && <span>Đang lưu...</span>}<span className="shrink-0">GMT+7</span></div>
         <div className="calendar-grid flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl ring-1 ring-border-default">
         {/* @ts-expect-error FullCalendar runtime supports slotLabelContent, but v7.1 types omit it. */}
-        <FullCalendar ref={ref} plugins={[theme, dayGrid, timeGrid, list, interaction]} locale={vi} timeZone="Asia/Ho_Chi_Minh" initialView={view in VIEWS ? view : 'timeGridWeek'} initialDate={date} headerToolbar={false} firstDay={1} height="100%" nowIndicator allDaySlot={false} slotMinTime="00:00:00" slotMaxTime="24:00:00" scrollTime="08:00:00" slotDuration="00:30:00" snapDuration="00:15:00" slotMinHeight={isMobile ? 40 : 18} selectable={!busy} selectMirror editable={!busy} eventDurationEditable eventResizableFromStart dayMaxEvents={3} slotEventOverlap slotLaneClass="lesson-slot" slotLabelContent={(info: { text: string }) => formatSlotLabel(info.text, hour12)} eventClass={info => info.event.extendedProps.lesson?.status === 'CANCELLED' ? 'lesson-cancelled' : ''} longPressDelay={500} eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
+        <FullCalendar ref={ref} plugins={[theme, dayGrid, timeGrid, list, interaction]} locale={vi} timeZone="Asia/Ho_Chi_Minh" initialView={view in VIEWS ? view : 'timeGridWeek'} initialDate={date} views={{ listAll: { type: 'list' } }} visibleRange={isListView ? listWindow : undefined} headerToolbar={false} firstDay={1} height="100%" nowIndicator allDaySlot={false} slotMinTime="00:00:00" slotMaxTime="24:00:00" scrollTime="08:00:00" slotDuration="00:30:00" snapDuration="00:15:00" slotMinHeight={isMobile ? 40 : 18} selectable={!busy} selectMirror editable={!busy} eventDurationEditable eventResizableFromStart dayMaxEvents={3} slotEventOverlap slotLaneClass="lesson-slot" slotLabelContent={(info: { text: string }) => formatSlotLabel(info.text, hour12)} eventClass={info => info.event.extendedProps.lesson?.status === 'CANCELLED' ? 'lesson-cancelled' : ''} longPressDelay={500} eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
         dayHeaderContent={info => info.view.type.startsWith('timeGrid') ? <span className="inline-flex flex-col"><span>{['CN', 'Th 2', 'Th 3', 'Th 4', 'Th 5', 'Th 6', 'Th 7'][info.date.getUTCDay()]}</span><span>{info.date.getUTCDate()}/{info.date.getUTCMonth() + 1}</span></span> : info.text}
-        datesSet={info => { const next = { from: info.start.toISOString(), to: info.end.toISOString() }; setRange(prev => prev?.from === next.from && prev.to === next.to ? prev : next); setTitle(info.view.title); const current = localTime(info.view.calendar.getDate().toISOString()).slice(0, 10); setDate(current); setView(info.view.type); persist({ date: current, view: info.view.type }) }}
+        datesSet={info => { const isList = info.view.type.startsWith('list'); const next = { from: info.start.toISOString(), to: info.end.toISOString() }; setRange(prev => prev?.from === next.from && prev.to === next.to ? prev : next); setTitle(isList ? 'Toàn bộ lịch học' : info.view.title); setView(info.view.type); if (isList) { persist({ view: info.view.type }); return } const current = localTime(info.view.calendar.getDate().toISOString()).slice(0, 10); setDate(current); persist({ date: current, view: info.view.type }) }}
         dateClick={info => openNew(info.dateStr)} select={info => { if (!info.allDay) openNew(info.start.toISOString(), info.end.toISOString()) }}
         events={lessons.map(l => ({ id: l.id, title: l.title, start: l.startsAt, end: new Date(Date.parse(l.startsAt) + l.durationMin * 60000).toISOString(), editable: !lockedLesson(l), className: ['lesson-calendar-event', l.status === 'CANCELLED' ? 'lesson-cancelled' : '', l.seriesId ? 'lesson-series' : ''].filter(Boolean).join(' '), extendedProps: { lesson: l, seriesId: l.seriesId, overlapStackIndex: getOverlapStackIndex(l, lessons) } }))}
         eventClick={info => { const lesson = lessons.find(l => l.id === info.event.id); if (lesson) startTransition(() => setEditor({ lesson, start: lesson.startsAt, end: new Date(Date.parse(lesson.startsAt) + lesson.durationMin * 60000).toISOString() })) }} eventDrop={info => void move(info)} eventResize={info => void move(info)}
