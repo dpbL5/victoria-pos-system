@@ -84,36 +84,36 @@ describe('renamePlayer', () => {
 
   it('trả SESSION_NOT_FOUND khi phiên không tồn tại', async () => {
     fakeStore.session.findUnique.mockResolvedValue(null)
-    const result = await renamePlayer({ sessionId: 'x', playerId: 'player-1', staffId: 'staff-1', role: 'ADMIN', name: 'Lan' }, repos)
+    const result = await renamePlayer({ sessionId: 'x', playerId: 'player-1', staffId: 'staff-1', canRenameAny: true, name: 'Lan' }, repos)
     expect(result).toEqual({ ok: false, error: { code: 'SESSION_NOT_FOUND' } })
   })
 
   it('trả SESSION_NOT_ACTIVE khi phiên đã kết thúc', async () => {
     fakeStore.session.findUnique.mockResolvedValue({ ...makeActiveSession(), status: 'COMPLETED' })
-    const result = await renamePlayer({ sessionId: 'sess-1', playerId: 'player-1', staffId: 'staff-1', role: 'ADMIN', name: 'Lan' }, repos)
+    const result = await renamePlayer({ sessionId: 'sess-1', playerId: 'player-1', staffId: 'staff-1', canRenameAny: true, name: 'Lan' }, repos)
     expect(result).toEqual({ ok: false, error: { code: 'SESSION_NOT_ACTIVE' } })
   })
 
   it('trả PLAYER_NOT_FOUND khi player không thuộc session', async () => {
-    const result = await renamePlayer({ sessionId: 'sess-1', playerId: 'player-999', staffId: 'staff-1', role: 'ADMIN', name: 'Lan' }, repos)
+    const result = await renamePlayer({ sessionId: 'sess-1', playerId: 'player-999', staffId: 'staff-1', canRenameAny: true, name: 'Lan' }, repos)
     expect(result).toEqual({ ok: false, error: { code: 'PLAYER_NOT_FOUND' } })
   })
 
   it('trả FORBIDDEN khi STAFF không phải owner và phiên không gắn ca', async () => {
     // staff-3 không tạo phiên, session không gắn shift → không có quyền
     fakeStore.session.findUnique.mockResolvedValue({ ...makeActiveSession(), shiftId: null })
-    const result = await renamePlayer({ sessionId: 'sess-1', playerId: 'player-1', staffId: 'staff-3', role: 'STAFF', name: 'Lan' }, repos)
+    const result = await renamePlayer({ sessionId: 'sess-1', playerId: 'player-1', staffId: 'staff-3', canRenameAny: false, name: 'Lan' }, repos)
     expect(result).toEqual({ ok: false, error: { code: 'FORBIDDEN' } })
   })
 
   it('STAFF là owner vẫn được đổi tên (không cần check ca)', async () => {
     fakeStore.session.findUnique.mockResolvedValue({ ...makeActiveSession(), shiftId: null })
-    const result = await renamePlayer({ sessionId: 'sess-1', playerId: 'player-1', staffId: 'staff-1', role: 'STAFF', name: 'Lan' }, repos)
+    const result = await renamePlayer({ sessionId: 'sess-1', playerId: 'player-1', staffId: 'staff-1', canRenameAny: false, name: 'Lan' }, repos)
     expect(result.ok).toBe(true)
   })
 
   it('đổi tên thành công: update theo đúng playerId + ghi audit PLAYER_RENAME', async () => {
-    const result = await renamePlayer({ sessionId: 'sess-1', playerId: 'player-1', staffId: 'staff-1', role: 'ADMIN', name: '  Lan  ' }, repos)
+    const result = await renamePlayer({ sessionId: 'sess-1', playerId: 'player-1', staffId: 'staff-1', canRenameAny: true, name: '  Lan  ' }, repos)
     expect(result).toEqual({
       ok: true,
       value: { id: 'player-1', name: 'Lan' },
@@ -134,7 +134,7 @@ describe('renamePlayer', () => {
   })
 
   it('đổi tên người đã có tên: audit ghi previousName cũ', async () => {
-    await renamePlayer({ sessionId: 'sess-1', playerId: 'player-2', staffId: 'staff-1', role: 'ADMIN', name: 'Minh Anh' }, repos)
+    await renamePlayer({ sessionId: 'sess-1', playerId: 'player-2', staffId: 'staff-1', canRenameAny: true, name: 'Minh Anh' }, repos)
     expect(fakeStore.activityLog.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         details: expect.objectContaining({ previousName: 'Minh', newName: 'Minh Anh' }),
@@ -143,7 +143,7 @@ describe('renamePlayer', () => {
   })
 
   it('tên rỗng → lưu null (UI fallback "Người N")', async () => {
-    const result = await renamePlayer({ sessionId: 'sess-1', playerId: 'player-2', staffId: 'staff-1', role: 'ADMIN', name: '   ' }, repos)
+    const result = await renamePlayer({ sessionId: 'sess-1', playerId: 'player-2', staffId: 'staff-1', canRenameAny: true, name: '   ' }, repos)
     expect(result).toEqual({ ok: true, value: { id: 'player-2', name: null } })
     expect(fakeStore.sessionPlayer.update).toHaveBeenCalledWith({
       where: { id: 'player-2' },

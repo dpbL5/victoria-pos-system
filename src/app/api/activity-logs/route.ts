@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { repositories } from '@/lib/infrastructure/repositories'
 
 const DEFAULT_LIMIT = 50
@@ -7,7 +7,7 @@ const MAX_LIMIT = 100
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin()
+    await requirePermission('audit.view')
 
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')?.trim()

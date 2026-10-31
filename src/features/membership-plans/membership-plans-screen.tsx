@@ -17,7 +17,7 @@ import { AppSkeleton } from '@/components/ui/skeleton'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { hasAccess } from '@/lib/shared/permissions'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
@@ -92,7 +92,7 @@ export function MembershipPlansScreen() {
     [plans, filter]
   )
 
-  const isAdmin = isAdminOnly(user?.role)
+  const isAdmin = hasAccess(user?.role?.permissions, user?.role?.key, 'memberships.plans.manage')
 
   const openCreate = () => {
     setEditingPlan(null)

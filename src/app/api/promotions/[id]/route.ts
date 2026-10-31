@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { derivePromotionDayType, normalizePromotionDays, resolvePromotionDays, updatePromotionRule, mapUpdatePromotionRuleError, deletePromotionRule, mapDeletePromotionRuleError } from '@/lib/promotions'
 import { repositories } from '@/lib/infrastructure/repositories'
@@ -22,7 +22,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requirePermission('promotions.edit')
     await validateCSRF(request)
     const { id } = await params
     const body = await request.json()
@@ -89,7 +89,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requirePermission('promotions.delete')
     await validateCSRF(request)
     const { id } = await params
 

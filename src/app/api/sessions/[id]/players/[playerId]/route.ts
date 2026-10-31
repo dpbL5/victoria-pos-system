@@ -1,6 +1,6 @@
 // ── PATCH /api/sessions/[id]/players/[playerId] — đổi tên người chơi ─────
 import { NextRequest, NextResponse } from 'next/server'
-import { requireMutationAuth } from '@/lib/shared/auth'
+import { requireMutationAuth, userHasPermission } from '@/lib/shared/auth'
 import { renamePlayer, mapRenamePlayerError } from '@/lib/sessions'
 import { renamePlayerSchema } from '@/lib/sessions'
 import {
@@ -16,6 +16,9 @@ export async function PATCH(
 ) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'sessions.checkin')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền vận hành phiên', status: 403 })
+    }
     const { id, playerId } = await params
 
     const body = await request.json()
@@ -28,7 +31,7 @@ export async function PATCH(
       sessionId: id,
       playerId,
       staffId: auth.userId,
-      role: auth.role,
+      canRenameAny: userHasPermission(auth, 'sessions.edit'),
       name: parsed.data.name,
     })
 

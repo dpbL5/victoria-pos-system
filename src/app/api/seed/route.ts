@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/infrastructure/prisma'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requireSuperuser } from '@/lib/shared/auth'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
 
@@ -11,7 +11,7 @@ function generatePassword(): string {
 export async function POST() {
   // Chỉ admin mới được seed
   try {
-    await requireAdmin()
+    await requireSuperuser()
   } catch {
     await prisma.appSetting.upsert({
       where: { key: 'PARKING_FEE_UNIT_PRICE' },
@@ -31,6 +31,13 @@ export async function POST() {
   }
 
   try {
+    // Role hệ thống duy nhất — ADMIN
+    const adminRole = await prisma.role.upsert({
+      where: { key: 'ADMIN' },
+      update: {},
+      create: { key: 'ADMIN', name: 'Quản trị viên', locked: true },
+    })
+
     const adminPassword = process.env.SEED_ADMIN_PASSWORD || generatePassword()
     const staffPassword = process.env.SEED_STAFF_PASSWORD || generatePassword()
 
@@ -42,7 +49,7 @@ export async function POST() {
         username: 'admin',
         passwordHash: adminHash,
         fullName: 'Quản trị viên',
-        role: 'ADMIN',
+        roleId: adminRole.id,
       },
     })
 
@@ -54,7 +61,7 @@ export async function POST() {
         username: 'staff',
         passwordHash: staffHash,
         fullName: 'Nhân viên POS',
-        role: 'STAFF',
+        roleId: null,
       },
     })
 

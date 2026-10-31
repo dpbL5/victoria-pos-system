@@ -1,7 +1,7 @@
 // ── GET/PUT /api/sessions/[id] ──────────────────────────
 import { NextRequest } from "next/server";
 import { requireAuth, requireMutationAuth } from "@/lib/shared/auth";
-import { isAdminOnly } from "@/lib/shared/roles";
+import { userHasPermission } from "@/lib/shared/auth";
 import { updateSession, mapUpdateSessionError } from "@/lib/sessions";
 import { repositories } from "@/lib/infrastructure/repositories";
 import { updateSessionSchema } from "@/lib/sessions";
@@ -29,7 +29,7 @@ export async function GET(
     }
 
     // IDOR: STAFF chỉ xem được phiên của ca mình tham gia hoặc do mình tạo
-    if (auth.role !== 'ADMIN' && auth.role !== 'MANAGER') {
+    if (!userHasPermission(auth, 'sessions.edit', 'sessions.monitor')) {
       const isOwner = session.staffId === auth.userId;
       const isParticipant = session.shiftId
         ? Boolean(await repositories.shift.findByIdAccess(session.shiftId))
@@ -54,7 +54,7 @@ export async function PUT(
 ) {
   try {
     const auth = await requireMutationAuth(request);
-    if (!isAdminOnly(auth.role)) {
+    if (!userHasPermission(auth, 'sessions.edit')) {
       return apiError({ code: "FORBIDDEN", message: "Chỉ quản trị viên được sửa phiên", status: 403 });
     }
     const { id } = await params;
@@ -69,7 +69,7 @@ export async function PUT(
     const result = await updateSession({
       sessionId: id,
       staffId: auth.userId,
-      role: auth.role,
+      canEditAny: userHasPermission(auth, 'sessions.edit'),
       data: parsed.data,
       notes: parsed.data.notes ?? null,
     });

@@ -13,50 +13,51 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
-import { isManagerOrAdmin } from '@/lib/shared/roles'
+import { moduleAccessible } from '@/lib/shared/permissions'
 
 interface NavItem {
   href: string
   label: string
   Icon: LucideIcon
+  /** Nhóm quyền điều khiển việc hiện tab — ẩn hoàn toàn khi không có quyền nào trong nhóm */
+  groupKey?: string
+  alwaysVisible?: boolean
 }
 
-// MANAGER/ADMIN trực quầy: Ca hôm nay · Lịch đặt · Báo cáo · Kho · Thêm.
-const managerNavItems: NavItem[] = [
-  { href: '/sessions', label: 'Ca hôm nay', Icon: Timer },
-  { href: '/bookings', label: 'Lịch đặt', Icon: CalendarClock },
-  { href: '/reports', label: 'Báo cáo', Icon: BarChart3 },
-  { href: '/inventory', label: 'Kho', Icon: Package },
-  { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
+// Một danh sách duy nhất khai báo theo permission — thứ tự cố định theo AGENTS.md
+// (Ca hôm nay · Lịch đặt · Báo cáo · Kho · Thêm). Lọc theo quyền tự sinh đúng
+// bộ nav cho mọi role, kể cả role tuỳ chỉnh.
+const navItems: NavItem[] = [
+  { href: '/sessions', label: 'Ca hôm nay', Icon: Timer, groupKey: 'sessions' },
+  { href: '/bookings', label: 'Lịch đặt', Icon: CalendarClock, groupKey: 'bookings' },
+  { href: '/reports', label: 'Báo cáo', Icon: BarChart3, groupKey: 'reports' },
+  { href: '/inventory', label: 'Kho', Icon: Package, groupKey: 'stock' },
+  { href: '/lessons', label: 'Lịch học', Icon: GraduationCap, groupKey: 'lessons' },
+  { href: '/classes', label: 'Lớp học', Icon: School, groupKey: 'classes' },
+  { href: '/students', label: 'Học viên', Icon: Users, groupKey: 'students' },
+  { href: '/settings', label: 'Thêm', Icon: MoreHorizontal, alwaysVisible: true },
 ]
 
-// STAFF chỉ cần bảng ca và tab Thêm.
-const staffNavItems: NavItem[] = [
-  { href: '/sessions', label: 'Ca hôm nay', Icon: Timer },
-  { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
-]
-
-// Giáo viên không trực quầy — giữ nav riêng theo các màn đào tạo họ mở được.
-const teacherNavItems: NavItem[] = [
-  { href: '/lessons', label: 'Lịch học', Icon: GraduationCap },
-  { href: '/classes', label: 'Lớp học', Icon: School },
-  { href: '/students', label: 'Học viên', Icon: Users },
-  { href: '/settings', label: 'Thêm', Icon: MoreHorizontal },
-]
-
-/** Tab hiện với một role — mỗi role có bộ route mà guard thật sự cho mở */
-export function getVisibleNavItems(userRole?: string): NavItem[] {
-  if (userRole === 'TEACHER') return teacherNavItems
-  return isManagerOrAdmin(userRole) ? managerNavItems : staffNavItems
+/** Tab hiện với một bộ quyền — nhóm không có quyền nào bị loại hoàn toàn */
+export function getVisibleNavItems(
+  perms?: readonly string[] | null,
+  roleKey?: string | null,
+): NavItem[] {
+  return navItems.filter(
+    (item) =>
+      item.alwaysVisible ||
+      (item.groupKey ? moduleAccessible(perms, item.groupKey, roleKey) : false),
+  )
 }
 
 interface BottomNavProps {
-  userRole?: string
+  permissions?: string[] | null
+  roleKey?: string | null
 }
 
-export function BottomNav({ userRole }: BottomNavProps) {
+export function BottomNav({ permissions, roleKey }: BottomNavProps) {
   const pathname = usePathname()
-  const visibleItems = getVisibleNavItems(userRole)
+  const visibleItems = getVisibleNavItems(permissions, roleKey)
 
   const isActive = (href: string) =>
     href === '/sessions'

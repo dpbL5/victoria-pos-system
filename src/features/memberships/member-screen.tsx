@@ -21,7 +21,7 @@ import { useApi } from '@/hooks/use-api'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
-import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
+import { hasAccess } from '@/lib/shared/permissions'
 import { vnNameSortKey } from '@/lib/shared/utils'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
@@ -93,8 +93,8 @@ export function MemberScreen() {
     expired: members.filter((member) => member.membershipStatus === 'EXPIRED').length,
     none: members.filter((member) => member.membershipStatus === 'NONE').length,
   }), [members])
-  const isAdmin = isManagerOrAdmin(user?.role)
-  const canManagePlans = isAdminOnly(user?.role)
+  const isAdmin = hasAccess(user?.role?.permissions, user?.role?.key, 'memberships.register', 'memberships.renew')
+  const canManagePlans = hasAccess(user?.role?.permissions, user?.role?.key, 'memberships.plans.manage')
 
   const renderActions = useCallback((item: MemberCustomer) => (
     <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireMutationAuth } from '@/lib/shared/auth'
+import { requireMutationAuth, userHasPermission } from '@/lib/shared/auth'
 import { retailSale, mapRetailSaleError } from '@/lib/invoicing'
 import {
   apiError,
@@ -29,6 +29,9 @@ const retailSaleSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'sessions.sell')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền bán hàng tại quầy', status: 403 })
+    }
 
     const body = await request.json()
     const parsed = retailSaleSchema.safeParse(body)

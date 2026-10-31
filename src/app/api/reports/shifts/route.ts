@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/shared/auth'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { userHasPermission } from '@/lib/shared/auth'
 import { calcToolStats } from '@/lib/shifts'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { parseStartOfDay, toInputDate } from '@/lib/shared/utils'
@@ -9,7 +9,7 @@ import type { ShiftRevenueSummary } from '@/types'
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth()
-    if (!isAdminOnly(auth.role)) {
+    if (!userHasPermission(auth, 'reports.viewAll')) {
       return NextResponse.json({ success: false, error: 'Không có quyền' }, { status: 403 })
     }
 

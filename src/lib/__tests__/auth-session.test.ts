@@ -9,7 +9,7 @@ vi.stubEnv('SESSION_SECRET', 'test-session-secret-at-least-32-characters-long')
 it('JWT, cookie đăng nhập và CSRF cùng hết hạn sau 7 ngày', async () => {
   const { createSession } = await import('@/lib/shared/auth')
   const token = await createSession({
-    userId: 'staff-1', username: 'staff', fullName: 'Nhân viên', role: 'STAFF',
+    userId: 'staff-1', username: 'staff', fullName: 'Nhân viên', roleId: null, roleName: null,
   })
   const { payload } = await jwtVerify(token, new TextEncoder().encode(process.env.SESSION_SECRET))
 

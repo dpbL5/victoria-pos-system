@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireMutationAuth } from '@/lib/shared/auth'
+import { requireMutationAuth, userHasPermission } from '@/lib/shared/auth'
 import { logToolCount, mapLogToolCountError, logToolCountSchema } from '@/lib/shifts'
 import {
   apiError,
@@ -14,6 +14,9 @@ export async function POST(
 ) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'tools.count')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền đếm dụng cụ', status: 403 })
+    }
 
     const { id } = await params
     const body = await request.json()
@@ -28,7 +31,7 @@ export async function POST(
       staffId: auth.userId,
       username: auth.username,
       fullName: auth.fullName,
-      role: auth.role,
+      canCount: true,
       toolCounts: parsed.data.toolCounts,
     })
 

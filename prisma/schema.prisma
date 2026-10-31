@@ -12,13 +12,6 @@ datasource db {
 
 // Enums
 
-enum UserRole {
-  ADMIN
-  MANAGER
-  STAFF
-  TEACHER
-}
-
 enum CustomerType {
   WALK_IN
   MEMBER
@@ -134,7 +127,9 @@ model User {
   username     String   @unique @db.VarChar(50)
   passwordHash String   @map("password_hash") @db.VarChar(255)
   fullName     String   @map("full_name") @db.VarChar(100)
-  role         UserRole @default(STAFF)
+  /// null = "Chưa phân vai" — đăng nhập được nhưng không có quyền nào
+  roleId       String?  @map("role_id")
+  role         Role?    @relation(fields: [roleId], references: [id])
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -151,6 +146,35 @@ model User {
   calendarConnection CalendarConnection?
 
   @@map("users")
+}
+
+/// Vai trò — tổ hợp permission từ catalog trong `src/lib/shared/permissions.ts`.
+/// Duy nhất role hệ thống `key = 'ADMIN'` (locked): bypass mọi guard, không sửa/xoá được.
+/// Các role còn lại do admin tự tạo qua trang /roles.
+model Role {
+  id          String   @id @default(uuid())
+  /// Key hệ thống — chỉ 'ADMIN'; role admin tự tạo để null
+  key         String?  @unique @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  description String?
+  locked      Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  permissions RolePermission[]
+  users       User[]
+
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId     String   @map("role_id")
+  permission String   @db.VarChar(100) // key từ permission catalog, vd 'pricing.create'
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([roleId, permission])
+  @@map("role_permissions")
 }
 
 model Customer {

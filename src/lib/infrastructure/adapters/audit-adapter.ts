@@ -34,14 +34,27 @@ export function createAuditRepository(store: AuditStore): AuditRepository {
             entityId: true,
             details: true,
             createdAt: true,
-            user: { select: { id: true, username: true, fullName: true, role: true } },
+            user: { select: { id: true, username: true, fullName: true, role: { select: { name: true } } } },
           },
           orderBy: { createdAt: 'desc' },
           take: input.take,
         }),
         store.activityLog.count({ where }),
       ])
-      return { rows, total }
+      return {
+        rows: rows.map((row) => ({
+          ...row,
+          user: row.user
+            ? {
+                id: row.user.id,
+                username: row.user.username,
+                fullName: row.user.fullName,
+                roleName: row.user.role?.name ?? null,
+              }
+            : null,
+        })),
+        total,
+      }
     },
   }
 }

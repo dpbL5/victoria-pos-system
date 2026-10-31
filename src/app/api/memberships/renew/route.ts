@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { requireMutationAuth } from '@/lib/shared/auth'
 import { withApiDiagnostics } from '@/lib/infrastructure/api-diagnostics'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { userHasPermission } from '@/lib/shared/auth'
 import { renewMembership, mapRenewMembershipError, renewMembershipSchema } from '@/lib/memberships'
 import {
   apiError,
@@ -13,6 +13,9 @@ import {
 async function postMembershipRenewal(request: NextRequest) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'memberships.renew')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền gia hạn hội viên', status: 403 })
+    }
 
     const body = await request.json()
     const parsed = renewMembershipSchema.safeParse(body)
@@ -21,7 +24,7 @@ async function postMembershipRenewal(request: NextRequest) {
       return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     }
 
-    if (parsed.data.paidAt && !isAdminOnly(auth.role)) {
+    if (parsed.data.paidAt && !userHasPermission(auth, 'memberships.backdate')) {
       return apiError({ code: 'FORBIDDEN', message: 'Chỉ quản trị viên được chọn ngày thu phí', status: 403 })
     }
 

@@ -1,4 +1,3 @@
-import { isManagerOrAdmin } from '@/lib/shared/roles'
 // ── Use-case: renamePlayer — đổi tên 1 người chơi trong phiên ACTIVE ─────
 import { err, ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
@@ -11,7 +10,8 @@ export interface RenamePlayerInput {
   sessionId: string
   playerId: string
   staffId: string
-  role: 'ADMIN' | 'MANAGER' | 'STAFF' | 'TEACHER'
+  /** Có quyền 'sessions.edit' — không thì chỉ phiên mình/ca mình */
+  canRenameAny: boolean
   /** Tên mới — đã trim; rỗng/undefined → xoá tên (UI fallback "Người N") */
   name?: string | null
 }
@@ -29,7 +29,7 @@ export async function renamePlayer(
   input: RenamePlayerInput,
   deps: Repositories = repositories
 ): Promise<Result<RenamePlayerResult>> {
-  const { sessionId, playerId, staffId, role } = input
+  const { sessionId, playerId, staffId, canRenameAny } = input
   // Tên đã trim ở route; rỗng → null để UI fallback "Người N"
   const newName = input.name?.trim() || null
 
@@ -38,8 +38,8 @@ export async function renamePlayer(
   if (!session) return err('SESSION_NOT_FOUND')
   if (session.status !== 'ACTIVE') return err('SESSION_NOT_ACTIVE')
 
-  // IDOR: STAFF chỉ đổi tên được player trong phiên mình tạo hoặc trong ca mình tham gia
-  if (!isManagerOrAdmin(role)) {
+  // IDOR: không có quyền sửa phiên toàn hệ thống thì chỉ đổi tên trong phiên mình/ca mình
+  if (!canRenameAny) {
     const isOwner = session.staffId === staffId
     const isParticipant = session.shiftId
       ? Boolean(await deps.shift.findByIdAccess(session.shiftId))

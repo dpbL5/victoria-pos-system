@@ -22,7 +22,7 @@ import { shortInvoiceNo } from '@/lib/shared/utils'
 import { AreaChart, DonutChart, HourlyBarChart, DailyVolumeChart } from './reports-charts'
 import { ReportsMonthFilter, monthWeeks } from './reports-month-filter'
 import { currentMonth, isCurrentMonth, monthRange, shiftMonth } from '@/lib/shared/month'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { hasAccess } from '@/lib/shared/permissions'
 
 type ItemType = 'PLAY_TIME' | 'MEMBERSHIP_FEE' | 'PRODUCT' | 'SERVICE' | 'DISCOUNT' | 'SURCHARGE' | 'DEPOSIT' | 'DEPOSIT_APPLIED'
 type Scope = 'STAFF' | 'ALL'
@@ -231,7 +231,7 @@ export const ReportsOverview = forwardRef<ReportsOverviewHandle, ReportsOverview
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [from, to, loadRevenue, loadTrends])
 
-  const canExport = isAdminOnly(user?.role)
+  const canExport = hasAccess(user?.role?.permissions, user?.role?.key, 'reports.export')
   const today = dashboard?.today
 
   if (loading) {

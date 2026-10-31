@@ -3,6 +3,7 @@ import { SignJWT } from 'jose'
 import { NextRequest } from 'next/server'
 
 // proxy.ts ném ngay khi thiếu SESSION_SECRET — set trước khi import động.
+// Proxy chỉ xác thực JWT — phân quyền module do page guard + API guard đảm nhiệm.
 const SECRET = 'test-secret-for-proxy-test-0123456789abcdef'
 process.env.SESSION_SECRET = SECRET
 
@@ -15,47 +16,55 @@ beforeAll(async () => {
   ;({ proxy } = await import('@/proxy'))
 })
 
-async function requestFor(role: string, pathname: string) {
-  const token = await new SignJWT({ role, userId: 'user-1' })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setExpirationTime('1h')
-    .sign(encoder.encode(SECRET))
-
-  const request = new NextRequest(`https://club.test${pathname}`, {
-    headers: { cookie: `qltrungcung_session=${token}` },
-  })
+async function requestFor(pathname: string, token?: string) {
+  const headers: Record<string, string> = {}
+  if (token) headers.cookie = `qltrungcung_session=${token}`
+  const request = new NextRequest(`https://club.test${pathname}`, { headers })
   return proxy(request)
 }
 
-describe('proxy — giáo viên chỉ mở được module Đào tạo + tab Thêm', () => {
-  it.each([
-    '/settings',
-    '/api/auth/me',
-    '/lessons',
-    '/classes',
-    '/students/abc',
-    '/api/lessons',
-  ])('%s đi qua được', async (pathname) => {
-    const response = await requestFor('TEACHER', pathname)
-    expect(response.headers.get('location')).toBeNull()
-    expect(response.headers.get('x-middleware-next')).toBe('1')
+async function validToken() {
+  return new SignJWT({ userId: 'user-1', roleId: null, roleName: null })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setExpirationTime('1h')
+    .sign(encoder.encode(SECRET))
+}
+
+describe('proxy — xác thực JWT', () => {
+  it.each(['/settings', '/lessons', '/sessions', '/reports', '/api/auth/me'])(
+    '%s với token hợp lệ đi qua',
+    async (pathname) => {
+      const response = await requestFor(pathname, await validToken())
+      expect(response.headers.get('location')).toBeNull()
+      expect(response.headers.get('x-middleware-next')).toBe('1')
+    },
+  )
+
+  it('public paths đi qua không cần token', async () => {
+    for (const pathname of ['/login', '/api/auth/login', '/api/auth/logout']) {
+      const response = await requestFor(pathname)
+      expect(response.headers.get('x-middleware-next')).toBe('1')
+    }
   })
 
-  it('/sessions bị đưa về /lessons', async () => {
-    const response = await requestFor('TEACHER', '/sessions')
+  it('không token + trang → redirect /login kèm callbackUrl nội bộ', async () => {
+    const response = await requestFor('/reports')
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('https://club.test/lessons')
+    expect(response.headers.get('location')).toBe('https://club.test/login?callbackUrl=%2Freports')
   })
 
-  it('API ngoài Đào tạo trả 403 thay vì chạy', async () => {
-    const response = await requestFor('TEACHER', '/api/shifts?current=true')
-    expect(response.status).toBe(403)
-  })
-})
-
-describe('proxy — vai trò khác', () => {
-  it.each(['ADMIN', 'MANAGER', 'STAFF'])('%s mở được /settings', async (role) => {
-    const response = await requestFor(role, '/settings')
+  it('không token + /api/* → next() (API route tự enforce 401)', async () => {
+    const response = await requestFor('/api/shifts?current=true')
     expect(response.headers.get('x-middleware-next')).toBe('1')
+  })
+
+  it('token sai chữ ký + trang → redirect /login', async () => {
+    const bad = await new SignJWT({ userId: 'user-1' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setExpirationTime('1h')
+      .sign(encoder.encode('khac-nhau-hoan-toan-0123456789abcdef'))
+    const response = await requestFor('/sessions', bad)
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/login')
   })
 })

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/infrastructure/prisma'
 async function check() {
   try {
     const userCount = await prisma.user.count()
-    const admin = await prisma.user.findFirst({ where: { role: 'ADMIN' } })
+    const admin = await prisma.user.findFirst({ where: { role: { key: 'ADMIN' } } })
     const tables = await prisma.$queryRaw`
       SELECT table_name
       FROM information_schema.tables

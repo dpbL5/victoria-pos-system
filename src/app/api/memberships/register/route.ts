@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { requireMutationAuth } from '@/lib/shared/auth'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { userHasPermission } from '@/lib/shared/auth'
 import { registerMember, mapRegisterMemberError, registerMemberSchema } from '@/lib/memberships'
 import {
   apiError,
@@ -12,6 +12,9 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'memberships.register')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền đăng ký hội viên', status: 403 })
+    }
 
     const body = await request.json()
     const parsed = registerMemberSchema.safeParse(body)
@@ -20,7 +23,7 @@ export async function POST(request: NextRequest) {
       return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     }
 
-    if (parsed.data.paidAt && !isAdminOnly(auth.role)) {
+    if (parsed.data.paidAt && !userHasPermission(auth, 'memberships.backdate')) {
       return apiError({ code: 'FORBIDDEN', message: 'Chỉ quản trị viên được chọn ngày thu phí', status: 403 })
     }
 

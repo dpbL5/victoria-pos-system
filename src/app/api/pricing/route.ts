@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { createPricingRule, mapCreatePricingRuleError } from '@/lib/pricing'
 import { repositories } from '@/lib/infrastructure/repositories'
@@ -17,7 +17,7 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    await requireAdmin()
+    await requirePermission('pricing.view')
 
     const rules = await repositories.pricing.findManyWithTiers()
 
@@ -33,7 +33,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requirePermission('pricing.create')
     await validateCSRF(request)
     const body = await request.json()
     const parsed = createPricingRuleSchema.safeParse(body)

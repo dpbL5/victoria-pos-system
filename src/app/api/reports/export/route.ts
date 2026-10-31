@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/shared/auth'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { userHasPermission } from '@/lib/shared/auth'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { toCsv } from '@/lib/shared/csv'
 import { toInputDate, parseStartOfDay, parseEndOfDay } from '@/lib/shared/utils'
@@ -15,7 +15,7 @@ const paymentMethodLabel: Record<string, string> = {
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth()
-    if (!isAdminOnly(auth.role)) {
+    if (!userHasPermission(auth, 'reports.export')) {
       return NextResponse.json({ success: false, error: 'Không có quyền' }, { status: 403 })
     }
 

@@ -39,9 +39,9 @@ const fakeStore = vi.hoisted(() => {
 vi.mock('@/lib/infrastructure/prisma', () => ({ prisma: fakeStore }))
 
 vi.mock('@/lib/shared/auth', () => ({
-  requireAuth: vi.fn(async () => ({ userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: 'STAFF' })),
-  requireAdmin: vi.fn(async () => { throw new Error('FORBIDDEN') }),
-  requireMutationAuth: vi.fn(async () => ({ userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: 'STAFF' })),
+  requireAuth: vi.fn(async () => ({ userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: null })),
+  requireMutationAuth: vi.fn(async () => ({ userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: null })),
+  userHasPermission: vi.fn(() => true),
 }))
 
 import { POST as checkoutHandler } from '@/app/api/sessions/[id]/checkout/route'

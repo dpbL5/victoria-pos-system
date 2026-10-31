@@ -1,6 +1,6 @@
 // ── API: /api/cashflows — quản lý thu chi (admin only) ─────
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { createCashflowSchema } from '@/lib/cashflow/validations'
@@ -19,7 +19,7 @@ function parseMonth(value: string | null): Month {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin()
+    await requirePermission('cashflows.view')
 
     const { searchParams } = request.nextUrl
     const typeParam = searchParams.get('type')
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requirePermission('cashflows.create')
     await validateCSRF(request)
 
     const body = await request.json()

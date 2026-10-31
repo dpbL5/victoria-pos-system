@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireTrainingAccess } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { createStudentSchema } from '@/lib/students'
@@ -14,7 +14,7 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireTrainingAccess()
+    await requirePermission('students.view')
 
     const search = request.nextUrl.searchParams.get('search') || undefined
     const statusParam = request.nextUrl.searchParams.get('status') || undefined
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireTrainingAccess()
+    const auth = await requirePermission('students.create')
     await validateCSRF(request)
     const body = await request.json()
     const parsed = createStudentSchema.safeParse(body)

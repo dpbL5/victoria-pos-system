@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
+import { requireAuth, requireMutationAuth, userHasPermission } from '@/lib/shared/auth'
 import { checkIn, mapCheckInError } from '@/lib/sessions'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { createSessionSchema } from '@/lib/sessions'
@@ -14,7 +14,10 @@ import {
 
 async function getSessions(request: NextRequest) {
   try {
-    await requireAuth()
+    const auth = await requireAuth()
+    if (!userHasPermission(auth, 'sessions.view')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền xem phiên chơi', status: 403 })
+    }
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') || undefined
@@ -65,6 +68,9 @@ function clampPositiveInt(
 async function postSession(request: NextRequest) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'sessions.checkin')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền check-in', status: 403 })
+    }
 
     const body = await request.json()
     const parsed = createSessionSchema.safeParse(body)

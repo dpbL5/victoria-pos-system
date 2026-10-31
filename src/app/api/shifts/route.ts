@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
+import { requireAuth, requireMutationAuth, userHasPermission } from '@/lib/shared/auth'
 import { openShiftSchema, openOrJoinShift, mapOpenOrJoinShiftError } from '@/lib/shifts'
 import {
   findOpenShiftForStaff,
@@ -39,11 +39,10 @@ export async function GET(request: NextRequest) {
         ? statusParam
         : undefined
 
-    // ── STAFF chỉ được dùng các query POS (current/openOperational) ──
-    // Danh sách ca làm / groupByDay là quyền MANAGER/ADMIN.
-    const isStaff = auth.role === 'STAFF'
+    // ── Không có quyền xem ca làm thì chỉ được dùng query POS (current/openOperational) ──
+    const canViewAllShifts = userHasPermission(auth, 'shifts.view')
     const posOnly = current || openOperational
-    if (isStaff && !posOnly) {
+    if (!canViewAllShifts && !posOnly) {
       return NextResponse.json(
         { success: false, error: 'Không có quyền xem danh sách ca làm' },
         { status: 403 }
@@ -68,7 +67,8 @@ export async function GET(request: NextRequest) {
 
     if (current) {
       let shift = await repositories.shift.findOpenForStaff(auth.userId)
-      if (!shift && auth.role === 'ADMIN' || auth.role === 'MANAGER') {
+      // Ca quầy là ca chung — không có ca riêng thì fallback sang ca operational
+      if (!shift && canViewAllShifts) {
         shift = await repositories.shift.findOpenOperational()
       }
       return NextResponse.json({ success: true, data: shift })
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
         from: fromDate,
         to: toDate,
         ...(status ? { status } : {}),
-        scope: auth.role === 'STAFF' ? 'STAFF' : 'ALL',
+        scope: canViewAllShifts ? 'ALL' : 'STAFF',
         staffId: auth.userId,
       })
 
@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
     const { rows: shifts } = await repositories.shift.findManyWithCount({
       from: new Date(0),
       to: new Date(),
-      ...(auth.role === 'STAFF' ? { staffId: auth.userId } : {}),
+      ...(!canViewAllShifts ? { staffId: auth.userId } : {}),
       ...(status ? { status } : {}),
       includeParticipants: includeParticipants === 'all' ? 'all' : 'active',
       skip: 0,
@@ -146,6 +146,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'shifts.open')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền mở ca', status: 403 })
+    }
 
     const body = await request.json()
     const parsed = openShiftSchema.safeParse(body)

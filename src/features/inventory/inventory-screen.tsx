@@ -20,7 +20,7 @@ import { AppSkeleton } from '@/components/ui/skeleton'
 import { SortableCardList, type Column as CardColumn } from '@/components/ui/sortable-card-list'
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
-import { isManagerOrAdmin } from '@/lib/shared/roles'
+import { hasAccess } from '@/lib/shared/permissions'
 import { useApi } from '@/hooks/use-api'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
@@ -54,7 +54,7 @@ export function InventoryScreen() {
   const loading = prodLoading || userLoading
   const user = userData?.data ?? null
 
-  const canManageStock = isManagerOrAdmin(user?.role)
+  const canManageStock = hasAccess(user?.role?.permissions, user?.role?.key, 'products.create', 'products.edit', 'products.delete', 'stock.post')
   const lowStockProducts = useMemo(
     () => products.filter((product) => isLowStock(product)),
     [products]

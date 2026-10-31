@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { requireAuth } from '@/lib/shared/auth'
-import { isManagerOrAdmin } from '@/lib/shared/roles'
+import { userHasPermission } from '@/lib/shared/auth'
 import { repositories } from '@/lib/infrastructure/repositories'
 import type { StockMovementType } from '@/types'
 import {
@@ -15,7 +15,7 @@ const MOVEMENT_TYPES: StockMovementType[] = ['RESTOCK', 'SALE', 'ADJUSTMENT', 'V
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth()
-    if (!isManagerOrAdmin(auth.role)) {
+    if (!userHasPermission(auth, 'stock.view')) {
       return apiError(ERR_FORBIDDEN)
     }
 

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAuth } from '@/lib/shared/auth'
+import { requireAuth, userHasPermission } from '@/lib/shared/auth'
 import { withApiDiagnostics } from '@/lib/infrastructure/api-diagnostics'
 import { repositories } from '@/lib/infrastructure/repositories'
 import {
@@ -36,7 +36,10 @@ async function getCheckoutPreview(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuth()
+    const auth = await requireAuth()
+    if (!userHasPermission(auth, 'sessions.view')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền xem phiên chơi', status: 403 })
+    }
     const { id } = await params
 
     const session = await repositories.session.findByIdWithPlayers(id)

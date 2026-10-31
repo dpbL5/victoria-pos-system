@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/shared/auth'
+import { requireAuth, userHasPermission } from '@/lib/shared/auth'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { toInputDate, parseStartOfDay, parseEndOfDay } from '@/lib/shared/utils'
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth()
+    if (!userHasPermission(auth, 'reports.view', 'reports.viewAll')) {
+      return NextResponse.json(
+        { success: false, error: 'Bạn không có quyền xem báo cáo' },
+        { status: 403 }
+      )
+    }
     const { searchParams } = new URL(request.url)
     const from = searchParams.get('from') || toInputDate(new Date())
     const to = searchParams.get('to') || toInputDate(new Date())
@@ -22,7 +28,7 @@ export async function GET(request: NextRequest) {
     const data = await repositories.reporting.getTrends({
       from: fromDate,
       to: toDate,
-      scope: auth.role === 'STAFF' ? 'STAFF' : 'ALL',
+      scope: userHasPermission(auth, 'reports.viewAll') ? 'ALL' : 'STAFF',
       staffId: auth.userId,
     })
 

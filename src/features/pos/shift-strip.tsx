@@ -37,9 +37,11 @@ export function ShiftStrip({
   shift: Shift | null
   readOnly?: boolean
   onOpen: () => void
-  onClose: () => void
+  /** Chỉ truyền khi role có quyền shifts.close — thiếu quyền thì nút không render */
+  onClose?: () => void
   onViewTransactions: () => void
-  onCountTools: () => void
+  /** Chỉ truyền khi role có quyền tools.count */
+  onCountTools?: () => void
   hasCounted: boolean
   canJoin: boolean
   onJoin: () => void
@@ -106,15 +108,17 @@ export function ShiftStrip({
         )
       ) : (
       <div className="mt-3 grid grid-cols-2 gap-2 md:flex md:flex-wrap md:justify-end">
-        <Button
-          variant={hasCounted ? 'white' : 'contrast'}
-          size="sm"
-          icon={ClipboardList}
-          disabled={hasCounted}
-          onClick={onCountTools}
-        >
-          {hasCounted ? 'Đã đếm D.cụ' : 'Đếm dụng cụ'}
-        </Button>
+        {onCountTools && (
+          <Button
+            variant={hasCounted ? 'white' : 'contrast'}
+            size="sm"
+            icon={ClipboardList}
+            disabled={hasCounted}
+            onClick={onCountTools}
+          >
+            {hasCounted ? 'Đã đếm D.cụ' : 'Đếm dụng cụ'}
+          </Button>
+        )}
         {canJoin && (
           <Button variant="contrast" size="sm" icon={UserPlus} disabled={submitting} onClick={onJoin}>
             {submitting ? 'Đang tham gia...' : 'Tham gia ca'}
@@ -127,14 +131,16 @@ export function ShiftStrip({
             hở một ô trống cạnh hành động phá huỷ. 4 nút → lưới 2×2 kín sẵn.
             `min-h-9` = 36px, đúng chiều cao điều khiển chuẩn của hệ — nút đóng ca
             là hành động không thể đảo nên cao hơn `size="sm"` (28px) một bậc. */}
-        <Button
-          variant="red"
-          size="sm"
-          className={`min-h-9 ${canJoin ? 'md:col-auto' : 'col-span-2 md:col-auto'}`}
-          onClick={onClose}
-        >
-          Đóng ca
-        </Button>
+        {onClose && (
+          <Button
+            variant="red"
+            size="sm"
+            className={`min-h-9 ${canJoin ? 'md:col-auto' : 'col-span-2 md:col-auto'}`}
+            onClick={onClose}
+          >
+            Đóng ca
+          </Button>
+        )}
       </div>
       )}
     </section>

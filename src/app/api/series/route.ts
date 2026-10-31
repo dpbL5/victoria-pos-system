@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireTrainingAccess } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { createSeriesSchema } from '@/lib/students'
 import { createSeries, mapCreateSeriesError } from '@/lib/students'
@@ -14,7 +14,7 @@ import {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireTrainingAccess()
+    const auth = await requirePermission('series.manage')
     await validateCSRF(request)
     const body = await request.json()
     const parsed = createSeriesSchema.safeParse(body)

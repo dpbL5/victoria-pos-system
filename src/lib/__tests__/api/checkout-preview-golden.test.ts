@@ -29,8 +29,9 @@ vi.mock('@/lib/shared/auth', () => ({
     userId: 'staff-1',
     username: 'nv_a',
     fullName: 'Nhân viên A',
-    role: 'STAFF',
+    role: null,
   })),
+  userHasPermission: vi.fn(() => true),
 }))
 
 import { GET as previewGet } from '@/app/api/sessions/[id]/checkout-preview/route'

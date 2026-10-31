@@ -1,6 +1,6 @@
 // ── GET /api/customers/[id]/history — lịch sử thanh toán của khách ─────
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/shared/auth'
+import { requireAuth, userHasPermission } from '@/lib/shared/auth'
 import { repositories } from '@/lib/infrastructure/repositories'
 
 export async function GET(
@@ -8,7 +8,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuth()
+    const auth = await requireAuth()
+    if (!userHasPermission(auth, 'customers.view')) {
+      return NextResponse.json({ success: false, error: 'Bạn không có quyền xem khách hàng' }, { status: 403 })
+    }
     const { id } = await params
 
     const customer = await repositories.customer.findById(id)

@@ -48,6 +48,8 @@ import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { useApi } from '@/hooks/use-api'
 import { getBoardAccess } from './board-access'
+import { hasAccess } from '@/lib/shared/permissions'
+import type { UserSession } from './types'
 import { QuickActions } from './quick-actions'
 import { SellPickDialog } from './sell-pick-dialog'
 import { ShiftGate } from './shift-gate'
@@ -104,7 +106,7 @@ export function TodayShiftScreen() {
 
   const shiftQuery = useApi<{ myShift: Shift | null; openShift: Shift | null }>(SHIFT_KEY)
   const sessionsQuery = useApi<SessionRow[]>(SESSIONS_KEY)
-  const authQuery = useApi<{ userId: string; role: string }>(AUTH_KEY)
+  const authQuery = useApi<UserSession>(AUTH_KEY)
   const bookingsQuery = useApi<BookingItem[]>(BOOKINGS_KEY)
   const shouldLoadProducts = !!checkoutSession || !!sellSession || retailOpen
   const shouldLoadTools = closeShiftDialog || countToolsDialog
@@ -132,6 +134,8 @@ export function TodayShiftScreen() {
   const tools = toolsQuery.data?.success ? toolsQuery.data.data ?? [] : []
   const authUserId = authQuery.data?.success ? authQuery.data.data?.userId ?? null : null
   const authRole = authQuery.data?.success ? authQuery.data.data?.role ?? null : null
+  const authPerms = authRole?.permissions ?? null
+  const authRoleKey = authRole?.key ?? null
   const loading = shiftQuery.isLoading || sessionsQuery.isLoading || authQuery.isLoading || bookingsQuery.isLoading
   const error = refreshError
     || shiftQuery.error?.message
@@ -253,7 +257,16 @@ export function TodayShiftScreen() {
   // ADMIN/MANAGER xem được phiên đang chơi + lịch đặt dù chưa vào ca (chỉ xem);
   // mọi hành động tiền vẫn cần ca của chính mình — đúng bằng guard
   // `SHIFT_REQUIRED` của backend nên không còn nút bật mà bấm vào là lỗi.
-  const { canOperate, canMonitor, showBoard } = getBoardAccess(authRole, !!shift)
+  const { canOperate, canMonitor, showBoard } = getBoardAccess(authPerms, authRoleKey, !!shift)
+  // Quyền chi tiết — API đã enforce, UI chỉ render control mà API chấp nhận
+  const canCheckIn = canOperate && hasAccess(authPerms, authRoleKey, 'sessions.checkin')
+  const canCheckout = canOperate && hasAccess(authPerms, authRoleKey, 'sessions.checkout')
+  const canSell = canOperate && hasAccess(authPerms, authRoleKey, 'sessions.sell')
+  const canConfirmBooking = canOperate && hasAccess(authPerms, authRoleKey, 'bookings.confirm')
+  const canCancelBooking = canOperate && hasAccess(authPerms, authRoleKey, 'bookings.cancel')
+  const canOpenShift = hasAccess(authPerms, authRoleKey, 'shifts.open')
+  const canCloseShift = hasAccess(authPerms, authRoleKey, 'shifts.close')
+  const canCountTools = hasAccess(authPerms, authRoleKey, 'tools.count')
   // Ca để hiển thị ở dải ca: ca của mình, hoặc ca quầy đang mở của người khác
   // (chế độ giám sát) — để quản lý biết mình đang xem ca nào và vào được ca đó.
   const boardShift = shift ?? openOperationalShift
@@ -575,8 +588,8 @@ export function TodayShiftScreen() {
               bookings={visibleBookings}
               // Chế độ giám sát (chưa vào ca): không truyền handler → BookingCards
               // render hàng chữ trần, không còn nút xám vô nghĩa.
-              onCheckIn={canOperate ? (booking, startTime, playerCount) => void handleBookingCheckIn(booking, startTime, playerCount) : undefined}
-              onCancel={canOperate ? (booking) => void handleBookingCancel(booking) : undefined}
+              onCheckIn={canConfirmBooking ? (booking, startTime, playerCount) => void handleBookingCheckIn(booking, startTime, playerCount) : undefined}
+              onCancel={canCancelBooking ? (booking) => void handleBookingCancel(booking) : undefined}
               busyId={busyBookingId}
               actionDisabled={!canOperate}
               shiftOpenedAt={shift?.openedAt}
@@ -643,6 +656,7 @@ export function TodayShiftScreen() {
               openShiftAt={openOperationalShift?.openedAt ?? null}
               submitting={submitting}
               onOpen={() => setOpenShiftDialog(true)}
+              canOpen={canOpenShift}
             />
             {bookingsLinkRow}
           </>
@@ -665,11 +679,11 @@ export function TodayShiftScreen() {
                 shift={boardShift}
                 readOnly={!canOperate}
                 onOpen={() => setOpenShiftDialog(true)}
-                onClose={() => setCloseShiftDialog(true)}
+                onClose={canCloseShift ? () => setCloseShiftDialog(true) : undefined}
                 onViewTransactions={() => {
                   if (boardShift) router.push(`/transactions?shiftId=${boardShift.id}`)
                 }}
-                onCountTools={() => setCountToolsDialog(true)}
+                onCountTools={canCountTools ? () => setCountToolsDialog(true) : undefined}
                 hasCounted={hasCountedTools}
                 canJoin={canJoinBoardShift}
                 onJoin={() => void handleOpenShift()}
@@ -678,11 +692,13 @@ export function TodayShiftScreen() {
 
               {/* Chế độ giám sát không có hàng hành động: cả 3 tile đều là thao tác
                   tiền, mà thao tác tiền cần ca của chính mình. */}
-              {canOperate && (
+              {canOperate && (canCheckIn || canSell) && (
               <QuickActions
                 shiftReady={canOperate}
                 sellDisabled={sessions.length === 0}
                 retailDisabled={!canOperate}
+                canCheckIn={canCheckIn}
+                canSell={canSell}
                 onCheckIn={() => {
                   setCheckInInitialMode('WALK_IN')
                   setCheckInDialog(true)
@@ -732,6 +748,8 @@ export function TodayShiftScreen() {
                       session={session}
                       index={index}
                       readOnly={!canOperate}
+                      checkoutEnabled={canCheckout}
+                      pauseEnabled={canCheckIn}
                       onCheckout={() => { setCheckoutFrozenAt(new Date().toISOString()); setCheckoutSession(session) }}
                       onPause={() => void handlePause(session)}
                       onResume={() => void handleResume(session)}

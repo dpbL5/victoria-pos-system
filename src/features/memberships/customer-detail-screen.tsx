@@ -28,7 +28,7 @@ import { NoticeCard } from '@/components/ui/notice-card'
 import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
-import { isManagerOrAdmin } from '@/lib/shared/roles'
+import { hasAccess } from '@/lib/shared/permissions'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { shortInvoiceNo } from '@/lib/shared/utils'
 import { money, formatDay } from '@/features/pos/format'
@@ -187,7 +187,7 @@ export function CustomerDetailScreen({ id, today }: Props) {
     return () => window.clearTimeout(timeoutId)
   }, [loadData])
 
-  const isAdmin = isManagerOrAdmin(user?.role)
+  const isAdmin = hasAccess(user?.role?.permissions, user?.role?.key, 'customers.edit', 'memberships.register', 'memberships.renew', 'invoices.edit', 'invoices.void')
 
   const startEdit = useCallback(() => {
     if (!customer) return

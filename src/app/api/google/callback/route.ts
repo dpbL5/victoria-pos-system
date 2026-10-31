@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireTrainingAccess } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { connectCalendar, mapConnectCalendarError } from '@/lib/students'
 import { cookies } from 'next/headers'
 import { apiError } from '@/lib/infrastructure/api-helpers'
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireTrainingAccess()
+    const auth = await requirePermission('lessons.view', 'classes.view', 'students.view')
 
     const code = request.nextUrl.searchParams.get('code')
     const state = request.nextUrl.searchParams.get('state')

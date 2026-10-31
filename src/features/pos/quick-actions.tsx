@@ -27,6 +27,8 @@ export function QuickActions({
   shiftReady,
   sellDisabled = false,
   retailDisabled = false,
+  canCheckIn = true,
+  canSell = true,
   onCheckIn,
   onSell,
   onRetail,
@@ -34,15 +36,32 @@ export function QuickActions({
   shiftReady: boolean
   sellDisabled?: boolean
   retailDisabled?: boolean
+  /** Ẩn hẳn ô khi role không có quyền — không render control bị API chặn */
+  canCheckIn?: boolean
+  canSell?: boolean
   onCheckIn: () => void
   onSell: () => void
   onRetail: () => void
 }) {
   const actions = [
-    { label: 'Bán kèm', icon: Package, tone: 'secondary' as const, onClick: onSell, disabled: sellDisabled },
-    { label: 'Check-in', icon: LogIn, tone: 'primary' as const, onClick: onCheckIn, disabled: false },
-    { label: 'Bán lẻ', icon: ShoppingCart, tone: 'secondary' as const, onClick: onRetail, disabled: retailDisabled },
+    ...(canSell
+      ? [
+          { label: 'Bán kèm', icon: Package, tone: 'secondary' as const, onClick: onSell, disabled: sellDisabled },
+        ]
+      : []),
+    ...(canCheckIn
+      ? [
+          { label: 'Check-in', icon: LogIn, tone: 'primary' as const, onClick: onCheckIn, disabled: false },
+        ]
+      : []),
+    ...(canSell
+      ? [
+          { label: 'Bán lẻ', icon: ShoppingCart, tone: 'secondary' as const, onClick: onRetail, disabled: retailDisabled },
+        ]
+      : []),
   ]
+
+  if (actions.length === 0) return null
 
   return (
     <div className="grid grid-cols-3 gap-2 md:grid-cols-[repeat(3,minmax(0,9rem))] md:justify-center lg:w-[26.5rem] lg:shrink-0">

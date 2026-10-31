@@ -1,23 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireMutationAuth } from '@/lib/shared/auth'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { userHasPermission, requireMutationAuth } from '@/lib/shared/auth'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { updateToolSchema } from '@/lib/tools'
-
-async function requireAdminMutation(request: NextRequest) {
-  const auth = await requireMutationAuth(request)
-  if (!isAdminOnly(auth.role)) {
-    throw new Error('FORBIDDEN')
-  }
-  return auth
-}
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdminMutation(request)
+    const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'tools.edit')) {
+      throw new Error('FORBIDDEN')
+    }
     const { id } = await params
 
     const body = await request.json()
@@ -47,7 +41,7 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
     }
     if (message === 'FORBIDDEN') {
-      return NextResponse.json({ success: false, error: 'Chỉ quản trị viên được truy cập' }, { status: 403 })
+      return NextResponse.json({ success: false, error: 'Bạn không có quyền sửa dụng cụ' }, { status: 403 })
     }
     if (message === 'CSRF_MISMATCH') {
       return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })
@@ -62,7 +56,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdminMutation(request)
+    const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'tools.delete')) {
+      throw new Error('FORBIDDEN')
+    }
     const { id } = await params
 
     const existing = await repositories.tool.findById(id)
@@ -82,7 +79,7 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Chưa đăng nhập' }, { status: 401 })
     }
     if (message === 'FORBIDDEN') {
-      return NextResponse.json({ success: false, error: 'Chỉ quản trị viên được truy cập' }, { status: 403 })
+      return NextResponse.json({ success: false, error: 'Bạn không có quyền xoá dụng cụ' }, { status: 403 })
     }
     if (message === 'CSRF_MISMATCH') {
       return NextResponse.json({ success: false, error: 'Yêu cầu không hợp lệ (CSRF)' }, { status: 403 })

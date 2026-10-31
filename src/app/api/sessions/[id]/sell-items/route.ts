@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireMutationAuth } from '@/lib/shared/auth'
+import { requireMutationAuth, userHasPermission } from '@/lib/shared/auth'
 import {
   removeSellItems,
   mapRemoveSellItemsError,
@@ -41,6 +41,9 @@ export async function PATCH(
 ) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'sessions.sell')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền bán kèm phiên', status: 403 })
+    }
     const { id } = await params
 
     const body = await request.json()
@@ -73,6 +76,9 @@ export async function DELETE(
 ) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'sessions.sell')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền bán kèm phiên', status: 403 })
+    }
     const { id } = await params
 
     const body = await request.json()

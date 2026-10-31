@@ -11,7 +11,8 @@ export interface UpdateUserInput {
   staffId: string
   userId: string
   fullName?: string
-  role?: 'ADMIN' | 'MANAGER' | 'STAFF' | 'TEACHER'
+  /** null = gỡ vai trò ("Chưa phân vai") */
+  roleId?: string | null
   isActive?: boolean
 }
 
@@ -39,7 +40,7 @@ export async function updateUser(
       input.userId,
       {
         ...(input.fullName !== undefined ? { fullName: input.fullName } : {}),
-        ...(input.role !== undefined ? { role: input.role } : {}),
+        ...(input.roleId !== undefined ? { roleId: input.roleId } : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       }
     )
@@ -53,12 +54,14 @@ export async function updateUser(
         targetUsername: existing.username,
         before: {
           fullName: existing.fullName,
-          role: existing.role,
+          roleId: existing.roleId,
+          roleName: existing.role?.name ?? null,
           isActive: existing.isActive,
         },
         after: {
           fullName: user.fullName,
-          role: user.role,
+          roleId: user.roleId,
+          roleName: user.role?.name ?? null,
           isActive: user.isActive,
         },
       },

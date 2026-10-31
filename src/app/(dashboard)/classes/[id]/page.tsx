@@ -1,19 +1,8 @@
-import { redirect } from 'next/navigation'
-import { requireAuth } from '@/lib/shared/auth'
-import { canAccessTraining } from '@/lib/shared/roles'
 import { ClassDetailScreen } from '@/features/classes/class-detail-screen'
+import { requirePageAccess } from '@/lib/shared/page-access'
 
 export default async function ClassDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  let user
-  try {
-    user = await requireAuth()
-  } catch {
-    redirect('/login')
-  }
-
-  if (!canAccessTraining(user?.role)) {
-    redirect('/sessions')
-  }
+  await requirePageAccess('classes')
 
   const { id } = await params
   return <ClassDetailScreen id={id} />

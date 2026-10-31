@@ -58,12 +58,13 @@ export async function POST(request: NextRequest) {
 
     clearFailedLogin(rateLimitKey);
 
-    // Tạo session JWT
+    // Tạo session JWT — chỉ định danh, quyền thực lấy từ DB mỗi request
     await createSession({
       userId: user.id,
       username: user.username,
       fullName: user.fullName,
-        role: user.role,
+      roleId: user.roleId,
+      roleName: user.role?.name ?? null,
     });
 
     return NextResponse.json({
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
         id: user.id,
         username: user.username,
         fullName: user.fullName,
-        role: user.role,
+        roleName: user.role?.name ?? null,
       },
     });
   } catch (error) {

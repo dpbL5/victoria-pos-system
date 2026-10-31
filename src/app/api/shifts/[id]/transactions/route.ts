@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/shared/auth'
+import { requireAuth, userHasPermission } from '@/lib/shared/auth'
 import { getShiftTransactions } from '@/lib/shifts'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { prisma } from '@/lib/infrastructure/prisma'
@@ -25,7 +25,7 @@ export async function GET(
       shift.staffId === auth.userId ||
       shift.participants.some((p) => p.staffId === auth.userId)
 
-    if (auth.role !== 'ADMIN' && auth.role !== 'MANAGER' && !isParticipant) {
+    if (!userHasPermission(auth, 'shifts.view') && !isParticipant) {
       return NextResponse.json(
         { success: false, error: 'Không có quyền xem giao dịch của ca này' },
         { status: 403 }

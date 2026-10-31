@@ -11,6 +11,8 @@ export function ActiveSessionCard({
   session,
   /** Chế độ giám sát (ADMIN/MANAGER chưa vào ca): chỉ đọc, không render nút */
   readOnly = false,
+  checkoutEnabled = true,
+  pauseEnabled = true,
   /** Vị trí trong danh sách — dùng stagger cho entry animation */
   index = 0,
   onCheckout,
@@ -22,6 +24,10 @@ export function ActiveSessionCard({
 }: {
   session: SessionRow
   readOnly?: boolean
+  /** Ẩn nút Thu khi role không có quyền sessions.checkout */
+  checkoutEnabled?: boolean
+  /** Ẩn nút Dừng/Chơi khi role không có quyền sessions.checkin */
+  pauseEnabled?: boolean
   index?: number
   onCheckout: () => void
   onPause: () => void
@@ -192,9 +198,9 @@ export function ActiveSessionCard({
               {collapsed ? `Mở ${playerCount} người chơi` : 'Thu gọn'}
             </Button>
           )}
-          {!readOnly && (
+          {!readOnly && (pauseEnabled || checkoutEnabled) && (
             <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
-              {!isGroup && (isPaused ? (
+              {pauseEnabled && !isGroup && (isPaused ? (
                 <Button
                   variant="contrast"
                   size="sm"
@@ -217,14 +223,16 @@ export function ActiveSessionCard({
                   Dừng
                 </Button>
               ))}
-              <Button
-                variant="contrast"
-                size="sm"
-                onClick={onCheckout}
-                className="px-3 md:px-4"
-              >
-                Thu
-              </Button>
+              {checkoutEnabled && (
+                <Button
+                  variant="contrast"
+                  size="sm"
+                  onClick={onCheckout}
+                  className="px-3 md:px-4"
+                >
+                  Thu
+                </Button>
+              )}
             </div>
           )}
         </div>
