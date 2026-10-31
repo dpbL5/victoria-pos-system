@@ -2,9 +2,10 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, CalendarClock, Edit3, Plus, StopCircle, Trash2 } from 'lucide-react'
+import { ArrowLeft, CalendarClock, Edit3, Plus, School, StopCircle, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Modal } from '@/components/ui/modal'
@@ -41,21 +42,18 @@ export function ClassDetailScreen({ id }: { id: string }) {
   const [endSlotTarget, setEndSlotTarget] = useState<ClassSlot | null>(null)
   const [endOpen, setEndOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [rosterIds, setRosterIds] = useState<string[] | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const detail = data?.data
   const error = data && !data.success ? (data.error ?? '') : ''
   const slots = detail?.slots ?? []
-  const selectedStudents = rosterIds ?? detail?.roster.map(student => student.id) ?? []
-  const rosterChanged = rosterIds !== null && rosterIds.join() !== (detail?.roster.map(student => student.id).join() ?? '')
   const lessons = lessonData?.success ? lessonData.data?.lessons ?? [] : []
   const lessonsError = lessonData && !lessonData.success ? lessonData.error : ''
   const rosterColumns: CardColumn<ClassDetail['roster'][number]>[] = [
     {
       key: 'fullName',
       label: 'Học viên',
-      render: student => <Link href={`/students/${student.id}`} className="font-medium text-zinc-950 hover:text-info hover:underline dark:text-white ">{student.fullName}</Link>,
+      render: student => <Link href={`/students/${student.id}`} className="font-medium text-text-primary hover:text-info hover:underline">{student.fullName}</Link>,
     },
     { key: 'phone', label: 'SĐT', render: student => student.phone || '—' },
   ]
@@ -69,7 +67,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
   }, [registerRefresh, mutate, mutateLessons])
 
 
-  async function saveInfo(payload: { name: string; coachName: string; note: string }) {
+  async function saveInfo(payload: { name: string; coachName: string; note: string }, studentIds: string[]) {
     setSubmitting(true)
     try {
       const result = await apiJson(`/api/classes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -77,31 +75,24 @@ export function ClassDetailScreen({ id }: { id: string }) {
         notifyError(result.error || 'Không lưu được lớp học')
         return
       }
-      notifySuccess('Đã cập nhật lớp học')
-      setInfoOpen(false)
-      await refreshData()
-    } catch {
-      notifyError('Lỗi kết nối máy chủ')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function saveRoster() {
-    setSubmitting(true)
-    try {
-      const result = await apiJson<{ updatedLessons: number; skippedLocked: number }>(`/api/classes/${id}/students`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentIds: selectedStudents }),
-      })
-      if (!result.success) {
-        notifyError(result.error || 'Không lưu được sổ học viên')
-        return
+      const rosterChanged = detail && studentIds.join() !== detail.roster.map(student => student.id).join()
+      if (detail?.isActive && rosterChanged) {
+        const roster = await apiJson<{ skippedLocked: number }>(`/api/classes/${id}/students`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentIds }),
+        })
+        if (!roster.success) {
+          notifyError(roster.error || 'Không lưu được sổ học viên')
+          await refreshData()
+          return
+        }
+        const skipped = roster.data?.skippedLocked ?? 0
+        notifySuccess(skipped ? `Đã cập nhật lớp học · bỏ qua ${skipped} buổi đã điểm danh` : 'Đã cập nhật lớp học')
+      } else {
+        notifySuccess('Đã cập nhật lớp học')
       }
-      const skipped = result.data?.skippedLocked ?? 0
-      notifySuccess(skipped ? `Đã lưu sổ học viên · bỏ qua ${skipped} buổi đã điểm danh` : 'Đã lưu sổ học viên')
-      setRosterIds(null)
+      setInfoOpen(false)
       await refreshData()
     } catch {
       notifyError('Lỗi kết nối máy chủ')
@@ -202,45 +193,48 @@ export function ClassDetailScreen({ id }: { id: string }) {
     return <div className="p-4"><NoticeCard tone="danger" title="Không tải được lớp học" description={error || 'Lớp không tồn tại hoặc đã bị xoá'} /><Link href="/classes" className="mt-3 inline-block text-sm text-info hover:underline text-info">Về danh sách lớp</Link></div>
   }
 
-  return <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
-    <div className="mx-auto max-w-content space-y-4">
-      <div className="flex items-center gap-2">
-        <Link href="/classes" className="inline-flex items-center gap-1 text-sm text-zinc-600 hover:underline dark:text-zinc-300"><ArrowLeft size={16} />Danh sách lớp</Link>
-      </div>
+  const rosterHeader = (
+    <div>
+      <h2 className="text-sm font-semibold text-text-primary">Sổ học viên</h2>
+      <p className="mt-0.5 text-xs text-text-tertiary">{detail.roster.length} học viên · bấm tên để xem lịch học</p>
+    </div>
+  )
 
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className={`flex flex-wrap items-center gap-2 ${PAGE_TITLE_CLASS}`}>
+  return <div className="min-h-full bg-surface-secondary px-4 py-4 md:px-6 md:py-6">
+    <div className="mx-auto max-w-content space-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => router.push('/classes')} title="Danh sách lớp" />
+          <h1 className={`flex min-w-0 flex-wrap items-center gap-2 ${PAGE_TITLE_CLASS}`}>
+            <School size={24} className="text-warning" />
             {detail.name}
             {detail.isActive ? <Badge variant="success">Đang hoạt động</Badge> : <Badge variant="default">Đã kết thúc</Badge>}
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">
-        <Button variant="white" size="sm" icon={CalendarClock} onClick={() => router.push(`/lessons?classId=${id}`)}>Xem lịch</Button>
-      <Button variant="white" size="sm" icon={Edit3} onClick={() => setInfoOpen(true)}>Sửa thông tin</Button>
-        {detail.isActive && <Button variant="red" size="sm" icon={StopCircle} onClick={() => setEndOpen(true)}>Kết thúc lớp</Button>}
-    <Button variant="red" size="sm" icon={Trash2} onClick={() => setDeleteOpen(true)} title="Xoá lớp thêm nhầm">Xoá lớp</Button>
-  </div>
+          <Button variant="white" size="sm" icon={CalendarClock} onClick={() => router.push(`/lessons?classId=${id}`)}>Xem lịch</Button>
+          <Button variant="white" size="sm" icon={Edit3} onClick={() => setInfoOpen(true)}>Sửa thông tin</Button>
+          {detail.isActive && <Button variant="red" size="sm" icon={StopCircle} onClick={() => setEndOpen(true)}>Kết thúc lớp</Button>}
+          <Button variant="red" size="sm" icon={Trash2} onClick={() => setDeleteOpen(true)} title="Xoá lớp thêm nhầm">Xoá lớp</Button>
+        </div>
       </header>
 
       {error && <NoticeCard tone="danger" title="Không tải được lớp học" description={error} />}
 
-      <section className="space-y-3">
-        <div className="space-y-3">
-          <h2 className="font-semibold text-zinc-950 dark:text-white">Thông tin lớp</h2>
-          <dl className="flex flex-wrap gap-x-8 gap-y-3 border-b border-zinc-200 pb-4 dark:border-zinc-800">
-            <div><dt className="text-xs text-zinc-500 dark:text-zinc-400">Huấn luyện viên</dt><dd className="mt-0.5 text-sm font-medium text-zinc-900 dark:text-white">{detail.coachName || 'Chưa phân công'}</dd></div>
-            <div><dt className="text-xs text-zinc-500 dark:text-zinc-400">Lịch lặp</dt><dd className="mt-0.5 text-sm font-medium text-zinc-900 dark:text-white">{slots.length}</dd></div>
-          </dl>
-          {detail.note && <p className="whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-300">{detail.note}</p>}
-        </div>
-      </section>
+      <Card padding="md" className="space-y-3">
+        <h2 className="text-sm font-semibold text-text-primary">Thông tin lớp</h2>
+        <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+          <div><dt className="text-xs text-text-tertiary">Huấn luyện viên</dt><dd className="font-medium">{detail.coachName || 'Chưa phân công'}</dd></div>
+          <div><dt className="text-xs text-text-tertiary">Lịch lặp</dt><dd className="font-medium tabular-nums">{slots.length} khung giờ</dd></div>
+          <div className="sm:col-span-2"><dt className="text-xs text-text-tertiary">Ghi chú</dt><dd className="whitespace-pre-wrap font-medium">{detail.note || '—'}</dd></div>
+        </dl>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-        <section className="space-y-3">
-          <h2 className="font-semibold text-zinc-950 dark:text-white">Sổ học viên <span className="font-normal text-zinc-500 dark:text-zinc-400">({detail.roster.length})</span></h2>
+        <section className="order-1 space-y-3 lg:order-1">
           <div className="md:hidden">
             <SortableCardList
+              header={rosterHeader}
               columns={rosterColumns}
               data={detail.roster}
               keyExtractor={student => student.id}
@@ -254,6 +248,7 @@ export function ClassDetailScreen({ id }: { id: string }) {
           </div>
           <div className="hidden md:block">
             <SortableTable
+              header={rosterHeader}
               columns={rosterColumns}
               data={detail.roster}
               keyExtractor={student => student.id}
@@ -265,75 +260,61 @@ export function ClassDetailScreen({ id }: { id: string }) {
               search={{ placeholder: 'Tìm học viên', getText: student => `${student.fullName} ${student.phone ?? ''}` }}
             />
           </div>
-          {detail.isActive && <details className="group rounded-lg border border-zinc-200 bg-white px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-900">
-          <summary className="w-fit cursor-pointer text-sm font-medium text-zinc-600 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring dark:text-zinc-300 dark:hover:text-white">Chỉnh sửa sổ học viên</summary>
-            <div className="mt-3 space-y-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Thay đổi áp dụng cho lịch lặp và các buổi chưa điểm danh.</p>
-              <StudentPicker key={detail.id} value={selectedStudents} disabled={submitting} onChange={setRosterIds} initial={detail.roster} availableForClassId={detail.id} />
-              <div className="flex justify-end">
-              <Button variant="contrast" size="sm" disabled={submitting || !rosterChanged} onClick={() => void saveRoster()}>{submitting ? 'Đang lưu...' : 'Lưu thay đổi'}</Button>
-            </div>
-          </div>
-          </details>}
         </section>
 
-      <section className="space-y-3 rounded-xl bg-white p-4 ring-1 ring-border-default dark:bg-zinc-900">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="font-semibold text-zinc-950 dark:text-white">Buổi học sắp tới</h2>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">Trong 12 tuần tới</span>
-        </div>
+        <Card padding="md" className="order-3 space-y-3 lg:order-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-text-primary">Lịch lặp của lớp</h2>
+            {detail.isActive && <Button variant="contrast" size="sm" icon={Plus} onClick={() => setSlotTarget('new')}>Thêm lịch lặp</Button>}
+          </div>
+          <div className="space-y-2">
+            {slots.map(slot => (
+              <div key={slot.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border-default p-3">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-2 text-sm font-medium text-text-primary"><CalendarClock size={16} />{formatSlot(slot)}{slot.isActive ? '' : ' · đã kết thúc'}</p>
+                  <p className="mt-1 text-xs tabular-nums text-text-tertiary">Từ {formatDate(slot.startsOn)} → {formatDate(slot.endsOn)} · {slot.students.length} học viên</p>
+                </div>
+                <div className="flex gap-1.5">
+                  {detail.isActive && <Button variant="white" size="sm" icon={Edit3} disabled={submitting} onClick={() => setSlotTarget(slot)} title="Sửa lịch lặp" />}
+                  {detail.isActive && slot.isActive && <Button variant="red-soft" size="sm" icon={StopCircle} disabled={submitting} onClick={() => setEndSlotTarget(slot)} title="Kết thúc lịch lặp" />}
+                </div>
+              </div>
+            ))}
+            {!slots.length && <p className="text-sm text-text-tertiary">Lớp chưa có lịch lặp. Thêm lịch lặp để sinh buổi học hằng tuần.</p>}
+          </div>
+        </Card>
+
+        <section className="order-2 space-y-3 lg:order-3 lg:col-span-2">
           {lessonData?.success && lessonData.data?.warning && <NoticeCard tone="warning" title="Lịch chưa được sinh đầy đủ" description={lessonData.data.warning} />}
-          {lessonsError
-            ? <NoticeCard tone="danger" title="Không tải được lịch học" description={lessonsError} />
-            : lessonsLoading
-              ? <p className="py-2 text-sm text-zinc-500 dark:text-zinc-400">Đang tải lịch học...</p>
-              : lessons.length
-                ? <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {lessons.map(lesson => (
-                    <li key={lesson.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
-                      <div className="flex min-w-0 flex-1 items-start gap-4">
-                        <div className="w-24 shrink-0">
-                          <p className="text-sm font-medium text-zinc-950 dark:text-white">{formatVnDate(lesson.startsAt)}</p>
-                          <p className="mt-0.5 text-xs tabular-nums text-zinc-500 dark:text-zinc-400">{formatVnTimeRange(lesson.startsAt, lesson.durationMin)}</p>
-                        </div>
+          {lessonsError ? <NoticeCard tone="danger" title="Không tải được lịch học" description={lessonsError} /> : (
+            <Card padding="none">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-3">
+                <h2 className="text-sm font-semibold text-text-primary">Buổi học sắp tới</h2>
+                <span className="text-xs text-text-tertiary">{lessonsLoading ? 'Trong 12 tuần tới' : `${lessons.length} buổi · Trong 12 tuần tới`}</span>
+              </div>
+              {lessonsLoading
+                ? <p className="px-4 pb-4 text-sm text-text-tertiary">Đang tải lịch học...</p>
+                : lessons.length
+                  ? <ul className="max-h-96 divide-y divide-border-default overflow-y-auto border-t border-border-default">
+                    {lessons.map(lesson => (
+                      <li key={lesson.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{lesson.title}</p>
-                          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                            {lesson.coachName ? `${lesson.coachName} · ` : ''}{lesson.students.length} học viên
+                          <p className="truncate text-sm font-medium text-text-primary">{lesson.title}</p>
+                          <p className="mt-0.5 text-xs tabular-nums text-text-tertiary">
+                            {formatVnDate(lesson.startsAt)} · {formatVnTimeRange(lesson.startsAt, lesson.durationMin)}{lesson.coachName ? ` · ${lesson.coachName}` : ''} · {lesson.students.length} học viên
                           </p>
                         </div>
-                      </div>
-                      <Badge variant={lesson.status === 'COMPLETED' ? 'success' : 'default'}>
-                        {lesson.status === 'COMPLETED' ? 'Đã học' : 'Sắp diễn ra'}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-                : <p className="py-2 text-sm text-zinc-500 dark:text-zinc-400">Chưa có buổi học trong 12 tuần tới.</p>}
+                        <Badge variant={lesson.status === 'COMPLETED' ? 'success' : 'default'}>
+                          {lesson.status === 'COMPLETED' ? 'Đã học' : 'Sắp diễn ra'}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                  : <p className="px-4 pb-4 text-sm text-text-tertiary">Chưa có buổi học trong 12 tuần tới.</p>}
+            </Card>
+          )}
         </section>
       </div>
-
-        <section className="space-y-3 rounded-xl bg-white p-4 ring-1 ring-border-default dark:bg-zinc-900">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-semibold text-zinc-950 dark:text-white">Lịch lặp của lớp</h2>
-            {detail.isActive && <Button variant="contrast" size="sm" icon={Plus} onClick={() => setSlotTarget('new')}>Thêm lịch lặp</Button>}
-        </div>
-        <div className="space-y-2">
-          {slots.map(slot => (
-            <div key={slot.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-              <div className="min-w-0">
-                <p className="flex items-center gap-2 text-sm font-medium text-zinc-950 dark:text-white"><CalendarClock size={16} />{formatSlot(slot)}{slot.isActive ? '' : ' · đã kết thúc'}</p>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Từ {formatDate(slot.startsOn)} → {formatDate(slot.endsOn)} · {slot.students.length} học viên</p>
-              </div>
-              <div className="flex gap-1.5">
-                {detail.isActive && <Button variant="white" size="sm" icon={Edit3} disabled={submitting} onClick={() => setSlotTarget(slot)} title="Sửa lịch lặp" />}
-                {detail.isActive && slot.isActive && <Button variant="red-soft" size="sm" icon={StopCircle} disabled={submitting} onClick={() => setEndSlotTarget(slot)} title="Kết thúc lịch lặp" />}
-              </div>
-            </div>
-          ))}
-          {!slots.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">Lớp chưa có lịch lặp. Thêm lịch lặp để sinh buổi học hằng tuần.</p>}
-        </div>
-      </section>
     </div>
 
     {infoOpen && <ClassInfoModal key={detail.id} lessonClass={detail} submitting={submitting} onClose={() => setInfoOpen(false)} onSubmit={saveInfo} />}
@@ -376,14 +357,16 @@ function ClassInfoModal({ lessonClass, submitting, onClose, onSubmit }: {
   lessonClass: ClassDetail
   submitting: boolean
   onClose: () => void
-  onSubmit: (payload: { name: string; coachName: string; note: string }) => Promise<void>
+  onSubmit: (payload: { name: string; coachName: string; note: string }, studentIds: string[]) => Promise<void>
 }) {
   const [name, setName] = useState(lessonClass.name)
   const [coachName, setCoachName] = useState(lessonClass.coachName ?? '')
   const [note, setNote] = useState(lessonClass.note ?? '')
+  const [rosterIds, setRosterIds] = useState<string[] | null>(null)
+  const selectedStudents = rosterIds ?? lessonClass.roster.map(student => student.id)
 
   return <Modal open onClose={onClose} title="Sửa thông tin lớp" size="md" footer={
-  <Button variant="contrast" size="lg" fullWidth disabled={submitting || !name.trim()} onClick={() => void onSubmit({ name: name.trim(), coachName: coachName.trim(), note: note.trim() })}>
+  <Button variant="contrast" size="lg" fullWidth disabled={submitting || !name.trim()} onClick={() => void onSubmit({ name: name.trim(), coachName: coachName.trim(), note: note.trim() }, selectedStudents)}>
       {submitting ? 'Đang lưu...' : 'Cập nhật'}
     </Button>
   }>
@@ -391,7 +374,14 @@ function ClassInfoModal({ lessonClass, submitting, onClose, onSubmit }: {
       <div><Label htmlFor="class-info-name" required>Tên lớp</Label><Input autoFocus id="class-info-name" maxLength={150} value={name} onChange={event => setName(event.target.value)} /></div>
       <div><Label htmlFor="class-info-coach">Huấn luyện viên</Label><Input id="class-info-coach" maxLength={100} value={coachName} onChange={event => setCoachName(event.target.value)} /></div>
       <div><Label htmlFor="class-info-note">Ghi chú</Label><Textarea id="class-info-note" rows={3} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} /></div>
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">Đổi tên lớp sẽ cập nhật tiêu đề các lịch lặp và buổi chưa điểm danh.</p>
+      <p className="text-xs text-text-tertiary">Đổi tên lớp sẽ cập nhật tiêu đề các lịch lặp và buổi chưa điểm danh.</p>
+      {lessonClass.isActive && <div className="space-y-3 border-t border-border-default pt-3">
+        <div>
+          <Label required>Sổ học viên</Label>
+          <p className="mt-0.5 text-xs text-text-tertiary">Thay đổi áp dụng cho lịch lặp và các buổi chưa điểm danh.</p>
+        </div>
+        <StudentPicker key={lessonClass.id} value={selectedStudents} disabled={submitting} onChange={setRosterIds} initial={lessonClass.roster} availableForClassId={lessonClass.id} />
+      </div>}
     </div>
   </Modal>
 }
@@ -402,7 +392,12 @@ function SlotModal({ slot, submitting, onClose, onSubmit }: {
   onClose: () => void
   onSubmit: (scope: 'FOLLOWING' | 'ALL', form: ScheduleFormState) => Promise<void>
 }) {
-  const [form, setForm] = useState<ScheduleFormState>(() => slot ? scheduleToForm(slot) : emptySchedule(todayInput()))
+  const [form, setForm] = useState<ScheduleFormState>(() => {
+    if (!slot) return { ...emptySchedule(todayInput()), ending: 'DATE', endsOn: '' }
+    // Khung giờ cũ từng "không kết thúc": ép chọn ngày kết thúc trước khi lưu.
+    const loaded = scheduleToForm(slot)
+    return loaded.ending === 'NEVER' ? { ...loaded, ending: 'DATE', endsOn: '' } : loaded
+  })
   const [scope, setScope] = useState<'FOLLOWING' | 'ALL'>('FOLLOWING')
 
   const error = scheduleError(form)
@@ -413,7 +408,7 @@ function SlotModal({ slot, submitting, onClose, onSubmit }: {
     </Button>
   }>
     <div className="space-y-4">
-      <ScheduleFields idPrefix={slot ? `slot-${slot.id}` : 'slot-new'} form={form} onChange={setForm} />
+      <ScheduleFields idPrefix={slot ? `slot-${slot.id}` : 'slot-new'} form={form} onChange={setForm} allowNever={false} />
         {error && <p className="text-sm text-danger">{error}</p>}
       {slot && <div>
         <Label htmlFor="slot-scope">Phạm vi thay đổi</Label>
@@ -421,9 +416,9 @@ function SlotModal({ slot, submitting, onClose, onSubmit }: {
           <option value="FOLLOWING">Từ buổi sắp tới trở đi</option>
           <option value="ALL">Toàn bộ chuỗi (giữ lịch sử)</option>
         </Select>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Buổi đã điểm danh không bị đổi lịch; nếu có buổi như vậy, hãy xử lý riêng trên lịch.</p>
+        <p className="mt-1 text-xs text-text-tertiary">Buổi đã điểm danh không bị đổi lịch; nếu có buổi như vậy, hãy xử lý riêng trên lịch.</p>
       </div>}
-      {!slot && <p className="text-xs text-zinc-500 dark:text-zinc-400">Lịch dùng sổ học viên hiện tại của lớp. Sinh buổi tối đa 12 tuần tới.</p>}
+      {!slot && <p className="text-xs text-text-tertiary">Lịch dùng sổ học viên hiện tại của lớp. Sinh buổi tối đa 12 tuần tới.</p>}
               </div>
   </Modal>
 }
