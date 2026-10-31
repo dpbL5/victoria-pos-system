@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import Link from 'next/link'
 import {
   History,
+  Minus,
   Package,
   PackagePlus,
+  Plus,
   Trash2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +26,7 @@ import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { money, toNumber } from '@/features/pos/format'
+import { stepperButton } from '@/features/pos/checkout-item-rows'
 import type { Product, ProductType, UserSession } from '@/features/pos/types'
 
 type InventoryFilter = 'ALL' | 'LOW_STOCK' | ProductType
@@ -618,6 +621,14 @@ function StockMovementDialog({
     ? product.stockQuantity + parsedQuantity
     : product?.stockQuantity ?? 0
 
+  const step = (delta: number) => {
+    const current = Number.isInteger(Number(quantity)) ? Number(quantity) : 0
+    let next = current + delta
+    if (movementType === 'RESTOCK') next = Math.max(1, next)
+    else if (next === 0) next = delta // điều chỉnh: bỏ qua 0 vì số lượng 0 không hợp lệ
+    setQuantity(String(next))
+  }
+
   const submit = async () => {
     if (!product) return
 
@@ -710,13 +721,37 @@ function StockMovementDialog({
             </div>
             <div>
               <Label htmlFor="stock-movement-quantity" required>Số lượng</Label>
-              <Input
-                id="stock-movement-quantity"
-                type="number"
-                inputMode="numeric"
-                value={quantity}
-                onChange={(event) => setQuantity(event.target.value)}
-              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="Giảm số lượng"
+                  onClick={() => step(-1)}
+                  className={stepperButton}
+                >
+                  <Minus size={14} aria-hidden />
+                </button>
+                <Input
+                  id="stock-movement-quantity"
+                  type="number"
+                  inputMode="numeric"
+                  step="1"
+                  className="min-w-0 flex-1 text-center"
+                  value={quantity}
+                  onChange={(event) => setQuantity(
+                    movementType === 'RESTOCK'
+                      ? event.target.value.replace(/-/g, '')
+                      : event.target.value
+                  )}
+                />
+                <button
+                  type="button"
+                  aria-label="Tăng số lượng"
+                  onClick={() => step(1)}
+                  className={stepperButton}
+                >
+                  <Plus size={14} aria-hidden />
+                </button>
+              </div>
             </div>
           </div>
 
