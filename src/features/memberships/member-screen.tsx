@@ -22,6 +22,7 @@ import { SortableCardList, type Column as CardColumn } from '@/components/ui/sor
 import { SortableTable, type Column } from '@/components/ui/sortable-table'
 import { useToast } from '@/components/ui/toast'
 import { isAdminOnly, isManagerOrAdmin } from '@/lib/shared/roles'
+import { vnNameSortKey } from '@/lib/shared/utils'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
@@ -39,11 +40,12 @@ interface MemberCustomer extends Customer {
   latestMembership?: Membership | null
   membershipStatus: MemberStatus
   expiresAt?: string
+  sortName: string
 }
 
 export function MemberScreen() {
   const { success: notifySuccess } = useToast()
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ACTIVE')
   const [registerOpen, setRegisterOpen] = useState(false)
   const [renewMember, setRenewMember] = useState<RenewMemberInput | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -68,6 +70,7 @@ export function MemberScreen() {
       expiresAt: member.currentMembership?.expiresAt
         ?? member.latestMembership?.expiresAt
         ?? '9999-12-31',
+      sortName: vnNameSortKey(member.fullName),
     })),
     [memberData]
   )
@@ -119,7 +122,7 @@ export function MemberScreen() {
 
   const memberColumns: Column<MemberCustomer>[] = useMemo(() => [
     {
-      key: 'fullName',
+      key: 'sortName',
       label: 'Tên hội viên',
       cellClassName: 'px-4 py-3 font-medium',
       render: (item) => (
@@ -150,7 +153,7 @@ export function MemberScreen() {
 
   const memberCardColumns: CardColumn<MemberCustomer>[] = useMemo(() => [
     {
-      key: 'fullName',
+      key: 'sortName',
       label: 'Tên hội viên',
       render: (item) => (
         <div className={`flex items-center gap-2 text-base font-semibold ${memberNameColor(item.membershipStatus)}`}>
@@ -278,8 +281,8 @@ export function MemberScreen() {
               placeholder: 'Tìm tên hoặc số điện thoại',
               getText: (m) => `${m.fullName} ${m.phone ?? ''}`,
             }}
-            sortableKeys={['fullName', 'phone', 'expiresAt']}
-            defaultSortKey="expiresAt"
+            sortableKeys={['sortName', 'phone', 'expiresAt']}
+            defaultSortKey="sortName"
             defaultSortDir="asc"
             emptyIcon={Users}
             emptyMessage="Không có hội viên"
@@ -298,8 +301,8 @@ export function MemberScreen() {
               placeholder: 'Tìm tên hoặc số điện thoại',
               getText: (m) => `${m.fullName} ${m.phone ?? ''}`,
             }}
-            sortableKeys={['fullName', 'phone', 'expiresAt']}
-            defaultSortKey="expiresAt"
+            sortableKeys={['sortName', 'phone', 'expiresAt']}
+            defaultSortKey="sortName"
             defaultSortDir="asc"
             emptyIcon={Users}
             emptyMessage="Không có hội viên"

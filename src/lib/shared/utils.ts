@@ -16,6 +16,12 @@ export function normalizeSearchText(text: string): string {
     .replace(/đ/g, 'd')
 }
 
+/** Khoá sắp xếp tên kiểu Việt Nam: so theo từ cuối (tên gọi), họ tên đầy đủ làm tie-break. */
+export function vnNameSortKey(fullName: string): string {
+  const words = fullName.trim().split(/\s+/)
+  return `${words[words.length - 1] ?? ''} ${fullName}`
+}
+
 /**
  * Rút gọn `invoiceNo` cho list views: chỉ giữ phần cuối sau dấu `-` cuối cùng.
  * Ví dụ: `INV-20260828-222614-35E7A9DE` → `35E7A9DE`.
