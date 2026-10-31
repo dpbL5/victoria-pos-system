@@ -113,7 +113,7 @@ export function formatSchedule(source: Pick<ScheduleSource, 'daysOfWeek' | 'star
   return [`${days} · ${source.startTime} · ${source.durationMin} phút`, repeat].filter(Boolean).join(' · ')
 }
 
-export function ScheduleFields({ idPrefix, form, onChange, disabled = false, showRepeat = true, startsOnLabel = 'Bắt đầu từ ngày' }: {
+export function ScheduleFields({ idPrefix, form, onChange, disabled = false, showRepeat = true, startsOnLabel = 'Bắt đầu từ ngày', allowNever = true }: {
   idPrefix: string
   form: ScheduleFormState
   onChange: (next: ScheduleFormState) => void
@@ -121,6 +121,8 @@ export function ScheduleFields({ idPrefix, form, onChange, disabled = false, sho
   /** false = chỉ ngày + giờ (buổi lẻ); true = thêm thứ trong tuần, số tuần lặp và cách kết thúc. */
   showRepeat?: boolean
   startsOnLabel?: string
+  /** false = buộc lịch lặp phải có ngày kết thúc hoặc số buổi (Lớp học). */
+  allowNever?: boolean
 }) {
   const patch = (values: Partial<ScheduleFormState>) => onChange({ ...form, ...values })
   return <fieldset disabled={disabled} className="space-y-3">
@@ -159,7 +161,7 @@ export function ScheduleFields({ idPrefix, form, onChange, disabled = false, sho
       <div>
         <Label htmlFor={`${idPrefix}-ending`}>Kết thúc lặp</Label>
         <Select id={`${idPrefix}-ending`} value={form.ending} onChange={event => patch({ ending: event.target.value as ScheduleFormState['ending'] })}>
-          <option value="NEVER">Không kết thúc</option>
+          {allowNever && <option value="NEVER">Không kết thúc</option>}
           <option value="DATE">Vào ngày</option>
           <option value="COUNT">Sau số buổi</option>
         </Select>

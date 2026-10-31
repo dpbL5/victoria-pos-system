@@ -288,7 +288,7 @@ function ClassFormModal({ lessonClass, submitting, onClose, onSubmit }: {
   const [coachName, setCoachName] = useState(lessonClass?.coachName ?? '')
   const [note, setNote] = useState(lessonClass?.note ?? '')
   const [withSlot, setWithSlot] = useState(!lessonClass)
-  const [slot, setSlot] = useState<ScheduleFormState>(() => emptySchedule(todayInput()))
+  const [slot, setSlot] = useState<ScheduleFormState>(() => ({ ...emptySchedule(todayInput()), ending: 'DATE', endsOn: '' }))
   const [studentIds, setStudentIds] = useState<string[]>([])
 
   const slotPayload = scheduleBody(slot)
@@ -325,7 +325,7 @@ function ClassFormModal({ lessonClass, submitting, onClose, onSubmit }: {
       {!lessonClass && <>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-info" checked={withSlot} onChange={event => setWithSlot(event.target.checked)} />Đặt lịch lặp ngay</label>
         {withSlot && <div className="space-y-4 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
-          <ScheduleFields idPrefix="class-slot" form={slot} onChange={setSlot} />
+          <ScheduleFields idPrefix="class-slot" form={slot} onChange={setSlot} allowNever={false} />
             {slotError && <p className="text-sm text-danger">{slotError}</p>}
         </div>}
         <StudentPicker value={studentIds} onChange={setStudentIds} unassignedOnly />

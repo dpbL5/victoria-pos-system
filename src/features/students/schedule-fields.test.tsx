@@ -101,4 +101,12 @@ describe('ScheduleFields', () => {
     expect(html).not.toContain('Các thứ trong tuần')
     expect(html).not.toContain('Kết thúc lặp')
   })
+
+  it('allowNever=false ẩn lựa chọn Không kết thúc (Lớp học)', () => {
+    const html = renderToStaticMarkup(<ScheduleFields idPrefix="x" form={form({ days: [1] })} onChange={() => {}} allowNever={false} />)
+
+    expect(html).not.toContain('Không kết thúc')
+    expect(html).toContain('Vào ngày')
+    expect(html).toContain('Sau số buổi')
+  })
 })
