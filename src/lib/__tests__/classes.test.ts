@@ -87,6 +87,7 @@ beforeEach(() => {
       }),
       delete: vi.fn(async (id: string) => { state.classes = state.classes.filter(row => row.id !== id) }),
       findUpcomingLessons: vi.fn(async (ids: string[]) => state.lessons.filter(lesson => lesson.startsAt >= new Date() && (ids.includes(lesson.classId ?? '') || ids.includes(state.series.find(series => series.id === lesson.seriesId)?.classId ?? '')))),
+      heldLessonCounts: vi.fn(async (ids: string[]) => Object.fromEntries(ids.map(id => [id, state.lessons.filter(lesson => lesson.startsAt < new Date() && lesson.status !== 'CANCELLED' && (lesson.classId === id || state.series.find(series => series.id === lesson.seriesId)?.classId === id)).length]))),
       classesOfStudents: vi.fn(async (studentIds: string[]) => {
         const rows: { studentId: string; studentName: string; classId: string; className: string }[] = []
         for (const item of state.classes.filter(row => row.isActive)) {

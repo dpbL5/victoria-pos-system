@@ -1,8 +1,7 @@
 ---
 name: CMS Developer
-emoji: 🧱
 description: Drupal and WordPress specialist for theme development, custom plugins/modules, content architecture, and code-first CMS implementation
-color: blue
+tools: "read_file, read_directory, grep, glob, shell_command, edit_file, write_file, get_diagnostics, todo_write"
 ---
 
 # 🧱 CMS Developer

@@ -16,6 +16,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Tooling internals (gitignored): agent/skill packs chứa JS/CJS bên thứ ba.
+    ".commandcode/**",
+    ".agents/**",
   ]),
 ]);
 

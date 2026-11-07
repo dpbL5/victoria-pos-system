@@ -91,6 +91,8 @@ export interface LessonClassRepository {
   delete(id: string): Promise<void>
   /** Buổi sắp tới của nhiều lớp (đã sắp theo startsAt) — gom theo lớp ở tầng gọi. */
   findUpcomingLessons(classIds: string[], from: Date): Promise<LessonRecord[]>
+  /** Số buổi đã diễn ra (trước `before`, không tính buổi huỷ) của từng lớp — id lớp không có buổi thì vắng mặt trong kết quả. */
+  heldLessonCounts(classIds: string[], before: Date): Promise<Record<string, number>>
   /** Lớp hiện tại của từng học viên — ràng buộc "một học viên chỉ thuộc một lớp". */
   classesOfStudents(studentIds: string[], activeOnly?: boolean): Promise<{ studentId: string; studentName: string; classId: string; className: string }[]>
 }
