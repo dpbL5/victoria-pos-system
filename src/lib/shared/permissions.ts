@@ -32,8 +32,11 @@ export const PERMISSION_GROUPS: PermissionGroupDef[] = [
       { key: 'sessions.checkin', label: 'Check-in / tạo phiên' },
       { key: 'sessions.checkout', label: 'Checkout & thu tiền' },
       { key: 'sessions.sell', label: 'Bán sản phẩm / dịch vụ trong phiên' },
+      { key: 'sessions.retail', label: 'Bán lẻ tại quầy' },
+      { key: 'sessions.staffDrink', label: 'Nhận nước / hàng dùng nội bộ' },
       { key: 'sessions.edit', label: 'Sửa phiên (giờ, số người chơi...)' },
       { key: 'sessions.monitor', label: 'Xem board chỉ-đọc khi không có ca riêng' },
+      { key: 'tools.count', label: 'Đếm dụng cụ' },
     ],
   },
   {
@@ -130,7 +133,6 @@ export const PERMISSION_GROUPS: PermissionGroupDef[] = [
       { key: 'tools.create', label: 'Thêm dụng cụ' },
       { key: 'tools.edit', label: 'Sửa dụng cụ' },
       { key: 'tools.delete', label: 'Xoá dụng cụ' },
-      { key: 'tools.count', label: 'Ghi nhận số dụng cụ đầu / cuối ca' },
     ],
   },
   {

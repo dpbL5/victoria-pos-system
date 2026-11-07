@@ -56,6 +56,7 @@ const ID = {
 // ── Probe đọc: role 0 quyền → 403, role toàn quyền → 200 ──
 const READS: Array<{ name: string; path: string }> = [
   { name: 'sessions.view', path: '/api/sessions' },
+  { name: 'sessions.staffDrink', path: '/api/staff-consumption' },
   { name: 'bookings.view', path: '/api/bookings' },
   { name: 'customers.view', path: '/api/customers' },
   { name: 'memberships (xem)', path: '/api/memberships' },
@@ -94,7 +95,8 @@ const MUTATIONS: Array<{
   { name: 'sessions.checkout', perm: 'sessions.checkout', method: 'POST', path: `/api/sessions/${ID.session}/checkout`, body: { paymentMethod: 'CASH' } },
   { name: 'sessions.sell (bán kèm)', perm: 'sessions.sell', method: 'POST', path: `/api/sessions/${ID.session}/sell`, body: {} },
   { name: 'sessions.sell (sửa hàng kèm)', perm: 'sessions.sell', method: 'PATCH', path: `/api/sessions/${ID.session}/sell-items`, body: {} },
-  { name: 'sessions.checkin (bán lẻ)', perm: 'sessions.sell', method: 'POST', path: '/api/retail-sales', body: {} },
+  { name: 'sessions.retail (bán lẻ)', perm: 'sessions.retail', method: 'POST', path: '/api/retail-sales', body: {} },
+  { name: 'sessions.staffDrink (nhận nước)', perm: 'sessions.staffDrink', method: 'POST', path: '/api/staff-consumption', body: {} },
   { name: 'sessions.checkin (tạm dừng)', perm: 'sessions.checkin', method: 'POST', path: `/api/sessions/${ID.session}/pause`, body: {} },
   { name: 'sessions.checkin (tiếp tục)', perm: 'sessions.checkin', method: 'POST', path: `/api/sessions/${ID.session}/resume`, body: {} },
   { name: 'sessions.checkin (dừng người chơi)', perm: 'sessions.checkin', method: 'POST', path: `/api/sessions/${ID.session}/players/${ID.player}/pause`, body: {} },
@@ -157,6 +159,8 @@ const CASHIER_PERMISSIONS = [
   'sessions.checkin',
   'sessions.checkout',
   'sessions.sell',
+  'sessions.retail',
+  'sessions.staffDrink',
   'shifts.open',
   'shifts.close',
   'bookings.view',

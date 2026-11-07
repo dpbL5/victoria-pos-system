@@ -19,6 +19,8 @@ export function RetailDialog({
   productsError,
   onRetryProducts,
   shiftReady,
+  canRetail,
+  canStaffDrink,
   submitting,
   setSubmitting,
   onClose,
@@ -30,6 +32,10 @@ export function RetailDialog({
   productsError: string;
   onRetryProducts: () => void;
   shiftReady: boolean;
+  /** Tab khách hàng chỉ hiện khi role có quyền bán lẻ */
+  canRetail: boolean;
+  /** Tab nhân viên chỉ hiện khi role có quyền nhận hàng nội bộ */
+  canStaffDrink: boolean;
   submitting: boolean;
   setSubmitting: (value: boolean) => void;
   onClose: () => void;
@@ -40,8 +46,11 @@ export function RetailDialog({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [customerQuery, setCustomerQuery] = useState("");
-  const [tab, setTab] = useState<"CUSTOMER" | "STAFF">("CUSTOMER");
+  const [tab, setTab] = useState<"CUSTOMER" | "STAFF">(canRetail ? "CUSTOMER" : "STAFF");
   const [staffProductId, setStaffProductId] = useState<string | null>(null);
+  const [staffDrinkStatus, setStaffDrinkStatus] = useState<
+    "loading" | "received" | "available"
+  >("loading");
 
   useEffect(() => {
     if (open) {
@@ -50,11 +59,34 @@ export function RetailDialog({
       setPaymentMethod("CASH");
       setCustomer(null);
       setCustomerQuery("");
-      setTab("CUSTOMER");
+      setTab(canRetail ? "CUSTOMER" : "STAFF");
       setStaffProductId(null);
+      setStaffDrinkStatus("loading");
       /* eslint-enable react-hooks/set-state-in-effect */
     }
-  }, [open]);
+  }, [open, canRetail]);
+
+  // Mỗi nhân viên chỉ được nhận nước 1 lần/ngày — kiểm tra khi mở tab
+  useEffect(() => {
+    if (!open || !canStaffDrink || tab !== "STAFF") return;
+    let cancelled = false;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setStaffDrinkStatus("loading");
+    /* eslint-enable react-hooks/set-state-in-effect */
+    apiJson<{ received: boolean }>("/api/staff-consumption")
+      .then((data) => {
+        if (cancelled) return;
+        setStaffDrinkStatus(
+          data.success && data.data?.received ? "received" : "available",
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setStaffDrinkStatus("available");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, canStaffDrink, tab]);
 
   const cartLines = products
     .map((product) => ({
@@ -133,15 +165,17 @@ export function RetailDialog({
     setSubmitting(true);
     try {
       const data = await apiJson(
-        `/api/products/${selected.id}/consume`,
-        jsonRequest({}),
+        "/api/staff-consumption",
+        jsonRequest({ productId: selected.id }),
       );
 
       if (!data.success) {
+        if (data.code === "ALREADY_RECEIVED_TODAY") setStaffDrinkStatus("received");
         notifyError(data.error || "Không trừ được kho");
         return;
       }
 
+      setStaffDrinkStatus("received");
       const refreshed = await onDone();
       notifySuccess(
         refreshed === false
@@ -159,10 +193,10 @@ export function RetailDialog({
     <Modal
       open={open}
       onClose={onClose}
-      title="Bán lẻ"
+      title={canRetail ? "Bán lẻ" : "Nhận hàng nội bộ"}
       description=""
       size="lg"
-      footer={tab === "CUSTOMER" ? (
+      footer={tab === "CUSTOMER" && canRetail ? (
         <Button
           variant="contrast"
           size="lg"
@@ -178,19 +212,26 @@ export function RetailDialog({
         >
           {submitting ? "Đang xử lý..." : `Thu tiền ${money(grandTotal)}`}
         </Button>
-      ) : (
+      ) : tab === "STAFF" && canStaffDrink ? (
         <Button
           variant="contrast"
           size="lg"
           fullWidth
-          disabled={submitting || productsLoading || !!productsError || !staffProductId}
+          disabled={
+            submitting ||
+            productsLoading ||
+            productsError !== "" ||
+            !staffProductId ||
+            staffDrinkStatus !== "available"
+          }
           onClick={handleStaffReceive}
         >
           {submitting ? "Đang xử lý..." : "Nhận"}
         </Button>
-      )}
+      ) : undefined}
     >
       <div className="space-y-4">
+        {canRetail && canStaffDrink && (
         <div className="grid grid-cols-2 gap-2">
           <Button
             variant={tab === "CUSTOMER" ? "blue" : "white"}
@@ -213,6 +254,7 @@ export function RetailDialog({
             Nhân viên
           </Button>
         </div>
+        )}
 
         {tab === "CUSTOMER" ? (
           <>
@@ -334,6 +376,14 @@ export function RetailDialog({
           onMethodChange={setPaymentMethod}
         />
           </>
+        ) : staffDrinkStatus === "loading" ? (
+          <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
+            Đang kiểm tra...
+          </p>
+        ) : staffDrinkStatus === "received" ? (
+          <div className="rounded-lg border border-warning-border bg-warning-bg p-3 text-sm text-zinc-700 dark:text-zinc-200">
+            Đã nhận nước, vui lòng đợi ca làm ngày tiếp theo
+          </div>
         ) : productsLoading ? (
           <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
             Đang tải danh sách hàng hoá...

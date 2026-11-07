@@ -29,8 +29,8 @@ const retailSaleSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireMutationAuth(request)
-    if (!userHasPermission(auth, 'sessions.sell')) {
-      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền bán hàng tại quầy', status: 403 })
+    if (!userHasPermission(auth, 'sessions.retail')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền bán lẻ tại quầy', status: 403 })
     }
 
     const body = await request.json()

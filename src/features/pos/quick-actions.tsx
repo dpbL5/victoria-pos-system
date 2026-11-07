@@ -29,6 +29,8 @@ export function QuickActions({
   retailDisabled = false,
   canCheckIn = true,
   canSell = true,
+  canRetail = true,
+  retailLabel = 'Bán lẻ',
   onCheckIn,
   onSell,
   onRetail,
@@ -39,6 +41,8 @@ export function QuickActions({
   /** Ẩn hẳn ô khi role không có quyền — không render control bị API chặn */
   canCheckIn?: boolean
   canSell?: boolean
+  canRetail?: boolean
+  retailLabel?: string
   onCheckIn: () => void
   onSell: () => void
   onRetail: () => void
@@ -54,9 +58,9 @@ export function QuickActions({
           { label: 'Check-in', icon: LogIn, tone: 'primary' as const, onClick: onCheckIn, disabled: false },
         ]
       : []),
-    ...(canSell
+    ...(canRetail
       ? [
-          { label: 'Bán lẻ', icon: ShoppingCart, tone: 'secondary' as const, onClick: onRetail, disabled: retailDisabled },
+          { label: retailLabel, icon: ShoppingCart, tone: 'secondary' as const, onClick: onRetail, disabled: retailDisabled },
         ]
       : []),
   ]

@@ -26,7 +26,7 @@ vi.mock('@/lib/shared/auth', () => ({
     username: 'nv_a',
     fullName: 'Nhân viên A',
     role: mockRole === 'STAFF'
-      ? { id: 'role-1', key: null, name: 'Nhân viên', locked: false, permissions: ['sessions.view'] }
+      ? { id: 'role-1', key: null, name: 'Nhân viên', locked: false, permissions: ['sessions.staffDrink'] }
       : null,
   })),
   userHasPermission: vi.fn((user: { role: { permissions: string[] } | null } | null, ...keys: string[]) =>
@@ -36,7 +36,7 @@ vi.mock('@/lib/shared/auth', () => ({
     username: 'nv_a',
     fullName: 'Nhân viên A',
     role: mockRole === 'STAFF'
-      ? { id: 'role-1', key: null, name: 'Nhân viên', locked: false, permissions: ['sessions.view'] }
+      ? { id: 'role-1', key: null, name: 'Nhân viên', locked: false, permissions: ['sessions.staffDrink'] }
       : null,
   })),
 }))

@@ -262,6 +262,8 @@ export function TodayShiftScreen() {
   const canCheckIn = canOperate && hasAccess(authPerms, authRoleKey, 'sessions.checkin')
   const canCheckout = canOperate && hasAccess(authPerms, authRoleKey, 'sessions.checkout')
   const canSell = canOperate && hasAccess(authPerms, authRoleKey, 'sessions.sell')
+  const canRetail = canOperate && hasAccess(authPerms, authRoleKey, 'sessions.retail')
+  const canStaffDrink = canOperate && hasAccess(authPerms, authRoleKey, 'sessions.staffDrink')
   const canConfirmBooking = canOperate && hasAccess(authPerms, authRoleKey, 'bookings.confirm')
   const canCancelBooking = canOperate && hasAccess(authPerms, authRoleKey, 'bookings.cancel')
   const canOpenShift = hasAccess(authPerms, authRoleKey, 'shifts.open')
@@ -692,13 +694,15 @@ export function TodayShiftScreen() {
 
               {/* Chế độ giám sát không có hàng hành động: cả 3 tile đều là thao tác
                   tiền, mà thao tác tiền cần ca của chính mình. */}
-              {canOperate && (canCheckIn || canSell) && (
+              {canOperate && (canCheckIn || canSell || canRetail || canStaffDrink) && (
               <QuickActions
                 shiftReady={canOperate}
                 sellDisabled={sessions.length === 0}
                 retailDisabled={!canOperate}
                 canCheckIn={canCheckIn}
                 canSell={canSell}
+                canRetail={canRetail || canStaffDrink}
+                retailLabel={canRetail ? 'Bán lẻ' : 'Nhận nước'}
                 onCheckIn={() => {
                   setCheckInInitialMode('WALK_IN')
                   setCheckInDialog(true)
@@ -883,6 +887,8 @@ export function TodayShiftScreen() {
         productsError={productsError}
         onRetryProducts={retryProducts}
         shiftReady={canOperate}
+        canRetail={canRetail}
+        canStaffDrink={canStaffDrink}
         submitting={submitting}
         setSubmitting={setSubmitting}
         onClose={() => setRetailOpen(false)}
