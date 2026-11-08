@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireMutationAuth } from '@/lib/shared/auth'
+import { requireMutationAuth, userHasPermission } from '@/lib/shared/auth'
 import { closeShift, mapCloseShiftError, closeShiftSchema } from '@/lib/shifts'
 import {
   apiError,
@@ -14,6 +14,9 @@ export async function POST(
 ) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'shifts.close')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền đóng ca', status: 403 })
+    }
 
     const { id } = await params
     const body = await request.json()
@@ -26,7 +29,7 @@ export async function POST(
     const result = await closeShift({
       shiftId: id,
       staffId: auth.userId,
-      staffRole: auth.role,
+      canClose: true,
       username: auth.username,
       fullName: auth.fullName,
       closingCash: parsed.data.closingCash,

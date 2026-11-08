@@ -3,7 +3,27 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { expect, it, vi } from 'vitest'
 import { MoreScreen } from './more-screen'
 
-const session = vi.hoisted(() => ({ role: 'ADMIN' }))
+// Bộ quyền đại diện 4 nhóm người dùng (role hệ thống cũ → permission set)
+const ROLE_PRESETS = vi.hoisted(() => ({
+  ADMIN: { id: 'r1', key: 'ADMIN', name: 'Quản trị viên', locked: true, permissions: [] },
+  MANAGER: {
+    id: 'r2', key: null, name: 'Quản lý', locked: false,
+    permissions: [
+      'shifts.view', 'bookings.view', 'customers.view', 'memberships.register', 'memberships.renew',
+      'memberships.plans.manage', 'products.view', 'stock.view',
+      'lessons.view', 'classes.view', 'students.view', 'reports.view', 'reports.viewAll',
+    ],
+  },
+  STAFF: {
+    id: 'r3', key: null, name: 'Nhân viên', locked: false,
+    permissions: ['sessions.view', 'sessions.checkin', 'bookings.view', 'customers.view', 'memberships.register'],
+  },
+  TEACHER: {
+    id: 'r4', key: null, name: 'Giáo viên', locked: false,
+    permissions: ['students.view', 'classes.view', 'lessons.view'],
+  },
+}))
+const session = vi.hoisted(() => ({ roleKey: 'ADMIN' }))
 const fetchedUrls = vi.hoisted(() => [] as (string | null)[])
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: () => {} }) }))
@@ -14,15 +34,15 @@ vi.mock('@/hooks/use-api', () => ({
     fetchedUrls.push(url)
     if (!url) return {}
     return url.startsWith('/api/auth/me')
-      ? { data: { success: true, data: { fullName: 'Tài khoản', username: 'user', role: session.role } } }
+      ? { data: { success: true, data: { fullName: 'Tài khoản', username: 'user', role: ROLE_PRESETS[session.roleKey as keyof typeof ROLE_PRESETS] } } }
       : url.startsWith('/api/shifts')
         ? { data: { success: true, data: null } }
         : { data: { success: true, data: { key: 'PARKING_FEE_UNIT_PRICE', value: '0', label: null } } }
   },
 }))
 
-function renderFor(role: string) {
-  session.role = role
+function renderFor(role: keyof typeof ROLE_PRESETS) {
+  session.roleKey = role
   fetchedUrls.length = 0
   return renderToStaticMarkup(<MoreScreen />)
 }

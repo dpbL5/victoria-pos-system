@@ -1,7 +1,7 @@
 // ── GET/POST/PUT/DELETE /api/customers/[id] ─────────────────────
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, requireMutationAuth } from "@/lib/shared/auth";
-import { isManagerOrAdmin } from "@/lib/shared/roles";
+import { userHasPermission } from "@/lib/shared/auth";
 import { validateCSRF } from "@/lib/shared/csrf";
 import { repositories } from "@/lib/infrastructure/repositories";
 import { deleteMember, mapDeleteMemberError, updateCustomer, mapUpdateCustomerError, updateCustomerSchema } from "@/lib/memberships";
@@ -77,6 +77,9 @@ export async function PUT(
 ) {
   try {
     const auth = await requireMutationAuth(request);
+    if (!userHasPermission(auth, 'customers.edit')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Không có quyền', status: 403 });
+    }
     const { id } = await params;
 
     const body = await request.json();
@@ -112,7 +115,7 @@ export async function DELETE(
 ) {
   try {
     const auth = await requireMutationAuth(request)
-    if (!isManagerOrAdmin(auth.role)) {
+    if (!userHasPermission(auth, 'customers.delete')) {
       return apiError({ code: 'FORBIDDEN', message: 'Không có quyền', status: 403 })
     }
     await validateCSRF(request)

@@ -28,7 +28,7 @@ import { NoticeCard } from '@/components/ui/notice-card'
 import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
-import { isManagerOrAdmin } from '@/lib/shared/roles'
+import { hasAccess } from '@/lib/shared/permissions'
 import { apiJson, jsonRequest } from '@/lib/api'
 import { shortInvoiceNo } from '@/lib/shared/utils'
 import { money, formatDay } from '@/features/pos/format'
@@ -187,7 +187,7 @@ export function CustomerDetailScreen({ id, today }: Props) {
     return () => window.clearTimeout(timeoutId)
   }, [loadData])
 
-  const isAdmin = isManagerOrAdmin(user?.role)
+  const isAdmin = hasAccess(user?.role?.permissions, user?.role?.key, 'customers.edit', 'memberships.register', 'memberships.renew', 'invoices.edit', 'invoices.void')
 
   const startEdit = useCallback(() => {
     if (!customer) return
@@ -263,7 +263,14 @@ export function CustomerDetailScreen({ id, today }: Props) {
     const now = new Date()
     const activeMemberships = memberships.filter((m) => m.status === 'ACTIVE')
     const current = activeMemberships.find((m) => new Date(m.startsAt) <= now && new Date(m.expiresAt) > now) ?? null
-    const latest = activeMemberships[0] ?? null
+    // Kỳ xa nhất = ngày hết hạn thực tế sau khi cộng dồn các lần gia hạn sớm
+    const latest = activeMemberships.reduce<Membership | null>(
+      (furthest, m) =>
+        !furthest || new Date(m.expiresAt).getTime() > new Date(furthest.expiresAt).getTime()
+          ? m
+          : furthest,
+      null
+    )
     const status: MemberStatus = current
       ? 'ACTIVE'
       : latest
@@ -277,16 +284,19 @@ export function CustomerDetailScreen({ id, today }: Props) {
         id: customer.id,
         fullName: customer.fullName,
         membershipStatus: membershipInfo.status,
-        currentMembership: membershipInfo.current
-          ? { expiresAt: membershipInfo.current.expiresAt }
-          : null,
+        // Gia hạn sớm nối tiếp sau kỳ xa nhất, không phải kỳ đang chạy
+        currentMembership:
+          membershipInfo.status === 'ACTIVE' && membershipInfo.latest
+            ? { expiresAt: membershipInfo.latest.expiresAt }
+            : null,
       }
-      : null
+    : null
 
-  // Số ngày còn lại của kỳ hiện tại — tính một lần theo kỳ, không tick theo render
+  // Số ngày còn lại tính tới ngày hết hạn xa nhất (đã cộng dồn)
+  // — tính một lần theo kỳ, không tick theo render
   // (trang không có interval refresh; sau gia hạn/đăng ký mới sẽ load lại).
   const daysToExpiry = useMemo<number | null>(() => {
-    const expiresAt = membershipInfo?.current?.expiresAt
+    const expiresAt = membershipInfo?.latest?.expiresAt ?? membershipInfo?.current?.expiresAt
     if (!expiresAt) return null
     // eslint-disable-next-line react-hooks/purity
     return Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86_400_000))
@@ -648,7 +658,7 @@ function MembershipStatusBlock({
   const ctaLabel = isActive ? 'Đóng tiếp kỳ mới' : isExpired ? 'Gia hạn để chơi' : 'Đăng ký kỳ đầu'
   const ctaDisabled = !shiftReady
   const ctaHint = !shiftReady ? 'Cần mở ca trước khi thu phí' : null
-  const displayMembership = current ?? latest
+  const displayMembership = latest ?? current
 
   return (
     <div

@@ -6,12 +6,12 @@ import type { Repositories } from '@/lib/infrastructure/repositories'
 import { repositories } from '@/lib/infrastructure/repositories'
 import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
 import type { ToolCountEntry } from '../validations'
-import { isManagerOrAdmin } from '@/lib/shared/roles'
 
 export interface CloseShiftInput {
   shiftId: string
   staffId: string
-  staffRole: 'ADMIN' | 'MANAGER' | 'STAFF' | 'TEACHER'
+  /** BẮT BUỘC có quyền 'shifts.close' — kể cả người mở ca cũng phải có quyền mới đóng được */
+  canClose: boolean
   username: string
   fullName: string
   closingCash: number
@@ -41,19 +41,16 @@ export async function closeShift(
   input: CloseShiftInput,
   deps: Repositories = repositories
 ): Promise<Result<CloseShiftResult>> {
-  const { shiftId, staffId, staffRole, username, fullName, closingCash, notes, toolCounts } = input
+  const { shiftId, staffId, canClose, username, fullName, closingCash, notes, toolCounts } = input
 
   // Validation trước transaction → return err
   const shift = await deps.shift.findByIdForClose(shiftId)
   if (!shift) return err('SHIFT_NOT_FOUND')
   if (shift.status !== 'OPEN') return err('SHIFT_ALREADY_CLOSED')
 
-  const isActiveParticipant = shift.participants.some(
-    (participant) => participant.staffId === staffId
-  )
-  if (!isManagerOrAdmin(staffRole) && shift.staffId !== staffId && !isActiveParticipant) {
-    return err('FORBIDDEN')
-  }
+  // Quyền đóng ca là điều kiện duy nhất — sở hữu/tham gia ca KHÔNG thay thế được quyền.
+  // Role chỉ có shifts.open mà không có shifts.close thì mở ca được nhưng không đóng được.
+  if (!canClose) return err('FORBIDDEN')
 
   const closedAt = new Date()
 
@@ -87,7 +84,7 @@ export async function closeShift(
           userId: staffId,
           username,
           fullName,
-          role: staffRole,
+          canClose,
         },
         expectedCash,
         closingCash,

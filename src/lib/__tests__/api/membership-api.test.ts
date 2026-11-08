@@ -39,9 +39,10 @@ vi.mock('@/lib/infrastructure/prisma', () => ({ prisma: fakeStore }))
 
 // Mock auth: bỏ qua JWT/CSRF/rate-limit — test hợp đồng HTTP + wiring use-case
 vi.mock('@/lib/shared/auth', () => ({
-  requireAuth: vi.fn(async () => ({ userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: 'STAFF' })),
-  requireAdmin: vi.fn(async () => { throw new Error('FORBIDDEN') }),
-  requireMutationAuth: vi.fn(async () => ({ userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: 'STAFF' })),
+  requireAuth: vi.fn(async () => ({ userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: null })),
+  userHasPermission: vi.fn((_user: unknown, ...keys: string[]) =>
+    keys.includes('memberships.register') || keys.includes('memberships.renew')),
+  requireMutationAuth: vi.fn(async () => ({ userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: null })),
 }))
 
 import { POST as registerHandler } from '@/app/api/memberships/register/route'

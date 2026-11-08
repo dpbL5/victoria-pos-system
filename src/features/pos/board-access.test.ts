@@ -3,48 +3,49 @@ import { getBoardAccess } from './board-access'
 
 // ── Ma trận quyền màn "Ca hôm nay" ────────────────────────────────────────
 // Khoá lại đúng ba quyết định: ai được thao tác tiền (phải có ca của mình),
-// ai được xem bảng dù chưa vào ca (ADMIN/MANAGER), và STAFF chưa vào ca vẫn
-// chỉ thấy màn "Mở ca" — không thấy bảng vận hành.
+// ai được xem bảng dù chưa vào ca (quyền sessions.monitor hoặc ADMIN), và
+// user không có quyền nào chưa vào ca vẫn chỉ thấy màn "Mở ca".
+const MONITOR_PERMS = ['sessions.monitor']
+const NO_PERMS: string[] = []
+
 describe('getBoardAccess', () => {
-  it('STAFF chưa vào ca: không thao tác, không xem bảng', () => {
-    expect(getBoardAccess('STAFF', false)).toEqual({
+  it('user không có quyền monitor, chưa vào ca: không thao tác, không xem bảng', () => {
+    expect(getBoardAccess(NO_PERMS, null, false)).toEqual({
       canOperate: false,
       canMonitor: false,
       showBoard: false,
     })
   })
 
-  it('STAFF đang trong ca: thao tác được nhưng không phải chế độ giám sát', () => {
-    expect(getBoardAccess('STAFF', true)).toEqual({
+  it('user đang trong ca: thao tác được nhưng không phải chế độ giám sát', () => {
+    expect(getBoardAccess(NO_PERMS, null, true)).toEqual({
       canOperate: true,
       canMonitor: false,
       showBoard: true,
     })
   })
 
-  it('ADMIN và MANAGER chưa vào ca: xem bảng ở chế độ chỉ xem', () => {
-    for (const role of ['ADMIN', 'MANAGER']) {
-      expect(getBoardAccess(role, false)).toEqual({
-        canOperate: false,
-        canMonitor: true,
-        showBoard: true,
-      })
-    }
+  it('ADMIN bypass: chưa vào ca vẫn xem bảng ở chế độ chỉ xem', () => {
+    expect(getBoardAccess([], 'ADMIN', false)).toEqual({
+      canOperate: false,
+      canMonitor: true,
+      showBoard: true,
+    })
   })
 
-  it('ADMIN/MANAGER đang trong ca: thao tác được như người trực quầy', () => {
-    for (const role of ['ADMIN', 'MANAGER']) {
-      expect(getBoardAccess(role, true)).toEqual({
-        canOperate: true,
-        canMonitor: true,
-        showBoard: true,
-      })
-    }
+  it('role tuỳ chỉnh có sessions.monitor: xem bảng chỉ đọc', () => {
+    expect(getBoardAccess(MONITOR_PERMS, null, false)).toEqual({
+      canOperate: false,
+      canMonitor: true,
+      showBoard: true,
+    })
   })
 
-  it('role khác (TEACHER) hoặc chưa đọc được role: không mở bảng khi chưa vào ca', () => {
-    expect(getBoardAccess('TEACHER', false).showBoard).toBe(false)
-    expect(getBoardAccess(null, false).showBoard).toBe(false)
-    expect(getBoardAccess(undefined, false).showBoard).toBe(false)
+  it('có monitor + đang trong ca: thao tác được như người trực quầy', () => {
+    expect(getBoardAccess(MONITOR_PERMS, null, true)).toEqual({
+      canOperate: true,
+      canMonitor: true,
+      showBoard: true,
+    })
   })
 })

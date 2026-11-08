@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { requireTrainingAccess } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { buildAuthUrl, getGoogleConfig } from '@/lib/google'
 import { cookies } from 'next/headers'
 
 export async function GET() {
   try {
-    const auth = await requireTrainingAccess()
+    const auth = await requirePermission('lessons.view', 'classes.view', 'students.view')
 
     const config = getGoogleConfig()
     if (!config.isConfigured) {

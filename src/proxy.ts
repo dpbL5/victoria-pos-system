@@ -1,6 +1,10 @@
 import { jwtVerify } from 'jose'
 import { NextRequest, NextResponse } from 'next/server'
 
+// Proxy chỉ xác thực (JWT hợp lệ) — phân quyền do page guard server-side
+// (requireAuth đọc DB) và từng API route tự enforce. Không đọc role từ JWT:
+// edge không truy cập được DB, giữ role ở đây sẽ tạo nguồn truth thứ hai stale.
+
 const SESSION_NAME = 'qltrungcung_session'
 const rawSessionSecret = process.env.SESSION_SECRET
 const hasStrongSessionSecret = !!rawSessionSecret && rawSessionSecret.length >= 32
@@ -21,20 +25,6 @@ if (!hasStrongSessionSecret) {
 const SESSION_SECRET = new TextEncoder().encode(rawSessionSecret as string)
 
 const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout']
-
-function isTeacherTrainingPath(pathname: string) {
-  return ['/lessons', '/classes', '/students', '/api/lessons', '/api/classes', '/api/students', '/api/series', '/api/google']
-  .some((path) => pathname === path || pathname.startsWith(`${path}/`))
-}
-
-/** Ngoài module Đào tạo, giáo viên chỉ được mở tab `Thêm` (/settings) và tài khoản của mình. */
-const TEACHER_ALLOWED_PATHS = ['/settings', '/api/auth/me']
-
-function isTeacherAllowedPath(pathname: string) {
-  return TEACHER_ALLOWED_PATHS.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`),
-  )
-}
 
 function isPublicStaticAsset(pathname: string) {
   return /\.(png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|pdf|txt|xml|json|js|css|map)$/i.test(pathname)
@@ -64,24 +54,15 @@ export async function proxy(request: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(token, SESSION_SECRET)
-    if (payload.role === 'TEACHER' && !isTeacherAllowedPath(pathname) && !isTeacherTrainingPath(pathname)) {
-      if (pathname.startsWith('/api/')) {
-        return NextResponse.json(
-          { success: false, error: 'Bạn chỉ được phép truy cập module Đào tạo' },
-          { status: 403 },
-  )
-}
-return NextResponse.redirect(new URL('/lessons', request.url))
-}
+    await jwtVerify(token, SESSION_SECRET)
     return NextResponse.next()
   } catch {
     if (pathname.startsWith('/api/')) {
-    return NextResponse.next()
-  }
+      return NextResponse.next()
+    }
     return redirectToLogin(request)
   }
-  }
+}
 
 function redirectToLogin(request: NextRequest) {
   const loginUrl = new URL('/login', request.url)
@@ -91,8 +72,8 @@ function redirectToLogin(request: NextRequest) {
     loginUrl.searchParams.set('callbackUrl', callbackPath)
   }
   return NextResponse.redirect(loginUrl)
-  }
+}
 
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
-  }
+}

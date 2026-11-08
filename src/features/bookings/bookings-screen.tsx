@@ -25,6 +25,8 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { AppSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { hasAccess } from '@/lib/shared/permissions'
+import type { UserSession } from '@/features/pos/types'
 import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { useApi } from '@/hooks/use-api'
@@ -132,6 +134,11 @@ export function BookingsScreen() {
   // nhân viên (backend trả SHIFT_REQUIRED). Không có ca thì khoá nút huỷ cọc lại.
   const shiftQuery = useApi<{ myShift: { id: string } | null; openShift: unknown }>('/api/shifts?current=true&openOperational=true')
   const hasOwnShift = !!shiftQuery.data?.success && !!shiftQuery.data.data?.myShift
+
+  // Quyền thao tác — API đã enforce; UI chỉ render control mà API chấp nhận
+  const { data: userData } = useApi<UserSession>('/api/auth/me', { dedupingInterval: 600_000 })
+  const canCreateBooking = hasAccess(userData?.data?.role?.permissions, userData?.data?.role?.key, 'bookings.create')
+  const canCancelBooking = hasAccess(userData?.data?.role?.permissions, userData?.data?.role?.key, 'bookings.cancel')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -357,11 +364,15 @@ export function BookingsScreen() {
       <div className="mx-auto max-w-content space-y-4">
         <header className="hidden items-center justify-between gap-3 md:flex">
           <h1 className={PAGE_TITLE_CLASS}>Lịch check-in tuần</h1>
-        <Button variant="contrast" size="sm" icon={CalendarPlus} onClick={startCreate}>Thêm lịch</Button>
+        {canCreateBooking && (
+          <Button variant="contrast" size="sm" icon={CalendarPlus} onClick={startCreate}>Thêm lịch</Button>
+        )}
         </header>
 
         <div className="md:hidden">
-        <Button variant="contrast" size="md" icon={CalendarPlus} fullWidth onClick={startCreate}>Thêm lịch</Button>
+        {canCreateBooking && (
+          <Button variant="contrast" size="md" icon={CalendarPlus} fullWidth onClick={startCreate}>Thêm lịch</Button>
+        )}
       </div>
 
         <div className="flex flex-wrap items-end gap-3">
@@ -463,7 +474,9 @@ export function BookingsScreen() {
                 description={weekBookings.length === 0
                   ? 'Tạo lịch để nhân viên xác nhận nhanh khi khách tới.'
                   : 'Chọn ngày khác trên dải, hoặc tạo lịch cho ngày này.'}
-                  action={<Button variant="contrast" onClick={() => startCreateAt(selectedDate, suggestedHour)}><CalendarPlus size={16} />Thêm lịch ngày này</Button>}
+                  action={canCreateBooking
+                    ? <Button variant="contrast" onClick={() => startCreateAt(selectedDate, suggestedHour)}><CalendarPlus size={16} />Thêm lịch ngày này</Button>
+                    : undefined}
               />
             ) : (
               <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -476,6 +489,7 @@ export function BookingsScreen() {
                         {label}
                       </div>
                       {items.length === 0 ? (
+                        canCreateBooking ? (
                         <button
                           type="button"
                           onClick={() => startCreateAt(selectedDate, hour)}
@@ -489,6 +503,11 @@ export function BookingsScreen() {
                             Thêm lịch
                           </span>
                         </button>
+                        ) : (
+                          <div aria-hidden className="flex h-full min-w-0 flex-1 items-center px-2 text-xs text-zinc-300 dark:text-zinc-700">
+                            —
+                          </div>
+                        )
                       ) : (
                         <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-1.5">
                           {items.map((booking, index) => {
@@ -546,7 +565,7 @@ export function BookingsScreen() {
         variant="center"
         footer={
           <div className="flex items-stretch gap-2">
-            {editing?.status === 'BOOKED' && (
+            {canCancelBooking && editing?.status === 'BOOKED' && (
               <Button
                 variant="red"
                 size="lg"
@@ -556,9 +575,15 @@ export function BookingsScreen() {
                 <CircleX size={14} />Hủy lịch
             </Button>
             )}
-          <Button className="flex-1" variant="contrast" size="lg" disabled={saving} onClick={() => void submit()}>
+          {canCreateBooking ? (
+            <Button className="flex-1" variant="contrast" size="lg" disabled={saving} onClick={() => void submit()}>
               {saving ? 'Đang lưu...' : editing ? 'Lưu thay đổi' : 'Tạo lịch'}
             </Button>
+          ) : (
+            <p className="flex-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Bạn không có quyền tạo/sửa lịch đặt.
+            </p>
+          )}
           </div>
         }
       >

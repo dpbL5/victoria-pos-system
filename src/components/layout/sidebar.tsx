@@ -16,6 +16,7 @@ import {
   School,
   Settings,
   ShieldCheck,
+  ShieldUser,
   Tag,
   Timer,
   UserCog,
@@ -25,16 +26,15 @@ import {
 } from "lucide-react";
 import { useCallback } from "react";
 import { Logo } from "@/components/ui/logo";
-import { canAccessTraining, isAdminOnly } from "@/lib/shared/roles";
+import { moduleAccessible } from "@/lib/shared/permissions";
 
 interface MenuItem {
   href: string;
   label: string;
   Icon: LucideIcon;
-  adminOnly?: boolean;
-  staffHidden?: boolean;
-  trainingOnly?: boolean;
-  /** Mọi role đều thấy (kể cả TEACHER, vốn chỉ mở module Đào tạo) */
+  /** Nhóm quyền điều khiển việc hiện item — user cần quyền trong ÍT NHẤT MỘT nhóm */
+  groups?: string[];
+  /** Mọi user đều thấy (tab Thêm) */
   alwaysVisible?: boolean;
 }
 
@@ -47,37 +47,39 @@ export const menuGroups: MenuGroup[] = [
   {
     label: "Vận hành",
     items: [
-      { href: "/sessions", label: "Ca hôm nay", Icon: Timer },
-      { href: "/bookings", label: "Đặt Lịch", Icon: CalendarClock },
+      { href: "/sessions", label: "Ca hôm nay", Icon: Timer, groups: ["sessions"] },
+      { href: "/bookings", label: "Đặt Lịch", Icon: CalendarClock, groups: ["bookings"] },
       {
         href: "/shifts",
         label: "Ca làm",
         Icon: Clock,
-        staffHidden: true,
+        groups: ["shifts"],
       },
       {
         href: "/cashflow",
         label: "Thu chi",
         Icon: ArrowRightLeft,
-        adminOnly: true,
+        groups: ["cashflows"],
       },
     ],
   },
   {
     label: "Khách hàng",
-    items: [{ href: "/customers", label: "Hội viên", Icon: ShieldCheck }],
+    items: [
+      { href: "/customers", label: "Hội viên", Icon: ShieldCheck, groups: ["customers", "memberships"] },
+    ],
   },
   {
     label: "Kho",
     items: [
-      { href: "/inventory", label: "Kho", Icon: Package, staffHidden: true },
+      { href: "/inventory", label: "Kho", Icon: Package, groups: ["products", "stock"] },
       {
         href: "/inventory/movements",
         label: "Lịch sử kho",
         Icon: History,
-        staffHidden: true,
+        groups: ["products", "stock"],
       },
-      { href: "/tools", label: "Dụng cụ", Icon: BowArrow, adminOnly: true },
+      { href: "/tools", label: "Dụng cụ", Icon: BowArrow, groups: ["tools"] },
     ],
   },
   {
@@ -87,20 +89,20 @@ export const menuGroups: MenuGroup[] = [
         href: "/lessons",
         label: "Lịch học",
         Icon: GraduationCap,
-        adminOnly: true,
-        trainingOnly: true,
+        groups: ["lessons", "classes", "students"],
       },
-      { href: "/classes", label: "Lớp học", Icon: School, adminOnly: true, trainingOnly: true },
-      { href: "/students", label: "Học viên", Icon: Users, adminOnly: true, trainingOnly: true },
+      { href: "/classes", label: "Lớp học", Icon: School, groups: ["classes", "lessons", "students"] },
+      { href: "/students", label: "Học viên", Icon: Users, groups: ["students", "classes", "lessons"] },
     ],
   },
   {
     label: "Quản trị",
     items: [
-      { href: "/reports", label: "Báo cáo", Icon: BarChart3, adminOnly: true },
-      { href: "/pricing", label: "Bảng giá", Icon: Banknote, adminOnly: true },
-      { href: "/promotions", label: "Khuyến mại", Icon: Tag, adminOnly: true },
-      { href: "/staff", label: "Nhân viên", Icon: UserCog, adminOnly: true },
+      { href: "/reports", label: "Báo cáo", Icon: BarChart3, groups: ["reports"] },
+      { href: "/pricing", label: "Bảng giá", Icon: Banknote, groups: ["pricing"] },
+      { href: "/promotions", label: "Khuyến mại", Icon: Tag, groups: ["promotions"] },
+      { href: "/staff", label: "Nhân viên", Icon: UserCog, groups: ["users"] },
+      { href: "/roles", label: "Vai trò", Icon: ShieldUser, groups: ["roles"] },
     ],
   },
   {
@@ -109,17 +111,22 @@ export const menuGroups: MenuGroup[] = [
   },
 ];
 
-export function getVisibleMenuGroups(userRole?: string): MenuGroup[] {
+/**
+ * Lọc menu theo quyền: item hiện khi user có quyền trong một trong các nhóm khai báo.
+ * Nhóm không còn item nào hiển thị → ẩn luôn tiêu đề nhóm (quy tắc ẩn nhóm quyền).
+ */
+export function getVisibleMenuGroups(
+  perms?: readonly string[] | null,
+  roleKey?: string | null,
+): MenuGroup[] {
   return menuGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => {
-        if (userRole === "TEACHER" && !item.trainingOnly && !item.alwaysVisible) return false;
-        if (item.trainingOnly && !canAccessTraining(userRole)) return false;
-        if (item.adminOnly && !isAdminOnly(userRole) && userRole !== "TEACHER") return false;
-        if (item.staffHidden && userRole === "STAFF") return false;
-        return true;
-      }),
+      items: group.items.filter(
+        (item) =>
+          item.alwaysVisible ||
+          (item.groups ? item.groups.some((g) => moduleAccessible(perms, g, roleKey)) : false),
+      ),
     }))
     .filter((group) => group.items.length > 0);
 }
@@ -127,12 +134,13 @@ export function getVisibleMenuGroups(userRole?: string): MenuGroup[] {
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
-  userRole?: string;
+  permissions?: string[] | null;
+  roleKey?: string | null;
 }
 
-export function Sidebar({ collapsed, onToggle, userRole }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, permissions, roleKey }: SidebarProps) {
   const pathname = usePathname();
-  const groups = getVisibleMenuGroups(userRole);
+  const groups = getVisibleMenuGroups(permissions, roleKey);
 
   const isActive = useCallback(
     (href: string) => {

@@ -157,12 +157,16 @@ export interface PricingRuleSnapshot {
   tiers: PricingRuleTierSnapshot[]
 }
 
-// ── Session payload (JWT) ──────────────────────────────
+// ── Session payload (JWT) — chỉ định danh, KHÔNG dùng để phân quyền ──
+// Quyền thực lấy từ DB qua requireAuth() (role + permissions).
 export interface SessionPayload {
   userId: string
   username: string
   fullName: string
-  role: UserRole
+  /** null = "Chưa phân vai" */
+  roleId: string | null
+  /** Chỉ để hiển thị */
+  roleName: string | null
 }
 
 // ── API response wrappers ──────────────────────────────

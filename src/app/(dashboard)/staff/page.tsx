@@ -35,14 +35,15 @@ import { usePageRefresh } from '@/components/layout/page-refresh-context'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { toInputDate } from '@/lib/shared/utils'
 import type { UserSession } from '@/features/pos/types'
-import type { UserRole } from '@/types'
-import { getRoleLabel, isAdminOnly } from '@/lib/shared/roles'
+import { hasAccess } from '@/lib/shared/permissions'
+import type { RoleSummary } from '@/features/roles/roles-screen'
 
 interface UserRow {
   id: string
   username: string
   fullName: string
-  role: UserRole
+  roleId: string | null
+  role: { id: string; key: string | null; name: string; locked: boolean } | null
   isActive: boolean
   createdAt: string
 }
@@ -59,7 +60,7 @@ interface ActivityLogRow {
     id: string
     username: string
     fullName: string
-    role: UserRole
+    roleName: string | null
   }
 }
 
@@ -69,7 +70,8 @@ const emptyCreateForm = {
   username: '',
   password: '',
   fullName: '',
-  role: 'STAFF' as UserRole,
+  /** '' = Chưa phân vai */
+  roleId: '',
 }
 
 const actionLabels: Record<string, string> = {
@@ -129,7 +131,7 @@ export default function StaffPage() {
     return <AppSkeleton />
   }
 
-  const isAdmin = isAdminOnly(user?.role)
+  const isAdmin = hasAccess(user?.role?.permissions, user?.role?.key, 'users.create', 'users.edit', 'users.delete')
 
   return (
     <div className="min-h-full bg-zinc-50 px-4 py-4 dark:bg-zinc-950 md:px-6 md:py-6">
@@ -142,8 +144,8 @@ export default function StaffPage() {
             </h1>
           </div>
           {user && (
-            <Badge variant={isAdmin ? 'purple' : 'default'}>
-              {isAdmin ? 'Admin' : 'Staff'}
+            <Badge variant={user.role?.key === 'ADMIN' ? 'purple' : 'default'}>
+              {user.role?.name ?? 'Chưa phân vai'}
           </Badge>
         )}
         </header>
@@ -263,13 +265,16 @@ function AccountsTab({
   const [resetTarget, setResetTarget] = useState<UserRow | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [roleEditTarget, setRoleEditTarget] = useState<UserRow | null>(null)
-  const [selectedRole, setSelectedRole] = useState<UserRole>('STAFF')
+  /** '' = Chưa phân vai */
+  const [selectedRoleId, setSelectedRoleId] = useState('')
+  const { data: rolesData } = useApi<RoleSummary[]>('/api/roles', { dedupingInterval: 300_000 })
+  const roles: RoleSummary[] = rolesData?.data ?? []
 
   const stats = useMemo(() => ({
     total: users.length,
     active: users.filter((item) => item.isActive).length,
-    admins: users.filter((item) => item.role === 'ADMIN' || item.role === 'MANAGER').length,
-    staff: users.filter((item) => item.role === 'STAFF').length,
+    admins: users.filter((item) => item.role?.key === 'ADMIN').length,
+    unassigned: users.filter((item) => !item.roleId).length,
   }), [users])
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
@@ -280,7 +285,7 @@ function AccountsTab({
         username: form.username.trim(),
         password: form.password,
         fullName: form.fullName.trim(),
-        role: form.role,
+        roleId: form.roleId || null,
       }))
 
       if (!data.success) {
@@ -324,8 +329,10 @@ function AccountsTab({
     if (!roleEditTarget) return
 
     // Chặn làm mất quản trị viên duy nhất còn lại.
-    if (selectedRole !== 'ADMIN' && roleEditTarget.role === 'ADMIN') {
-      const otherAdmins = users.filter((item) => item.role === 'ADMIN' && item.id !== roleEditTarget.id)
+    const targetIsAdmin = roleEditTarget.role?.key === 'ADMIN'
+    const selectedRole = roles.find((role) => role.id === selectedRoleId)
+    if (targetIsAdmin && selectedRole?.key !== 'ADMIN') {
+      const otherAdmins = users.filter((item) => item.role?.key === 'ADMIN' && item.id !== roleEditTarget.id)
       if (otherAdmins.length === 0) {
         notifyError('Phải giữ lại ít nhất một quản trị viên.')
         return
@@ -335,7 +342,7 @@ function AccountsTab({
     setSubmitting(true)
     try {
       const data = await apiJson<UserRow>(`/api/users/${roleEditTarget.id}`, jsonRequest('PUT', {
-        role: selectedRole,
+        roleId: selectedRoleId || null,
       }))
 
       if (!data.success) {
@@ -344,7 +351,7 @@ function AccountsTab({
       }
 
       notifySuccess(
-        `Đã cập nhật vai trò ${roleEditTarget.fullName} → ${selectedRole === 'ADMIN' ? 'Quản trị viên' : getRoleLabel(selectedRole)}`,
+        `Đã cập nhật vai trò ${roleEditTarget.fullName} → ${selectedRole?.name ?? 'Chưa phân vai'}`,
       )
       setRoleEditTarget(null)
       await onReload()
@@ -397,8 +404,8 @@ function AccountsTab({
       label: 'Vai trò',
       cellClassName: 'px-4 py-3',
       render: (item) => (
-        <Badge variant={isAdminOnly(item.role) ? 'purple' : 'default'} size="sm">
-          {item.role === 'ADMIN' ? 'Admin' : getRoleLabel(item.role)}
+        <Badge variant={item.role?.key === 'ADMIN' ? 'purple' : 'default'} size="sm">
+          {item.role?.name ?? 'Chưa phân vai'}
         </Badge>
       ),
     },
@@ -430,7 +437,7 @@ function AccountsTab({
             title="Sửa vai trò"
               onClick={() => {
               setRoleEditTarget(item)
-              setSelectedRole(item.role)
+              setSelectedRoleId(item.roleId ?? '')
             }}
           />
         <Button
@@ -461,8 +468,8 @@ function AccountsTab({
       render: (item) => (
         <span className="flex items-center gap-2 text-base font-semibold text-zinc-950 dark:text-white">
           {item.fullName}
-          <Badge variant={isAdminOnly(item.role) ? 'purple' : 'default'} size="sm">
-            {item.role === 'ADMIN' ? 'Admin' : getRoleLabel(item.role)}
+          <Badge variant={item.role?.key === 'ADMIN' ? 'purple' : 'default'} size="sm">
+            {item.role?.name ?? 'Chưa phân vai'}
             </Badge>
           </span>
       ),
@@ -497,7 +504,7 @@ function AccountsTab({
             title="Sửa vai trò"
             onClick={() => {
               setRoleEditTarget(item)
-              setSelectedRole(item.role)
+              setSelectedRoleId(item.roleId ?? '')
             }}
           />
           <Button
@@ -528,7 +535,7 @@ function AccountsTab({
     <div>
       <h2 className="text-sm font-semibold text-zinc-950 dark:text-white">Tài khoản nội bộ</h2>
       <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-        Tổng: {stats.total} · Đang mở: {stats.active} · Quản trị: {stats.admins} · Nhân viên: {stats.staff}
+        Tổng: {stats.total} · Đang mở: {stats.active} · Admin: {stats.admins} · Chưa phân vai: {stats.unassigned}
       </p>
     </div>
   )
@@ -601,13 +608,13 @@ function AccountsTab({
                 <Label htmlFor="staff-role">Vai trò</Label>
                 <Select
                   id="staff-role"
-                  value={form.role}
-                  onChange={(event) => setForm({ ...form, role: event.target.value as UserRole })}
+                  value={form.roleId}
+                  onChange={(event) => setForm({ ...form, roleId: event.target.value })}
                 >
-              <option value="STAFF">Nhân viên</option>
-              <option value="MANAGER">Quản lý</option>
-            <option value="TEACHER">Giáo viên</option>
-              <option value="ADMIN">Quản trị viên</option>
+              <option value="">Chưa phân vai</option>
+              {roles.map((role) => (
+                <option key={role.id} value={role.id}>{role.name}</option>
+              ))}
             </Select>
           </div>
             <div className="flex gap-2">
@@ -645,10 +652,12 @@ function AccountsTab({
             getText: (u) => `${u.fullName} ${u.username}`,
           }}
           filters={[
-            { key: 'STAFF', label: 'Nhân viên', matches: (u) => u.role === 'STAFF' },
-            { key: 'MANAGER', label: 'Quản lý', matches: (u) => u.role === 'MANAGER' },
-            { key: 'TEACHER', label: 'Giáo viên', matches: (u) => u.role === 'TEACHER' },
-            { key: 'ADMIN', label: 'Quản trị viên', matches: (u) => u.role === 'ADMIN' },
+            { key: 'unassigned', label: 'Chưa phân vai', matches: (u) => !u.roleId },
+            ...roles.map((role) => ({
+              key: role.id,
+              label: role.name,
+              matches: (u: UserRow) => u.roleId === role.id,
+            })),
           ]}
           sortableKeys={['fullName', 'username', 'isActive', 'createdAt']}
           defaultSortKey="createdAt"
@@ -747,13 +756,13 @@ function AccountsTab({
             <Label htmlFor="role-edit-select">Vai trò</Label>
             <Select
               id="role-edit-select"
-              value={selectedRole}
-              onChange={(event) => setSelectedRole(event.target.value as UserRole)}
+              value={selectedRoleId}
+              onChange={(event) => setSelectedRoleId(event.target.value)}
             >
-                  <option value="STAFF">Nhân viên</option>
-                  <option value="MANAGER">Quản lý</option>
-                <option value="TEACHER">Giáo viên</option>
-                  <option value="ADMIN">Quản trị viên</option>
+                  <option value="">Chưa phân vai</option>
+                  {roles.map((role) => (
+                <option key={role.id} value={role.id}>{role.name}</option>
+              ))}
                 </Select>
               </div>
             </div>

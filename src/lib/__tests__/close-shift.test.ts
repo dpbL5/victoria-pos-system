@@ -28,7 +28,7 @@ const repos = createRepositories(fakeStore as never)
 const input = {
   shiftId: 'shift-1',
   staffId: 'staff-1',
-  staffRole: 'STAFF' as const,
+  canClose: true,
   username: 'nv_a',
   fullName: 'Nhân viên A',
   closingCash: 600000,
@@ -88,25 +88,38 @@ describe('closeShift', () => {
     expect(result).toEqual({ ok: false, error: { code: 'SHIFT_ALREADY_CLOSED' } })
   })
 
-  it('trả FORBIDDEN khi STAFF không phải người mở ca và không tham gia', async () => {
+  it('thiếu quyền shifts.close → FORBIDDEN (ca của người khác)', async () => {
     fakeStore.shift.findUnique.mockResolvedValue({
       id: 'shift-1',
       status: 'OPEN',
       staffId: 'staff-khac',
       participants: [{ staffId: 'staff-khac' }],
     })
-    const result = await closeShift(input, repos)
+    const result = await closeShift({ ...input, canClose: false }, repos)
     expect(result).toEqual({ ok: false, error: { code: 'FORBIDDEN' } })
   })
 
-  it('ADMIN được đóng ca của người khác', async () => {
+  it('NGƯỜI MỞ CA nhưng thiếu quyền shifts.close vẫn bị chặn', async () => {
+    // Regression: role chỉ có shifts.open không được đóng ca — kể cả ca chính mình mở
+    fakeStore.shift.findUnique.mockResolvedValue({
+      id: 'shift-1',
+      status: 'OPEN',
+      staffId: 'staff-1',
+      participants: [{ staffId: 'staff-1' }],
+    })
+    const result = await closeShift({ ...input, canClose: false }, repos)
+    expect(result).toEqual({ ok: false, error: { code: 'FORBIDDEN' } })
+    expect(fakeStore.shift.update).not.toHaveBeenCalled()
+  })
+
+  it('có quyền shifts.close → đóng được ca của người khác', async () => {
     fakeStore.shift.findUnique.mockResolvedValue({
       id: 'shift-1',
       status: 'OPEN',
       staffId: 'staff-khac',
       participants: [],
     })
-    const result = await closeShift({ ...input, staffRole: 'ADMIN' }, repos)
+    const result = await closeShift(input, repos)
     expect(result.ok).toBe(true)
   })
 
@@ -148,7 +161,7 @@ describe('closeShift', () => {
       expectedCash: 100000,
       closingCash: 600000,
       cashDifference: 500000,
-      closedBy: { userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: 'STAFF' },
+      closedBy: { userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', canClose: true },
     })
   })
 

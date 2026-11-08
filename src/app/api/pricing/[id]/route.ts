@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import {
   updatePricingRule,
@@ -23,7 +23,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requirePermission('pricing.edit')
     await validateCSRF(request)
     const { id } = await params
     const body = await request.json()
@@ -93,7 +93,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requirePermission('pricing.delete')
     await validateCSRF(request)
     const { id } = await params
 

@@ -6,11 +6,12 @@ import { generateCSRFToken, setCSRFCookie, clearCSRFCookie, validateCSRF } from 
 import { rateLimit } from "@/lib/shared/rate-limit";
 import { withRetry } from "@/lib/infrastructure/db-retry";
 import type { SessionPayload } from "@/types";
-import { canAccessTraining, isAdminOnly, isManagerOrAdmin } from './roles';
+import {
+  hasAnyPermission,
+  isSuperuserRole,
+  type PermissionGroupDef,
+} from "@/lib/shared/permissions";
 import { measureApiAuth, recordApiRetry } from '@/lib/infrastructure/api-diagnostics'
-
-// Re-export for API route usage
-export { canAccessTraining, isAdminOnly, isManagerOrAdmin };
 
 // ── Config ─────────────────────────────────────────────
 const rawSessionSecret = process.env.SESSION_SECRET;
@@ -78,10 +79,29 @@ export async function destroySession(): Promise<void> {
   await clearCSRFCookie();
 }
 
+// ── AuthUser — user + role + permissions (nguồn truth là DB) ──
+export interface AuthRoleInfo {
+  id: string;
+  /** 'ADMIN' với role hệ thống; null với role admin tự tạo */
+  key: string | null;
+  name: string;
+  locked: boolean;
+  /** Khóa quyền từ permission catalog */
+  permissions: string[];
+}
+
+export interface AuthUser {
+  userId: string;
+  username: string;
+  fullName: string;
+  /** null = "Chưa phân vai" — không có quyền nào */
+  role: AuthRoleInfo | null;
+}
+
 // ── User lookup cache — giảm 1 DB read mỗi request ──────
 // requireAuth() chạy trên mọi API request (49 route files). Không cache → mỗi
 // request tốn 1 `user.findUnique`. Cache in-memory TTL ngắn giảm tải đáng kể
-// trên pool chỉ 3 connections, vẫn phản ứng kịp khi user bị disable (TTL 30s).
+// trên pool chỉ 3 connections, vẫn phản ứng kịp khi user/role bị đổi (TTL 30s).
 const USER_CACHE_TTL_MS = 30_000;
 const userCache = new Map<string, { user: AuthUserLookup | null; expiresAt: number }>();
 
@@ -89,8 +109,14 @@ interface AuthUserLookup {
   id: string;
   username: string;
   fullName: string;
-  role: SessionPayload["role"];
   isActive: boolean;
+  role: {
+    id: string;
+    key: string | null;
+    name: string;
+    locked: boolean;
+    permissions: { permission: string }[];
+  } | null;
 }
 
 function getCachedUser(userId: string): AuthUserLookup | null | undefined {
@@ -103,8 +129,25 @@ function getCachedUser(userId: string): AuthUserLookup | null | undefined {
   return entry.user;
 }
 
+function toAuthUser(user: AuthUserLookup): AuthUser {
+  return {
+    userId: user.id,
+    username: user.username,
+    fullName: user.fullName,
+    role: user.role
+      ? {
+          id: user.role.id,
+          key: user.role.key,
+          name: user.role.name,
+          locked: user.role.locked,
+          permissions: user.role.permissions.map((p) => p.permission),
+        }
+      : null,
+  };
+}
+
 // ── Require auth (throws nếu chưa login) ──────────────
-export async function requireAuth(): Promise<SessionPayload> {
+export async function requireAuth(): Promise<AuthUser> {
   return measureApiAuth(async () => {
     const session = await verifySession();
     if (!session) {
@@ -121,8 +164,16 @@ export async function requireAuth(): Promise<SessionPayload> {
             id: true,
             username: true,
             fullName: true,
-            role: true,
             isActive: true,
+            role: {
+              select: {
+                id: true,
+                key: true,
+                name: true,
+                locked: true,
+                permissions: { select: { permission: true } },
+              },
+            },
           },
         }), { onRetry: recordApiRetry }
       );
@@ -135,54 +186,52 @@ export async function requireAuth(): Promise<SessionPayload> {
       throw new Error("UNAUTHORIZED");
     }
 
-    return {
-      userId: user.id,
-      username: user.username,
-      fullName: user.fullName,
-      role: user.role,
-    };
+    return toAuthUser(user);
   })
 }
 
-// ── Require admin role (ADMIN only — quản trị hệ thống) ──
-// MANAGER không có quyền quản trị (bảng giá, khuyến mại, dụng cụ, nhân viên,
-// thu chi, sửa/xoá hoá đơn...). Module Đào tạo dùng requireTrainingAccess().
-export async function requireAdmin(): Promise<SessionPayload> {
-  const session = await requireAuth();
-  if (!isAdminOnly(session.role)) {
+// ── Require permission (any-of) ─────────────────────────
+// ADMIN (key = 'ADMIN') bypass mọi guard. Còn lại cần ít nhất một trong các quyền.
+export async function requirePermission(...permissionKeys: string[]): Promise<AuthUser> {
+  const user = await requireAuth();
+  if (isSuperuserRole(user.role)) return user;
+  if (!hasAnyPermission(user.role?.permissions, permissionKeys)) {
     throw new Error("FORBIDDEN");
   }
-  return session;
+  return user;
 }
 
-// ── Require ADMIN only (user management) ──────────────
-export async function requireAdminOnly(): Promise<SessionPayload> {
-  const session = await requireAuth();
-  if (session.role !== "ADMIN") {
-    throw new Error("FORBIDDEN");
-  }
-  return session;
+/** Require quyền từ một nhóm permission (bất kỳ quyền nào trong nhóm) */
+export async function requireGroupPermission(group: PermissionGroupDef): Promise<AuthUser> {
+  return requirePermission(...group.permissions.map((p) => p.key));
 }
 
-export async function requireTrainingAccess(): Promise<SessionPayload> {
-  const session = await requireAuth();
-  if (!canAccessTraining(session.role)) {
+/** Chỉ role hệ thống ADMIN — bootstrap/seed, không gán được qua role tuỳ chỉnh */
+export async function requireSuperuser(): Promise<AuthUser> {
+  const user = await requireAuth();
+  if (!isSuperuserRole(user.role)) {
     throw new Error("FORBIDDEN");
   }
-  return session;
+  return user;
+}
+
+/** Check permission thuần trên AuthUser (đã tính bypass ADMIN) — dùng sau requireMutationAuth */
+export function userHasPermission(user: AuthUser, ...permissionKeys: string[]): boolean {
+  return isSuperuserRole(user.role) || hasAnyPermission(user.role?.permissions, permissionKeys);
 }
 
 // ── Require auth + CSRF cho mutation endpoints ──────────
 // Dùng thay requireAuth() trong POST/PUT/DELETE handlers.
 // Tự động áp dụng rate limiting (30 req/phút) + CSRF check.
-export async function requireMutationAuth(request: Request): Promise<SessionPayload> {
+// Phân quyền do route tự check bằng requirePermission/isSuperuserRole.
+export async function requireMutationAuth(request: Request): Promise<AuthUser> {
   // Rate limit: 30 mutation requests mỗi phút mỗi IP
   const rl = await rateLimit(request, { maxRequests: 30, windowSeconds: 60, prefix: 'mutation' });
   if (!rl.ok) {
     throw new Error("RATE_LIMITED");
 }
 
-  const session = await requireAuth();
+  const user = await requireAuth();
   await validateCSRF(request);
-  return session;
+  return user;
 }

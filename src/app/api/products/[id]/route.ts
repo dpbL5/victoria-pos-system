@@ -1,7 +1,7 @@
 // ── DELETE /api/products/[id] — xoá/deactivate hàng hóa (admin/manager) ─────
 import { NextRequest } from 'next/server'
 import { requireMutationAuth } from '@/lib/shared/auth'
-import { isManagerOrAdmin } from '@/lib/shared/roles'
+import { userHasPermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { deleteProduct, mapDeleteProductError } from '@/lib/sessions'
 import { apiError, ERR_UNAUTHORIZED, ERR_FORBIDDEN, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
@@ -12,7 +12,7 @@ export async function DELETE(
 ) {
   try {
     const auth = await requireMutationAuth(request)
-    if (!isManagerOrAdmin(auth.role)) {
+    if (!userHasPermission(auth, 'products.delete')) {
       return apiError({ code: 'FORBIDDEN', message: 'Không có quyền', status: 403 })
     }
     await validateCSRF(request)

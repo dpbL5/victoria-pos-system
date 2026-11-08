@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { derivePromotionDayType, normalizePromotionDays, createPromotionRule, mapCreatePromotionRuleError } from '@/lib/promotions'
 import { repositories } from '@/lib/infrastructure/repositories'
@@ -16,7 +16,7 @@ import {
 
 export async function GET() {
   try {
-    await requireAdmin()
+    await requirePermission('promotions.view')
 
     const rules = await repositories.promotions.findMany()
 
@@ -28,7 +28,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requirePermission('promotions.create')
     await validateCSRF(request)
     const body = await request.json()
     const parsed = createPromotionRuleSchema.safeParse(body)

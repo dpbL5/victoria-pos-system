@@ -14,5 +14,5 @@ export type {
   ResetUserPasswordInput,
   ResetUserPasswordResult,
 } from './use-cases/reset-user-password'
-export type { UserRepository, UserRecord, UserListItem } from './ports'
+export type { UserRepository, UserRecord, UserWithRole, UserListItem } from './ports'
 export * from './validations'

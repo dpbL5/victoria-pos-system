@@ -6,7 +6,14 @@ vi.mock('@/lib/infrastructure/repositories', () => ({
   repositories: { reporting: { getShiftDayGroups } },
 }))
 vi.mock('@/lib/shared/auth', () => ({
-  requireAuth: vi.fn(async () => ({ userId: 'manager-1', role: 'MANAGER' })),
+  requireAuth: vi.fn(async () => ({
+    userId: 'manager-1',
+    username: 'ql',
+    fullName: 'Quản lý',
+    role: { id: 'role-1', key: null, name: 'Quản lý', locked: false, permissions: ['shifts.view'] },
+  })),
+  userHasPermission: vi.fn((user: { role: { permissions: string[] } | null }, ...keys: string[]) =>
+    !!user.role && keys.some((k) => user.role!.permissions.includes(k))),
   requireMutationAuth: vi.fn(),
 }))
 

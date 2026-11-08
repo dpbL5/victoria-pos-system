@@ -5,6 +5,7 @@ import { runInTransaction, fail } from '@/lib/infrastructure/db-helpers'
 import type { HttpErrorInfo } from '@/lib/infrastructure/api-helpers'
 import type { Repositories } from '@/lib/infrastructure/repositories'
 import { repositories } from '@/lib/infrastructure/repositories'
+import { parseStartOfDay, toInputDate } from '@/lib/shared/utils'
 import type { ProductAdminDetail } from '../ports'
 
 // ── Create product ──
@@ -226,4 +227,63 @@ export function mapDeleteProductError(error: DomainError): HttpErrorInfo {
     default:
       return { code: 'UNKNOWN', message: 'Lỗi máy chủ', status: 500 }
   }
+}
+
+// ── Nhân viên nhận nước uống — tối đa 1 lần/ngày ──
+const STAFF_DRINK_REASON = 'lấy nước uống'
+
+export interface ConsumeStaffProductInput {
+  productId: string
+  staffId: string
+  staffName: string
+  shiftId: string | null
+}
+
+export async function consumeStaffProduct(
+  input: ConsumeStaffProductInput,
+  deps: Repositories = repositories
+): Promise<Result<ApplyStockMovementResult>> {
+  // ponytail: chặn bằng đọc trước khi ghi — 2 request đồng thời của cùng tài khoản
+  // vẫn có thể lọt (không có unique index). Đủ cho quầy POS; nếu cần chặn tuyệt đối
+  // thì thêm bảng/unique index (staffId, ngày) hoặc advisory lock quanh transaction.
+  if (await hasReceivedStaffDrinkToday(input.staffId, deps)) {
+    return err('ALREADY_RECEIVED_TODAY')
+  }
+
+  return applyStockMovement(
+    {
+      productId: input.productId,
+      staffId: input.staffId,
+      type: 'ADJUSTMENT',
+      quantity: -1,
+      reason: `${input.staffName} ${STAFF_DRINK_REASON}`,
+      shiftId: input.shiftId,
+    },
+    deps
+  )
+}
+
+/** Đã nhận nước trong ngày (giờ Việt Nam) chưa — nhận diện theo lý do stock movement. */
+export async function hasReceivedStaffDrinkToday(
+  staffId: string,
+  deps: Repositories = repositories,
+  now: Date = new Date()
+): Promise<boolean> {
+  const from = parseStartOfDay(toInputDate(now))
+  const to = new Date(from.getTime() + 24 * 60 * 60 * 1000)
+  const movements = await deps.product.findStockMovements({
+    staffId,
+    type: 'ADJUSTMENT',
+    from,
+    to,
+    take: 20,
+  })
+  return movements.some((movement) => movement.reason?.endsWith(STAFF_DRINK_REASON) ?? false)
+}
+
+export function mapConsumeStaffProductError(error: DomainError): HttpErrorInfo {
+  if (error.code === 'ALREADY_RECEIVED_TODAY') {
+    return { code: 'ALREADY_RECEIVED_TODAY', message: 'Hôm nay bạn đã nhận nước rồi', status: 409 }
+  }
+  return mapApplyStockMovementError(error)
 }

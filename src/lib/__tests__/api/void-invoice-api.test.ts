@@ -37,12 +37,13 @@ vi.mock('@/lib/infrastructure/prisma', () => ({ prisma: fakeStore }))
 
 let mockRole = 'ADMIN'
 vi.mock('@/lib/shared/auth', () => ({
-  requireAuth: vi.fn(async () => ({ userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: mockRole })),
-  requireAdmin: vi.fn(async () => {
-    if (mockRole !== 'ADMIN') throw new Error('FORBIDDEN')
-    return { userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: 'ADMIN' }
-  }),
-  requireMutationAuth: vi.fn(async () => ({ userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: mockRole })),
+  requireAuth: vi.fn(async () => ({ userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: mockRole === 'ADMIN'
+    ? { id: 'role-admin', key: 'ADMIN', name: 'Quản trị viên', locked: true, permissions: [] }
+    : null })),
+  userHasPermission: vi.fn((user: { role: { key: string | null } | null }) => user.role?.key === 'ADMIN' || mockRole === 'ADMIN'),
+  requireMutationAuth: vi.fn(async () => ({ userId: 'staff-1', username: 'nv_a', fullName: 'Nhân viên A', role: mockRole === 'ADMIN'
+    ? { id: 'role-admin', key: 'ADMIN', name: 'Quản trị viên', locked: true, permissions: [] }
+    : null })),
 }))
 
 import { POST as voidHandler } from '@/app/api/invoices/[id]/void/route'

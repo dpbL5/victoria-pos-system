@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import {
   updateMembershipPlan,
@@ -21,7 +21,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requirePermission('memberships.plans.manage')
     await validateCSRF(request)
     const { id } = await params
     const body = await request.json()
@@ -48,7 +48,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requirePermission('memberships.plans.manage')
     await validateCSRF(request)
     const { id } = await params
 

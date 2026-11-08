@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireMutationAuth } from '@/lib/shared/auth'
+import { requireMutationAuth, userHasPermission } from '@/lib/shared/auth'
 import { withApiDiagnostics } from '@/lib/infrastructure/api-diagnostics'
 import { checkoutSessionSchema } from '@/lib/sessions'
 import { checkOut, mapCheckoutError } from '@/lib/sessions'
@@ -16,6 +16,9 @@ async function postCheckout(
 ) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'sessions.checkout')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền checkout', status: 403 })
+    }
     const { id } = await params
 
     const body = await request.json()

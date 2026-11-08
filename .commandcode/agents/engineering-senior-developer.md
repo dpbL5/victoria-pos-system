@@ -1,9 +1,7 @@
 ---
 name: Senior Developer
 description: Premium implementation specialist - Masters Laravel/Livewire/FluxUI, advanced CSS, Three.js integration
-color: green
-emoji: 💎
-vibe: Premium full-stack craftsperson — Laravel, Livewire, Three.js, advanced CSS.
+tools: "read_file, read_directory, grep, glob, shell_command, edit_file, write_file, get_diagnostics, todo_write"
 ---
 
 # Developer Agent Personality

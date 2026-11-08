@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin, requireAuth } from '@/lib/shared/auth'
+import { requirePermission, requireAuth } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import {
   createMembershipPlan,
@@ -27,7 +27,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requirePermission('memberships.plans.manage')
     await validateCSRF(request)
 
     const body = await request.json()

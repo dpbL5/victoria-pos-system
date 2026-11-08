@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Minus, Plus, X } from "lucide-react";
+import { Check, Minus, Plus, User, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -19,6 +19,8 @@ export function RetailDialog({
   productsError,
   onRetryProducts,
   shiftReady,
+  canRetail,
+  canStaffDrink,
   submitting,
   setSubmitting,
   onClose,
@@ -30,6 +32,10 @@ export function RetailDialog({
   productsError: string;
   onRetryProducts: () => void;
   shiftReady: boolean;
+  /** Tab khách hàng chỉ hiện khi role có quyền bán lẻ */
+  canRetail: boolean;
+  /** Tab nhân viên chỉ hiện khi role có quyền nhận hàng nội bộ */
+  canStaffDrink: boolean;
   submitting: boolean;
   setSubmitting: (value: boolean) => void;
   onClose: () => void;
@@ -40,6 +46,11 @@ export function RetailDialog({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [customerQuery, setCustomerQuery] = useState("");
+  const [tab, setTab] = useState<"CUSTOMER" | "STAFF">(canRetail ? "CUSTOMER" : "STAFF");
+  const [staffProductId, setStaffProductId] = useState<string | null>(null);
+  const [staffDrinkStatus, setStaffDrinkStatus] = useState<
+    "loading" | "received" | "available"
+  >("loading");
 
   useEffect(() => {
     if (open) {
@@ -48,9 +59,34 @@ export function RetailDialog({
       setPaymentMethod("CASH");
       setCustomer(null);
       setCustomerQuery("");
+      setTab(canRetail ? "CUSTOMER" : "STAFF");
+      setStaffProductId(null);
+      setStaffDrinkStatus("loading");
       /* eslint-enable react-hooks/set-state-in-effect */
     }
-  }, [open]);
+  }, [open, canRetail]);
+
+  // Mỗi nhân viên chỉ được nhận nước 1 lần/ngày — kiểm tra khi mở tab
+  useEffect(() => {
+    if (!open || !canStaffDrink || tab !== "STAFF") return;
+    let cancelled = false;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setStaffDrinkStatus("loading");
+    /* eslint-enable react-hooks/set-state-in-effect */
+    apiJson<{ received: boolean }>("/api/staff-consumption")
+      .then((data) => {
+        if (cancelled) return;
+        setStaffDrinkStatus(
+          data.success && data.data?.received ? "received" : "available",
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setStaffDrinkStatus("available");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, canStaffDrink, tab]);
 
   const cartLines = products
     .map((product) => ({
@@ -118,14 +154,49 @@ export function RetailDialog({
     }
   };
 
+  const goods = products.filter((product) => product.type === "PRODUCT");
+
+  const handleStaffReceive = async () => {
+    const selected = goods.find((product) => product.id === staffProductId);
+    if (!selected) {
+      notifyError("Chọn một món hàng");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const data = await apiJson(
+        "/api/staff-consumption",
+        jsonRequest({ productId: selected.id }),
+      );
+
+      if (!data.success) {
+        if (data.code === "ALREADY_RECEIVED_TODAY") setStaffDrinkStatus("received");
+        notifyError(data.error || "Không trừ được kho");
+        return;
+      }
+
+      setStaffDrinkStatus("received");
+      const refreshed = await onDone();
+      notifySuccess(
+        refreshed === false
+          ? "Đã trừ kho; danh sách hàng chưa cập nhật. Hãy tải lại màn hình."
+          : `Đã trừ 1 ${selected.name}`,
+      );
+    } catch {
+      notifyError("Lỗi kết nối máy chủ");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Bán lẻ"
+      title={canRetail ? "Bán lẻ" : "Nhận hàng nội bộ"}
       description=""
       size="lg"
-      footer={
+      footer={tab === "CUSTOMER" && canRetail ? (
         <Button
           variant="contrast"
           size="lg"
@@ -141,9 +212,52 @@ export function RetailDialog({
         >
           {submitting ? "Đang xử lý..." : `Thu tiền ${money(grandTotal)}`}
         </Button>
-      }
+      ) : tab === "STAFF" && canStaffDrink ? (
+        <Button
+          variant="contrast"
+          size="lg"
+          fullWidth
+          disabled={
+            submitting ||
+            productsLoading ||
+            productsError !== "" ||
+            !staffProductId ||
+            staffDrinkStatus !== "available"
+          }
+          onClick={handleStaffReceive}
+        >
+          {submitting ? "Đang xử lý..." : "Nhận"}
+        </Button>
+      ) : undefined}
     >
       <div className="space-y-4">
+        {canRetail && canStaffDrink && (
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            variant={tab === "CUSTOMER" ? "blue" : "white"}
+            size="lg"
+            fullWidth
+            icon={User}
+            aria-pressed={tab === "CUSTOMER"}
+            onClick={() => setTab("CUSTOMER")}
+          >
+            Khách hàng
+          </Button>
+          <Button
+            variant={tab === "STAFF" ? "blue" : "white"}
+            size="lg"
+            fullWidth
+            icon={Users}
+            aria-pressed={tab === "STAFF"}
+            onClick={() => setTab("STAFF")}
+          >
+            Nhân viên
+          </Button>
+        </div>
+        )}
+
+        {tab === "CUSTOMER" ? (
+          <>
         {/* ── Khách hàng (tuỳ chọn) ── */}
         <div>
           <Label>Khách hàng (tuỳ chọn)</Label>
@@ -261,6 +375,68 @@ export function RetailDialog({
           method={paymentMethod}
           onMethodChange={setPaymentMethod}
         />
+          </>
+        ) : staffDrinkStatus === "loading" ? (
+          <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
+            Đang kiểm tra...
+          </p>
+        ) : staffDrinkStatus === "received" ? (
+          <div className="rounded-lg border border-warning-border bg-warning-bg p-3 text-sm text-zinc-700 dark:text-zinc-200">
+            Đã nhận nước, vui lòng đợi ca làm ngày tiếp theo
+          </div>
+        ) : productsLoading ? (
+          <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
+            Đang tải danh sách hàng hoá...
+          </p>
+        ) : productsError ? (
+          <div
+            role="alert"
+            className="rounded-lg border border-danger-border bg-danger-bg p-3 text-sm text-danger"
+          >
+            <p>Không tải được hàng hoá: {productsError}</p>
+            <Button variant="white" size="sm" className="mt-2" onClick={onRetryProducts}>
+              Thử lại
+            </Button>
+          </div>
+        ) : goods.length === 0 ? (
+          <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
+            Chưa có hàng hoá.
+          </p>
+        ) : (
+          <div>
+            <Label>Hàng hoá</Label>
+            <div className="mt-1 max-h-64 space-y-2 overflow-y-auto pr-1">
+              {goods.map((product) => {
+                const selected = staffProductId === product.id;
+                const outOfStock = product.stockQuantity <= 0;
+                return (
+                  <button
+                    key={product.id}
+                    type="button"
+                    disabled={outOfStock}
+                    aria-pressed={selected}
+                    onClick={() => setStaffProductId(selected ? null : product.id)}
+                    className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-colors disabled:opacity-40 ${
+                      selected
+                        ? "border-info-border bg-info-bg"
+                        : "border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-zinc-950 dark:text-white">
+                        {product.name}
+                      </p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {outOfStock ? "Hết hàng" : `Còn ${product.stockQuantity}`}
+                      </p>
+                    </div>
+                    {selected && <Check size={16} className="text-info" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );

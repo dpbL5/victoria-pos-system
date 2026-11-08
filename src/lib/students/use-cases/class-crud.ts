@@ -476,16 +476,22 @@ export async function endClassSlot(
 
 export interface ClassListItem extends LessonClassRecord {
   studentCount: number
+  heldCount: number
   nextLessonAt: Date | null
 }
 
-/** Danh sách lớp kèm sổ học viên (hợp nhất) và buổi tới gần nhất. */
+/** Danh sách lớp kèm sổ học viên (hợp nhất), số buổi đã diễn ra và buổi tới gần nhất. */
 export async function listClasses(input: { status?: 'ACTIVE' | 'ENDED'; search?: string } = {}, deps: Repositories = repositories): Promise<ClassListItem[]> {
   const rows = await deps.lessonClass.findMany(input)
-  const upcoming = rows.length ? await deps.lessonClass.findUpcomingLessons(rows.map(c => c.id), new Date()) : []
+  const now = new Date()
+  const [upcoming, held] = rows.length ? await Promise.all([
+    deps.lessonClass.findUpcomingLessons(rows.map(c => c.id), now),
+    deps.lessonClass.heldLessonCounts(rows.map(c => c.id), now),
+  ]) : [[], {}]
   return rows.map(lessonClass => ({
     ...lessonClass,
     studentCount: classRosterIds(lessonClass).length,
+    heldCount: held[lessonClass.id] ?? 0,
     nextLessonAt: upcoming.find(l => l.classId === lessonClass.id || (l.seriesId && lessonClass.slots.some(s => s.id === l.seriesId)))?.startsAt ?? null,
   }))
 }

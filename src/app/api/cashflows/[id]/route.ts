@@ -1,6 +1,6 @@
 // ── API: /api/cashflows/[id] — sửa/xoá khoản thu chi (admin only) ─────
 import { NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { updateCashflowSchema } from '@/lib/cashflow/validations'
 import { updateCashflow, mapUpdateCashflowError, deleteCashflow, mapDeleteCashflowError } from '@/lib/cashflow'
@@ -11,7 +11,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requirePermission('cashflows.edit')
     await validateCSRF(request)
 
     const { id } = await params
@@ -44,7 +44,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdmin()
+    const auth = await requirePermission('cashflows.delete')
     await validateCSRF(request)
 
     const { id } = await params

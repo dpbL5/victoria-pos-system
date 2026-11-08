@@ -82,7 +82,8 @@ export function CheckInDialog({
     setMemberSearch(customer.fullName);
     // Kết quả tìm kiếm đã kèm membershipStatus/currentMembership (includeMembershipStatus)
     if (customer.membershipStatus !== undefined) {
-      setCurrentMembership(customer.currentMembership ?? null);
+      // Hiển thị ngày hết hạn xa nhất (đã cộng dồn khi gia hạn sớm)
+      setCurrentMembership(customer.latestMembership ?? customer.currentMembership ?? null);
       setMembershipActive(customer.membershipStatus === "ACTIVE");
       return;
     }

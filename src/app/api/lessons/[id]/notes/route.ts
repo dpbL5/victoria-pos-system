@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireTrainingAccess } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { updateLessonNotesSchema } from '@/lib/students'
 import { updateLessonStudentNotes, mapLessonNotesError } from '@/lib/students'
@@ -15,7 +15,7 @@ type Params = { params: Promise<{ id: string }> }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
-    const auth = await requireTrainingAccess()
+    const auth = await requirePermission('lessons.edit')
     await validateCSRF(request)
     const { id } = await params
     const body = await request.json()

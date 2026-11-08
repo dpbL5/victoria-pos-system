@@ -1,19 +1,8 @@
-import { redirect } from 'next/navigation'
-import { requireAuth } from '@/lib/shared/auth'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { requirePageAccess } from '@/lib/shared/page-access'
 import { PromotionScreen } from '@/features/promotions/promotion-screen'
 
 export default async function PromotionsPage() {
-  let user
-  try {
-    user = await requireAuth()
-  } catch {
-    redirect('/login')
-  }
-
-  if (!isAdminOnly(user?.role)) {
-    redirect('/sessions')
-  }
+  await requirePageAccess('promotions')
 
   return <PromotionScreen />
 }

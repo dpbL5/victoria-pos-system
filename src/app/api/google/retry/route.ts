@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireTrainingAccess } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { retryCalendar, mapCalendarError } from '@/lib/students'
 import { apiError, apiSuccess, ERR_UNAUTHORIZED, ERR_FORBIDDEN, ERR_CSRF } from '@/lib/infrastructure/api-helpers'
@@ -10,7 +10,7 @@ export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireTrainingAccess()
+    const auth = await requirePermission('lessons.view', 'classes.view', 'students.view')
     await validateCSRF(request)
     const result = await retryCalendar({ staffId: auth.userId })
     return result.ok ? apiSuccess(result.value) : apiError(mapCalendarError(result.error))

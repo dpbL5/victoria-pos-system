@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
-import { requireTrainingAccess } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { calendarAccessToken, selectCalendar, mapCalendarError } from '@/lib/students'
@@ -11,14 +11,14 @@ function errorResponse(error: unknown) {
 }
 export async function GET() {
   try {
-    const auth = await requireTrainingAccess()
+    const auth = await requirePermission('lessons.view', 'classes.view', 'students.view')
     const { accessToken } = await calendarAccessToken(auth.userId)
     return apiSuccess(await repositories.googleCalendar.listCalendars(accessToken))
   } catch (error) { return errorResponse(error) }
 }
 export async function PUT(request: NextRequest) {
   try {
-    const auth = await requireTrainingAccess()
+    const auth = await requirePermission('lessons.view', 'classes.view', 'students.view')
     await validateCSRF(request)
     const parsed = z.object({ calendarId: z.string().min(1).max(300), confirmChange: z.boolean().default(false) }).safeParse(await request.json())
     if (!parsed.success) return apiError({ code: 'VALIDATION', message: 'Chọn lịch Google hợp lệ', status: 400 })

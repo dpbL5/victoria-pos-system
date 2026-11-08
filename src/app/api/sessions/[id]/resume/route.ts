@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireMutationAuth } from '@/lib/shared/auth'
+import { requireMutationAuth, userHasPermission } from '@/lib/shared/auth'
 import { resumeSession, mapResumeSessionError } from '@/lib/sessions'
 import {
   apiError,
@@ -14,6 +14,9 @@ export async function POST(
 ) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'sessions.checkin')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền vận hành phiên', status: 403 })
+    }
     const { id } = await params
 
     const result = await resumeSession({

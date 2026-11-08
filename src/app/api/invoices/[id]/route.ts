@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
-import { isAdminOnly } from '@/lib/shared/roles'
+import { userHasPermission } from '@/lib/shared/auth'
 import { deleteInvoice, mapDeleteInvoiceError } from '@/lib/invoicing'
 import { repositories } from '@/lib/infrastructure/repositories'
 import {
@@ -33,9 +33,9 @@ export async function GET(
       return apiError({ code: 'INVOICE_NOT_FOUND', message: 'Không tìm thấy hoá đơn', status: 404 })
     }
 
-    const isAdmin = auth.role === 'ADMIN' || auth.role === 'MANAGER'
+    const canViewAll = userHasPermission(auth, 'invoices.view')
     const isOwner = invoice.staffId === auth.userId
-    if (!isAdmin && !isOwner) {
+    if (!canViewAll && !isOwner) {
       return apiError({ code: 'FORBIDDEN', message: 'Không có quyền xem hoá đơn này', status: 403 })
     }
 
@@ -141,14 +141,14 @@ export async function DELETE(
 ) {
   try {
     const auth = await requireMutationAuth(request)
-    if (!isAdminOnly(auth.role)) return apiError(ERR_FORBIDDEN)
+    if (!userHasPermission(auth, 'invoices.void')) return apiError(ERR_FORBIDDEN)
     const { id } = await params
 
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
       return apiError({ code: 'INVALID_ID', message: 'ID hoá đơn không hợp lệ', status: 400 })
     }
 
-    const result = await deleteInvoice({ invoiceId: id, staffId: auth.userId, role: auth.role })
+    const result = await deleteInvoice({ invoiceId: id, staffId: auth.userId, canOverride: userHasPermission(auth, 'invoices.void') })
     if (!result.ok) return apiError(mapDeleteInvoiceError(result.error))
 
     return apiSuccess({ message: 'Đã xoá hoá đơn' })

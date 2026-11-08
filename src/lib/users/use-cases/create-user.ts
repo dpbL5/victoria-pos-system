@@ -13,7 +13,8 @@ export interface CreateUserInput {
   username: string
   password: string
   fullName: string
-  role: 'ADMIN' | 'MANAGER' | 'STAFF' | 'TEACHER'
+  /** null = "Chưa phân vai" */
+  roleId: string | null
 }
 
 export interface CreateUserResult {
@@ -34,7 +35,7 @@ export async function createUser(
       username: input.username,
       passwordHash,
       fullName: input.fullName,
-      role: input.role,
+      roleId: input.roleId,
     })
 
     await tx.audit.append({
@@ -45,7 +46,8 @@ export async function createUser(
       details: {
         username: user.username,
         fullName: user.fullName,
-        role: user.role,
+        roleId: user.roleId,
+        roleName: user.role?.name ?? null,
         isActive: user.isActive,
       },
     })

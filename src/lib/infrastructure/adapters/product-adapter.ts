@@ -202,6 +202,15 @@ export function createProductRepository(store: ProductStore): ProductRepository 
         where: {
           ...(input.type ? { type: input.type } : {}),
           ...(input.productId ? { productId: input.productId } : {}),
+          ...(input.staffId ? { staffId: input.staffId } : {}),
+          ...(input.from || input.to
+            ? {
+                createdAt: {
+                  ...(input.from ? { gte: input.from } : {}),
+                  ...(input.to ? { lt: input.to } : {}),
+                },
+              }
+            : {}),
         },
         select: {
           id: true,

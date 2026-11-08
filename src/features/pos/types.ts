@@ -121,9 +121,18 @@ export interface Membership {
   plan?: MembershipPlan
 }
 
+export interface UserRoleInfo {
+  id: string
+  key: string | null
+  name: string
+  locked: boolean
+  permissions: string[]
+}
+
+/** Trả về từ /api/auth/me — role null = "Chưa phân vai" */
 export interface UserSession {
   userId: string
   username: string
   fullName: string
-  role: UserRole
+  role: UserRoleInfo | null
 }

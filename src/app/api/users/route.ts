@@ -1,6 +1,6 @@
 // ── GET /api/users & POST /api/users ────────────────────
 import { NextRequest } from "next/server";
-import { requireAdminOnly } from "@/lib/shared/auth";
+import { requirePermission } from "@/lib/shared/auth";
 import { validateCSRF } from "@/lib/shared/csrf";
 import { createUser, mapCreateUserError } from "@/lib/users";
 import { repositories } from "@/lib/infrastructure/repositories";
@@ -16,7 +16,7 @@ import {
 
 export async function GET() {
   try {
-    await requireAdminOnly();
+    await requirePermission('users.view');
 
     const users = await repositories.user.findMany();
 
@@ -35,7 +35,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdminOnly();
+    const auth = await requirePermission('users.create');
     await validateCSRF(request);
 
     const body = await request.json();

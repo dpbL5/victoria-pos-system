@@ -9,7 +9,7 @@ export { updateSession, mapUpdateSessionError } from './use-cases/update-session
 export { pauseSession, resumeSession, mapPauseSessionError, mapResumeSessionError } from './use-cases/pause-session'
 export { pausePlayer, resumePlayer, mapPausePlayerError, mapResumePlayerError } from './use-cases/pause-session'
 export { renamePlayer, mapRenamePlayerError } from './use-cases/rename-player'
-export { createProduct, mapCreateProductError, applyStockMovement, mapApplyStockMovementError, deleteProduct, mapDeleteProductError } from './use-cases/product-crud'
+export { createProduct, mapCreateProductError, applyStockMovement, mapApplyStockMovementError, deleteProduct, mapDeleteProductError, consumeStaffProduct, hasReceivedStaffDrinkToday, mapConsumeStaffProductError } from './use-cases/product-crud'
 export {
   calculatePlayerPrice,
   type PlayerPricingParams,

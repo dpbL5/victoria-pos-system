@@ -311,7 +311,16 @@ export interface ProductRepository {
     shiftId: string | null
    }): Promise<{ movementId: string; before: number; after: number; shiftId: string | null; type: string; quantity: number }>
   /** Lịch sử biến động kho (mới nhất trước) — GET /api/stock-movements */
-  findStockMovements(input: { type?: StockMovementType; productId?: string; take?: number }): Promise<StockMovementRow[]>
+  findStockMovements(input: {
+    type?: StockMovementType
+    productId?: string
+    staffId?: string
+    /** Lọc createdAt >= from */
+    from?: Date
+    /** Lọc createdAt < to */
+    to?: Date
+    take?: number
+  }): Promise<StockMovementRow[]>
   /** Đánh dấu ngưng bán: set isActive=false — dùng khi hàng đã có giao dịch liên quan */
   deactivate(id: string): Promise<void>
   /** Xoá cứng product — chỉ dùng khi chưa có giao dịch liên quan */

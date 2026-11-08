@@ -21,6 +21,7 @@ import {
   School,
   Settings,
   ShieldCheck,
+  ShieldUser,
   Sun,
   Tag,
   Ticket,
@@ -35,7 +36,7 @@ import { AppSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { useApi } from "@/hooks/use-api";
 import { apiJson } from "@/lib/api";
-import { getRoleLabel, isAdminOnly, isManagerOrAdmin } from "@/lib/shared/roles";
+import { hasAccess, moduleAccessible } from "@/lib/shared/permissions";
 import { formatClock, money } from "@/features/pos/format";
 import type { Shift, UserSession } from "@/features/pos/types";
 import { CalendarConnection } from "@/features/students/calendar-connection";
@@ -73,13 +74,13 @@ export function MoreScreen() {
     },
   );
   const user = userData?.data ?? null;
-  const role = user?.role;
-  const isAdmin = isAdminOnly(role);
-  const isTeacher = role === "TEACHER";
-
-  // Chờ đọc xong role rồi mới quyết định gọi API. Giáo viên không trực quầy và
-  // proxy chặn ngoài module Đào tạo — gọi sớm sẽ ăn 403 ngay lần render đầu.
-  const canLoadShift = !!role && !isTeacher;
+  const perms = user?.role?.permissions ?? [];
+  const roleKey = user?.role?.key;
+  // Quyền sửa cài đặt hệ thống (phí gửi xe...)
+  const isAdmin = hasAccess(perms, roleKey, "settings.edit");
+  // Trực quầy — giữ trạng thái ca + gọi API ca; user chỉ Đào tạo không gọi
+  const isCounterStaff = hasAccess(perms, roleKey, "sessions.view", "sessions.checkin", "shifts.view");
+  const canLoadShift = isCounterStaff;
   const { data: shiftData, isLoading: shiftLoading } = useApi<Shift | null>(
     canLoadShift ? "/api/shifts?current=true" : null,
     {
@@ -111,140 +112,29 @@ export function MoreScreen() {
     }
   }, [parkingFeeData, parkingFeeValue]);
 
-  const canViewShifts = isManagerOrAdmin(user?.role);
-  // Thứ tự lối tắt = mức dùng thật, đếm từ activity_logs (07–10/2026):
-  // Ca làm 132 · Đặt Lịch 37 · Nhân viên 36 · Hội viên 28 · Lịch học 28 ·
-  // Bảng giá 23 · Lớp học 14 · Học viên 11 · Khuyến mại 7 · Thu chi 7 · Kho 5 ·
-  // còn lại là màn chỉ đọc / không ghi audit nên xếp cuối.
-  const coreLinks = [
-    ...(canViewShifts
-      ? [
-        {
-            href: "/shifts",
-            label: "Ca làm",
-            Icon: Clock,
-          },
-        ]
-      : []),
-    {
-      href: "/bookings",
-      label: "Đặt Lịch",
-      Icon: CalendarClock,
-    },
-    {
-      href: "/customers",
-      label: "Hội viên",
-      Icon: ShieldCheck,
-    },
-    ...(canViewShifts
-      ? [
-        {
-            href: "/inventory",
-            label: "Kho",
-            Icon: Package,
-          },
-        ]
-      : []),
-  ] as const;
+  const canViewShifts = hasAccess(perms, roleKey, "shifts.view");
+  // Lối tắt khai báo theo nhóm quyền — nhóm không có quyền nào thì ẩn hoàn toàn
+  const allShortcuts = [
+    { href: "/shifts", label: "Ca làm", Icon: Clock, groups: ["shifts"] },
+    { href: "/bookings", label: "Đặt Lịch", Icon: CalendarClock, groups: ["bookings"] },
+    { href: "/staff", label: "Nhân viên", Icon: UserCog, groups: ["users"] },
+    { href: "/customers", label: "Hội viên", Icon: ShieldCheck, groups: ["customers", "memberships"] },
+    { href: "/lessons", label: "Lịch học", Icon: GraduationCap, groups: ["lessons", "classes", "students"] },
+    { href: "/pricing", label: "Bảng giá", Icon: Banknote, groups: ["pricing"] },
+    { href: "/classes", label: "Lớp học", Icon: School, groups: ["classes", "lessons", "students"] },
+    { href: "/students", label: "Học viên", Icon: Users, groups: ["students", "classes", "lessons"] },
+    { href: "/promotions", label: "Khuyến mại", Icon: Tag, groups: ["promotions"] },
+    { href: "/cashflow", label: "Thu chi", Icon: ArrowRightLeft, groups: ["cashflows"] },
+    { href: "/inventory", label: "Kho", Icon: Package, groups: ["products", "stock"] },
+    { href: "/tools", label: "Dụng cụ", Icon: BowArrow, groups: ["tools"] },
+    { href: "/membership-plans", label: "Gói hội viên", Icon: Ticket, groups: ["memberships"] },
+    { href: "/reports", label: "Báo cáo", Icon: BarChart3, groups: ["reports"] },
+    { href: "/roles", label: "Vai trò", Icon: ShieldUser, groups: ["roles"] },
+  ];
 
-  const adminLinks = [
-    {
-      href: "/shifts",
-      label: "Ca làm",
-      Icon: Clock,
-    },
-    {
-      href: "/bookings",
-      label: "Đặt Lịch",
-      Icon: CalendarClock,
-    },
-    {
-      href: "/staff",
-      label: "Nhân viên",
-      Icon: UserCog,
-    },
-    {
-      href: "/customers",
-      label: "Hội viên",
-      Icon: ShieldCheck,
-    },
-    {
-      href: "/lessons",
-      label: "Lịch học",
-      Icon: GraduationCap,
-    },
-    {
-      href: "/pricing",
-      label: "Bảng giá",
-      Icon: Banknote,
-    },
-    {
-      href: "/classes",
-      label: "Lớp học",
-      Icon: School,
-    },
-    {
-      href: "/students",
-      label: "Học viên",
-      Icon: Users,
-    },
-    {
-      href: "/promotions",
-      label: "Khuyến mại",
-      Icon: Tag,
-    },
-    {
-      href: "/cashflow",
-      label: "Thu chi",
-      Icon: ArrowRightLeft,
-    },
-    {
-      href: "/inventory",
-      label: "Kho",
-      Icon: Package,
-    },
-    {
-      href: "/tools",
-      label: "Dụng cụ",
-      Icon: BowArrow,
-    },
-    {
-      href: "/membership-plans",
-      label: "Gói hội viên",
-      Icon: Ticket,
-    },
-    {
-      href: "/reports",
-      label: "Báo cáo",
-      Icon: BarChart3,
-    },
-  ] as const;
-
-  // Giáo viên chỉ mở được module Đào tạo — lối tắt vận hành sẽ bị proxy đưa về
-  // `/lessons`, nên tab `Thêm` của họ chỉ liên kết 3 màn đào tạo.
-  const teacherLinks = [
-    {
-      href: "/lessons",
-      label: "Lịch học",
-      Icon: GraduationCap,
-    },
-    {
-      href: "/classes",
-      label: "Lớp học",
-      Icon: School,
-    },
-    {
-      href: "/students",
-      label: "Học viên",
-      Icon: Users,
-    },
-  ] as const;
-
-  const shortcutLinks = isAdmin
-    ? adminLinks
-    : isTeacher
-      ? teacherLinks
-      : coreLinks;
+  const shortcutLinks = allShortcuts.filter((item) =>
+    item.groups.some((group) => moduleAccessible(perms, group, roleKey)),
+  );
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -325,23 +215,15 @@ export function MoreScreen() {
               </p>
               <p className="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
                 {user?.username ?? ""}
-                {user
-                ? ` · ${getRoleLabel(user.role)}`
-                  : ""}
+                {user?.role ? ` · ${user.role.name}` : " · Chưa phân vai"}
               </p>
             </div>
-            <Badge variant={isAdmin ? "purple" : "default"}>
-              {user?.role === "ADMIN"
-                ? "Admin"
-                : user?.role === "MANAGER"
-                  ? "QL"
-                  : user?.role === "TEACHER"
-                  ? "GV"
-                  : "Staff"}
+            <Badge variant={roleKey === "ADMIN" ? "purple" : "default"}>
+              {user?.role?.name ?? "Chưa phân vai"}
             </Badge>
           </div>
-          {/* Giáo viên không trực ca quầy nên không hiện trạng thái ca */}
-          {!isTeacher && (
+          {/* Không trực quầy thì không hiện trạng thái ca */}
+          {isCounterStaff && (
             <p
               className={`mt-3 text-xs font-medium ${shift ? "text-success" : "text-warning"}`}
             >

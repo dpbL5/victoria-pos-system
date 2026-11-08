@@ -1,13 +1,27 @@
 import { describe, it, expect } from 'vitest'
 import { getVisibleNavItems } from '@/components/layout/bottom-nav'
 
-// ── getVisibleNavItems ────────────────────────────────────
-// MANAGER/ADMIN: Ca hôm nay · Lịch đặt · Báo cáo · Kho · Thêm.
-// STAFF: Ca hôm nay · Thêm. TEACHER: nav đào tạo riêng.
+// ── getVisibleNavItems (permission-driven) ────────────────
+// Một danh sách item duy nhất khai báo nhóm quyền; bộ tab tự sinh theo quyền.
+// Nhóm không có quyền nào → ẩn hoàn toàn khỏi bottom bar.
+
+// Bộ quyền kiểu "quản lý quầy": POS + đặt lịch + báo cáo + kho
+const COUNTER_MANAGER = [
+  'sessions.view',
+  'sessions.checkin',
+  'sessions.checkout',
+  'bookings.view',
+  'reports.view',
+  'stock.view',
+]
+// Bộ quyền kiểu "thu ngân": chỉ làm POS
+const CASHIER = ['sessions.view', 'sessions.checkin', 'sessions.checkout']
+// Bộ quyền kiểu "giáo viên": chỉ đào tạo
+const TEACHER = ['students.view', 'classes.view', 'lessons.view']
 
 describe('getVisibleNavItems', () => {
-  it('ADMIN thấy 5 tab, đúng thứ tự trái → phải', () => {
-    expect(getVisibleNavItems('ADMIN').map((item) => item.href)).toEqual([
+  it('quyền quản lý quầy: 5 tab, đúng thứ tự trái → phải', () => {
+    expect(getVisibleNavItems(COUNTER_MANAGER).map((item) => item.href)).toEqual([
       '/sessions',
       '/bookings',
       '/reports',
@@ -16,8 +30,8 @@ describe('getVisibleNavItems', () => {
     ])
   })
 
-  it('ADMIN thấy đúng nhãn của 5 tab', () => {
-    expect(getVisibleNavItems('ADMIN').map((item) => item.label)).toEqual([
+  it('quyền quản lý quầy: đúng nhãn của 5 tab', () => {
+    expect(getVisibleNavItems(COUNTER_MANAGER).map((item) => item.label)).toEqual([
       'Ca hôm nay',
       'Lịch đặt',
       'Báo cáo',
@@ -26,25 +40,15 @@ describe('getVisibleNavItems', () => {
     ])
   })
 
-  it('MANAGER dùng chung bộ tab với ADMIN', () => {
-    expect(getVisibleNavItems('MANAGER').map((item) => item.href)).toEqual([
-      '/sessions',
-      '/bookings',
-      '/reports',
-      '/inventory',
-      '/settings',
-    ])
-  })
-
-  it('STAFF chỉ còn Ca hôm nay và Thêm', () => {
-    expect(getVisibleNavItems('STAFF').map((item) => item.href)).toEqual([
+  it('quyền thu ngân chỉ còn Ca hôm nay và Thêm', () => {
+    expect(getVisibleNavItems(CASHIER).map((item) => item.href)).toEqual([
       '/sessions',
       '/settings',
     ])
   })
 
-  it('TEACHER dùng nav đào tạo riêng', () => {
-    expect(getVisibleNavItems('TEACHER').map((item) => item.href)).toEqual([
+  it('quyền đào tạo: nav riêng Lịch học · Lớp học · Học viên · Thêm', () => {
+    expect(getVisibleNavItems(TEACHER).map((item) => item.href)).toEqual([
       '/lessons',
       '/classes',
       '/students',
@@ -52,16 +56,20 @@ describe('getVisibleNavItems', () => {
     ])
   })
 
-  it('mọi role đều có tab Thêm (/settings)', () => {
-    for (const role of ['ADMIN', 'MANAGER', 'STAFF', 'TEACHER']) {
-      expect(getVisibleNavItems(role).map((item) => item.href), role).toContain('/settings')
+  it('role không có quyền nào: chỉ còn tab Thêm', () => {
+    expect(getVisibleNavItems([]).map((item) => item.href)).toEqual(['/settings'])
+  })
+
+  it('mọi bộ quyền đều có tab Thêm (/settings)', () => {
+    for (const perms of [COUNTER_MANAGER, CASHIER, TEACHER, [], null, undefined]) {
+      expect(getVisibleNavItems(perms).map((item) => item.href), String(perms)).toContain('/settings')
     }
   })
 
-  it('không role nào thấy href trùng', () => {
-    for (const role of ['ADMIN', 'MANAGER', 'STAFF', 'TEACHER']) {
-      const hrefs = getVisibleNavItems(role).map((item) => item.href)
-      expect(new Set(hrefs).size, role).toBe(hrefs.length)
+  it('không bộ quyền nào thấy href trùng', () => {
+    for (const perms of [COUNTER_MANAGER, CASHIER, TEACHER, []]) {
+      const hrefs = getVisibleNavItems(perms).map((item) => item.href)
+      expect(new Set(hrefs).size, String(perms)).toBe(hrefs.length)
     }
   })
 })

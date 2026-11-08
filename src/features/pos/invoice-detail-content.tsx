@@ -22,7 +22,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label, Select, Textarea } from '@/components/ui/input'
 import { formatVND } from '@/lib/shared/utils'
-import { paymentMethodLabel } from './format'
+import { formatPausedHMS, paymentMethodLabel } from './format'
 import { useInvoiceEditLogic, type InvoiceEditorLine } from './invoice-edit-logic'
 import type { Product } from './types'
 
@@ -380,6 +380,14 @@ type PlayerPricing = {
   discountAmount?: number
   total?: number
   pricingRuleName?: string
+  /** Gắn từ metadata.playerPauses khi dựng bảng — không nằm trong playerPricing */
+  pausedSeconds?: number
+}
+
+type PlayerPause = {
+  id?: string
+  name?: string
+  pausedSeconds?: number
 }
 
 type TableRow =
@@ -408,12 +416,20 @@ function flattenInvoiceItems(items: InvoiceItem[]): TableRow[] {
         : null
       if (playerPricing && playerPricing.length > 0) {
         const isMultiPlayer = playerPricing.length > 1
+        const playerPauses = Array.isArray(metadata.playerPauses)
+          ? (metadata.playerPauses as PlayerPause[])
+          : []
+        const totalPausedSeconds =
+          typeof metadata.pausedSeconds === 'number' ? metadata.pausedSeconds : 0
         for (let i = 0; i < playerPricing.length; i++) {
           const p = playerPricing[i]
           rows.push({
             key: `${item.id}-p${i}`,
             kind: 'player',
-            player: p,
+            player: {
+              ...p,
+              pausedSeconds: resolvePlayerPausedSeconds(p, playerPauses, totalPausedSeconds, isMultiPlayer),
+            },
             itemType: item.type,
             isMultiPlayer,
           })
@@ -424,6 +440,39 @@ function flattenInvoiceItems(items: InvoiceItem[]): TableRow[] {
     rows.push({ key: item.id, kind: 'item', item })
   }
   return rows
+}
+
+/**
+ * Thời gian nghỉ của 1 người chơi. Nguồn chính là `metadata.playerPauses` (ghi
+ * lúc checkout); hoá đơn rất cũ chỉ có `metadata.pausedSeconds` cấp phiên nên
+ * dùng làm fallback khi hoá đơn chỉ có 1 người.
+ */
+function resolvePlayerPausedSeconds(
+  player: PlayerPricing,
+  playerPauses: PlayerPause[],
+  totalPausedSeconds: number,
+  isMultiPlayer: boolean,
+): number {
+  const matched = player.id
+    ? playerPauses.find((entry) => entry.id === player.id)
+    : undefined
+  if (typeof matched?.pausedSeconds === 'number') return Math.max(0, matched.pausedSeconds)
+  if (
+    !isMultiPlayer &&
+    playerPauses.length === 1 &&
+    typeof playerPauses[0].pausedSeconds === 'number'
+  ) {
+    return Math.max(0, playerPauses[0].pausedSeconds)
+  }
+  if (!isMultiPlayer && totalPausedSeconds > 0) return Math.max(0, totalPausedSeconds)
+  return 0
+}
+
+/** Thời gian nghỉ cấp dòng PLAY_TIME — dùng cho hoá đơn không có chi tiết từng người */
+function itemPausedSeconds(item: InvoiceItem): number {
+  if (item.type !== 'PLAY_TIME') return 0
+  const metadata = (item.metadata ?? {}) as Record<string, unknown>
+  return typeof metadata.pausedSeconds === 'number' ? Math.max(0, metadata.pausedSeconds) : 0
 }
 
 function isEditableItem(item: InvoiceItem) {
@@ -481,6 +530,7 @@ function ItemRowGeneric({
   const editable = editing && line && isEditableItem(item)
   const quantity = line?.quantity ?? item.quantity
   const total = line ? line.quantity * line.unitPrice : item.total
+  const pausedSeconds = itemPausedSeconds(item)
 
   return (
     <tr className="align-top">
@@ -500,6 +550,9 @@ function ItemRowGeneric({
               {item.description}
             </p>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-text-tertiary">
+              {pausedSeconds > 0 && (
+                <span>Tổng nghỉ {formatPausedHMS(pausedSeconds)}</span>
+              )}
               {item.discountAmount > 0 && (
               <span className="text-danger">
                   −{formatVND(item.discountAmount)}
@@ -663,6 +716,7 @@ function PlayerRow({ row }: { row: Extract<TableRow, { kind: 'player' }> }) {
   const discount = player.discountAmount ?? 0
   const name = (player.name ?? '').trim()
   const ruleName = player.pricingRuleName ?? ''
+  const pausedSeconds = player.pausedSeconds ?? 0
 
   return (
     <tr className="align-top">
@@ -682,6 +736,11 @@ function PlayerRow({ row }: { row: Extract<TableRow, { kind: 'player' }> }) {
                 <span className="text-text-tertiary">({ruleName})</span>
               )}
           </p>
+            {pausedSeconds > 0 && (
+              <p className="mt-0.5 text-xs text-text-tertiary">
+                Nghỉ {formatPausedHMS(pausedSeconds)}
+              </p>
+            )}
             {discount > 0 && (
             <p className="mt-0.5 text-xs text-danger">
                 −{formatVND(discount)}

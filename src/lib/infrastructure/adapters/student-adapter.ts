@@ -226,6 +226,14 @@ export function createLessonClassRepository(store: StudentStore): LessonClassRep
       }),
     findById: (id) => store.lessonClass.findUnique({ where: { id }, include: classInclude }),
     create: (data) => store.lessonClass.create({ data, include: classInclude }),
+    heldLessonCounts: async (classIds, before) => {
+      if (!classIds.length) return {}
+      const rows = await store.lessonClass.findMany({
+        where: { id: { in: classIds } },
+        select: { id: true, _count: { select: { lessons: { where: { startsAt: { lt: before }, status: { not: 'CANCELLED' } } } } } },
+      })
+      return Object.fromEntries(rows.map(row => [row.id, row._count.lessons]))
+    },
     replaceStudents: async (classId, studentIds) => {
       await store.lessonClassStudent.deleteMany({ where: { classId } })
       if (studentIds.length) await store.lessonClassStudent.createMany({ data: studentIds.map(studentId => ({ classId, studentId })) })

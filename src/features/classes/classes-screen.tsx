@@ -148,6 +148,12 @@ export function ClassesScreen() {
       render: item => item.studentCount,
     },
     {
+      key: 'heldCount',
+      label: 'Đã học',
+      cellClassName: 'px-4 py-3 text-sm tabular-nums text-zinc-950 dark:text-white',
+      render: item => item.heldCount,
+    },
+    {
       key: 'nextLessonAt',
       label: 'Buổi tới',
       cellClassName: 'px-4 py-3 text-sm text-zinc-600 dark:text-zinc-300',
@@ -180,6 +186,7 @@ export function ClassesScreen() {
     { key: 'coachName', label: 'Huấn luyện viên', render: item => item.coachName || '—' },
     { key: 'slots', label: 'Lịch lặp', render: item => item.slots.length ? item.slots.map(slot => formatSlot(slot)).join(' • ') : '—' },
     { key: 'studentCount', label: 'Học viên', render: item => <span className="font-semibold tabular-nums text-zinc-950 dark:text-white">{item.studentCount}</span> },
+    { key: 'heldCount', label: 'Đã học', render: item => <span className="tabular-nums">{item.heldCount}</span> },
     { key: 'nextLessonAt', label: 'Buổi tới', render: item => item.nextLessonAt ? formatDateTime(item.nextLessonAt) : '—' },
     {
       label: '',
@@ -288,7 +295,7 @@ function ClassFormModal({ lessonClass, submitting, onClose, onSubmit }: {
   const [coachName, setCoachName] = useState(lessonClass?.coachName ?? '')
   const [note, setNote] = useState(lessonClass?.note ?? '')
   const [withSlot, setWithSlot] = useState(!lessonClass)
-  const [slot, setSlot] = useState<ScheduleFormState>(() => emptySchedule(todayInput()))
+  const [slot, setSlot] = useState<ScheduleFormState>(() => ({ ...emptySchedule(todayInput()), ending: 'DATE', endsOn: '' }))
   const [studentIds, setStudentIds] = useState<string[]>([])
 
   const slotPayload = scheduleBody(slot)
@@ -325,7 +332,7 @@ function ClassFormModal({ lessonClass, submitting, onClose, onSubmit }: {
       {!lessonClass && <>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-info" checked={withSlot} onChange={event => setWithSlot(event.target.checked)} />Đặt lịch lặp ngay</label>
         {withSlot && <div className="space-y-4 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
-          <ScheduleFields idPrefix="class-slot" form={slot} onChange={setSlot} />
+          <ScheduleFields idPrefix="class-slot" form={slot} onChange={setSlot} allowNever={false} />
             {slotError && <p className="text-sm text-danger">{slotError}</p>}
         </div>}
         <StudentPicker value={studentIds} onChange={setStudentIds} unassignedOnly />

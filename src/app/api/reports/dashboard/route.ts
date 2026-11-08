@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/shared/auth'
+import { requireAuth, userHasPermission } from '@/lib/shared/auth'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { withApiDiagnostics } from '@/lib/infrastructure/api-diagnostics'
 import { parseStartOfDay, toInputDate } from '@/lib/shared/utils'
@@ -15,10 +15,17 @@ const itemTypes: ItemTypeKey[] = ['PLAY_TIME', 'MEMBERSHIP_FEE', 'PRODUCT', 'SER
 async function getDashboard() {
   try {
     const auth = await requireAuth()
+    if (!userHasPermission(auth, 'reports.view', 'reports.viewAll')) {
+      return NextResponse.json(
+        { success: false, error: 'Bạn không có quyền xem báo cáo' },
+        { status: 403 }
+      )
+    }
     const { start, end } = getTodayRange()
-    const scope = auth.role === 'STAFF' ? 'STAFF' : 'ALL'
+    const canViewAll = userHasPermission(auth, 'reports.viewAll')
+    const scope = canViewAll ? 'ALL' : 'STAFF'
 
-    const currentShift = auth.role === 'ADMIN' || auth.role === 'MANAGER'
+    const currentShift = canViewAll
       ? await repositories.shift.findOpenOperational()
       : await repositories.shift.findOpenForStaff(auth.userId)
     const currentShiftId = currentShift?.id ?? null
@@ -26,7 +33,7 @@ async function getDashboard() {
     const data = await repositories.reporting.getDashboardData({
       start,
       end,
-      scope: auth.role === 'STAFF' ? 'STAFF' : 'ALL',
+      scope,
       staffId: auth.userId,
       currentShiftId,
     })

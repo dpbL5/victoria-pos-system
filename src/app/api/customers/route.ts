@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
+import { requireAuth, requireMutationAuth, userHasPermission } from '@/lib/shared/auth'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { createCustomerSchema } from '@/lib/memberships'
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth()
+    const auth = await requireAuth()
+    if (!userHasPermission(auth, 'customers.view', 'memberships.view', 'memberships.register', 'memberships.renew', 'memberships.backdate', 'memberships.plans.manage')) {
+      return NextResponse.json({ success: false, error: 'Bạn không có quyền xem khách hàng' }, { status: 403 })
+    }
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || ''
@@ -56,7 +59,12 @@ export async function GET(request: NextRequest) {
       const currentMembership = activeMemberships.find((membership) =>
         membership.startsAt <= now && membership.expiresAt > now
       ) ?? null
-      const latestMembership = activeMemberships[0] ?? null
+      // Kỳ xa nhất = ngày hết hạn thực tế sau khi cộng dồn các lần gia hạn sớm
+      const latestMembership = activeMemberships.reduce<(typeof activeMemberships)[number] | null>(
+        (furthest, membership) =>
+          !furthest || membership.expiresAt > furthest.expiresAt ? membership : furthest,
+        null
+      )
 
       return {
         ...customer,
@@ -102,7 +110,10 @@ function clampPositiveInt(
 
 export async function POST(request: NextRequest) {
   try {
-    await requireMutationAuth(request)
+    const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'customers.create')) {
+      return NextResponse.json({ success: false, error: 'Bạn không có quyền thêm khách hàng' }, { status: 403 })
+    }
 
     const body = await request.json()
     const parsed = createCustomerSchema.safeParse(body)

@@ -2,12 +2,15 @@ import { NextRequest } from 'next/server'
 import { apiError, apiSuccess, ERR_CSRF, ERR_UNAUTHORIZED, resultToResponse } from '@/lib/infrastructure/api-helpers'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { autoCancelStaleBookings, createBooking, createBookingSchema, mapBookingError } from '@/lib/bookings'
-import { requireAuth, requireMutationAuth } from '@/lib/shared/auth'
+import { requireAuth, requireMutationAuth, userHasPermission } from '@/lib/shared/auth'
 import { getVnWeekRange, parseStartOfDay, today } from '@/lib/shared/utils'
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth()
+    if (!userHasPermission(auth, 'bookings.view')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền xem lịch đặt', status: 403 })
+    }
     const weekStart = request.nextUrl.searchParams.get('weekStart') || getVnWeekRange(today()).from
     const parsedDate = new Date(`${weekStart}T00:00:00.000Z`)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== weekStart || getVnWeekRange(weekStart).from !== weekStart) {
@@ -35,6 +38,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireMutationAuth(request)
+    if (!userHasPermission(auth, 'bookings.create')) {
+      return apiError({ code: 'FORBIDDEN', message: 'Bạn không có quyền tạo lịch đặt', status: 403 })
+    }
     const parsed = createBookingSchema.safeParse(await request.json())
     if (!parsed.success) return apiError({ code: 'VALIDATION', message: parsed.error.issues[0].message, status: 400 })
     return resultToResponse(await createBooking({ ...parsed.data, staffId: auth.userId }), mapBookingError, 201)

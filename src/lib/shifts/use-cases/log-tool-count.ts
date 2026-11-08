@@ -1,4 +1,3 @@
-import { isManagerOrAdmin } from '@/lib/shared/roles'
 // ── Use-case: logToolCount — ghi lại số lượng dụng cụ trong ca ─────
 import { err, ok } from '@/lib/shared/result'
 import type { DomainError, Result } from '@/lib/shared/result'
@@ -13,7 +12,8 @@ export interface LogToolCountInput {
   staffId: string
   username: string
   fullName: string
-  role: 'ADMIN' | 'MANAGER' | 'STAFF' | 'TEACHER'
+  /** BẮT BUỘC có quyền 'tools.count' */
+  canCount: boolean
   toolCounts: ToolCountEntry[]
 }
 
@@ -32,7 +32,7 @@ export async function logToolCount(
   input: LogToolCountInput,
   deps: Repositories = repositories
 ): Promise<Result<LogToolCountResult>> {
-  const { shiftId, staffId, username, fullName, role, toolCounts } = input
+  const { shiftId, staffId, username, fullName, canCount, toolCounts } = input
 
   if (toolCounts.length === 0) return err('TOOL_COUNT_EMPTY')
 
@@ -41,12 +41,8 @@ export async function logToolCount(
   if (!shift) return err('SHIFT_NOT_FOUND')
   if (shift.status !== 'OPEN') return err('SHIFT_ALREADY_CLOSED')
 
-  const isActiveParticipant = shift.participants.some(
-    (participant) => participant.staffId === staffId
-  )
-  if (!isManagerOrAdmin(role) && shift.staffId !== staffId && !isActiveParticipant) {
-    return err('FORBIDDEN')
-  }
+  // Quyền đếm dụng cụ là điều kiện duy nhất — sở hữu/tham gia ca không thay thế được quyền
+  if (!canCount) return err('FORBIDDEN')
 
   const alreadyCounted = await deps.shift.findByIdWithToolStats(shiftId)
   if (alreadyCounted?.toolCounts.some((tc) => tc.openCount > 0)) {
@@ -70,7 +66,7 @@ export async function logToolCount(
           userId: staffId,
           username,
           fullName,
-          role,
+          canCount,
         },
         counts: toolCounts,
         countedAt: countedAt.toISOString(),

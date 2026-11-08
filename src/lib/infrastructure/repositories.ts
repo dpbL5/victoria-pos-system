@@ -12,6 +12,7 @@ import { createSessionRepository } from './adapters/session-adapter'
 import { createProductRepository } from './adapters/product-adapter'
 import { createCashflowRepository } from './adapters/cashflow-adapter'
 import { createUserRepository } from './adapters/user-adapter'
+import { createRoleRepository } from './adapters/role-adapter'
 import { createToolRepository } from './adapters/tool-adapter'
 import { createReportingRepository } from './adapters/reporting-adapter'
 import { createBookingRepository } from './adapters/booking-adapter'
@@ -35,6 +36,7 @@ import type { SettingsRepository } from '@/lib/settings/ports'
 import type { ProductRepository, SessionRepository } from '@/lib/sessions/ports'
 import type { CashflowRepository } from '@/lib/cashflow/ports'
 import type { UserRepository } from '@/lib/users/ports'
+import type { RoleRepository } from '@/lib/roles'
 import type { ToolRepository } from '@/lib/tools/ports'
 import type { ReportingRepository } from '@/lib/reports/ports'
 import type { BookingRepository } from '@/lib/bookings/ports'
@@ -66,6 +68,7 @@ export interface Repositories {
   product: ProductRepository
   cashflow: CashflowRepository
   user: UserRepository
+  role: RoleRepository
   tool: ToolRepository
   reporting: ReportingRepository
   /** Optional only for legacy test doubles; createRepositories always supplies it. */
@@ -95,6 +98,7 @@ export function createRepositories(store: Prisma.TransactionClient): Repositorie
     product: createProductRepository(store),
     cashflow: createCashflowRepository(store),
     user: createUserRepository(store),
+    role: createRoleRepository(store),
     tool: createToolRepository(store),
     reporting: createReportingRepository(store),
     booking: createBookingRepository(store),

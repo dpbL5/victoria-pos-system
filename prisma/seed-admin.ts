@@ -1,5 +1,5 @@
 /**
- * Tạo (hoặc cập nhật) tài khoản admin mặc định.
+ * Tạo (hoặc cập nhật) tài khoản admin mặc định + role hệ thống ADMIN.
  *
  * Dùng khi DB trống và bạn chưa thể đăng nhập để gọi /api/seed.
  * Idempotent: chạy lại nhiều lần vẫn an toàn, mật khẩu sẽ được reset.
@@ -12,7 +12,6 @@
  */
 import 'dotenv/config'
 import { prisma } from '@/lib/infrastructure/prisma'
-import { UserRole } from '@/generated/prisma/enums'
 import bcrypt from 'bcryptjs'
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME ?? 'admin'
@@ -31,19 +30,26 @@ async function main() {
   const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12)
 
   const admin = await prisma.$transaction(async (tx) => {
+    // Role hệ thống duy nhất — ADMIN khoá cứng, bypass mọi guard qua key
+    const adminRole = await tx.role.upsert({
+      where: { key: 'ADMIN' },
+      update: { name: 'Quản trị viên', locked: true },
+      create: { key: 'ADMIN', name: 'Quản trị viên', locked: true },
+    })
+
     const user = await tx.user.upsert({
       where: { username: ADMIN_USERNAME },
       update: {
         passwordHash,
         fullName: ADMIN_FULL_NAME,
-        role: UserRole.ADMIN,
+        roleId: adminRole.id,
         isActive: true,
       },
       create: {
         username: ADMIN_USERNAME,
         passwordHash,
         fullName: ADMIN_FULL_NAME,
-        role: UserRole.ADMIN,
+        roleId: adminRole.id,
         isActive: true,
       },
     })
@@ -57,7 +63,7 @@ async function main() {
         details: {
           username: user.username,
           fullName: user.fullName,
-          role: user.role,
+          role: adminRole.key,
           isActive: user.isActive,
         },
       },
@@ -69,7 +75,7 @@ async function main() {
   console.log('Tạo tài khoản admin thành công:')
   console.log(`  username : ${admin.username}`)
   console.log(`  fullName : ${admin.fullName}`)
-  console.log(`  role     : ${admin.role}`)
+  console.log('  role     : ADMIN (bypass mọi guard)')
   console.log('  password : ******** (đã hash)')
 
   if (ADMIN_PASSWORD === 'superuser@victoria2026') {

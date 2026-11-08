@@ -178,9 +178,14 @@ export function createShiftRepository(store: ShiftAdapterStore): ShiftRepository
       const [rows, total] = await Promise.all([
         store.shift.findMany({
           where,
+          // ShiftListRow yêu cầu _count (reports/shifts đọc shift._count.sessions);
+          // bản 'active participants' gốc không có _count → bổ sung để không 500.
           include: input.includeParticipants === 'all'
             ? shiftWithAllParticipantsInclude
-            : shiftWithParticipantsInclude,
+            : {
+                ...shiftWithParticipantsInclude,
+                _count: { select: { sessions: true, payments: true } },
+              },
           orderBy: { openedAt: 'desc' },
           skip: input.skip,
           take: input.take,

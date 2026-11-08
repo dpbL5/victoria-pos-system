@@ -19,11 +19,14 @@ export function ShiftGate({
   openShiftAt,
   submitting,
   onOpen,
+  canOpen = true,
 }: {
   /** Giờ mở của ca quầy đang mở sẵn mà người dùng có thể tham gia */
   openShiftAt?: string | null
   submitting: boolean
   onOpen: () => void
+  /** Role thiếu quyền shifts.open — ẩn nút thay vì render control bị API chặn */
+  canOpen?: boolean
 }) {
   const joinClock = openShiftAt ? formatClock(openShiftAt) : null
 
@@ -45,16 +48,22 @@ export function ShiftGate({
         {joinClock ? `Có ca quầy đang mở lúc ${joinClock}` : 'Chưa mở ca'}
       </h2>
 
-      <Button
-        variant="contrast"
-        size="lg"
-        fullWidth
-        className="mt-5 max-w-xs"
-        loading={submitting}
-        onClick={onOpen}
-      >
-        {joinClock ? 'Tham gia ca' : 'Mở ca'}
-      </Button>
+      {canOpen ? (
+        <Button
+          variant="contrast"
+          size="lg"
+          fullWidth
+          className="mt-5 max-w-xs"
+          loading={submitting}
+          onClick={onOpen}
+        >
+          {joinClock ? 'Tham gia ca' : 'Mở ca'}
+        </Button>
+      ) : (
+        <p className="mt-5 max-w-xs text-sm text-text-tertiary">
+          Bạn không có quyền mở ca. Vui lòng liên hệ quản trị viên để được cấp quyền hoặc vào ca giúp.
+        </p>
+      )}
     </section>
   )
 }

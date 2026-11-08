@@ -29,7 +29,7 @@ export interface AuditRepository {
       entityId: string
       details: Prisma.JsonValue | null
       createdAt: Date
-      user: { id: string; username: string; fullName: string; role: string } | null
+      user: { id: string; username: string; fullName: string; roleName: string | null } | null
     }>
     total: number
   }>

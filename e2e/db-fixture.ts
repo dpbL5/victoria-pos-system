@@ -3,7 +3,6 @@ import { randomBytes } from 'node:crypto'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import bcrypt from 'bcryptjs'
-import { UserRole } from '../src/generated/prisma/enums'
 import { prisma } from '../src/lib/infrastructure/prisma'
 
 const statePath = resolve(process.cwd(), '.e2e-auth.json')
@@ -24,12 +23,17 @@ async function createFixture() {
   const suffix = randomBytes(8).toString('hex')
   const username = `e2e_pw_${suffix}`
   const password = randomBytes(24).toString('base64url')
+  const adminRole = await prisma.role.upsert({
+    where: { key: 'ADMIN' },
+    update: {},
+    create: { key: 'ADMIN', name: 'Quản trị viên', locked: true },
+  })
   const user = await prisma.user.create({
     data: {
       username,
       passwordHash: await bcrypt.hash(password, 12),
       fullName: `Playwright E2E ${suffix}`,
-      role: UserRole.ADMIN,
+      roleId: adminRole.id,
       isActive: true,
     },
   })

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireTrainingAccess } from '@/lib/shared/auth'
+import { requirePermission } from '@/lib/shared/auth'
 import { validateCSRF } from '@/lib/shared/csrf'
 import { repositories } from '@/lib/infrastructure/repositories'
 import { updateStudentSchema } from '@/lib/students'
@@ -16,7 +16,7 @@ type Params = { params: Promise<{ id: string }> }
 
 export async function GET(_request: NextRequest, { params }: Params) {
   try {
-    await requireTrainingAccess()
+    await requirePermission('students.view')
 
     const { id } = await params
     const student = await repositories.student.findByIdIncludingDeleted(id)
@@ -36,7 +36,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 
 export async function PUT(request: NextRequest, { params }: Params) {
   try {
-    const auth = await requireTrainingAccess()
+    const auth = await requirePermission('students.edit')
     await validateCSRF(request)
     const { id } = await params
     const body = await request.json()
@@ -70,7 +70,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
-    const auth = await requireTrainingAccess()
+    const auth = await requirePermission('students.delete')
     await validateCSRF(request)
     const { id } = await params
 

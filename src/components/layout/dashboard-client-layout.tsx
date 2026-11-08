@@ -7,17 +7,11 @@ import { BottomNav } from '@/components/layout/bottom-nav'
 import { Header } from '@/components/layout/header'
 import { PageRefreshProvider } from '@/components/layout/page-refresh-context'
 import { ToastProvider } from '@/components/ui/toast'
-
-interface User {
-  userId: string
-  username: string
-  fullName: string
-  role: string
-}
+import type { AuthUser } from '@/lib/shared/auth'
 
 const SIDEBAR_COLLAPSED_KEY = 'qltrungcung_sidebar_collapsed'
 
-export function DashboardClientLayout({ user, children }: { user: User; children: React.ReactNode }) {
+export function DashboardClientLayout({ user, children }: { user: AuthUser; children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   useEffect(() => {
@@ -45,18 +39,20 @@ export function DashboardClientLayout({ user, children }: { user: User; children
   }, [])
 
   const sidebarOffset = sidebarCollapsed ? 'md:ml-[4.5rem]' : 'md:ml-60'
+  const permissions = user.role?.permissions ?? []
+  const roleKey = user.role?.key ?? null
 
   return (
     <ThemeProvider>
       <ToastProvider>
         <div className="flex min-h-screen bg-white dark:bg-zinc-950">
-          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} userRole={user.role} />
+          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} permissions={permissions} roleKey={roleKey} />
 
           <div className={`mobile-nav-content-safe flex min-w-0 flex-1 flex-col transition-all duration-200 md:pb-0 ${sidebarOffset}`}>
             <PageRefreshProvider>
               <Header
                 userFullName={user.fullName}
-                userRole={user.role}
+                roleName={user.role?.name ?? null}
               />
               <main className="flex-1">
                 {children}
@@ -64,7 +60,7 @@ export function DashboardClientLayout({ user, children }: { user: User; children
             </PageRefreshProvider>
           </div>
 
-          <BottomNav userRole={user.role} />
+          <BottomNav permissions={permissions} roleKey={roleKey} />
         </div>
       </ToastProvider>
     </ThemeProvider>

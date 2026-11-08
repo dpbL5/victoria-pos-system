@@ -22,6 +22,7 @@ export interface LessonClass {
   isActive: boolean
   slots: ClassSlot[]
   studentCount: number
+  heldCount: number
   nextLessonAt: string | null
 }
 

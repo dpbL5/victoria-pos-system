@@ -5,11 +5,11 @@ import { RefreshCw } from 'lucide-react'
 import { Logo } from '@/components/ui/logo'
 import { PAGE_TITLE_CLASS } from '@/components/ui/page-title'
 import { usePageRefresh } from './page-refresh-context'
-import { getRoleLabel } from '@/lib/shared/roles'
 
 interface HeaderProps {
   userFullName: string
-  userRole: string
+  /** Tên vai trò hiển thị — null = "Chưa phân vai" */
+  roleName: string | null
 }
 
 const TITLES: Record<string, string> = {
@@ -24,6 +24,7 @@ const TITLES: Record<string, string> = {
   '/promotions': 'Khuyến mại giờ chơi',
   '/tools': 'Dụng cụ quầy',
   '/staff': 'Nhân viên',
+  '/roles': 'Vai trò',
   '/settings': 'Thêm',
   '/cashflow': 'Thu chi',
   '/membership-plans': 'Gói hội viên',
@@ -40,10 +41,10 @@ function getTitle(pathname: string): string {
   return ''
 }
 
-export function Header({ userFullName, userRole }: HeaderProps) {
+export function Header({ userFullName, roleName }: HeaderProps) {
   const pathname = usePathname()
   const { refresh } = usePageRefresh()
-  const roleLabel = getRoleLabel(userRole)
+  const roleLabel = roleName ?? 'Chưa phân vai'
   const initial = userFullName.charAt(0).toUpperCase()
   const title = getTitle(pathname)
 
