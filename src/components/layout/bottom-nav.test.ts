@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { getVisibleNavItems } from '@/components/layout/bottom-nav'
+import { ALL_PERMISSIONS } from '@/lib/shared/permissions'
 
 // ── getVisibleNavItems (permission-driven) ────────────────
 // Một danh sách item duy nhất khai báo nhóm quyền; bộ tab tự sinh theo quyền.
 // Nhóm không có quyền nào → ẩn hoàn toàn khỏi bottom bar.
+// Tối đa 4 tab chính + "Thêm" — tab dư vào lưới lối tắt trong màn Thêm.
 
 // Bộ quyền kiểu "quản lý quầy": POS + đặt lịch + báo cáo + kho
 const COUNTER_MANAGER = [
@@ -63,6 +65,22 @@ describe('getVisibleNavItems', () => {
   it('mọi bộ quyền đều có tab Thêm (/settings)', () => {
     for (const perms of [COUNTER_MANAGER, CASHIER, TEACHER, [], null, undefined]) {
       expect(getVisibleNavItems(perms).map((item) => item.href), String(perms)).toContain('/settings')
+    }
+  })
+
+  it('role đủ mọi quyền: chỉ 5 tab, Đào tạo nằm ngoài bar (vào qua màn Thêm)', () => {
+    const hrefs = getVisibleNavItems(ALL_PERMISSIONS).map((item) => item.href)
+    expect(hrefs).toEqual(['/sessions', '/bookings', '/reports', '/inventory', '/settings'])
+    expect(hrefs).not.toContain('/lessons')
+    expect(hrefs).not.toContain('/classes')
+    expect(hrefs).not.toContain('/students')
+  })
+
+  it('mọi bộ quyền: tối đa 5 tab và Thêm luôn đứng cuối', () => {
+    for (const perms of [ALL_PERMISSIONS, COUNTER_MANAGER, CASHIER, TEACHER, []]) {
+      const items = getVisibleNavItems(perms)
+      expect(items.length, String(perms)).toBeLessThanOrEqual(5)
+      expect(items[items.length - 1].href, String(perms)).toBe('/settings')
     }
   })
 
