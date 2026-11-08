@@ -37,6 +37,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
+      <link rel="manifest" href="/manifest.json"></link>
         {/*
           Theme anti-flicker script: chạy trước khi page render để tránh
           flash sai theme. Script này là static, KHÔNG chứa user input.
