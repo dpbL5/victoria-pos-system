@@ -9,7 +9,7 @@ export async function GET(
 ) {
   try {
     const auth = await requireAuth()
-    if (!userHasPermission(auth, 'customers.view')) {
+    if (!userHasPermission(auth, 'customers.view', 'memberships.view')) {
       return NextResponse.json({ success: false, error: 'Bạn không có quyền xem khách hàng' }, { status: 403 })
     }
     const { id } = await params

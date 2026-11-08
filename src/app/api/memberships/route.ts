@@ -5,7 +5,7 @@ import { repositories } from '@/lib/infrastructure/repositories'
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth()
-    if (!userHasPermission(auth, 'customers.view', 'memberships.register', 'memberships.renew', 'memberships.plans.manage', 'memberships.backdate')) {
+    if (!userHasPermission(auth, 'customers.view', 'memberships.view', 'memberships.register', 'memberships.renew', 'memberships.plans.manage', 'memberships.backdate')) {
       return NextResponse.json({ success: false, error: 'Bạn không có quyền xem hội viên' }, { status: 403 })
     }
 

@@ -253,6 +253,13 @@ export function TodayShiftScreen() {
   // Phiên đang tạm dừng là phiên đang không được tính tiền — đếm lên header
   // để trạng thái cần chú ý không bị chôn trong danh sách.
   const pausedCount = sessions.filter((session) => session.pausedAt).length
+  // Tách danh sách theo loại khách để nhân viên đọc nhanh; chỉ là cách hiển thị,
+  // dữ liệu phiên không đổi.
+  const isMemberSession = (session: SessionRow) => session.customer?.type === 'MEMBER' || !!session.membership
+  const sessionGroups = [
+    { key: 'MEMBER', label: 'Hội viên', items: sessions.filter(isMemberSession) },
+    { key: 'WALK_IN', label: 'Khách vãng lai', items: sessions.filter((session) => !isMemberSession(session)) },
+  ].filter((group) => group.items.length > 0)
   // ── Quyền trên bảng: thao tác tiền ≠ được xem bảng ──
   // ADMIN/MANAGER xem được phiên đang chơi + lịch đặt dù chưa vào ca (chỉ xem);
   // mọi hành động tiền vẫn cần ca của chính mình — đúng bằng guard
@@ -746,21 +753,31 @@ export function TodayShiftScreen() {
                 />
               ) : (
                 <div className="divide-y divide-border-default">
-                  {sessions.map((session, index) => (
-                    <ActiveSessionCard
-                      key={session.id}
-                      session={session}
-                      index={index}
-                      readOnly={!canOperate}
-                      checkoutEnabled={canCheckout}
-                      pauseEnabled={canCheckIn}
-                      onCheckout={() => { setCheckoutFrozenAt(new Date().toISOString()); setCheckoutSession(session) }}
-                      onPause={() => void handlePause(session)}
-                      onResume={() => void handleResume(session)}
-                      onPausePlayer={(playerId) => void handlePausePlayer(session, playerId)}
-                      onResumePlayer={(playerId) => void handleResumePlayer(session, playerId)}
-                      onRenamePlayer={(playerId, name) => handleRenamePlayer(session, playerId, name)}
-                    />
+                  {sessionGroups.map((group) => (
+                    <section key={group.key}>
+                      <div className="flex items-center justify-between gap-3 bg-surface-tertiary px-4 py-2">
+                        <h3 className="text-xs font-semibold text-text-secondary">{group.label}</h3>
+                        <span className="text-xs tabular-nums text-text-tertiary">{group.items.length}</span>
+                      </div>
+                      <div className="divide-y divide-border-default">
+                        {group.items.map((session, index) => (
+                          <ActiveSessionCard
+                            key={session.id}
+                            session={session}
+                            index={index}
+                            readOnly={!canOperate}
+                            checkoutEnabled={canCheckout}
+                            pauseEnabled={canCheckIn}
+                            onCheckout={() => { setCheckoutFrozenAt(new Date().toISOString()); setCheckoutSession(session) }}
+                            onPause={() => void handlePause(session)}
+                            onResume={() => void handleResume(session)}
+                            onPausePlayer={(playerId) => void handlePausePlayer(session, playerId)}
+                            onResumePlayer={(playerId) => void handleResumePlayer(session, playerId)}
+                            onRenamePlayer={(playerId, name) => handleRenamePlayer(session, playerId, name)}
+                          />
+                        ))}
+                      </div>
+                    </section>
                   ))}
                 </div>
               )}

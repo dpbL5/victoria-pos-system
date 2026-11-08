@@ -436,6 +436,8 @@ function RoleDialog({
                       <button
                         key={permission.key}
                         type="button"
+                        aria-label={`${group.label}: ${permission.label}`}
+                        title={`${permission.description} (bấm để bật/tắt)`}
                         aria-pressed={selected}
                         onClick={() => togglePermission(permission.key)}
                         className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${

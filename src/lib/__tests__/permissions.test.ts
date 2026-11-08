@@ -105,6 +105,7 @@ describe('moduleAccessible / hasPageAccess / firstAccessibleModuleRoute', () => 
 
   it('hasPageAccess: any-of nhóm', () => {
     expect(hasPageAccess(['customers.view'], ['customers', 'memberships'])).toBe(true)
+    expect(hasPageAccess(['memberships.view'], ['customers', 'memberships'])).toBe(true)
     expect(hasPageAccess(['memberships.register'], ['customers', 'memberships'])).toBe(true)
     expect(hasPageAccess(['pricing.view'], ['customers', 'memberships'])).toBe(false)
   })

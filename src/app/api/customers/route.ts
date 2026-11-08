@@ -6,7 +6,7 @@ import { createCustomerSchema } from '@/lib/memberships'
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth()
-    if (!userHasPermission(auth, 'customers.view', 'memberships.register', 'memberships.renew', 'memberships.backdate', 'memberships.plans.manage')) {
+    if (!userHasPermission(auth, 'customers.view', 'memberships.view', 'memberships.register', 'memberships.renew', 'memberships.backdate', 'memberships.plans.manage')) {
       return NextResponse.json({ success: false, error: 'Bạn không có quyền xem khách hàng' }, { status: 403 })
     }
 
