@@ -38,16 +38,22 @@ const navItems: NavItem[] = [
   { href: '/settings', label: 'Thêm', Icon: MoreHorizontal, alwaysVisible: true },
 ]
 
+/** Tối đa 4 tab chính — tab dư vào lưới lối tắt màn Thêm, tránh nhồi bar trên mobile */
+const MAX_PRIMARY_TABS = 4
+
 /** Tab hiện với một bộ quyền — nhóm không có quyền nào bị loại hoàn toàn */
 export function getVisibleNavItems(
   perms?: readonly string[] | null,
   roleKey?: string | null,
 ): NavItem[] {
-  return navItems.filter(
+  const visible = navItems.filter(
     (item) =>
       item.alwaysVisible ||
       (item.groupKey ? moduleAccessible(perms, item.groupKey, roleKey) : false),
   )
+  const primary = visible.filter((item) => !item.alwaysVisible).slice(0, MAX_PRIMARY_TABS)
+  // "Thêm" luôn đứng cuối; tab bị cắt vẫn vào được qua lối tắt trong màn Thêm
+  return [...primary, ...visible.filter((item) => item.alwaysVisible)]
 }
 
 interface BottomNavProps {
